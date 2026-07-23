@@ -1,0 +1,758 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		CE3330632E5293CC004C25FC /* MapLibre in Frameworks */ = {isa = PBXBuildFile; productRef = CE8F7A1B2E512A3B00C1B2F4 /* MapLibre */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		CEAA8B1B2E39237B00BEFB35 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = CEAA8B052E39237A00BEFB35 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = CEAA8B0C2E39237A00BEFB35;
+			remoteInfo = osrswiki;
+		};
+		CEAA8B252E39237B00BEFB35 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = CEAA8B052E39237A00BEFB35 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = CEAA8B0C2E39237A00BEFB35;
+			remoteInfo = osrswiki;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		CEAA8B0D2E39237A00BEFB35 /* osrswiki.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = osrswiki.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		CEAA8B1A2E39237B00BEFB35 /* osrswikiTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = osrswikiTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		CEAA8B242E39237B00BEFB35 /* osrswikiUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = osrswikiUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		CE332F992E51761B004C25FC /* Exceptions for "osrswiki" folder in "osrswiki" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = CEAA8B0C2E39237A00BEFB35 /* osrswiki */;
+		};
+		CE77F0012E60000100F5A11E /* Exceptions for "osrswikiTests" folder in "osrswikiTests" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				AppLaunchPreloadingTest.swift,
+				AutonomousMapLibreTest.swift,
+				AutomatedClosedLoopValidationTests.swift,
+				ComprehensiveOfflineWorkflowTest.swift,
+				ContainerBoundsTest.swift,
+				DirectTimelineTest.swift,
+				FontWeightVerificationTest.swift,
+				MainMapTabRenderingTest.swift,
+				MapLibreAutomatedRuntimeTest.swift,
+				MapLibreBridgeQuantitativeTest.swift,
+				MapLibreBridgeTests.swift,
+				MapLibrePreloadingIntegrationTest.swift,
+				MapLoadingDiagnosticTest.swift,
+				MockMapCacheTest.swift,
+				NewsRepositoryCacheTest.swift,
+				NewsViewModelCacheTest.swift,
+				PreloadingStatusTest.swift,
+				ProgressBarTimingTests.swift,
+				QuantitativePreviewTest.swift,
+				RealPreviewGenerationTest.swift,
+				RealWorldMapTest.swift,
+				ResourceDiscoveryAnalysisTest.swift,
+				"SaveProcessDiagnosticTest 2.swift",
+				SimpleAndroidParityTest.swift,
+				SimplePreviewTest.swift,
+				SimpleResourceDiscoveryTest.swift,
+				SingletonCacheValidationTest.swift,
+				osrswikiTests.swift,
+				TableRenderingTestsSimple.swift,
+				TableScrollingTests.swift,
+				TimelineAnalysisTest.swift,
+			);
+			target = CEAA8B192E39237B00BEFB35 /* osrswikiTests */;
+		};
+		CE77F0022E60000100F5A11E /* Exceptions for "osrswikiUITests" folder in "osrswikiUITests" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				AppearanceButtonHeightTest.swift,
+				AppearanceColorInvestigationUITests.swift,
+				AppearanceDesignImprovementTest.swift,
+				ArticleBottomBarThemeTest.swift,
+				AutomatedVarrockMapLibreTest.swift,
+				BackButtonNavigationTest.swift,
+				BottomBarFlickerFixTest.swift,
+				BottomBarNavigationTimingUITests.swift,
+				CSSJSIntegrationTest.swift,
+				CardLayoutVerificationTest.swift,
+				CollectionViewDequeueReproductionTest.swift,
+				CompareWithAndroidTest.swift,
+				DirectMapLibreZIndexTest.swift,
+				DirectSearchCrashTest.swift,
+				DirectZIndexTest.swift,
+				ExternalLinkSpacingTestTest.swift,
+				FeedbackCardColorConsistencyTest.swift,
+				FinalComparisonTest.swift,
+				FinalLayoutVerificationTest.swift,
+				FloorSwitchingNavigationBugTest.swift,
+				FontMetricsTest.swift,
+				FontVerificationTest.swift,
+				HTMLMapLibreInjectionTest.swift,
+				HistoryNavigationFixTest.swift,
+				HistoryNavigationProgrammaticTest.swift,
+				HomeCachingAndRefreshTest.swift,
+				HomePageCachingUITest.swift,
+				HomeThemeResponsivenessTest.swift,
+				HorizontalGestureFeatureParityUITest.swift,
+				ImageContainerTransparencyTest.swift,
+				KeyboardBlankAreaTest.swift,
+				KeyboardDismissalTest.swift,
+				LaunchAppFromHomeTest.swift,
+				LayoutConsistencyTest.swift,
+				LinkFontWeightConsistencyTest.swift,
+				ManualNavigationTest.swift,
+				MapLibreEmbedVerificationTest.swift,
+				MapLibreZIndexTest.swift,
+				MapLoadingDialogVerificationTest.swift,
+				MapZIndexFixTest.swift,
+				MessageBoxWidthTestTest.swift,
+				NavigationBarThemeConsistencyFixTest.swift,
+				NavigateToVarrockTest.swift,
+				RaceConditionStressTest.swift,
+				SafariComparisonTest.swift,
+				SavedPagesNavigationTest.swift,
+				SearchBarFixesTest.swift,
+				SearchBarWhiteSpaceFixTest.swift,
+				SearchCountRemovalTest.swift,
+				SearchCrashReproductionTest.swift,
+				SearchFlowIntegrationTest.swift,
+				SearchFocusLatencyTest.swift,
+				SearchFreezeReproductionTest.swift,
+				SearchHighlightingUITests.swift,
+				SearchStabilityVerificationTest.swift,
+				SearchTapMemoryLeakTest.swift,
+				SearchToArticleMemoryLeakTest.swift,
+				SimpleKeyboardDismissalTest.swift,
+				SimpleNavigationTest.swift,
+				SimpleZIndexTest.swift,
+				SpecificCardLayoutTest.swift,
+				TOCSidebarUITest.swift,
+				TabBarAlignmentUITests.swift,
+				TabBarAlphaImplementationTest.swift,
+				TabBarConcurrencyStressTest.swift,
+				TabBarStressTestSimple.swift,
+				TabBarThemingTest.swift,
+				TableStyleTest.swift,
+				TablePreviewUITest.swift,
+				ThemeConsistencyTestTest.swift,
+				ThemePreviewBackgroundTest.swift,
+				TitleAreaScrollingTest.swift,
+				VarrockMapLibreTest.swift,
+				VerifyBottomBarFixTest.swift,
+				VoiceSearchPermissionMemoryLeakTest.swift,
+				VoiceSearchUITest.swift,
+				osrswikiUITests.swift,
+				osrswikiUITestsLaunchTests.swift,
+			);
+			target = CEAA8B232E39237B00BEFB35 /* osrswikiUITests */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		CEAA8B0F2E39237A00BEFB35 /* osrswiki */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				CE332F992E51761B004C25FC /* Exceptions for "osrswiki" folder in "osrswiki" target */,
+			);
+			path = osrswiki;
+			sourceTree = "<group>";
+		};
+		CEAA8B1D2E39237B00BEFB35 /* osrswikiTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				CE77F0012E60000100F5A11E /* Exceptions for "osrswikiTests" folder in "osrswikiTests" target */,
+			);
+			path = osrswikiTests;
+			sourceTree = "<group>";
+		};
+		CEAA8B272E39237B00BEFB35 /* osrswikiUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				CE77F0022E60000100F5A11E /* Exceptions for "osrswikiUITests" folder in "osrswikiUITests" target */,
+			);
+			path = osrswikiUITests;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		CEAA8B0A2E39237A00BEFB35 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				CE3330632E5293CC004C25FC /* MapLibre in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		CEAA8B172E39237B00BEFB35 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		CEAA8B212E39237B00BEFB35 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		CEAA8B042E39237A00BEFB35 = {
+			isa = PBXGroup;
+			children = (
+				CEAA8B0F2E39237A00BEFB35 /* osrswiki */,
+				CEAA8B1D2E39237B00BEFB35 /* osrswikiTests */,
+				CEAA8B272E39237B00BEFB35 /* osrswikiUITests */,
+				CEAA8B0E2E39237A00BEFB35 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		CEAA8B0E2E39237A00BEFB35 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				CEAA8B0D2E39237A00BEFB35 /* osrswiki.app */,
+				CEAA8B1A2E39237B00BEFB35 /* osrswikiTests.xctest */,
+				CEAA8B242E39237B00BEFB35 /* osrswikiUITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		CEAA8B0C2E39237A00BEFB35 /* osrswiki */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = CEAA8B2E2E39237B00BEFB35 /* Build configuration list for PBXNativeTarget "osrswiki" */;
+			buildPhases = (
+				CEAA8B092E39237A00BEFB35 /* Sources */,
+				CEAA8B0A2E39237A00BEFB35 /* Frameworks */,
+				CE4877F42E56634E0047884D /* Run Script */,
+				CEAA8B0B2E39237A00BEFB35 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				CEAA8B0F2E39237A00BEFB35 /* osrswiki */,
+			);
+			name = osrswiki;
+			packageProductDependencies = (
+				CE8F7A1B2E512A3B00C1B2F4 /* MapLibre */,
+			);
+			productName = osrswiki;
+			productReference = CEAA8B0D2E39237A00BEFB35 /* osrswiki.app */;
+			productType = "com.apple.product-type.application";
+		};
+		CEAA8B192E39237B00BEFB35 /* osrswikiTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = CEAA8B312E39237B00BEFB35 /* Build configuration list for PBXNativeTarget "osrswikiTests" */;
+			buildPhases = (
+				CEAA8B162E39237B00BEFB35 /* Sources */,
+				CEAA8B172E39237B00BEFB35 /* Frameworks */,
+				CEAA8B182E39237B00BEFB35 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				CEAA8B1C2E39237B00BEFB35 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				CEAA8B1D2E39237B00BEFB35 /* osrswikiTests */,
+			);
+			name = osrswikiTests;
+			packageProductDependencies = (
+			);
+			productName = osrswikiTests;
+			productReference = CEAA8B1A2E39237B00BEFB35 /* osrswikiTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		CEAA8B232E39237B00BEFB35 /* osrswikiUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = CEAA8B342E39237B00BEFB35 /* Build configuration list for PBXNativeTarget "osrswikiUITests" */;
+			buildPhases = (
+				CEAA8B202E39237B00BEFB35 /* Sources */,
+				CEAA8B212E39237B00BEFB35 /* Frameworks */,
+				CEAA8B222E39237B00BEFB35 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				CEAA8B262E39237B00BEFB35 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				CEAA8B272E39237B00BEFB35 /* osrswikiUITests */,
+			);
+			name = osrswikiUITests;
+			packageProductDependencies = (
+			);
+			productName = osrswikiUITests;
+			productReference = CEAA8B242E39237B00BEFB35 /* osrswikiUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		CEAA8B052E39237A00BEFB35 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1640;
+				LastUpgradeCheck = 1640;
+				TargetAttributes = {
+					CEAA8B0C2E39237A00BEFB35 = {
+						CreatedOnToolsVersion = 16.4;
+					};
+					CEAA8B192E39237B00BEFB35 = {
+						CreatedOnToolsVersion = 16.4;
+						TestTargetID = CEAA8B0C2E39237A00BEFB35;
+					};
+					CEAA8B232E39237B00BEFB35 = {
+						CreatedOnToolsVersion = 16.4;
+						TestTargetID = CEAA8B0C2E39237A00BEFB35;
+					};
+				};
+			};
+			buildConfigurationList = CEAA8B082E39237A00BEFB35 /* Build configuration list for PBXProject "osrswiki" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = CEAA8B042E39237A00BEFB35;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				CE8F7A1A2E512A3B00C1B2F4 /* XCRemoteSwiftPackageReference "maplibre-gl-native-distribution" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = CEAA8B0E2E39237A00BEFB35 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				CEAA8B0C2E39237A00BEFB35 /* osrswiki */,
+				CEAA8B192E39237B00BEFB35 /* osrswikiTests */,
+				CEAA8B232E39237B00BEFB35 /* osrswikiUITests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		CEAA8B0B2E39237A00BEFB35 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		CEAA8B182E39237B00BEFB35 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		CEAA8B222E39237B00BEFB35 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		CE4877F42E56634E0047884D /* Run Script */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 8;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Run Script";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 1;
+			shellPath = /bin/bash;
+			shellScript = "cd \"$SRCROOT\"\nif [[ -x ./organize-shared-assets.sh ]]; then\n    ./organize-shared-assets.sh\nelse\n    echo \"Skipping organize-shared-assets.sh; script is not present in $SRCROOT\"\nfi\n";
+		};
+/* End PBXShellScriptBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		CEAA8B092E39237A00BEFB35 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		CEAA8B162E39237B00BEFB35 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		CEAA8B202E39237B00BEFB35 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		CEAA8B1C2E39237B00BEFB35 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = CEAA8B0C2E39237A00BEFB35 /* osrswiki */;
+			targetProxy = CEAA8B1B2E39237B00BEFB35 /* PBXContainerItemProxy */;
+		};
+		CEAA8B262E39237B00BEFB35 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = CEAA8B0C2E39237A00BEFB35 /* osrswiki */;
+			targetProxy = CEAA8B252E39237B00BEFB35 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		CEAA8B2C2E39237B00BEFB35 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.5;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		CEAA8B2D2E39237B00BEFB35 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.5;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		CEAA8B2F2E39237B00BEFB35 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 4;
+				DEVELOPMENT_TEAM = 8M2762LWD7;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = osrswiki/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "OSRS Wiki";
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = omiyawaki.osrswiki;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		CEAA8B302E39237B00BEFB35 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 4;
+				DEVELOPMENT_TEAM = 8M2762LWD7;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = osrswiki/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "OSRS Wiki";
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = omiyawaki.osrswiki;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		CEAA8B322E39237B00BEFB35 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 4;
+				DEVELOPMENT_TEAM = 8M2762LWD7;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.5;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = omiyawaki.osrswikiTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/osrswiki.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/osrswiki";
+			};
+			name = Debug;
+		};
+		CEAA8B332E39237B00BEFB35 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 4;
+				DEVELOPMENT_TEAM = 8M2762LWD7;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.5;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = omiyawaki.osrswikiTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/osrswiki.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/osrswiki";
+			};
+			name = Release;
+		};
+		CEAA8B352E39237B00BEFB35 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 4;
+				DEVELOPMENT_TEAM = 8M2762LWD7;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = omiyawaki.osrswikiUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = osrswiki;
+			};
+			name = Debug;
+		};
+		CEAA8B362E39237B00BEFB35 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 4;
+				DEVELOPMENT_TEAM = 8M2762LWD7;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = omiyawaki.osrswikiUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = osrswiki;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		CEAA8B082E39237A00BEFB35 /* Build configuration list for PBXProject "osrswiki" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				CEAA8B2C2E39237B00BEFB35 /* Debug */,
+				CEAA8B2D2E39237B00BEFB35 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		CEAA8B2E2E39237B00BEFB35 /* Build configuration list for PBXNativeTarget "osrswiki" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				CEAA8B2F2E39237B00BEFB35 /* Debug */,
+				CEAA8B302E39237B00BEFB35 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		CEAA8B312E39237B00BEFB35 /* Build configuration list for PBXNativeTarget "osrswikiTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				CEAA8B322E39237B00BEFB35 /* Debug */,
+				CEAA8B332E39237B00BEFB35 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		CEAA8B342E39237B00BEFB35 /* Build configuration list for PBXNativeTarget "osrswikiUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				CEAA8B352E39237B00BEFB35 /* Debug */,
+				CEAA8B362E39237B00BEFB35 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		CE8F7A1A2E512A3B00C1B2F4 /* XCRemoteSwiftPackageReference "maplibre-gl-native-distribution" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/maplibre/maplibre-gl-native-distribution";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 6.9.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		CE8F7A1B2E512A3B00C1B2F4 /* MapLibre */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = CE8F7A1A2E512A3B00C1B2F4 /* XCRemoteSwiftPackageReference "maplibre-gl-native-distribution" */;
+			productName = MapLibre;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = CEAA8B052E39237A00BEFB35 /* Project object */;
+}

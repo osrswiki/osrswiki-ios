@@ -1,0 +1,294 @@
+/*
+ * INTERACTIVE MODULE (DEDUPLICATED)
+ * Removed 13 duplicate selectors
+ * Generated: interactive.css
+ */
+
+.mwe-popups .mwe-popups-settings-icon:active, .oo-ui-popupToolGroup.oo-ui-widget-enabled > .oo-ui-popupToolGroup-handle:hover, .oo-ui-tool.oo-ui-widget-enabled > .oo-ui-tool-link:hover {
+    background-color: var(--ooui-normal--hover);
+}
+
+#options-toggle:not(:checked) + #options-list .options-parameter-list:after {
+    background-image: linear-gradient(to bottom,transparent,var(--body-mid) 90%);
+    bottom: 0;
+    content: '';
+    height: 40px;
+    left: 0;
+    pointer-events: none;
+    position: absolute;
+    right: 0;
+}
+
+.mp-popular-page-light:hover {
+    filter: brightness(115%);
+    transition: 100ms;
+}
+
+a:active {
+    color: var(--link-color);
+}
+
+.documentation-subheader a:active {
+    color: var(--documentation-link-color);
+}
+
+.oo-ui-dropdownWidget.oo-ui-widget-enabled .oo-ui-dropdownWidget-handle:hover, .oo-ui-tagItemWidget.oo-ui-widget-enabled:hover {
+    background-color: var(--ooui-normal--hover);
+    border-color: var(--ooui-normal-border);
+    color: var(--ooui-text);
+}
+
+.oo-ui-dropdownWidget.oo-ui-widget-enabled .oo-ui-dropdownWidget-handle:active {
+    color: var(--ooui-text);
+}
+
+.oo-ui-dropdownWidget.oo-ui-widget-enabled .oo-ui-dropdownWidget-handle:focus, .oo-ui-toggleSwitchWidget.oo-ui-widget-enabled:focus {
+    border-color: var(--ooui-accent);
+    box-shadow: inset 0 0 0 1px var(--ooui-accent);
+}
+
+.oo-ui-selectFileWidget.oo-ui-widget-enabled.oo-ui-selectFileWidget-dropTarget:hover {
+    border-color: var(--ooui-input-border--hover);
+}
+
+.oo-ui-tabSelectWidget-framed .oo-ui-tabOptionWidget.oo-ui-widget-enabled:active, .oo-ui-tabSelectWidget-framed .oo-ui-tabOptionWidget.oo-ui-widget-enabled:hover {
+    background-color: var(--body-light);
+    color: var(--ooui-text);
+}
+
+.oo-ui-tabSelectWidget-framed .oo-ui-tabOptionWidget.oo-ui-widget-enabled.oo-ui-optionWidget-selected:hover {
+    background-color: var(--body-dark);
+}
+
+.oo-ui-tabSelectWidget-frameless .oo-ui-tabOptionWidget.oo-ui-optionWidget-selected:focus, .oo-ui-tabSelectWidget-frameless .oo-ui-tabOptionWidget.oo-ui-optionWidget-selected:hover {
+    box-shadow: inset 0 -2px 0 0 var(--ooui-progressive--hover);
+    color: var(--ooui-progressive--hover);
+}
+
+.oo-ui-toggleSwitchWidget.oo-ui-widget-enabled:hover, .oo-ui-toggleSwitchWidget.oo-ui-widget-enabled:hover .oo-ui-toggleSwitchWidget-grip {
+    background-color: var(--ooui-input);
+    border-color: var(--ooui-accent);
+}
+
+.oo-ui-toggleSwitchWidget.oo-ui-widget-enabled:active, .oo-ui-toggleSwitchWidget.oo-ui-widget-enabled:active:focus, .oo-ui-toggleSwitchWidget.oo-ui-widget-enabled:active:hover {
+    background-color: var(--ooui-progressive--hover);
+    border-color: var(--ooui-progressive--hover);
+    box-shadow: inset 0 0 0 1px var(--ooui-progressive--hover);
+}
+
+.oo-ui-toggleSwitchWidget.oo-ui-widget-enabled:active .oo-ui-toggleSwitchWidget-grip, .oo-ui-toggleSwitchWidget.oo-ui-widget-enabled:active:focus .oo-ui-toggleSwitchWidget-grip, .oo-ui-toggleSwitchWidget.oo-ui-widget-enabled:active:hover .oo-ui-toggleSwitchWidget-grip {
+    background-color: var(--ooui-input);
+    border-color: var(--ooui-input);
+}
+
+.oo-ui-toggleSwitchWidget.oo-ui-widget-enabled:focus .oo-ui-toggleSwitchWidget-grip {
+    border-color: var(--ooui-accent);
+}
+
+.oo-ui-toggleSwitchWidget.oo-ui-widget-enabled.oo-ui-toggleWidget-on:active, .oo-ui-toggleSwitchWidget.oo-ui-widget-enabled.oo-ui-toggleWidget-on:active:hover, .oo-ui-toggleSwitchWidget.oo-ui-widget-enabled.oo-ui-toggleWidget-on:hover {
+    background-color: var(--ooui-progressive--hover);
+    border-color: var(--ooui-progressive--hover);
+}
+
+.oo-ui-toggleSwitchWidget.oo-ui-widget-enabled.oo-ui-toggleWidget-on:focus {
+    border-color: var(--ooui-progressive);
+}
+
+.oo-ui-toggleSwitchWidget.oo-ui-widget-enabled.oo-ui-toggleWidget-on:focus::before {
+    border-color: #fff;
+}
+
+.oo-ui-popupToolGroup.oo-ui-widget-enabled > .oo-ui-popupToolGroup-handle:focus, .oo-ui-tool.oo-ui-widget-enabled > .oo-ui-tool-link:focus {
+    box-shadow: inset 0 0 0 1px var(--ooui-accent);
+    outline: 1px solid var(--ooui-accent);
+}
+
+.oo-ui-tool.oo-ui-widget-enabled > .oo-ui-tool-link:active {
+    background-color: var(--ooui-normal--hover);
+    box-shadow: none;
+    color: var(--ooui-accent);
+}
+
+.oo-ui-tool.oo-ui-widget-enabled.oo-ui-flaggedElement-primary.oo-ui-flaggedElement-progressive > .oo-ui-tool-link:active, .oo-ui-tool.oo-ui-widget-enabled.oo-ui-flaggedElement-primary.oo-ui-flaggedElement-progressive > .oo-ui-tool-link:hover {
+    background-color: var(--ooui-progressive--hover);
+}
+
+.oo-ui-tool.oo-ui-widget-enabled.oo-ui-flaggedElement-primary.oo-ui-flaggedElement-progressive > .oo-ui-tool-link:focus {
+    box-shadow: inset 0 0 0 1px var(--ooui-accent),inset 0 0 0 2px #fff;
+}
+
+.oo-ui-listToolGroup-tools .oo-ui-tool.oo-ui-widget-enabled:hover {
+    background-color: var(--ooui-normal--hover);
+    color: var(--ooui-text);
+}
+
+.oo-ui-toolbar-actions .oo-ui-popupToolGroup.oo-ui-widget-enabled > .oo-ui-popupToolGroup-handle:hover {
+    border-right-color: var(--ooui-normal--hover);
+}
+
+.oo-ui-popupToolGroup-tools .oo-ui-tool.oo-ui-widget-enabled .oo-ui-tool-link:focus {
+    box-shadow: inset 0 0 0 2px var(--ooui-accent);
+}
+
+.oo-ui-popupToolGroup.oo-ui-popupToolGroup-active > .oo-ui-popupToolGroup-handle:hover {
+    background-color: var(--ooui-normal--hover);
+    color: var(--ooui-accent);
+}
+
+.ve-ui-specialCharacterPage-character:hover {
+    border-color: var(--body-dark);
+}
+
+.oo-ui-dropdownWidget.oo-ui-widget-enabled .oo-ui-dropdownWidget-handle:hover {
+    background-color: var(--ooui-normal--hover);
+    border-color: var(--ooui-normal-border);
+    color: var(--ooui-text);
+}
+
+.oo-ui-dropdownWidget.oo-ui-widget-enabled .oo-ui-dropdownWidget-handle:focus {
+    border-color: var(--ooui-accent);
+    box-shadow: inset 0 0 0 1px var(--ooui-accent);
+}
+
+.oo-ui-tabSelectWidget-framed .oo-ui-tabOptionWidget.oo-ui-widget-enabled:hover {
+    background-color: var(--body-light);
+    color: var(--ooui-text);
+}
+
+.oo-ui-tabSelectWidget-framed .oo-ui-tabOptionWidget.oo-ui-widget-enabled:active {
+    background-color: var(--body-light);
+    color: var(--ooui-text);
+}
+
+.oo-ui-tabSelectWidget-frameless .oo-ui-tabOptionWidget.oo-ui-optionWidget-selected:hover {
+    box-shadow: inset 0 -2px 0 0 var(--ooui-progressive--hover);
+    color: var(--ooui-progressive--hover);
+}
+
+.oo-ui-tabSelectWidget-frameless .oo-ui-tabOptionWidget.oo-ui-optionWidget-selected:focus {
+    box-shadow: inset 0 -2px 0 0 var(--ooui-progressive--hover);
+    color: var(--ooui-progressive--hover);
+}
+
+.oo-ui-tagItemWidget.oo-ui-widget-enabled:hover {
+    background-color: var(--ooui-normal--hover);
+    border-color: var(--ooui-normal-border);
+    color: var(--ooui-text);
+}
+
+.oo-ui-toggleSwitchWidget.oo-ui-widget-enabled:hover {
+    background-color: var(--ooui-input);
+    border-color: var(--ooui-accent);
+}
+
+.oo-ui-toggleSwitchWidget.oo-ui-widget-enabled:hover .oo-ui-toggleSwitchWidget-grip {
+    background-color: var(--ooui-input);
+    border-color: var(--ooui-accent);
+}
+
+.oo-ui-toggleSwitchWidget.oo-ui-widget-enabled:active {
+    background-color: var(--ooui-progressive--hover);
+    border-color: var(--ooui-progressive--hover);
+    box-shadow: inset 0 0 0 1px var(--ooui-progressive--hover);
+}
+
+.oo-ui-toggleSwitchWidget.oo-ui-widget-enabled:active:hover {
+    background-color: var(--ooui-progressive--hover);
+    border-color: var(--ooui-progressive--hover);
+    box-shadow: inset 0 0 0 1px var(--ooui-progressive--hover);
+}
+
+.oo-ui-toggleSwitchWidget.oo-ui-widget-enabled:active:focus {
+    background-color: var(--ooui-progressive--hover);
+    border-color: var(--ooui-progressive--hover);
+    box-shadow: inset 0 0 0 1px var(--ooui-progressive--hover);
+}
+
+.oo-ui-toggleSwitchWidget.oo-ui-widget-enabled:active .oo-ui-toggleSwitchWidget-grip {
+    background-color: var(--ooui-input);
+    border-color: var(--ooui-input);
+}
+
+.oo-ui-toggleSwitchWidget.oo-ui-widget-enabled:active:hover .oo-ui-toggleSwitchWidget-grip {
+    background-color: var(--ooui-input);
+    border-color: var(--ooui-input);
+}
+
+.oo-ui-toggleSwitchWidget.oo-ui-widget-enabled:active:focus .oo-ui-toggleSwitchWidget-grip {
+    background-color: var(--ooui-input);
+    border-color: var(--ooui-input);
+}
+
+.oo-ui-toggleSwitchWidget.oo-ui-widget-enabled:focus {
+    border-color: var(--ooui-accent);
+    box-shadow: inset 0 0 0 1px var(--ooui-accent);
+}
+
+.oo-ui-toggleSwitchWidget.oo-ui-widget-enabled.oo-ui-toggleWidget-on:hover {
+    background-color: var(--ooui-progressive--hover);
+    border-color: var(--ooui-progressive--hover);
+}
+
+.oo-ui-toggleSwitchWidget.oo-ui-widget-enabled.oo-ui-toggleWidget-on:active {
+    background-color: var(--ooui-progressive--hover);
+    border-color: var(--ooui-progressive--hover);
+}
+
+.oo-ui-toggleSwitchWidget.oo-ui-widget-enabled.oo-ui-toggleWidget-on:active:hover {
+    background-color: var(--ooui-progressive--hover);
+    border-color: var(--ooui-progressive--hover);
+}
+
+.oo-ui-tool.oo-ui-widget-enabled > .oo-ui-tool-link:hover {
+    background-color: var(--ooui-normal--hover);
+}
+
+.oo-ui-tool.oo-ui-widget-enabled > .oo-ui-tool-link:focus {
+    box-shadow: inset 0 0 0 1px var(--ooui-accent);
+    outline: 1px solid var(--ooui-accent);
+}
+
+.oo-ui-tool.oo-ui-widget-enabled.oo-ui-flaggedElement-primary.oo-ui-flaggedElement-progressive > .oo-ui-tool-link:hover {
+    background-color: var(--ooui-progressive--hover);
+}
+
+.oo-ui-tool.oo-ui-widget-enabled.oo-ui-flaggedElement-primary.oo-ui-flaggedElement-progressive > .oo-ui-tool-link:active {
+    background-color: var(--ooui-progressive--hover);
+}
+
+.oo-ui-popupToolGroup.oo-ui-widget-enabled > .oo-ui-popupToolGroup-handle:hover {
+    background-color: var(--ooui-normal--hover);
+}
+
+.oo-ui-popupToolGroup.oo-ui-widget-enabled > .oo-ui-popupToolGroup-handle:focus {
+    box-shadow: inset 0 0 0 1px var(--ooui-accent);
+    outline: 1px solid var(--ooui-accent);
+}
+
+.oo-ui-toggleSwitchWidget.oo-ui-widget-enabled.oo-ui-toggleWidget-on:active, .oo-ui-toggleSwitchWidget.oo-ui-widget-enabled.oo-ui-toggleWidget-on:active:hover {
+    opacity: 0.8;
+}
+
+.oo-ui-tool.oo-ui-widget-enabled.oo-ui-flaggedElement-primary.oo-ui-flaggedElement-progressive > .oo-ui-tool-link:active, .oo-ui-tool.oo-ui-widget-enabled.oo-ui-flaggedElement-primary.oo-ui-flaggedElement-progressive.oo-ui-tool-active > .oo-ui-tool-link {
+    color: var(--link-color);
+    text-decoration: underline;
+}
+
+.oo-ui-tool.oo-ui-widget-enabled > .oo-ui-tool-link:active, .oo-ui-tool.oo-ui-widget-enabled.oo-ui-popupToolGroup-active > .oo-ui-tool-link, .oo-ui-tool.oo-ui-widget-enabled.oo-ui-tool-active > .oo-ui-tool-link {
+    color: var(--link-color);
+    text-decoration: underline;
+}
+
+.documentation-subheader a, .documentation-subheader a:active, .documentation-subheader a:visited {
+    color: var(--link-color);
+    text-decoration: underline;
+}
+
+.mwe-popups .mwe-popups-settings-icon:active, .mwe-popups .mwe-popups-settings-icon:hover {
+    background-color: var(--ooui-normal--hover);
+}
+
+a:active, a:visited {
+    color: var(--link-color);
+}
+

@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>TESTING</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; font-size: 18px; }
+        .result { padding: 20px; margin: 20px 0; border-radius: 10px; font-size: 24px; font-weight: bold; }
+        .success { background: #4CAF50; color: white; }
+        .failure { background: #f44336; color: white; }
+        .testing { background: #ff9800; color: white; }
+    </style>
+</head>
+<body>
+    <h1>MapLibre Bridge Test</h1>
+    
+    <div id="result" class="result testing">
+        🔍 TESTING IN PROGRESS...
+    </div>
+    
+    <div id="test-widget" 
+         class="maplibre-widget" 
+         data-map='{"lat": 3094, "lng": 3094, "zoom": 4, "floor": 0}'
+         style="width: 300px; height: 200px; background: yellow; border: 2px solid red;">
+        PLACEHOLDER - Should become map
+    </div>
+    
+    <div id="details"></div>
+
+    <script>
+        let testResult = 'TESTING';
+        let bridgeAvailable = false;
+        let bridgeCallMade = false;
+        let nativeResponseReceived = false;
+        
+        function updateTitle() {
+            document.title = testResult;
+        }
+        
+        function updateUI(status, message, details) {
+            testResult = status;
+            updateTitle();
+            
+            const resultDiv = document.getElementById('result');
+            const detailsDiv = document.getElementById('details');
+            
+            if (status === 'SUCCESS') {
+                resultDiv.innerHTML = '✅ ' + message;
+                resultDiv.className = 'result success';
+            } else if (status === 'FAILURE') {
+                resultDiv.innerHTML = '❌ ' + message;
+                resultDiv.className = 'result failure';
+            } else {
+                resultDiv.innerHTML = '🔍 ' + message;
+                resultDiv.className = 'result testing';
+            }
+            
+            if (details) {
+                detailsDiv.innerHTML = '<p><strong>Details:</strong> ' + details + '</p>';
+            }
+        }
+        
+        // Start test after 1 second
+        setTimeout(() => {
+            updateUI('TESTING', 'Checking if bridge loaded...', 'Looking for window.OsrsWikiBridge');
+            
+            if (typeof window.OsrsWikiBridge !== 'undefined') {
+                bridgeAvailable = true;
+                updateUI('TESTING', 'Bridge found! Testing functionality...', 'Attempting to call bridge methods');
+                
+                try {
+                    // Test bridge communication
+                    window.OsrsWikiBridge.log('BRIDGE_TEST: Testing bridge communication');
+                    
+                    // Test widget measurement
+                    const widget = document.getElementById('test-widget');
+                    const rect = widget.getBoundingClientRect();
+                    const rectJson = JSON.stringify({
+                        x: Math.round(rect.x), 
+                        y: Math.round(rect.y), 
+                        width: Math.round(rect.width), 
+                        height: Math.round(rect.height)
+                    });
+                    const mapData = widget.getAttribute('data-map');
+                    
+                    window.OsrsWikiBridge.onMapPlaceholderMeasured('test-widget', rectJson, mapData);
+                    bridgeCallMade = true;
+                    
+                    // Wait to see if native response comes
+                    setTimeout(() => {
+                        // Check if widget appearance changed (indicating native overlay)
+                        const currentStyle = window.getComputedStyle(widget);
+                        const stillYellow = currentStyle.backgroundColor.includes('255, 255, 0') || 
+                                          currentStyle.backgroundColor.includes('yellow');
+                        
+                        if (!stillYellow || widget.style.display === 'none') {
+                            nativeResponseReceived = true;
+                            updateUI('SUCCESS', 'BRIDGE WORKING - Native map rendered!', 
+                                   'Widget appearance changed, indicating native MapLibre overlay');
+                        } else {
+                            updateUI('FAILURE', 'Bridge calls work but no native response', 
+                                   'JavaScript bridge functional but Swift native handler not responding');
+                        }
+                    }, 3000);
+                    
+                } catch (error) {
+                    updateUI('FAILURE', 'Bridge exists but calls failed', 
+                           'Error: ' + error.message);
+                }
+                
+            } else {
+                updateUI('FAILURE', 'Bridge not found - external script failed to load', 
+                       'window.OsrsWikiBridge is undefined - check asset loading');
+            }
+        }, 1000);
+        
+        // Final timeout check
+        setTimeout(() => {
+            if (testResult === 'TESTING') {
+                updateUI('FAILURE', 'Test timed out', 'No definitive result after 10 seconds');
+            }
+        }, 10000);
+        
+        // Update title immediately
+        updateTitle();
+    </script>
+
+    <!-- Load the bridge script -->
+    <script src="app-assets://localhost/web/map_bridge.js"></script>
+</body>
+</html>

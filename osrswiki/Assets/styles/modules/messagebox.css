@@ -1,0 +1,165 @@
+/*
+ * MESSAGEBOX MODULE (DEDUPLICATED)
+ * Removed 1 duplicate selectors
+ * Generated: messagebox.css
+ */
+
+.messagebox {
+    background-color: var(--body-light);
+    background-color: var(--wikitable-bg);
+    border-color: var(--body-dark);
+    border-color: var(--body-dark) !important;
+    border-left: 15px solid;
+    border-left: 15px solid var(--body-dark) !important;
+    margin: 8px 0;
+    padding: 8px 12px;
+    width: 100%;
+    max-width: 100%;
+}
+
+.messagebox.stub {
+    width: 100%;
+    max-width: 100%;
+}
+
+.messagebox.hasdialogue {
+    padding: 0 10px;
+    width: auto;
+}
+
+.messagebox.obsolete {
+    background-color: var(--messagebox-obsolete-background);
+    border-color: var(--messagebox-obsolete-border);
+    color: var(--messagebox-obsolete-color);
+}
+
+.messagebox.obsolete a:active {
+    color: var(--messagebox-obsolete-link-color);
+}
+
+.messagebox.info {
+    background-color: var(--messagebox-info-background);
+    border-color: var(--messagebox-info-border);
+    color: var(--messagebox-info-color);
+}
+
+.messagebox.info a:active {
+    color: var(--messagebox-info-link-color);
+}
+
+.messagebox.action {
+    background-color: var(--messagebox-action-background);
+    border-color: var(--messagebox-action-border);
+    color: var(--messagebox-action-color);
+}
+
+.messagebox.action a:active {
+    color: var(--messagebox-action-link-color);
+}
+
+.messagebox.warn {
+    background-color: var(--messagebox-warn-background);
+    border-color: var(--messagebox-warn-border);
+    color: var(--messagebox-warn-color);
+}
+
+.messagebox.warn a:active {
+    color: var(--messagebox-warn-link-color);
+}
+
+.messagebox.safe {
+    background-color: var(--messagebox-safe-background);
+    border-color: var(--messagebox-safe-border);
+    color: var(--messagebox-safe-color);
+}
+
+.messagebox.safe a:active {
+    color: var(--messagebox-safe-link-color);
+}
+
+.messagebox.disambig {
+    background-color: var(--messagebox-disambig-background);
+    border-color: var(--messagebox-disambig-border);
+    color: var(--messagebox-disambig-color);
+}
+
+.messagebox.disambig a:active {
+    color: var(--messagebox-disambig-link-color);
+}
+
+.messagebox.discord {
+    background-color: var(--messagebox-discord-background);
+    border-color: var(--messagebox-discord-border);
+    color: #fff;
+}
+
+.messagebox.discord a:active {
+    color: var(--messagebox-discord-link-color);
+}
+
+.messagebox.discord a:active.external {
+    font-style: italic;
+}
+
+.mw-message-box {
+    background-color: var(--body-light);
+    border-color: var(--body-dark);
+    border: 1px solid var(--body-border);
+    margin: 0.5em 0;
+    padding: 0.5em 1em;
+}
+
+.messagebox.discord a, .messagebox.discord a:active, .messagebox.discord a:visited {
+    background-color: #5865F2;
+    color: #fff;
+    text-decoration: underline;
+}
+
+.messagebox.obsolete a, .messagebox.obsolete a:active, .messagebox.obsolete a:visited {
+    background-color: var(--body-light);
+    border: 1px solid var(--body-border);
+    color: var(--link-color);
+    text-decoration: underline;
+}
+
+.messagebox.action a, .messagebox.action a:active, .messagebox.action a:visited {
+    background-color: var(--body-light);
+    border: 1px solid var(--body-border);
+    color: var(--link-color);
+    text-decoration: underline;
+}
+
+.messagebox.discord a.external, .messagebox.discord a:active.external, .messagebox.discord a:visited.external {
+    background-color: #5865F2;
+    color: #fff;
+    text-decoration: underline;
+}
+
+.messagebox.info a, .messagebox.info a:active, .messagebox.info a:visited {
+    background-color: var(--body-light);
+    border: 1px solid var(--body-border);
+    color: var(--link-color);
+    text-decoration: underline;
+}
+
+.messagebox.safe a, .messagebox.safe a:active, .messagebox.safe a:visited {
+    background-color: var(--body-light);
+    border: 1px solid var(--body-border);
+    color: var(--link-color);
+    text-decoration: underline;
+}
+
+.messagebox.disambig a, .messagebox.disambig a:active, .messagebox.disambig a:visited {
+    background-color: var(--body-light);
+    border: 1px solid var(--body-border);
+    color: var(--link-color);
+    text-decoration: underline;
+}
+
+.messagebox.warn a, .messagebox.warn a:active, .messagebox.warn a:visited {
+    background-color: var(--body-light);
+    border: 1px solid var(--body-border);
+    color: var(--link-color);
+    text-decoration: underline;
+}
+

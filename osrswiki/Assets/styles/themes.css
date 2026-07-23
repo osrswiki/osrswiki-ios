@@ -1,0 +1,397 @@
+/* --- Variable Definitions --- */
+
+/* Default Theme: OSRS Light */
+:root {
+    color-scheme: light;
+    --body-background-image: url(https://oldschool.runescape.wiki/images/Old_School_RuneScape_Wiki_background.jpg?2a17b);
+    --body-background-color: #c0a886;
+    --body-main: #e2dbc8;
+    --body-light: #d8ccb4;
+    --body-mid: #d0bd97;
+    --body-dark-shade: #b8a282;
+    --body-border: #94866d;
+    --text-color: #000000;
+    --link-color: #936039;
+    --link-visited-color: var(--link-color);
+    --redlink-color: #ba0000;
+    --heading-color: var(--text-color);
+    --byline-color: #4c4c4c;
+    --subtle-color: #777777;
+    --sidebar-color: var(--body-border);
+    --wikitable-header-bg: var(--body-dark-shade);
+    --wikitable-border: var(--body-border);
+    --wikitable-bg: var(--body-light);
+    --wikitable-color: var(--text-color);
+    --wikitable-alternating-bg: #e9e3d6;
+    --navbox-background: var(--body-main);
+    --navbox-border: var(--wikitable-border);
+    --navbox-title-background: var(--wikitable-header-bg);
+    --navbox-group-title-background: var(--body-mid);
+    --ooui-interface: var(--body-light);
+    --ooui-interface-border: var(--body-border);
+    --mw-code-background-color: #ddd4bb;
+    --tap-highlight-color: rgba(0, 0, 0, 0.1);
+    --external-icon: url(data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23936039' d='M6 1h5v5L8.86 3.85 4.7 8 4 7.3l4.15-4.16L6 1Z M2 3h2v1H2v6h6V8h1v2a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z'/%3E%3C/svg%3E);
+    --ul-list-style-image: url(data:image/svg+xml,%3C%3Fxml version='1.0' encoding='UTF-8'%3F%3E%3Csvg xmlns='http://www.w3.org/2000/svg' width='5' height='13'%3E%3Ccircle cx='2.5' cy='9' r='2.5' fill='%23000'/%3E%3C/svg%3E);
+    
+    /* Table highlighting colors from wiki */
+    --table-yes-background: #c3e8a3;
+    --table-yes-color: #2e5e05;
+    --table-no-background: #fbc0ba;
+    --table-no-color: #801c13;
+    --table-maybe-background: #fcea94;
+    --table-maybe-color: #786300;
+    --table-na-background: rgba(255,255,255,0.3);
+    --table-na-color: var(--subtle-color);
+    
+    /* Drop table rarity colors */
+    --droptable-text-color: #000;
+    --droptable-always-background: #afeeee;
+    --droptable-common-background: #56e156;
+    --droptable-uncommon-background: #ffed4c;
+    --droptable-rare-background: #ff863c;
+    --droptable-veryrare-background: #ff6262;
+    --droptable-random-background: #ffa3ff;
+    
+    /* Additional GEMW (Grand Exchange Market Watch) variables */
+    --gemw-positive-color: #6bc71f;
+    --gemw-unchanged-color: #3ea6e6;
+    --gemw-negative-color: #ee4231;
+    --gemw-historical-border-color: #000;
+    
+    /* Interface and interactive elements */
+    --sidebar: var(--sidebar-color);
+    --wikitable-bg-lighter: #f0e7d4;
+    --ooui-progressive: #0645ad;
+    --ooui-progressive--hover: #0b5394;
+    --ooui-accent: #36c;
+    
+    /* Message boxes and notifications */
+    --errorbox-bg: #ffeedd;
+    --errorbox-border: #ff6347;
+    --warningbox-bg: #fff8dc;
+    --warningbox-border: #ffa500;
+    --successbox-bg: #f0fff0;
+    --successbox-border: #32cd32;
+    
+    /* OOUI interface elements */
+    --ooui-normal: #f8f9fa;
+    --ooui-normal--hover: #eaecf0;
+    --ooui-normal-border: #a2a9b1;
+    --ooui-text: #222;
+    --ooui-input: #fff;
+    --ooui-input-border: #a2a9b1;
+    --ooui-input-border--hover: #72777d;
+    --ooui-window-background: rgba(255,255,255,0.95);
+    
+    /* Content-specific variables */
+    --production-selected-background: var(--table-yes-background);
+    --production-selected-color: var(--table-yes-color);
+    --questdetails-header-background: var(--wikitable-header-bg);
+    --questdetails-header-background-alt: var(--wikitable-alternating-bg);
+    --thumb-bg: #f8f9fa;
+    --diff-addedline-background: #d1f2d1;
+    --diff-inline-deletedline: #f8d7da;
+    
+    /* SMW and advanced interface variables */
+    --smw-ask-options-even-bg: var(--body-light);
+    --smw-ask-options-odd-bg: var(--wikitable-alternating-bg);
+    --button-background: var(--ooui-normal);
+    --button-color: var(--ooui-text);
+    --filter-black-to-link: brightness(0) saturate(100%) invert(35%) sepia(29%) saturate(1292%) hue-rotate(16deg) brightness(93%) contrast(92%);
+    
+    /* OOUI disabled states */
+    --ooui-disabled: #c8ccd1;
+    --ooui-disabled-text: #72777d;
+    --ooui-disabled-border: #c8ccd1;
+    
+    /* Phase 4: Gaming & Community Features */
+    --ajaxpoll-background: var(--wikitable-bg);
+    --coins-pos-color: #2f7b00;
+    --documentation-background: #f8f9fa;
+    --documentation-border: #a2a9b1;
+    --droptable-always-text-color: var(--droptable-text-color);
+    --droptable-common-text-color: var(--droptable-text-color);
+    --droptable-uncommon-text-color: var(--droptable-text-color);
+    --infobox-room-poh-color: #654321;
+    --keypress-background: #f8f9fa;
+    --keypress-border: #a2a9b1;
+    --keypress-color: #222;
+    
+    /* Message box variations */
+    --messagebox-action-background: #eef3ff;
+    --messagebox-action-border: #36c;
+    --messagebox-action-color: #222;
+    --messagebox-action-link-color: var(--link-color);
+    --messagebox-disambig-background: #fee7e6;
+    --messagebox-disambig-border: #d73027;
+    --messagebox-disambig-color: #222;
+    --messagebox-disambig-link-color: var(--link-color);
+    --messagebox-discord-background: #eef3ff;
+    --messagebox-discord-border: #5865f2;
+    --messagebox-discord-link-color: var(--link-color);
+    --messagebox-info-background: #e1f3ff;
+    --messagebox-info-border: #36c;
+    --messagebox-info-color: #222;
+    --messagebox-info-link-color: var(--link-color);
+    --messagebox-obsolete-background: #f5f5f5;
+    --messagebox-obsolete-border: #999;
+    --messagebox-obsolete-color: #666;
+    --messagebox-obsolete-link-color: var(--link-color);
+    --messagebox-safe-background: #d5fdf4;
+    --messagebox-safe-border: #00af89;
+    --messagebox-safe-color: #222;
+    --messagebox-safe-link-color: var(--link-color);
+    --messagebox-warn-background: #fef6e7;
+    --messagebox-warn-border: #fc3;
+    --messagebox-warn-color: #222;
+    --messagebox-warn-link-color: var(--link-color);
+    
+    /* Phase 5: Advanced Game Interface Variables */
+    --ajaxpoll-text-color: var(--text-color);
+    --ajaxpoll-answerbar-background: #3c780a;
+    --ajaxpoll-answerbar-border: #2d5a08;
+    
+    /* Phase 6: Main Page & Content Tile Variables */
+    --tile-dark-header-color: #ddd;
+    --transcript-strikethrough-color: var(--text-color);
+    
+    /* Phase 7: Advanced Gaming & Content Variables */
+    --rc-positive-color: #00af89;
+    --rc-negative-color: #d73027;
+    --sourceeditor-background-secondary: var(--body-light);
+    --sourceeditor-border: var(--body-border);
+    
+    /* Phase 8: User Roles, Echo Notifications & UI Chrome Variables */
+    --awb-purple: #8b5a96;
+    --admin-blue: #4285f4;
+    --bearcat-green: #2e7d32;
+    --background-text-color: var(--text-color);
+    --background-link-color: var(--link-color);
+    --body-dark: var(--body-dark-shade);
+    
+    /* Phase 9B: Strategic Mobile-Relevant Variables */
+    --diff-context-border-color: var(--body-border);
+    --diff-context-background: var(--body-main);
+    --diff-addedline-border-color: #a3d3ff;
+    --diff-addedline-color: #000;
+    --diff-deletedline-border-color: #ffe49c;
+    --diff-deletedline-color: #000;
+    --diff-deletedline-background: #ffe49c;
+    --tabber-active-tab-bg: var(--body-main);
+    --tabber-active-tab-color: var(--text-color);
+    --tabber-active-tab-hover-color: var(--text-color);
+    --tabber-active-tab-hover-bg: var(--body-light);
+    --tabber-active-tab-hover-border-color: var(--body-border);
+    --tabber-active-tab-border-hider-color: var(--body-main);
+    --tabber-inactive-tab-bg: var(--body-light);
+    --tabber-inactive-tab-color: var(--link-color);
+    --tabber-inactive-tab-border-color: var(--body-border);
+    --tabber-inactive-tab-hover-bg: var(--body-mid);
+    --tabber-inactive-tab-hover-border-color: var(--body-dark-shade);
+    --documentation-link-color: var(--link-color);
+    --tile-dark-byline-color: #ddd;
+}
+
+
+/* Theme: OSRS Dark */
+body.theme-osrs-dark {
+    color-scheme: dark;
+    --body-background-image: url(https://oldschool.runescape.wiki/images/Old_School_RuneScape_Wiki_background_brown_darkmode.jpg?8dc38);
+    --body-background-color: #1b1612;
+    --body-main: #28221d;
+    --body-light: #3e362f;
+    --body-mid: #312a25;
+    --body-dark-shade: #312a25;
+    --body-border: #736559;
+    --text-color: #f4eaea;
+    --link-color: #b79d7e;
+    --link-visited-color: var(--link-color);
+    --redlink-color: #f26d60;
+    --heading-color: var(--text-color);
+    --byline-color: #a4a1a1;
+    --subtle-color: var(--byline-color);
+    --sidebar-color: var(--body-border);
+    --wikitable-header-bg: #312a25;
+    --wikitable-border: #28221d;
+    --wikitable-bg: #3e362f;
+    --wikitable-color: var(--text-color);
+    --wikitable-alternating-bg: #372e27;
+    --navbox-background: var(--body-light);
+    --navbox-border: var(--wikitable-border);
+    --navbox-title-background: var(--wikitable-header-bg);
+    --navbox-group-title-background: var(--body-mid);
+    --ooui-interface: #312a25;
+    --ooui-interface-border: #483e37;
+    --mw-code-background-color: var(--body-dark-shade);
+    --tap-highlight-color: rgba(255, 255, 255, 0.1);
+    --external-icon: url(data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23b79d7e' d='M6 1h5v5L8.86 3.85 4.7 8 4 7.3l4.15-4.16L6 1Z M2 3h2v1H2v6h6V8h1v2a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z'/%3E%3C/svg%3E);
+    --ul-list-style-image: url(data:image/svg+xml,%3C%3Fxml version='1.0' encoding='UTF-8'%3F%3E%3Csvg xmlns='http://www.w3.org/2000/svg' width='5' height='13'%3E%3Ccircle cx='2.5' cy='9' r='2.5' fill='%23f4eaea'/%3E%3C/svg%3E);
+    
+    /* Table highlighting colors adapted for dark theme */
+    --table-yes-background: #2d4a1f;
+    --table-yes-color: #a8d67b;
+    --table-no-background: #4a2521;
+    --table-no-color: #f08a7d;
+    --table-maybe-background: #4a3f1e;
+    --table-maybe-color: #e4d464;
+    --table-na-background: rgba(0,0,0,0.3);
+    --table-na-color: var(--subtle-color);
+    
+    /* Drop table rarity colors adapted for dark theme */
+    --droptable-text-color: var(--text-color);
+    --droptable-always-background: #2f4a4a;
+    --droptable-common-background: #2a4a2a;
+    --droptable-uncommon-background: #4a4a1e;
+    --droptable-rare-background: #4a2f1e;
+    --droptable-veryrare-background: #4a2525;
+    --droptable-random-background: #3d2a3d;
+    
+    /* Additional GEMW variables adapted for dark theme */
+    --gemw-positive-color: #2a4a2a;
+    --gemw-unchanged-color: #2a3a4a;
+    --gemw-negative-color: #4a2525;
+    --gemw-historical-border-color: var(--body-border);
+    
+    /* Interface and interactive elements adapted for dark theme */
+    --sidebar: var(--sidebar-color);
+    --wikitable-bg-lighter: #453c33;
+    --ooui-progressive: #4d9bff;
+    --ooui-progressive--hover: #6babff;
+    --ooui-accent: #72a7f7;
+    
+    /* Message boxes and notifications adapted for dark theme */
+    --errorbox-bg: #4a2626;
+    --errorbox-border: #cc5555;
+    --warningbox-bg: #4a3d26;
+    --warningbox-border: #cc8844;
+    --successbox-bg: #264a26;
+    --successbox-border: #55aa55;
+    
+    /* OOUI interface elements adapted for dark theme */
+    --ooui-normal: #3e362f;
+    --ooui-normal--hover: #453c33;
+    --ooui-normal-border: #736559;
+    --ooui-text: var(--text-color);
+    --ooui-input: #312a25;
+    --ooui-input-border: #736559;
+    --ooui-input-border--hover: #a4a1a1;
+    --ooui-window-background: rgba(40,34,29,0.95);
+    
+    /* Content-specific variables adapted for dark theme */
+    --production-selected-background: var(--table-yes-background);
+    --production-selected-color: var(--table-yes-color);
+    --questdetails-header-background: var(--wikitable-header-bg);
+    --questdetails-header-background-alt: var(--wikitable-alternating-bg);
+    --thumb-bg: #3e362f;
+    --diff-addedline-background: #2a4a2a;
+    --diff-inline-deletedline: #4a2525;
+    
+    /* SMW and advanced interface variables adapted for dark theme */
+    --smw-ask-options-even-bg: var(--body-mid);
+    --smw-ask-options-odd-bg: var(--body-dark-shade);
+    --button-background: var(--ooui-normal);
+    --button-color: var(--ooui-text);
+    --filter-black-to-link: brightness(0) saturate(100%) invert(67%) sepia(18%) saturate(657%) hue-rotate(13deg) brightness(99%) contrast(96%);
+    
+    /* OOUI disabled states adapted for dark theme */
+    --ooui-disabled: #54524f;
+    --ooui-disabled-text: #a4a1a1;
+    --ooui-disabled-border: #54524f;
+    
+    /* Phase 4: Gaming & Community Features adapted for dark theme */
+    --ajaxpoll-background: var(--wikitable-bg);
+    --coins-pos-color: #7bb355;
+    --documentation-background: #312a25;
+    --documentation-border: #736559;
+    --droptable-always-text-color: var(--text-color);
+    --droptable-common-text-color: var(--text-color);
+    --droptable-uncommon-text-color: var(--text-color);
+    --infobox-room-poh-color: #b8956f;
+    --keypress-background: #312a25;
+    --keypress-border: #736559;
+    --keypress-color: var(--text-color);
+    
+    /* Message box variations adapted for dark theme */
+    --messagebox-action-background: #2a3040;
+    --messagebox-action-border: #72a7f7;
+    --messagebox-action-color: var(--text-color);
+    --messagebox-action-link-color: var(--link-color);
+    --messagebox-disambig-background: #402a2a;
+    --messagebox-disambig-border: #f26d60;
+    --messagebox-disambig-color: var(--text-color);
+    --messagebox-disambig-link-color: var(--link-color);
+    --messagebox-discord-background: #2a3040;
+    --messagebox-discord-border: #8a95ff;
+    --messagebox-discord-link-color: var(--link-color);
+    --messagebox-info-background: #2a3540;
+    --messagebox-info-border: #72a7f7;
+    --messagebox-info-color: var(--text-color);
+    --messagebox-info-link-color: var(--link-color);
+    --messagebox-obsolete-background: #3a3a3a;
+    --messagebox-obsolete-border: #999;
+    --messagebox-obsolete-color: #ccc;
+    --messagebox-obsolete-link-color: var(--link-color);
+    --messagebox-safe-background: #2a4032;
+    --messagebox-safe-border: #55bb99;
+    --messagebox-safe-color: var(--text-color);
+    --messagebox-safe-link-color: var(--link-color);
+    --messagebox-warn-background: #403a2a;
+    --messagebox-warn-border: #ffcc55;
+    --messagebox-warn-color: var(--text-color);
+    --messagebox-warn-link-color: var(--link-color);
+    
+    /* Phase 5: Advanced Game Interface Variables adapted for dark theme */
+    --ajaxpoll-text-color: var(--text-color);
+    --ajaxpoll-answerbar-background: #4a8a1a;
+    --ajaxpoll-answerbar-border: #3a6a0a;
+    
+    /* Phase 6: Main Page & Content Tile Variables adapted for dark theme */
+    --tile-dark-header-color: #aaa;
+    --transcript-strikethrough-color: var(--text-color);
+    
+    /* Phase 7: Advanced Gaming & Content Variables adapted for dark theme */
+    --rc-positive-color: #55bb99;
+    --rc-negative-color: #f26d60;
+    --sourceeditor-background-secondary: var(--body-mid);
+    --sourceeditor-border: var(--body-border);
+    
+    /* Phase 8: User Roles, Echo Notifications & UI Chrome Variables adapted for dark theme */
+    --awb-purple: #c799d1;
+    --admin-blue: #7bb3ff;
+    --bearcat-green: #66bb6a;
+    --background-text-color: var(--text-color);
+    --background-link-color: var(--link-color);
+    --body-dark: var(--body-dark-shade);
+    
+    /* Phase 9B: Strategic Mobile-Relevant Variables adapted for dark theme */
+    --diff-context-border-color: var(--body-border);
+    --diff-context-background: var(--body-mid);
+    --diff-addedline-border-color: #2a4a4a;
+    --diff-addedline-color: var(--text-color);
+    --diff-deletedline-border-color: #4a3d26;
+    --diff-deletedline-color: var(--text-color);
+    --diff-deletedline-background: #4a3d26;
+    --tabber-active-tab-bg: var(--body-mid);
+    --tabber-active-tab-color: var(--text-color);
+    --tabber-active-tab-hover-color: var(--text-color);
+    --tabber-active-tab-hover-bg: var(--body-light);
+    --tabber-active-tab-hover-border-color: var(--body-border);
+    --tabber-active-tab-border-hider-color: var(--body-mid);
+    --tabber-inactive-tab-bg: var(--body-light);
+    --tabber-inactive-tab-color: var(--link-color);
+    --tabber-inactive-tab-border-color: var(--body-border);
+    --tabber-inactive-tab-hover-bg: var(--wikitable-header-bg);
+    --tabber-inactive-tab-hover-border-color: var(--body-border);
+    --documentation-link-color: var(--link-color);
+    --tile-dark-byline-color: #aaa;
+}
+
+
+
+/* --- Global Application --- */
+
+/* Apply theme-aware tap highlight to all elements */
+* {
+    -webkit-tap-highlight-color: var(--tap-highlight-color);
+}

@@ -1,0 +1,147 @@
+/*
+    Styles for MediaWiki navbox tables.
+    These rules are based on the desktop wiki's styling with refinements.
+*/
+
+.navbox {
+    font-size: 0.85em;
+    background: var(--navbox-background);
+    border-collapse: collapse;
+    /* Margin is now handled by the parent .collapsible-container. */
+    margin: 0;
+    width: 100%;
+    clear: both;
+    box-shadow: 0 0.25rem 0.35rem -0.25rem rgba(0, 0, 0, 0.1);
+}
+
+/* Remove generic cell borders - use selective borders instead to match web version */
+/* Main navbox cells will get borders through specific selectors below */
+
+/* Remove generic subgroup cell borders - use selective borders instead to match web version */
+/* Subgroup cells will get borders through specific selectors below */
+
+/* Target cells containing .navbox-group-title to fix cell-in-cell appearance */
+/* These cells need transparent backgrounds and zero padding so the nested element styling works */
+.navbox.navbox > * > tr > th:has(.navbox-group-title),
+.navbox.navbox > * > tr > td:has(.navbox-group-title) {
+    background: transparent !important;
+    padding: 0 !important;
+}
+
+/* Comprehensive fallback selectors for browsers without :has() support */
+/* Target cells that are likely to contain group titles */
+.navbox.navbox > * > tr > .navbox-group,
+.navbox.navbox > * > tr > th.navbox-group,
+.navbox.navbox > * > tr > td.navbox-group {
+    background: transparent !important;
+    padding: 0 !important;
+}
+
+/* Apply styling directly to table cells to avoid nested background conflicts */
+.navbox.navbox .navbox-title {
+    font-size: 110%;
+    line-height: 1.6em;
+    background: var(--navbox-title-background);
+    text-align: center;
+    padding: 0.4em 1em;
+    border-bottom: 1px solid var(--navbox-border);
+    font-weight: bold;
+}
+
+.navbox.navbox .navbox-group-title {
+    background: var(--navbox-group-title-background);
+    text-align: left;
+    padding: 0.25em 1em; /* Match web version padding */
+    width: 1%;
+    white-space: nowrap;
+    border: 1px solid var(--navbox-border);
+    border-width: 0 1px 1px 0; /* Right and bottom borders only - matches web version */
+    font-weight: 600;
+}
+
+.navbox.navbox .navbox-list {
+    padding: 0.25em 0.5em;
+    line-height: 1.4em;
+    /* No bottom border to prevent doubling with row separators */
+}
+
+/* Make list items display inline like the web version */
+.navbox.navbox ul {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.navbox.navbox li {
+    display: inline;
+    margin: 0;
+    padding: 0;
+}
+
+/* Add separators between inline list items */
+.navbox.navbox li:not(:last-child)::after {
+    content: " • ";
+    color: var(--subtle-color);
+    margin: 0 0.3em;
+}
+
+/* Add row separators like web version - second row and beyond get top borders */
+/* But only apply to direct children to avoid conflicts with subgroups */
+.navbox.navbox > tbody > tr:nth-child(n+2) {
+    border-top: 1px solid var(--navbox-border);
+}
+
+/* Nested navbox tables inside navbox-list cells */
+.navbox.navbox .navbox-list > .navbox {
+    margin: -0.25em -0.5em; /* Compensate for parent cell padding */
+    border: none; /* Remove outer border on nested tables */
+    box-shadow: none; /* Remove shadow from nested tables */
+}
+
+/* Styling for navbox-subgroup nested tables */
+.navbox.navbox .navbox-subgroup {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 0;
+    border: none;
+    box-shadow: none;
+}
+
+/* Cells containing navbox-subgroup tables should have zero padding to eliminate cell-in-cell effect */
+.navbox.navbox .navbox-parent {
+    padding: 0 !important;
+}
+
+/* Group titles inside navbox-subgroup tables use same selective border pattern */
+.navbox.navbox .navbox-subgroup .navbox-group-title {
+    background: var(--navbox-group-title-background);
+    text-align: left;
+    padding: 0.25em 1em; /* Match web version padding */
+    width: 1%;
+    white-space: nowrap;
+    border: 1px solid var(--navbox-border);
+    border-width: 0 1px 1px 0; /* Right and bottom borders only - matches web version */
+    font-weight: 600;
+}
+
+/* List cells inside navbox-subgroup tables - no bottom border to prevent doubling */
+.navbox.navbox .navbox-subgroup .navbox-list {
+    /* No bottom border to prevent doubling with row separators */
+}
+
+/* Row separators for subgroup tables - second row and beyond get top borders */
+.navbox.navbox .navbox-subgroup tr:nth-child(n+2) {
+    border-top: 1px solid var(--navbox-border);
+}
+
+/* Remove bottom borders from last row of subgroups to prevent double borders */
+.navbox.navbox .navbox-subgroup > tbody > tr:last-child > th,
+.navbox.navbox .navbox-subgroup > tbody > tr:last-child > td {
+    border-bottom: none;
+}
+
+/* Also remove bottom borders from last row of main navbox */
+.navbox.navbox > tbody > tr:last-child > th,
+.navbox.navbox > tbody > tr:last-child > td {
+    border-bottom: none;
+}

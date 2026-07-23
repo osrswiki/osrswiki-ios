@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "asset_set_id": "osrs-surface-maps-949feadd10f7",
+  "repository": "osrswiki/osrswiki-tooling",
+  "release_tag": "map-assets-v1-949feadd10f7",
+  "assets": [
+    {
+      "name": "map_floor_0.mbtiles",
+      "sha256": "8abc2cbe5c25cbdb70ac00d763d6560b7544a1befa7546d7cc67205273e22cea",
+      "bytes": 44019712
+    },
+    {
+      "name": "map_floor_1.mbtiles",
+      "sha256": "130a98d27f069d76c2b902968c7c62892ca9046d5172103506d0487984b45e07",
+      "bytes": 4255744
+    },
+    {
+      "name": "map_floor_2.mbtiles",
+      "sha256": "43f1fbf54377d39c5523884fc8d406adbec48178c46bede05000388116e7e36b",
+      "bytes": 2453504
+    },
+    {
+      "name": "map_floor_3.mbtiles",
+      "sha256": "208fd6907e9746ec849cc7f51ae09bb9cf037b3b4eca044b825d19af676a8b05",
+      "bytes": 1122304
+    }
+  ],
+  "provenance": {
+    "source_authority": "https://github.com/omiyawaki/osrswiki-fleet.git#main",
+    "generator": "tools/map/map-asset-generator.py",
+    "artifact_class": "immutable-reproducible-release",
+    "generated_intermediates": "host-local-only"
+  }
+}

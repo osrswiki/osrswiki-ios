@@ -1,0 +1,1118 @@
+/*
+ * FORMS MODULE (DEDUPLICATED)
+ * Removed 18 duplicate selectors
+ * Generated: forms.css
+ */
+
+.production-selected {
+    background: var(--table-yes-background);
+    color: var(--table-yes-color);
+}
+
+#pagehistory li.selected {
+    background-color: var(--body-light);
+    border: 1px dashed var(--body-border);
+    color: inherit;
+    outline: none;
+}
+
+.cdx-button.cdx-button--fake-button--enabled.cdx-button--weight-primary.cdx-button--action-progressive {
+    background-color: var(--ooui-progressive);
+    border-color: var(--ooui-progressive);
+    color: #fff;
+}
+
+.cdx-button.cdx-button--fake-button--enabled.cdx-button--weight-primary.cdx-button--action-progressive:hover, .cdx-checkbox__input:enabled:indeterminate:hover + .cdx-checkbox__icon, .oo-ui-buttonElement-framed.oo-ui-widget-enabled.oo-ui-flaggedElement-primary.oo-ui-flaggedElement-progressive > .oo-ui-buttonElement-button:hover, .oo-ui-checkboxInputWidget.oo-ui-widget-enabled [type='checkbox']:checked:hover + span, .oo-ui-checkboxInputWidget.oo-ui-widget-enabled [type='checkbox']:indeterminate:hover + span, .oo-ui-radioInputWidget.oo-ui-widget-enabled [type='radio']:active + span, input.smw-ask-action-btn.smw-ask-action-btn-dblue:hover {
+    background-color: var(--ooui-progressive--hover);
+    border-color: var(--ooui-progressive--hover);
+}
+
+.cdx-button.cdx-button--fake-button--enabled.cdx-button--weight-primary.cdx-button--action-progressive:focus {
+    box-shadow: inset 0 0 0 1px var(--ooui-accent),inset 0 0 0 2px #fff;
+}
+
+.cdx-message--error {
+    background-color: var(--errorbox-bg);
+    border-color: var(--errorbox-border);
+    border-radius: 4px;
+    border: 1px solid;
+    margin: 8px 0;
+    padding: 8px 12px;
+}
+
+.cdx-message--warning {
+    background-color: var(--warningbox-bg);
+    border-color: var(--warningbox-border);
+    border-radius: 4px;
+    border: 1px solid;
+    margin: 8px 0;
+    padding: 8px 12px;
+}
+
+.cdx-message--success {
+    background-color: var(--successbox-bg);
+    border-color: var(--successbox-border);
+    border-radius: 4px;
+    border: 1px solid;
+    margin: 8px 0;
+    padding: 8px 12px;
+}
+
+.cdx-button.cdx-button--fake-button--enabled, .oo-ui-buttonElement-framed.oo-ui-widget-enabled > .oo-ui-buttonElement-button, span.fileinput-button {
+    background-color: var(--ooui-normal);
+    border-color: var(--ooui-normal-border);
+    color: var(--ooui-text);
+}
+
+.cdx-button.cdx-button--fake-button--enabled:active, .cdx-button.cdx-button--fake-button--enabled:hover, .oo-ui-buttonElement-framed.oo-ui-widget-enabled > .oo-ui-buttonElement-button:active, .oo-ui-buttonElement-framed.oo-ui-widget-enabled > .oo-ui-buttonElement-button:hover, .oo-ui-buttonElement-framed.oo-ui-widget-enabled.oo-ui-buttonElement-pressed > .oo-ui-buttonElement-button {
+    background-color: var(--ooui-normal--hover);
+    border-color: var(--ooui-normal-border);
+    color: var(--ooui-text);
+}
+
+.cdx-button.cdx-button--fake-button--enabled:focus:not(:active):not(.cdx-button--is-active) {
+    border-color: var(--ooui-accent);
+    box-shadow: inset 0 0 0 1px var(--ooui-accent),inset 0 0 0 2px #fff;
+    color: var(--ooui-text);
+}
+
+.cdx-button.cdx-button--fake-button--enabled:visited, .mw-echo-ui-menuItemWidget > .oo-ui-buttonElement-button > .oo-ui-labelElement-label, .oo-ui-buttonElement-framed.oo-ui-widget-enabled.oo-ui-flaggedElement-destructive > .oo-ui-buttonElement-button, .oo-ui-buttonElement-framed.oo-ui-widget-enabled.oo-ui-flaggedElement-progressive > .oo-ui-buttonElement-button, .oo-ui-buttonElement-frameless.oo-ui-widget-enabled > .oo-ui-buttonElement-button, .oo-ui-buttonElement-frameless.oo-ui-widget-enabled > .oo-ui-buttonElement-button:active, .oo-ui-buttonElement-frameless.oo-ui-widget-enabled > .oo-ui-buttonElement-button:hover, .oo-ui-buttonElement-frameless.oo-ui-widget-enabled.oo-ui-buttonElement-pressed > input.oo-ui-buttonElement-button, .oo-ui-buttonElement-frameless.oo-ui-widget-enabled.oo-ui-flaggedElement-progressive > .oo-ui-buttonElement-button, .oo-ui-buttonElement-frameless.oo-ui-widget-enabled.oo-ui-flaggedElement-progressive > .oo-ui-buttonElement-button:hover, .oo-ui-dropdownInputWidget.oo-ui-widget-enabled select {
+    color: var(--ooui-text);
+}
+
+.cdx-button.cdx-button--fake-button--enabled.cdx-button--weight-primary.cdx-button--action-progressive.is-on, .cdx-button.cdx-button--fake-button--enabled.cdx-button--weight-primary.cdx-button--action-progressive:active {
+    background-color: var(--ooui-progressive--hover);
+    border-color: var(--ooui-progressive--hover);
+    box-shadow: none;
+}
+
+.cdx-button.cdx-button--weight-quiet {
+    background: transparent;
+    border-color: transparent;
+    color: var(--text-color);
+}
+
+.cdx-button.cdx-button--weight-quiet.cdx-button--action-progressive:hover, .cdx-button.cdx-button--weight-quiet:hover, input[type='checkbox']:hover + .cdx-button.cdx-button--weight-quiet {
+    background-color: rgba(0,24,73,0.02745098);
+    border-color: transparent;
+    color: var(--text-color);
+}
+
+.cdx-button.cdx-button--weight-quiet.cdx-button--action-progressive, .cdx-button.cdx-button--weight-quiet.cdx-button--action-progressive:focus, .cdx-button.cdx-button--weight-quiet:focus, .mw-rcfilters-ui-filterTagMultiselectWidget-wrapper-content-title, input[type='checkbox']:focus + .cdx-button.cdx-button--weight-quiet {
+    color: var(--text-color);
+}
+
+.cdx-button.cdx-button--weight-quiet.cdx-button--action-progressive:active, .cdx-button.cdx-button--weight-quiet:active, input[type='checkbox']:active + .cdx-button.cdx-button--weight-quiet {
+    background-color: rgba(0,36,73,0.08235294);
+    border-color: #72777d;
+    color: var(--text-color);
+}
+
+.cdx-checkbox__input:enabled:indeterminate + .cdx-checkbox__icon, .oo-ui-buttonElement-framed.oo-ui-widget-enabled.oo-ui-flaggedElement-primary.oo-ui-flaggedElement-progressive > .oo-ui-buttonElement-button, .oo-ui-checkboxInputWidget.oo-ui-widget-enabled [type='checkbox']:checked + span, .oo-ui-checkboxInputWidget.oo-ui-widget-enabled [type='checkbox']:indeterminate + span {
+    background-color: var(--ooui-progressive);
+    border-color: var(--ooui-progressive);
+}
+
+.cdx-checkbox__input:enabled:active + .cdx-checkbox__icon, .cdx-checkbox__input:enabled:indeterminate:active + .cdx-checkbox__icon, .oo-ui-checkboxInputWidget.oo-ui-widget-enabled [type='checkbox']:active + span, .oo-ui-checkboxInputWidget.oo-ui-widget-enabled [type='checkbox']:checked:active + span, .oo-ui-checkboxInputWidget.oo-ui-widget-enabled [type='checkbox']:indeterminate:active + span {
+    background-color: var(--ooui-progressive--hover);
+    border-color: var(--ooui-progressive--hover);
+    box-shadow: inset 0 0 0 1px var(--ooui-progressive--hover);
+}
+
+.cdx-checkbox__input:enabled:indeterminate:focus:not(:active), .cdx-checkbox__input:enabled:indeterminate:focus:not(:active):not(:hover) + .cdx-checkbox__icon, .oo-ui-checkboxInputWidget.oo-ui-widget-enabled [type='checkbox']:checked:focus + span, .oo-ui-checkboxInputWidget.oo-ui-widget-enabled [type='checkbox']:indeterminate:focus + span {
+    background-color: var(--ooui-progressive--hover);
+    border-color: var(--ooui-accent);
+    box-shadow: inset 0 0 0 1px var(--ooui-accent),inset 0 0 0 2px #fff;
+}
+
+.cdx-checkbox__input:enabled:hover + .cdx-checkbox__icon, .oo-ui-checkboxInputWidget.oo-ui-widget-enabled [type='checkbox']:hover + span, .oo-ui-processDialog .oo-ui-actionWidget:not(.oo-ui-flaggedElement-progressive):not(.oo-ui-flaggedElement-destructive) > .oo-ui-buttonElement-button:focus, .oo-ui-radioInputWidget.oo-ui-widget-enabled [type='radio']:hover + span, .oo-ui-textInputWidget.oo-ui-widget-enabled:hover .oo-ui-inputWidget-input:focus {
+    border-color: var(--ooui-accent);
+}
+
+.cdx-message {
+    border-radius: 4px;
+    color: var(--text-color);
+    margin: 8px 0;
+    padding: 8px 12px;
+}
+
+input[type='checkbox']:hover + .cdx-button.cdx-button--weight-quiet.cdx-button--action-progressive {
+    background-color: rgba(0,24,73,0.027);
+    border-color: transparent;
+    color: var(--ooui-progressive);
+}
+
+input[type='checkbox']:focus + .cdx-button.cdx-button--weight-quiet.cdx-button--action-progressive {
+    color: var(--ooui-progressive);
+}
+
+input[type='checkbox']:active + .cdx-button.cdx-button--weight-quiet.cdx-button--action-progressive {
+    background-color: rgba(0,36,73,0.082);
+    border-color: #72777d;
+    color: var(--ooui-progressive);
+}
+
+.smw-ask-format fieldset {
+    border-color: var(--sidebar);
+    margin: 8px 0;
+    padding: 8px;
+}
+
+.smw-ask-query-format select {
+    background-color: var(--ooui-interface);
+    border-radius: 2px;
+    border: 1px solid var(--ooui-interface-border);
+    color: var(--text-color);
+    padding: 4px 8px;
+}
+
+.mw-echo-ui-toggleReadCircleButtonWidget-circle-unread, .smw-ask-button-lgrey:hover, .smw-ask-button-submit input:hover {
+    background-color: var(--ooui-normal--hover);
+    border-color: var(--ooui-normal-border);
+}
+
+.smallChart .highcharts-button title + rect, .smallChart .highcharts-input-group, .smallChart .zoomButton {
+    display: none;
+}
+
+.highcharts-button-box, .highcharts-scrollbar-button {
+    fill: var(--ooui-normal);
+    stroke: var(--ooui-normal-border);
+}
+
+.tile-bottom.link-button {
+    align-self: flex-end;
+    padding: 0;
+}
+
+.tile-bottom.link-button a {
+    background-color: var(--ooui-normal);
+    border-radius: 2px;
+    border: 1px solid var(--ooui-normal-border);
+    color: var(--ooui-text);
+    display: block;
+    padding: 0.75em 1.5em 0.8em;
+    text-align: center;
+    text-decoration: none;
+    transition: background-color 0.2s;
+}
+
+.oo-ui-buttonElement-framed.oo-ui-widget-enabled.oo-ui-flaggedElement-destructive > .oo-ui-buttonElement-button:hover, .oo-ui-dropdownInputWidget.oo-ui-widget-enabled:hover, .oo-ui-tagItemWidget.oo-ui-widget-enabled .oo-ui-buttonElement-button:hover, .tile-bottom.link-button a:hover {
+    background-color: var(--ooui-normal--hover);
+}
+
+#mwe-popups-settings main#mwe-popups-settings-form p {
+    color: var(--byline-color);
+    margin: 8px 0;
+}
+
+#mwe-popups-settings main#mwe-popups-settings-form form label > span {
+    color: var(--ooui-text);
+    font-weight: normal;
+}
+
+.smw-ask-button-submit input {
+    background-color: var(--ooui-normal);
+    border-color: var(--ooui-normal-border);
+    border-radius: 2px;
+    border: 1px solid var(--ooui-normal-border);
+    color: var(--text-color);
+    cursor: pointer;
+    padding: 6px 12px;
+}
+
+input.smw-ask-action-btn.smw-ask-action-btn-dblue {
+    background-color: var(--ooui-progressive);
+    border-color: var(--ooui-normal-border);
+    border-radius: 2px;
+    border: 1px solid var(--ooui-progressive);
+    color: var(--ooui-text);
+    cursor: pointer;
+    padding: 6px 12px;
+}
+
+.smw-tabs input.nav-tab:checked + label.nav-label {
+    background-color: var(--ooui-normal);
+    border-color: var(--ooui-normal-border);
+    border: 1px solid var(--ooui-normal-border);
+    color: var(--ooui-text);
+}
+
+.smw-tabs input.nav-tab:checked + label.nav-label:hover {
+    color: inherit;
+}
+
+.smw-ui-input-filter {
+    background-color: var(--ooui-interface);
+    border-color: var(--ooui-interface-border);
+    border-radius: 2px;
+    border: 1px solid var(--ooui-interface-border);
+    color: var(--ooui-text);
+    padding: 4px 8px;
+}
+
+.smw-ui-input-filter input {
+    background: transparent;
+    border-left-color: var(--ooui-interface-border) !important;
+    border-left: 1px solid var(--ooui-interface-border) !important;
+    color: var(--ooui-text) !important;
+    padding: 4px 8px;
+}
+
+.mw-widgets-datetime-dateTimeInputWidget-handle {
+    background-color: var(--ooui-input);
+    border-color: var(--ooui-input-border);
+    border-radius: 2px;
+    border: 1px solid var(--ooui-input-border);
+    color: var(--ooui-text);
+    padding: 6px 10px;
+}
+
+.mw-widget-dateInputWidget-calendar {
+    background-color: var(--ooui-interface);
+    border-radius: 4px;
+    border: 1px solid var(--ooui-interface-border);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+}
+
+.musicMap-buttons {
+    margin: 0.7em;
+    text-align: center;
+}
+
+.equipment-div-buttons {
+    background-image: url(/images/Worn_equipment_tab_%28borderless%29.png?bce01);
+    height: 244px;
+    margin: 4px 0 3px;
+}
+
+.equipment-statsbutton {
+    box-shadow: 2px 2px 3px black;
+    cursor: pointer;
+    height: 40px;
+    left: 0px;
+    top: 204px;
+    width: 40px;
+}
+
+.equipment-ikodbutton {
+    box-shadow: 2px 2px 3px black;
+    cursor: pointer;
+    height: 40px;
+    left: 90px;
+    top: 204px;
+    width: 40px;
+}
+
+.mainpage-recent-updates .tile-bottom.link-button a {
+    padding: 1rem 1.5rem 0.75rem;
+    text-align: left;
+}
+
+.mainpage-contents .tile-bottom.link-button a {
+    padding: 0.75em 0.2em;
+}
+
+.highcharts-range-selector-group text {
+    color: var(--ooui-text) !important;
+    fill: var(--ooui-text) !important;
+}
+
+.mw-rcfilters-ui-filterTagMultiselectWidget-emptyFilters {
+    color: var(--byline-color);
+}
+
+.mw-rcfilters-collapsed .mw-rcfilters-ui-filterTagMultiselectWidget {
+    border-bottom-color: var(--ooui-interface-border);
+}
+
+.mw-echo-ui-toggleReadCircleButtonWidget-circle {
+    background-color: var(--ooui-progressive);
+}
+
+.mw-echo-ui-toggleReadCircleButtonWidget:hover .mw-echo-ui-toggleReadCircleButtonWidget-circle, .mw-widgets-datetime-calendarWidget-grid .mw-widgets-datetime-calendarWidget-cell.mw-widgets-datetime-calendarWidget-selected .oo-ui-buttonElement-button {
+    background-color: var(--ooui-progressive--hover);
+}
+
+.mw-echo-ui-toggleReadCircleButtonWidget:hover .mw-echo-ui-toggleReadCircleButtonWidget-circle-unread, .mw-widgets-datetime-dateTimeInputWidget.oo-ui-widget-enabled .mw-widgets-datetime-dateTimeInputWidget-editField:hover, .oo-ui-dropdownInputWidget.oo-ui-widget-enabled {
+    background-color: var(--ooui-normal);
+}
+
+.vector-search-box .cdx-menu-item__content {
+    background: none;
+}
+
+.smw-ask-search fieldset {
+    background: var(--body-light);
+    border-color: var(--sidebar);
+    border: 1px solid var(--body-border);
+    padding: 1em;
+}
+
+.mw-widget-calendarWidget-item-selected {
+    background: var(--ooui-accent);
+    color: #fff;
+    font-weight: bold;
+}
+
+.smw-ask-actions textarea {
+    background-color: var(--ooui-interface);
+    background: var(--ooui-input);
+    border-color: var(--ooui-interface-border);
+    border: 1px solid var(--ooui-input-border);
+    color: var(--ooui-text);
+    color: var(--text-color);
+    font-family: inherit;
+    padding: 0.5em;
+}
+
+.smw-ask-actions textarea:focus {
+    border-color: var(--ooui-progressive);
+    outline: none;
+}
+
+.mw-rcfilters-ui-menuSelectWidget-footer {
+    background: var(--body-light);
+    border-top: 1px solid var(--body-border);
+    padding: 0.5em;
+}
+
+.smw-ask-condition fieldset {
+    border-color: var(--sidebar);
+}
+
+.smw-ask-query textarea {
+    background-color: var(--ooui-interface);
+    border-color: var(--ooui-interface-border);
+    color: var(--ooui-text);
+}
+
+.oo-ui-checkboxInputWidget [type='checkbox'] + span, .oo-ui-radioInputWidget [type='radio'] + span {
+    background-color: var(--ooui-input);
+    border-color: var(--ooui-input-border);
+}
+
+.oo-ui-radioInputWidget.oo-ui-widget-enabled [type='radio']:checked + span {
+    border-color: var(--ooui-progressive);
+}
+
+.oo-ui-radioInputWidget.oo-ui-widget-enabled [type='radio']:checked:active + span:before, .oo-ui-radioInputWidget.oo-ui-widget-enabled [type='radio']:checked:hover + span {
+    border-color: var(--ooui-progressive--hover);
+}
+
+.oo-ui-buttonElement-framed.oo-ui-widget-enabled > .oo-ui-buttonElement-button:focus, .oo-ui-buttonElement-framed.oo-ui-widget-enabled.oo-ui-flaggedElement-progressive > .oo-ui-buttonElement-button:focus, .oo-ui-buttonElement-frameless.oo-ui-widget-enabled > .oo-ui-buttonElement-button:focus, .oo-ui-checkboxInputWidget.oo-ui-widget-enabled [type='checkbox']:focus + span, .oo-ui-dropdownInputWidget.oo-ui-widget-enabled select:focus, .oo-ui-textInputWidget.oo-ui-widget-enabled .oo-ui-inputWidget-input:focus {
+    border-color: var(--ooui-accent);
+    box-shadow: inset 0 0 0 1px var(--ooui-accent);
+}
+
+.oo-ui-radioInputWidget.oo-ui-widget-enabled [type='radio']:checked:active + span {
+    border-color: var(--ooui-progressive--hover);
+    box-shadow: inset 0 0 0 1px var(--ooui-progressive--hover);
+}
+
+.oo-ui-checkboxInputWidget [type='checkbox']:disabled + span, .oo-ui-radioInputWidget [type='radio']:disabled + span {
+    background-color: var(--ooui-disabled);
+    border-color: var(--ooui-disabled);
+}
+
+.oo-ui-dropdownInputWidget select {
+    border-color: var(--ooui-normal-border);
+}
+
+.oo-ui-dropdownInputWidget option {
+    background-color: var(--ooui-interface);
+}
+
+.oo-ui-dropdownInputWidget.oo-ui-widget-enabled select:active, .oo-ui-dropdownInputWidget.oo-ui-widget-enabled select:hover {
+    border-color: var(--ooui-normal-border);
+    color: var(--ooui-text);
+}
+
+.oo-ui-textInputWidget .oo-ui-inputWidget-input {
+    background-color: var(--ooui-input);
+    border-color: var(--ooui-input-border);
+    color: var(--ooui-text);
+}
+
+.mw-widgets-datetime-calendarWidget-grid .mw-widgets-datetime-calendarWidget-cell.mw-widgets-datetime-calendarWidget-extra .oo-ui-buttonElement-button .oo-ui-labelElement-label, .oo-ui-textInputWidget.oo-ui-widget-enabled .oo-ui-inputWidget-input::placeholder {
+    color: var(--subtle-color);
+}
+
+.oo-ui-textInputWidget.oo-ui-widget-enabled .oo-ui-inputWidget-input[readonly]:not(.oo-ui-pendingElement-pending) {
+    background-color: var(--ooui-disabled);
+    color: var(--ooui-disabled-text);
+}
+
+.mw-widget-dateInputWidget.oo-ui-widget-enabled .mw-widget-dateInputWidget-handle:hover, .mw-widgets-datetime-dateTimeInputWidget.oo-ui-widget-enabled.mw-widgets-datetime-dateTimeInputWidget-handle:hover, .mw-widgets-datetime-dateTimeInputWidget.oo-ui-widget-enabled:hover input, .mw-widgets-datetime-dateTimeInputWidget.oo-ui-widget-enabled:hover textarea, .oo-ui-textInputWidget.oo-ui-widget-enabled:hover .oo-ui-inputWidget-input {
+    border-color: var(--ooui-input-border--hover);
+}
+
+.oo-ui-textInputWidget.oo-ui-widget-disabled .oo-ui-inputWidget-input {
+    -webkit-text-fill-color: var(--ooui-disabled-text);
+    background-color: var(--ooui-disabled);
+    border-color: var(--ooui-disabled-border);
+    color: var(--ooui-disabled-text);
+    text-shadow: none;
+}
+
+.oo-ui-buttonElement-frameless.oo-ui-widget-enabled.oo-ui-flaggedElement-progressive > .oo-ui-buttonElement-button:active, .oo-ui-buttonElement-frameless.oo-ui-widget-enabled.oo-ui-flaggedElement-progressive.oo-ui-buttonElement-pressed > .oo-ui-buttonElement-button {
+    border-color: var(--ooui-text);
+    color: var(--ooui-text);
+}
+
+.oo-ui-buttonElement-frameless.oo-ui-widget-disabled > .oo-ui-buttonElement-button {
+    color: var(--ooui-disabled-text);
+}
+
+.oo-ui-buttonElement-framed.oo-ui-widget-disabled > .oo-ui-buttonElement-button {
+    background-color: var(--ooui-disabled);
+    border-color: var(--ooui-disabled-border);
+}
+
+.oo-ui-buttonElement-framed.oo-ui-widget-enabled.oo-ui-buttonElement-active > .oo-ui-buttonElement-button, .oo-ui-buttonElement-framed.oo-ui-widget-enabled.oo-ui-flaggedElement-primary.oo-ui-flaggedElement-progressive > .oo-ui-buttonElement-button:active, .oo-ui-buttonElement-framed.oo-ui-widget-enabled.oo-ui-flaggedElement-primary.oo-ui-flaggedElement-progressive.oo-ui-buttonElement-active > .oo-ui-buttonElement-button, .oo-ui-buttonElement-framed.oo-ui-widget-enabled.oo-ui-flaggedElement-primary.oo-ui-flaggedElement-progressive.oo-ui-buttonElement-pressed > .oo-ui-buttonElement-button, .oo-ui-buttonElement-framed.oo-ui-widget-enabled.oo-ui-flaggedElement-primary.oo-ui-flaggedElement-progressive.oo-ui-popupToolGroup-active > .oo-ui-buttonElement-button {
+    background-color: var(--ooui-progressive--hover);
+    border-color: var(--ooui-progressive--hover);
+    color: #fff;
+}
+
+.oo-ui-buttonElement-framed.oo-ui-widget-enabled.oo-ui-buttonElement-active > .oo-ui-buttonElement-button:focus {
+    border-color: var(--ooui-progressive--hover);
+    box-shadow: inset 0 0 0 1px var(--ooui-accent);
+}
+
+.oo-ui-buttonElement-framed.oo-ui-widget-enabled.oo-ui-flaggedElement-progressive > .oo-ui-buttonElement-button:hover {
+    background-color: var(--ooui-normal--hover);
+    border-color: var(--ooui-progressive--hover);
+}
+
+.oo-ui-buttonElement-framed.oo-ui-widget-enabled.oo-ui-flaggedElement-primary.oo-ui-flaggedElement-progressive > .oo-ui-buttonElement-button:focus {
+    border-color: var(--ooui-accent);
+    box-shadow: inset 0 0 0 1px var(--ooui-accent),inset 0 0 0 2px #fff;
+}
+
+.oo-ui-processDialog .oo-ui-actionWidget > .oo-ui-buttonElement-button, .oo-ui-processDialog .oo-ui-actionWidget > .oo-ui-buttonElement-button:active, .oo-ui-processDialog .oo-ui-actionWidget > .oo-ui-buttonElement-button:hover {
+    border-bottom-color: transparent;
+    border-top-color: transparent;
+}
+
+.oo-ui-processDialog .oo-ui-actionWidget:not(.oo-ui-flaggedElement-progressive):not(.oo-ui-flaggedElement-destructive) > .oo-ui-buttonElement-button:active, .oo-ui-processDialog .oo-ui-actionWidget:not(.oo-ui-flaggedElement-progressive):not(.oo-ui-flaggedElement-destructive) > .oo-ui-buttonElement-button:hover {
+    border-left-color: transparent;
+    border-right-color: var(--ooui-interface-border);
+}
+
+.oo-ui-processDialog-actions-other .oo-ui-actionWidget > .oo-ui-buttonElement-button, .oo-ui-processDialog-actions-safe .oo-ui-actionWidget > .oo-ui-buttonElement-button {
+    border-left-color: transparent;
+    border-right-color: var(--ooui-normal-border);
+}
+
+.oo-ui-processDialog-actions-safe .oo-ui-widget-enabled.oo-ui-iconElement:not(.oo-ui-labelElement) > .oo-ui-buttonElement-button:hover {
+    background-color: var(--ooui-normal--hover);
+    border-right-color: var(--ooui-interface-border);
+}
+
+.mw-prefs-tabs.mw-prefs-tabs-searching .oo-ui-tabPanelLayout.mw-prefs-search-matched > fieldset > legend {
+    background: var(--body-mid);
+}
+
+.mw-echo-ui-menuItemWidget > .oo-ui-buttonElement-button > .oo-ui-labelElement-label {
+    color: var(--ooui-text);
+}
+
+.oo-ui-checkboxInputWidget [type='checkbox'] + span {
+    background-color: var(--ooui-input);
+    border-color: var(--ooui-input-border);
+}
+
+.oo-ui-radioInputWidget [type='radio'] + span {
+    background-color: var(--ooui-input);
+    border-color: var(--ooui-input-border);
+}
+
+.oo-ui-checkboxInputWidget.oo-ui-widget-enabled [type='checkbox']:checked + span {
+    background-color: var(--ooui-progressive);
+    border-color: var(--ooui-progressive);
+}
+
+.oo-ui-checkboxInputWidget.oo-ui-widget-enabled [type='checkbox']:indeterminate + span {
+    background-color: var(--ooui-progressive);
+    border-color: var(--ooui-progressive);
+}
+
+.oo-ui-checkboxInputWidget.oo-ui-widget-enabled [type='checkbox']:checked:hover + span {
+    background-color: var(--ooui-progressive--hover);
+    border-color: var(--ooui-progressive--hover);
+}
+
+.oo-ui-checkboxInputWidget.oo-ui-widget-enabled [type='checkbox']:indeterminate:hover + span {
+    background-color: var(--ooui-progressive--hover);
+    border-color: var(--ooui-progressive--hover);
+}
+
+.oo-ui-radioInputWidget.oo-ui-widget-enabled [type='radio']:checked:hover + span {
+    border-color: var(--ooui-progressive--hover);
+}
+
+.oo-ui-checkboxInputWidget.oo-ui-widget-enabled [type='checkbox']:hover + span {
+    border-color: var(--ooui-accent);
+}
+
+.oo-ui-radioInputWidget.oo-ui-widget-enabled [type='radio']:hover + span {
+    border-color: var(--ooui-accent);
+}
+
+.oo-ui-checkboxInputWidget.oo-ui-widget-enabled [type='checkbox']:focus + span {
+    border-color: var(--ooui-accent);
+    box-shadow: inset 0 0 0 1px var(--ooui-accent);
+}
+
+.oo-ui-checkboxInputWidget.oo-ui-widget-enabled [type='checkbox']:active + span {
+    background-color: var(--ooui-progressive--hover);
+    border-color: var(--ooui-progressive--hover);
+    box-shadow: inset 0 0 0 1px var(--ooui-progressive--hover);
+}
+
+.oo-ui-checkboxInputWidget.oo-ui-widget-enabled [type='checkbox']:checked:active + span {
+    background-color: var(--ooui-progressive--hover);
+    border-color: var(--ooui-progressive--hover);
+    box-shadow: inset 0 0 0 1px var(--ooui-progressive--hover);
+}
+
+.oo-ui-checkboxInputWidget.oo-ui-widget-enabled [type='checkbox']:indeterminate:active + span {
+    background-color: var(--ooui-progressive--hover);
+    border-color: var(--ooui-progressive--hover);
+    box-shadow: inset 0 0 0 1px var(--ooui-progressive--hover);
+}
+
+.oo-ui-radioInputWidget.oo-ui-widget-enabled [type='radio']:active + span {
+    background-color: var(--ooui-progressive--hover);
+    border-color: var(--ooui-progressive--hover);
+}
+
+.oo-ui-radioInputWidget.oo-ui-widget-enabled [type='radio']:checked:active + span:before {
+    border-color: var(--ooui-progressive--hover);
+}
+
+.oo-ui-checkboxInputWidget.oo-ui-widget-enabled [type='checkbox']:checked:focus + span {
+    background-color: var(--ooui-progressive--hover);
+    border-color: var(--ooui-accent);
+    box-shadow: inset 0 0 0 1px var(--ooui-accent),inset 0 0 0 2px #fff;
+}
+
+.oo-ui-checkboxInputWidget.oo-ui-widget-enabled [type='checkbox']:indeterminate:focus + span {
+    background-color: var(--ooui-progressive--hover);
+    border-color: var(--ooui-accent);
+    box-shadow: inset 0 0 0 1px var(--ooui-accent),inset 0 0 0 2px #fff;
+}
+
+.oo-ui-checkboxInputWidget [type='checkbox']:disabled + span {
+    background-color: var(--ooui-disabled);
+    border-color: var(--ooui-disabled);
+}
+
+.oo-ui-radioInputWidget [type='radio']:disabled + span {
+    background-color: var(--ooui-disabled);
+    border-color: var(--ooui-disabled);
+}
+
+.oo-ui-dropdownInputWidget.oo-ui-widget-enabled {
+    background-color: var(--ooui-normal);
+}
+
+.oo-ui-dropdownInputWidget.oo-ui-widget-enabled:hover {
+    background-color: var(--ooui-normal--hover);
+}
+
+.oo-ui-dropdownInputWidget.oo-ui-widget-enabled select {
+    color: var(--ooui-text);
+}
+
+.oo-ui-dropdownInputWidget.oo-ui-widget-enabled select:hover {
+    border-color: var(--ooui-normal-border);
+    color: var(--ooui-text);
+}
+
+.oo-ui-dropdownInputWidget.oo-ui-widget-enabled select:active {
+    border-color: var(--ooui-normal-border);
+    color: var(--ooui-text);
+}
+
+.oo-ui-dropdownInputWidget.oo-ui-widget-enabled select:focus {
+    border-color: var(--ooui-accent);
+    box-shadow: inset 0 0 0 1px var(--ooui-accent);
+}
+
+.oo-ui-tagItemWidget.oo-ui-widget-enabled .oo-ui-buttonElement-button:hover {
+    background-color: var(--ooui-normal--hover);
+}
+
+.oo-ui-textInputWidget.oo-ui-widget-enabled .oo-ui-inputWidget-input::placeholder {
+    color: var(--subtle-color);
+}
+
+.oo-ui-textInputWidget.oo-ui-widget-enabled .oo-ui-inputWidget-input:focus {
+    border-color: var(--ooui-accent);
+    box-shadow: inset 0 0 0 1px var(--ooui-accent);
+}
+
+.oo-ui-textInputWidget.oo-ui-widget-enabled:hover .oo-ui-inputWidget-input {
+    border-color: var(--ooui-input-border--hover);
+}
+
+.oo-ui-textInputWidget.oo-ui-widget-enabled:hover .oo-ui-inputWidget-input:focus {
+    border-color: var(--ooui-accent);
+}
+
+.oo-ui-buttonElement-frameless.oo-ui-widget-enabled > .oo-ui-buttonElement-button {
+    color: var(--ooui-text);
+}
+
+.oo-ui-buttonElement-frameless.oo-ui-widget-enabled > .oo-ui-buttonElement-button:hover {
+    color: var(--ooui-text);
+}
+
+.oo-ui-buttonElement-frameless.oo-ui-widget-enabled > .oo-ui-buttonElement-button:focus {
+    border-color: var(--ooui-accent);
+    box-shadow: inset 0 0 0 1px var(--ooui-accent);
+}
+
+.oo-ui-buttonElement-frameless.oo-ui-widget-enabled.oo-ui-buttonElement-pressed > input.oo-ui-buttonElement-button {
+    color: var(--ooui-text);
+}
+
+.oo-ui-buttonElement-frameless.oo-ui-widget-enabled > .oo-ui-buttonElement-button:active {
+    color: var(--ooui-text);
+}
+
+.oo-ui-buttonElement-frameless.oo-ui-widget-enabled.oo-ui-flaggedElement-progressive > .oo-ui-buttonElement-button {
+    color: var(--ooui-text);
+}
+
+.oo-ui-buttonElement-frameless.oo-ui-widget-enabled.oo-ui-flaggedElement-progressive > .oo-ui-buttonElement-button:hover {
+    color: var(--ooui-text);
+}
+
+.oo-ui-buttonElement-frameless.oo-ui-widget-enabled.oo-ui-flaggedElement-progressive > .oo-ui-buttonElement-button:active {
+    border-color: var(--ooui-text);
+    color: var(--ooui-text);
+}
+
+.oo-ui-buttonElement-frameless.oo-ui-widget-enabled.oo-ui-flaggedElement-progressive.oo-ui-buttonElement-pressed > .oo-ui-buttonElement-button {
+    border-color: var(--ooui-text);
+    color: var(--ooui-text);
+}
+
+.oo-ui-buttonElement-framed.oo-ui-widget-enabled > .oo-ui-buttonElement-button {
+    background-color: var(--ooui-normal);
+    border-color: var(--ooui-normal-border);
+    color: var(--ooui-text);
+}
+
+.oo-ui-buttonElement-framed.oo-ui-widget-enabled > .oo-ui-buttonElement-button:hover {
+    background-color: var(--ooui-normal--hover);
+    border-color: var(--ooui-normal-border);
+    color: var(--ooui-text);
+}
+
+.oo-ui-buttonElement-framed.oo-ui-widget-enabled > .oo-ui-buttonElement-button:focus {
+    border-color: var(--ooui-accent);
+    box-shadow: inset 0 0 0 1px var(--ooui-accent);
+}
+
+.oo-ui-buttonElement-framed.oo-ui-widget-enabled.oo-ui-buttonElement-active > .oo-ui-buttonElement-button {
+    background-color: var(--ooui-progressive--hover);
+    border-color: var(--ooui-progressive--hover);
+    color: #fff;
+}
+
+.oo-ui-buttonElement-framed.oo-ui-widget-enabled > .oo-ui-buttonElement-button:active {
+    background-color: var(--ooui-normal--hover);
+    border-color: var(--ooui-normal-border);
+    color: var(--ooui-text);
+}
+
+.oo-ui-buttonElement-framed.oo-ui-widget-enabled.oo-ui-buttonElement-pressed > .oo-ui-buttonElement-button {
+    background-color: var(--ooui-normal--hover);
+    border-color: var(--ooui-normal-border);
+    color: var(--ooui-text);
+}
+
+.oo-ui-buttonElement-framed.oo-ui-widget-enabled.oo-ui-flaggedElement-progressive > .oo-ui-buttonElement-button {
+    color: var(--ooui-text);
+}
+
+.oo-ui-buttonElement-framed.oo-ui-widget-enabled.oo-ui-flaggedElement-progressive > .oo-ui-buttonElement-button:focus {
+    border-color: var(--ooui-accent);
+    box-shadow: inset 0 0 0 1px var(--ooui-accent);
+}
+
+.oo-ui-buttonElement-framed.oo-ui-widget-enabled.oo-ui-flaggedElement-destructive > .oo-ui-buttonElement-button {
+    color: var(--ooui-text);
+}
+
+.oo-ui-buttonElement-framed.oo-ui-widget-enabled.oo-ui-flaggedElement-destructive > .oo-ui-buttonElement-button:hover {
+    background-color: var(--ooui-normal--hover);
+}
+
+.oo-ui-buttonElement-framed.oo-ui-widget-enabled.oo-ui-flaggedElement-primary.oo-ui-flaggedElement-progressive > .oo-ui-buttonElement-button {
+    background-color: var(--ooui-progressive);
+    border-color: var(--ooui-progressive);
+}
+
+.oo-ui-buttonElement-framed.oo-ui-widget-enabled.oo-ui-flaggedElement-primary.oo-ui-flaggedElement-progressive > .oo-ui-buttonElement-button:hover {
+    background-color: var(--ooui-progressive--hover);
+    border-color: var(--ooui-progressive--hover);
+}
+
+.oo-ui-buttonElement-framed.oo-ui-widget-enabled.oo-ui-flaggedElement-primary.oo-ui-flaggedElement-progressive > .oo-ui-buttonElement-button:active {
+    background-color: var(--ooui-progressive--hover);
+    border-color: var(--ooui-progressive--hover);
+    color: #fff;
+}
+
+.oo-ui-buttonElement-framed.oo-ui-widget-enabled.oo-ui-flaggedElement-primary.oo-ui-flaggedElement-progressive.oo-ui-buttonElement-pressed > .oo-ui-buttonElement-button {
+    background-color: var(--ooui-progressive--hover);
+    border-color: var(--ooui-progressive--hover);
+    color: #fff;
+}
+
+.oo-ui-buttonElement-framed.oo-ui-widget-enabled.oo-ui-flaggedElement-primary.oo-ui-flaggedElement-progressive.oo-ui-buttonElement-active > .oo-ui-buttonElement-button {
+    background-color: var(--ooui-progressive--hover);
+    border-color: var(--ooui-progressive--hover);
+    color: #fff;
+}
+
+.oo-ui-buttonElement-framed.oo-ui-widget-enabled.oo-ui-flaggedElement-primary.oo-ui-flaggedElement-progressive.oo-ui-popupToolGroup-active > .oo-ui-buttonElement-button {
+    background-color: var(--ooui-progressive--hover);
+    border-color: var(--ooui-progressive--hover);
+    color: #fff;
+}
+
+.oo-ui-processDialog .oo-ui-actionWidget > .oo-ui-buttonElement-button {
+    border-bottom-color: transparent;
+    border-top-color: transparent;
+}
+
+.oo-ui-processDialog .oo-ui-actionWidget > .oo-ui-buttonElement-button:hover {
+    border-bottom-color: transparent;
+    border-top-color: transparent;
+}
+
+.oo-ui-processDialog .oo-ui-actionWidget > .oo-ui-buttonElement-button:active {
+    border-bottom-color: transparent;
+    border-top-color: transparent;
+}
+
+.oo-ui-processDialog .oo-ui-actionWidget:not(.oo-ui-flaggedElement-progressive):not(.oo-ui-flaggedElement-destructive) > .oo-ui-buttonElement-button:hover {
+    border-left-color: transparent;
+    border-right-color: var(--ooui-interface-border);
+}
+
+.oo-ui-processDialog .oo-ui-actionWidget:not(.oo-ui-flaggedElement-progressive):not(.oo-ui-flaggedElement-destructive) > .oo-ui-buttonElement-button:active {
+    border-left-color: transparent;
+    border-right-color: var(--ooui-interface-border);
+}
+
+.oo-ui-processDialog .oo-ui-actionWidget:not(.oo-ui-flaggedElement-progressive):not(.oo-ui-flaggedElement-destructive) > .oo-ui-buttonElement-button:focus {
+    border-color: var(--ooui-accent);
+}
+
+.oo-ui-processDialog-actions-safe .oo-ui-actionWidget > .oo-ui-buttonElement-button {
+    border-left-color: transparent;
+    border-right-color: var(--ooui-normal-border);
+}
+
+.oo-ui-processDialog-actions-other .oo-ui-actionWidget > .oo-ui-buttonElement-button {
+    border-left-color: transparent;
+    border-right-color: var(--ooui-normal-border);
+}
+
+.mw-widget-dateInputWidget.oo-ui-widget-enabled .mw-widget-dateInputWidget-handle:hover {
+    border-color: var(--ooui-input-border--hover);
+}
+
+.mw-widgets-datetime-calendarWidget-grid .mw-widgets-datetime-calendarWidget-cell.mw-widgets-datetime-calendarWidget-extra .oo-ui-buttonElement-button .oo-ui-labelElement-label {
+    color: var(--subtle-color);
+}
+
+.mw-widgets-datetime-calendarWidget-grid .mw-widgets-datetime-calendarWidget-cell.mw-widgets-datetime-calendarWidget-selected .oo-ui-buttonElement-button {
+    background-color: var(--ooui-progressive--hover);
+}
+
+.mw-widgets-datetime-dateTimeInputWidget.oo-ui-widget-enabled.mw-widgets-datetime-dateTimeInputWidget-handle:hover {
+    border-color: var(--ooui-input-border--hover);
+}
+
+.mw-widgets-datetime-dateTimeInputWidget.oo-ui-widget-enabled:hover input {
+    border-color: var(--ooui-input-border--hover);
+}
+
+.mw-widgets-datetime-dateTimeInputWidget.oo-ui-widget-enabled:hover textarea {
+    border-color: var(--ooui-input-border--hover);
+}
+
+.mw-widgets-datetime-dateTimeInputWidget.oo-ui-widget-enabled .mw-widgets-datetime-dateTimeInputWidget-editField:hover {
+    background-color: var(--ooui-normal);
+}
+
+.cdx-button.cdx-button--weight-quiet.cdx-button--action-destructive:hover, .cdx-button.cdx-button--weight-quiet.cdx-button--action-progressive:hover, .cdx-button.cdx-button--weight-quiet:hover, input[type='checkbox']:hover + .cdx-button.cdx-button--weight-quiet, input[type='checkbox']:hover + .cdx-button.cdx-button--weight-quiet.cdx-button--action-destructive, input[type='checkbox']:hover + .cdx-button.cdx-button--weight-quiet.cdx-button--action-progressive {
+    background-color: rgba(0,24,73,0.02745098);
+    border-color: transparent;
+    color: var(--text-color);
+}
+
+.oo-ui-buttonElement-framed.oo-ui-widget-enabled.oo-ui-flaggedElement-primary.oo-ui-flaggedElement-progressive > .oo-ui-buttonElement-button:active, .oo-ui-buttonElement-framed.oo-ui-widget-enabled.oo-ui-flaggedElement-primary.oo-ui-flaggedElement-progressive.oo-ui-buttonElement-active > .oo-ui-buttonElement-button, .oo-ui-buttonElement-framed.oo-ui-widget-enabled.oo-ui-flaggedElement-primary.oo-ui-flaggedElement-progressive.oo-ui-buttonElement-pressed > .oo-ui-buttonElement-button, .oo-ui-buttonElement-framed.oo-ui-widget-enabled.oo-ui-flaggedElement-primary.oo-ui-flaggedElement-progressive.oo-ui-popupToolGroup-active > .oo-ui-buttonElement-button {
+    background-color: var(--ooui-normal);
+    border-color: var(--ooui-normal-border);
+    color: var(--ooui-text);
+}
+
+.cdx-checkbox__input:enabled:checked:active + .cdx-checkbox__icon, .cdx-checkbox__input:enabled:indeterminate:active + .cdx-checkbox__icon {
+    opacity: 0.8;
+}
+
+.cdx-message--error, .cdx-message--success, .cdx-message--warning, .usermessage {
+    background-color: var(--errorbox-bg);
+    border-color: var(--errorbox-border);
+}
+
+.equipment-ammo, .equipment-ammo2, .equipment-boots, .equipment-cape, .equipment-gloves, .equipment-head, .equipment-ikodbutton, .equipment-legs, .equipment-neck, .equipment-ring, .equipment-shield, .equipment-statsbutton, .equipment-torso, .equipment-weapon {
+    left: 111px;
+    top: 39px;
+}
+
+.cdx-button.cdx-button--fake-button--enabled.cdx-button--weight-primary.cdx-button--action-progressive.is-on, .cdx-button.cdx-button--fake-button--enabled.cdx-button--weight-primary.cdx-button--action-progressive:active, .cdx-button:enabled.cdx-button--weight-primary.cdx-button--action-progressive.is-on, .cdx-button:enabled.cdx-button--weight-primary.cdx-button--action-progressive:active, .cdx-button:not(:disabled).cdx-button--weight-primary.cdx-button--action-progressive.is-on, .cdx-button:not(:disabled).cdx-button--weight-primary.cdx-button--action-progressive:active {
+    background-color: var(--ooui-progressive--hover);
+    border-color: var(--ooui-progressive--hover);
+    box-shadow: none;
+}
+
+.cdx-message, .usermessage {
+    background-color: var(--body-light);
+    border-color: var(--body-dark);
+}
+
+.cdx-checkbox__input:enabled:checked:focus:not(:active), .cdx-checkbox__input:enabled:indeterminate:focus:not(:active) {
+    opacity: 0.8;
+}
+
+.highcharts-button-box {
+    fill: var(--ooui-normal);
+}
+
+.cdx-button.cdx-button--fake-button--enabled, .cdx-button:enabled, .cdx-button:not(:disabled) {
+    background-color: var(--ooui-normal);
+    border-color: var(--ooui-normal-border);
+    color: var(--ooui-text);
+}
+
+.oo-ui-checkboxInputWidget.oo-ui-widget-enabled [type='checkbox']:checked + span, .oo-ui-checkboxInputWidget.oo-ui-widget-enabled [type='checkbox']:indeterminate + span {
+    background-color: var(--ooui-normal);
+    border-color: var(--ooui-normal-border);
+    color: var(--ooui-text);
+}
+
+.cdx-checkbox__input:enabled:checked:hover + .cdx-checkbox__icon, .cdx-checkbox__input:enabled:indeterminate:hover + .cdx-checkbox__icon {
+    opacity: 0.8;
+}
+
+.mw-echo-ui-notificationBadgeButtonPopupWidget-popup > .oo-ui-popupWidget-popup > .oo-ui-popupWidget-footer, .mw-echo-ui-notificationBadgeButtonPopupWidget-popup > .oo-ui-popupWidget-popup > .oo-ui-popupWidget-head {
+    border-color: var(--ooui-interface-border);
+}
+
+.cdx-button.cdx-button--fake-button--enabled:active, .cdx-button.cdx-button--fake-button--enabled:hover, .cdx-button:enabled:active, .cdx-button:enabled:hover, .cdx-button:not(:disabled):active, .cdx-button:not(:disabled):hover {
+    background-color: var(--ooui-normal--hover);
+    border-color: var(--ooui-normal-border);
+    color: var(--ooui-text);
+}
+
+.cdx-button.cdx-button--fake-button--enabled.cdx-button--weight-primary.cdx-button--action-progressive:focus, .cdx-button:enabled.cdx-button--weight-primary.cdx-button--action-progressive:focus, .cdx-button:not(:disabled).cdx-button--weight-primary.cdx-button--action-progressive:focus {
+    box-shadow: inset 0 0 0 1px var(--ooui-accent),inset 0 0 0 2px #fff;
+}
+
+.cdx-text-input__input:enabled::placeholder {
+    color: var(--byline-color);
+}
+
+.equipment-div, .equipment-div-buttons {
+    background-image: url(/images/Worn_equipment_tab_%28no_buttons%29.png?324d3);
+    height: 222px;
+    margin: 15px 0 14px;
+}
+
+.cdx-message--warning, .usermessage {
+    background-color: var(--warningbox-bg);
+    border-color: var(--warningbox-border);
+}
+
+.mw-echo-ui-toggleReadCircleButtonWidget:hover .mw-echo-ui-toggleReadCircleButtonWidget-circle-unread {
+    background-color: var(--ooui-normal);
+}
+
+.cdx-button.cdx-button--fake-button--enabled:focus:not(:active):not(.cdx-button--is-active), .cdx-button:enabled:focus:not(:active):not(.cdx-button--is-active), .cdx-button:not(:disabled):focus:not(:active):not(.cdx-button--is-active) {
+    border-color: var(--ooui-accent);
+    box-shadow: inset 0 0 0 1px var(--ooui-accent),inset 0 0 0 2px #fff;
+    color: var(--ooui-text);
+}
+
+.oo-ui-processDialog .oo-ui-actionWidget > .oo-ui-buttonElement-button:active, .oo-ui-processDialog .oo-ui-actionWidget > .oo-ui-buttonElement-button:hover {
+    border-bottom-color: transparent;
+    border-top-color: transparent;
+}
+
+.cdx-button.cdx-button--fake-button--enabled.cdx-button--weight-primary.cdx-button--action-progressive:hover, .cdx-button:enabled.cdx-button--weight-primary.cdx-button--action-progressive:hover, .cdx-button:not(:disabled).cdx-button--weight-primary.cdx-button--action-progressive:hover {
+    background-color: var(--ooui-progressive--hover);
+    border-color: var(--ooui-progressive--hover);
+}
+
+.oo-ui-textInputWidget.oo-ui-widget-enabled textarea.oo-ui-inputWidget-input:focus {
+    outline: 1px solid var(--ooui-accent);
+}
+
+.cdx-button.cdx-button--weight-quiet.cdx-button--action-destructive:active, .cdx-button.cdx-button--weight-quiet.cdx-button--action-progressive:active, .cdx-button.cdx-button--weight-quiet:active, input[type='checkbox']:active + .cdx-button.cdx-button--weight-quiet, input[type='checkbox']:active + .cdx-button.cdx-button--weight-quiet.cdx-button--action-destructive, input[type='checkbox']:active + .cdx-button.cdx-button--weight-quiet.cdx-button--action-progressive {
+    background-color: rgba(0,36,73,0.08235294);
+    border-color: #72777d;
+    color: var(--text-color);
+}
+
+.cdx-checkbox__input:enabled:hover + .cdx-checkbox__icon {
+    border-color: var(--ooui-accent);
+}
+
+.cdx-button.cdx-button--weight-quiet.cdx-button--action-destructive:focus, .cdx-button.cdx-button--weight-quiet.cdx-button--action-progressive:focus, .cdx-button.cdx-button--weight-quiet:focus, input[type='checkbox']:focus + .cdx-button.cdx-button--weight-quiet, input[type='checkbox']:focus + .cdx-button.cdx-button--weight-quiet.cdx-button--action-destructive, input[type='checkbox']:focus + .cdx-button.cdx-button--weight-quiet.cdx-button--action-progressive {
+    color: var(--text-color);
+}
+
+.mw-echo-ui-notificationBadgeButtonPopupWidget-popup > .oo-ui-popupWidget-popup > .oo-ui-popupWidget-footer .mw-echo-ui-notificationBadgeButtonPopupWidget-footer-buttons .oo-ui-buttonElement:last-child {
+    border-left-color: var(--ooui-normal-border);
+}
+
+.mw-echo-ui-toggleReadCircleButtonWidget:hover .mw-echo-ui-toggleReadCircleButtonWidget-circle {
+    background-color: var(--ooui-progressive--hover);
+}
+
+.smw-tabs input.nav-tab:checked + label.nav-label, .smw-tabs input.nav-tab:checked + label.nav-label:hover {
+    border-color: var(--ooui-normal-border);
+}
+
+.cdx-button.cdx-button--fake-button--enabled:visited, .cdx-button:enabled:visited, .cdx-button:not(:disabled):visited {
+    color: var(--ooui-text);
+}
+
+.oo-ui-checkboxInputWidget.oo-ui-widget-enabled [type='checkbox']:checked:hover + span, .oo-ui-checkboxInputWidget.oo-ui-widget-enabled [type='checkbox']:indeterminate:hover + span {
+    background-color: var(--ooui-normal);
+    border-color: var(--ooui-normal-border);
+    color: var(--ooui-text);
+}
+
+.highcharts-navigator-handle, .highcharts-scrollbar-button, .highcharts-scrollbar-thumb {
+    fill: var(--ooui-normal);
+    stroke: var(--ooui-normal-border);
+}
+
+.oo-ui-checkboxInputWidget.oo-ui-widget-enabled [type='checkbox']:hover + span, .oo-ui-radioInputWidget.oo-ui-widget-enabled [type='radio']:hover + span {
+    background-color: var(--ooui-normal);
+    border-color: var(--ooui-normal-border);
+    color: var(--ooui-text);
+}
+
+span.fileinput-button {
+    background-color: var(--ooui-normal);
+    border-color: var(--ooui-normal-border);
+    color: var(--ooui-text);
+}
+
+.mw-widget-dateInputWidget-handle {
+    background-color: var(--ooui-input);
+    border-color: var(--ooui-input-border);
+    color: var(--ooui-text);
+}
+
+.oo-ui-buttonElement-frameless.oo-ui-widget-enabled > .oo-ui-buttonElement-button:active, .oo-ui-buttonElement-frameless.oo-ui-widget-enabled.oo-ui-buttonElement-pressed > input.oo-ui-buttonElement-button {
+    color: var(--ooui-text);
+}
+
+.cdx-message, .mw-message-box {
+    background-color: var(--body-light);
+    border-color: var(--body-dark);
+}
+
+.mw-widgets-datetime-dateTimeInputWidget.oo-ui-widget-enabled:hover input, .mw-widgets-datetime-dateTimeInputWidget.oo-ui-widget-enabled:hover textarea {
+    background-color: var(--ooui-normal);
+    border-color: var(--ooui-normal-border);
+    color: var(--ooui-text);
+}
+
+.smw-ask-actions textarea, .smw-ask-query textarea {
+    background-color: var(--ooui-interface);
+    border-color: var(--ooui-interface-border);
+    color: var(--ooui-text);
+}
+
+.mw-echo-ui-menuItemWidget > .oo-ui-buttonElement-button > .oo-ui-labelElement-label, .mw-echo-ui-notificationItemWidget-content-actions-timestamp, .mw-echo-ui-notificationItemWidget-content-message-body, .mw-echo-ui-notificationItemWidget-content-message-header {
+    background-color: var(--ooui-normal);
+    border-color: var(--ooui-normal-border);
+    color: var(--ooui-text);
+}
+
+.smallChart .highcharts-button title + rect {
+    display: none;
+}
+
+.smw-ask-button-lgrey:hover, .smw-ask-button-submit input:hover {
+    background-color: var(--ooui-normal--hover);
+    border-color: var(--ooui-normal-border);
+}
+
+.mw-echo-ui-notificationBadgeButtonPopupWidget-popup > .oo-ui-popupWidget-popup .mw-echo-ui-placeholderItemWidget {
+    background-color: inherit;
+}
+
+.cdx-button.cdx-button--fake-button--enabled.cdx-button--weight-primary.cdx-button--action-progressive, .cdx-button:enabled.cdx-button--weight-primary.cdx-button--action-progressive, .cdx-button:not(:disabled).cdx-button--weight-primary.cdx-button--action-progressive {
+    background-color: var(--ooui-progressive);
+    border-color: var(--ooui-progressive);
+    color: #fff;
+}
+
+.oo-ui-buttonElement-frameless.oo-ui-widget-enabled.oo-ui-flaggedElement-progressive > .oo-ui-buttonElement-button, .oo-ui-buttonElement-frameless.oo-ui-widget-enabled.oo-ui-flaggedElement-progressive > .oo-ui-buttonElement-button:hover {
+    background-color: var(--ooui-normal);
+    border-color: var(--ooui-normal-border);
+    color: var(--ooui-text);
+}
+
+.oo-ui-checkboxInputWidget.oo-ui-widget-enabled [type='checkbox']:checked:focus + span, .oo-ui-checkboxInputWidget.oo-ui-widget-enabled [type='checkbox']:indeterminate:focus + span {
+    background-color: var(--ooui-normal);
+    border-color: var(--ooui-normal-border);
+    color: var(--ooui-text);
+}
+
+.smallChart .highcharts-input-group, .smallChart .zoomButton, .smallChart svg > text:first-of-type {
+    display: none;
+}
+
+.cdx-checkbox__input:enabled:active + .cdx-checkbox__icon {
+    background-color: var(--ooui-progressive--hover);
+    border-color: var(--ooui-progressive--hover);
+    box-shadow: inset 0 0 0 1px var(--ooui-progressive--hover);
+}
+
+.mw-echo-ui-toggleReadCircleButtonWidget-circle-unread {
+    background-color: var(--ooui-normal--hover);
+    border-color: var(--ooui-normal-border);
+}
+
+.oo-ui-checkboxInputWidget.oo-ui-widget-enabled [type='checkbox']:active + span, .oo-ui-checkboxInputWidget.oo-ui-widget-enabled [type='checkbox']:checked:active + span, .oo-ui-checkboxInputWidget.oo-ui-widget-enabled [type='checkbox']:indeterminate:active + span {
+    background-color: var(--ooui-normal);
+    border-color: var(--ooui-normal-border);
+    color: var(--ooui-text);
+}
+
+.oo-ui-buttonElement-framed.oo-ui-widget-enabled > .oo-ui-buttonElement-button:active, .oo-ui-buttonElement-framed.oo-ui-widget-enabled.oo-ui-buttonElement-pressed > .oo-ui-buttonElement-button {
+    background-color: var(--ooui-normal);
+    border-color: var(--ooui-normal-border);
+    color: var(--ooui-text);
+}
+
+.cdx-checkbox__input:enabled:checked:focus:not(:active):not(:hover) + .cdx-checkbox__icon, .cdx-checkbox__input:enabled:indeterminate:focus:not(:active):not(:hover) + .cdx-checkbox__icon {
+    opacity: 0.8;
+}
+

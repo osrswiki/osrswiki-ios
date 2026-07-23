@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>MapLibre Direct Test</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-section { border: 2px solid #333; padding: 20px; margin: 20px 0; }
+        .map-placeholder { 
+            width: 300px; 
+            height: 200px; 
+            background-color: #f0f0f0; 
+            border: 2px dashed #999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+        }
+        .debug-output { 
+            background: #000; 
+            color: #0f0; 
+            padding: 10px; 
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔥 MapLibre Direct Test Page</h1>
+    
+    <div class="test-section">
+        <h2>Test Map Placeholder</h2>
+        <p>This should trigger MapLibre bridge when measured:</p>
+        <div id="map-placeholder-test" class="map-placeholder" 
+             data-lat="3376" 
+             data-lon="3214" 
+             data-zoom="6" 
+             data-plane="0">
+            MAP PLACEHOLDER (Varrock)
+        </div>
+    </div>
+    
+    <div class="test-section">
+        <h2>Debug Output</h2>
+        <div id="debug-output" class="debug-output">
+Waiting for bridge tests...
+        </div>
+    </div>
+    
+    <div class="test-section">
+        <h2>Manual Tests</h2>
+        <button onclick="testBridge()">🔥 Test Bridge Communication</button>
+        <button onclick="testMapCreation()">🗺️ Test Map Creation</button>
+        <button onclick="clearDebug()">🧹 Clear Debug</button>
+    </div>
+
+    <script>
+        console.log("🔥 MapLibre Direct Test Page Loaded");
+        
+        let debugOutput = document.getElementById('debug-output');
+        
+        function logDebug(message) {
+            console.log(message);
+            debugOutput.textContent += new Date().toLocaleTimeString() + ': ' + message + '\n';
+            debugOutput.scrollTop = debugOutput.scrollHeight;
+        }
+        
+        function clearDebug() {
+            debugOutput.textContent = 'Debug cleared...\n';
+        }
+        
+        function testBridge() {
+            logDebug("🔥 Testing bridge communication...");
+            
+            // Test if native bridge exists
+            if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.osrsNativeMapHandler) {
+                logDebug("✅ Native bridge found!");
+                
+                // Test direct bridge call
+                try {
+                    const testRect = JSON.stringify({x: 10, y: 50, width: 300, height: 200});
+                    const testMapData = JSON.stringify({lat: "3376", lon: "3214", zoom: "6", plane: "0"});
+                    
+                    window.webkit.messageHandlers.osrsNativeMapHandler.postMessage({
+                        method: 'onMapPlaceholderMeasured',
+                        id: 'test-map-direct',
+                        rectJson: testRect,
+                        mapDataJson: testMapData
+                    });
+                    
+                    logDebug("✅ Bridge call sent successfully");
+                } catch (e) {
+                    logDebug("❌ Bridge call failed: " + e.message);
+                }
+            } else {
+                logDebug("❌ Native bridge not found");
+            }
+        }
+        
+        function testMapCreation() {
+            logDebug("🗺️ Testing map placeholder detection...");
+            
+            const placeholder = document.getElementById('map-placeholder-test');
+            if (placeholder) {
+                const rect = placeholder.getBoundingClientRect();
+                logDebug(`📏 Placeholder rect: ${rect.x}, ${rect.y}, ${rect.width}, ${rect.height}`);
+                
+                const mapData = {
+                    lat: placeholder.dataset.lat,
+                    lon: placeholder.dataset.lon,
+                    zoom: placeholder.dataset.zoom,
+                    plane: placeholder.dataset.plane
+                };
+                logDebug(`🎯 Map data: ${JSON.stringify(mapData)}`);
+                
+                // Simulate the map detection that should happen automatically
+                if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.osrsNativeMapHandler) {
+                    const rectJson = JSON.stringify({
+                        x: rect.x,
+                        y: rect.y,
+                        width: rect.width,
+                        height: rect.height
+                    });
+                    
+                    const mapDataJson = JSON.stringify(mapData);
+                    
+                    window.webkit.messageHandlers.osrsNativeMapHandler.postMessage({
+                        method: 'onMapPlaceholderMeasured',
+                        id: 'map-placeholder-test',
+                        rectJson: rectJson,
+                        mapDataJson: mapDataJson
+                    });
+                    
+                    logDebug("🚀 Map creation request sent");
+                } else {
+                    logDebug("❌ Cannot send map creation request - bridge not available");
+                }
+            }
+        }
+        
+        // Auto-test on load
+        window.onload = function() {
+            logDebug("🔥 Page loaded, starting auto-tests...");
+            setTimeout(() => {
+                testBridge();
+                setTimeout(() => {
+                    testMapCreation();
+                }, 1000);
+            }, 500);
+        };
+        
+        // Listen for collapsible toggle
+        function toggleMap() {
+            logDebug("🔄 Testing collapsible toggle...");
+            if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.osrsNativeMapHandler) {
+                window.webkit.messageHandlers.osrsNativeMapHandler.postMessage({
+                    method: 'onCollapsibleToggled',
+                    mapId: 'map-placeholder-test',
+                    isOpening: true
+                });
+                logDebug("✅ Toggle message sent");
+            }
+        }
+        
+        logDebug("🔥 Direct test script initialized");
+    </script>
+</body>
+</html>

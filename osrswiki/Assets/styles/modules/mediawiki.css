@@ -1,0 +1,908 @@
+/*
+ * MEDIAWIKI MODULE (DEDUPLICATED)
+ * Removed 40 duplicate selectors
+ * Generated: mediawiki.css
+ */
+
+.mw-code {
+    background-color: var(--mw-code-background-color);
+    border-radius: 2px;
+    font-family: monospace;
+    padding: 2px 4px;
+}
+
+.mw-parser-output a.external {
+    /* TEMPORARILY REMOVED for spacing investigation */
+    /* background-image: var(--external-icon); */
+    /* background-position: right center; */
+    /* background-repeat: no-repeat; */
+    color: var(--link-color);
+    padding-right: 0 !important; /* Force remove padding - specificity fix */
+}
+
+/* Additional specificity override for external links */
+a.external,
+a.external.text,
+.mw-parser-output a.external,
+.mw-parser-output a.external.text,
+span.plainlinks a.external,
+span.plainlinks a.external.text {
+    padding-right: 0 !important;
+    margin-right: 0 !important;
+    background-image: none !important;
+}
+
+.mw-kartographer-interactive .leaflet-popup-content a, .mw-kartographer-interactive .leaflet-popup-content a:active, .mw-parser-output a.external:active {
+    color: var(--link-color);
+}
+
+.mw-revslider-container, .mw-revslider-slider-wrapper {
+    border-color: var(--sidebar);
+}
+
+.mw-highlight, .mwe-popups .mw-ui-icon-element:not(.disabled):hover {
+    background: none;
+}
+
+.mw-diff-movedpara-right::after, .mw-highlight .hll a .linenos, .smw-column-header {
+    color: var(--text-color);
+}
+
+.mw-diff-inline-added.mw-diff-empty-line::after {
+    background: var(--diff-addedline-background);
+    color: var(--byline-color);
+}
+
+.mw-diff-inline-deleted.mw-diff-empty-line::after, .mw-inline-diff-newline::after {
+    background: var(--diff-inline-deletedline);
+    color: var(--byline-color);
+}
+
+.smw-callout-error {
+    background-color: var(--errorbox-bg);
+    border-color: var(--errorbox-border);
+    border-radius: 4px;
+    border: 1px solid;
+    margin: 8px 0;
+    padding: 8px 12px;
+}
+
+.smw-callout-warning {
+    background-color: var(--warningbox-bg);
+    border-color: var(--warningbox-border);
+    border-radius: 4px;
+    border: 1px solid;
+    margin: 8px 0;
+    padding: 8px 12px;
+}
+
+.smw-ask-toplinks {
+    background-color: var(--body-mid);
+    border-radius: 4px;
+    margin: 8px 0;
+    padding: 8px 12px;
+}
+
+.smw-ask-toplinks span.smw-icon-info {
+    background: none;
+    display: inline-block;
+    padding: 0 !important;
+}
+
+.smw-ask-toplinks span.smw-icon-info::before {
+    -webkit-mask: url("data:image/svg+xml,%3C%3Fxml version='1.0' encoding='UTF-8'%3F%3E%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 20 20'%3E%3Ctitle%3Einfo%3C/title%3E%3Cpath d='M10 0C4.477 0 0 4.477 0 10s4.477 10 10 10 10-4.477 10-10S15.523 0 10 0zM9 5h2v2H9zm0 4h2v6H9z'/%3E%3C/svg%3E") no-repeat 50% 50% / contain;
+    background: var(--text-color);
+    content: '';
+    display: inline-block;
+    height: 16px;
+    margin-right: 4px;
+    mask: url("data:image/svg+xml,%3C%3Fxml version='1.0' encoding='UTF-8'%3F%3E%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 20 20'%3E%3Ctitle%3Einfo%3C/title%3E%3Cpath d='M10 0C4.477 0 0 4.477 0 10s4.477 10 10 10 10-4.477 10-10S15.523 0 10 0zM9 5h2v2H9zm0 4h2v6H9z'/%3E%3C/svg%3E") no-repeat 50% 50% / contain;
+    padding: 0 0 3px 18px;
+    vertical-align: text-top;
+    width: 16px;
+}
+
+.smw-ask-options-row-odd {
+    background-color: var(--body-light);
+}
+
+.smw-ask-options-row-even {
+    background-color: var(--body-mid);
+}
+
+.smw-property-page-results .header-title {
+    background-color: var(--ooui-interface);
+    border-color: var(--ooui-interface-border);
+    border: 1px solid var(--ooui-interface-border);
+    color: var(--ooui-text);
+    padding: 8px 12px;
+}
+
+.mw-widget-calendarWidget, .smw-property-page-results .header-row > .header-title {
+    border-color: var(--ooui-interface-border);
+}
+
+.smw-property-page-results .value-row:hover {
+    background-color: var(--ooui-normal--hover);
+    cursor: pointer;
+}
+
+.smw-ui-pagination .page-link.link-disabled {
+    background-color: var(--ooui-disabled);
+    border-color: var(--ooui-disabled-border);
+    border: 1px solid var(--ooui-disabled-border);
+    color: var(--ooui-disabled-text);
+    cursor: not-allowed;
+}
+
+.smw-ui-pagination .page-link {
+    background-color: var(--ooui-normal);
+    border-color: var(--ooui-normal-border);
+    border-radius: 2px;
+    border: 1px solid var(--ooui-normal-border);
+    color: var(--link-color);
+    margin: 0 2px;
+    padding: 6px 10px;
+    text-decoration: none;
+}
+
+.smw-ui-pagination .page-link:hover {
+    background-color: var(--ooui-normal--hover);
+    border-color: var(--ooui-normal-border);
+    color: var(--link-color);
+}
+
+.smw-ui-pagination .page-link.link-active {
+    background-color: var(--ooui-progressive);
+    border-color: var(--ooui-progressive);
+    color: #fff;
+}
+
+.mw-kartographer-mapDialog-foot {
+    background-color: var(--body-light);
+    border-color: var(--body-mid);
+    border-top: 1px solid var(--body-border);
+    padding: 12px;
+}
+
+.mw-kartographer-interactive .leaflet-container {
+    color: var(--text-color);
+    font-family: inherit;
+}
+
+.mw-kartographer-interactive .leaflet-popup-content a:visited {
+    color: var(--link-visited-color);
+}
+
+.mw-kartographer-interactive .leaflet-popup-content a:hover {
+    color: var(--link-color);
+    text-decoration: underline;
+}
+
+.mw-kartographer-interactive .leaflet-popup-content a.new a.new:visited, .mw-kartographer-interactive .leaflet-popup-content a.new:visited {
+    color: var(--redlink-color);
+}
+
+.mw-kartographer-interactive .leaflet-popup-content p {
+    font-size: 14px;
+    line-height: 1.4em;
+    margin-bottom: 5px;
+}
+
+.leaflet-vis-tooltip.lbl-bg-grey a.mw-selflink.selflink {
+    color: #444e5a;
+}
+
+.mw-kartographer-interactive {
+    --background-color-base: var(--body-main);
+    --background-color-interactive-subtle: var(--body-light);
+    --border-color-base: var(--body-border);
+    --color-base--hover: var(--link-color);
+    --color-base: var(--text-color);
+}
+
+.mw-templatedata-doc-params dl:not(:empty) {
+    border-top: 1px solid var(--body-border);
+    column-count: 3;
+    margin-bottom: 0.5em;
+}
+
+.mw-templatedata-doc-params dt::after {
+    content: ":";
+}
+
+.mw-templatedata-doc-params dd, .mw-templatedata-doc-params dt {
+    margin: 0.1em 2em;
+    min-width: auto;
+}
+
+.mw-templatedata-doc-muted, .mw-templatedata-doc-param-alias {
+    color: var(--subtle-color);
+}
+
+.mw-parser-output > ol .plinkp-template {
+    display: inline-block;
+    line-height: 29px;
+    text-align: center;
+    width: 35px;
+}
+
+.mw-plusminus-pos {
+    color: var(--rc-positive-color);
+}
+
+.mw-plusminus-neg {
+    color: var(--rc-negative-color);
+}
+
+.client-js .mw-recentchanges-toplinks:not(.mw-recentchanges-toplinks-collapsed) {
+    background-color: var(--body-light);
+    border-color: var(--body-border);
+    border-radius: 2px;
+}
+
+.mw-prefs-search-highlight {
+    background: var(--body-mid) !important;
+    outline-color: var(--body-mid) !important;
+}
+
+#mw-searchoptions, .mw-search-profile-tabs {
+    background-color: var(--body-mid);
+    border-color: transparent;
+}
+
+.page-Special_UserLogin .mw-ui-container {
+    margin: 0 auto;
+    max-width: 64rem;
+}
+
+.mw-highlight .linenos, .mw-number-text, .mw-protectedpages-unknown, .mw-search-result-data {
+    color: var(--byline-color);
+}
+
+.mw-apisandbox-toolbar, .mw-content-container, .mw-echo-ui-notificationsInboxWidget-toolbarWrapper {
+    background: var(--body-main);
+}
+
+.mw-dismissable-notice-close-parent {
+    min-height: 1em;
+}
+
+.mw-echo-ui-bundleNotificationItemWidget-group {
+    background-color: var(--body-main);
+}
+
+.mw-echo-ui-notificationItemWidget-content-actions-timestamp, .mw-widget-calendarWidget-day, .mw-widget-calendarWidget-day-heading {
+    color: var(--ooui-text);
+}
+
+.mw-footer, .mw-footer li {
+    color: var(--background-text-color);
+}
+
+.mw-footer a:visited {
+    color: var(--background-link-color);
+}
+
+.diff-context {
+    background: var(--diff-context-background);
+    border-color: var(--diff-context-border-color);
+    color: inherit;
+}
+
+.diff-addedline {
+    border-color: var(--diff-addedline-border-color);
+}
+
+.diff-addedline .diffchange {
+    background: var(--diff-addedline-background);
+    color: var(--diff-addedline-color);
+}
+
+.diff-deletedline {
+    border-color: var(--diff-deletedline-border-color);
+}
+
+.diff-deletedline .diffchange {
+    background: var(--diff-deletedline-background);
+    color: var(--diff-deletedline-color);
+}
+
+.mw-diff-inline-moved ins {
+    background: var(--diff-addedline-background);
+}
+
+.mw-diff-inline-moved del {
+    background: var(--diff-inline-deletedline);
+}
+
+.mw-notification {
+    background-color: var(--body-light);
+    background: var(--body-light);
+    border-color: var(--body-border);
+    border-left: 4px solid var(--ooui-progressive);
+    border: 1px solid var(--body-border);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    color: var(--text-color);
+    padding: 0.8em;
+}
+
+.smw-ask-action-btn.smw-ask-action-btn-lblue {
+    background-color: var(--smw-ask-action-btn-lblue-bg);
+    border-color: var(--smw-ask-action-btn-lblue-border-color);
+    border: 1px solid var(--ooui-progressive);
+    color: var(--smw-ask-action-btn-lblue-color);
+    padding: 0.5em 1em;
+}
+
+.smw-ask-action-btn.smw-ask-action-btn-lblue:hover, .smw-ask-action-btn.smw-ask-action-btn-lblue:visited {
+    background-color: var(--smw-ask-action-btn-lblue-bg);
+    border-color: var(--smw-ask-action-btn-lblue-border-color);
+    color: var(--smw-ask-action-btn-lblue-color);
+}
+
+.smw-ask-action-btn.smw-ask-action-btn-dblue {
+    background-color: var(--smw-ask-action-btn-dblue-bg);
+    border-color: var(--smw-ask-action-btn-dblue-border-color);
+    border: 1px solid var(--ooui-accent);
+    color: var(--smw-ask-action-btn-dblue-color);
+    padding: 0.5em 1em;
+}
+
+.smw-ask-action-btn.smw-ask-action-btn-dblue:hover {
+    background-color: var(--smw-ask-action-btn-dblue-bg);
+    border-color: var(--smw-ask-action-btn-dblue-border-color);
+    color: var(--smw-ask-action-btn-dblue-color);
+    opacity: 0.8;
+}
+
+.smw-callout-info {
+    background-color: var(--body-light);
+    background-color: var(--messagebox-info-background);
+    border-color: var(--body-dark);
+    border: 1px solid var(--messagebox-info-border);
+    color: var(--messagebox-info-color);
+    margin: 0.5em 0;
+    padding: 0.5em 1em;
+}
+
+.smw-callout-success {
+    background-color: var(--successbox-bg);
+    border-color: var(--successbox-border);
+    border: 1px solid var(--messagebox-safe-border);
+    color: var(--messagebox-safe-color);
+    margin: 0.5em 0;
+    padding: 0.5em 1em;
+}
+
+.smw-tabs section {
+    background: var(--body-light);
+    border-top-color: var(--ooui-normal-border);
+    border: 1px solid var(--body-border);
+    padding: 1em;
+}
+
+.smw-tabs .subtab-content {
+    background: var(--wikitable-bg);
+    padding: 0.5em;
+}
+
+.smw-factbox {
+    background: var(--body-main);
+    border-color: transparent;
+    border: 1px solid var(--body-border);
+    margin: 1em 0;
+    padding: 1em;
+}
+
+.mw-content-text {
+    color: var(--text-color);
+    line-height: 1.6;
+}
+
+pre.mw-code {
+    background: var(--mw-code-background-color);
+    border: 1px solid var(--body-border);
+    overflow-x: auto;
+    padding: 1em;
+}
+
+.mw-parser-output ul {
+    list-style-image: var(--ul-list-style-image);
+}
+
+.mw-echo-ui-crossWikiUnreadFilterWidget {
+    background: var(--body-light);
+    border-color: var(--body-border);
+    border: 1px solid var(--body-border);
+    padding: 0.5em;
+}
+
+.mw-echo-ui-crossWikiUnreadFilterWidget-subtitle {
+    color: var(--byline-color);
+    font-size: 0.9em;
+}
+
+.mw-echo-ui-notificationItemWidget {
+    background-color: var(--ooui-normal);
+    background: var(--body-main);
+    border-bottom: 1px solid var(--body-border);
+    padding: 1em;
+}
+
+.mw-echo-ui-notificationItemWidget:not(:last-child) {
+    border-color: var(--ooui-normal-border);
+    margin-bottom: 1px;
+}
+
+.mw-echo-ui-notificationItemWidget:hover {
+    background-color: var(--ooui-normal--hover);
+    background: var(--body-light);
+}
+
+.mw-echo-ui-notificationItemWidget-unread {
+    background-color: var(--ooui-normal--hover);
+    background: var(--messagebox-info-background);
+    border-left: 3px solid var(--ooui-progressive);
+}
+
+.mw-echo-ui-notificationItemWidget-unread:hover {
+    background-color: var(--ooui-normal);
+    background: var(--body-light);
+}
+
+.mw-echo-ui-notificationItemWidget-content-message-header {
+    color: var(--text-color);
+    font-weight: bold;
+    margin-bottom: 0.5em;
+}
+
+.mw-widget-calendarWidget-item:hover {
+    background-color: var(--ooui-progressive);
+    background: var(--ooui-progressive);
+    color: #fff;
+    cursor: pointer;
+}
+
+.smw-ask-action-btn.smw-ask-action-btn-dblue:visited {
+    background-color: var(--smw-ask-action-btn-dblue-bg);
+    border-color: var(--smw-ask-action-btn-dblue-border-color);
+    color: var(--smw-ask-action-btn-dblue-color);
+}
+
+a.smw-ask-action-btn.smw-ask-action-btn-lblue:hover {
+    background-color: var(--body-mid);
+    background-color: var(--ooui-progressive--hover);
+    border-color: var(--body-mid);
+    border-color: var(--ooui-progressive--hover);
+    border: 1px solid var(--ooui-progressive);
+    color: var(--ooui-text);
+    display: inline-block;
+    padding: 0.5em 1em;
+    text-decoration: none;
+}
+
+a.smw-ask-action-btn-lgrey {
+    background-color: var(--ooui-normal);
+    border-color: var(--ooui-normal-border);
+    color: var(--ooui-text);
+}
+
+a.smw-ask-action-btn-lgrey:hover {
+    background-color: var(--ooui-normal--hover);
+    border-color: var(--ooui-normal-border);
+    color: var(--ooui-text);
+}
+
+.mw-widget-calendarWidget:focus {
+    border-color: var(--ooui-accent);
+    box-shadow: inset 0 0 0 1px var(--ooui-accent);
+}
+
+.mw-widget-calendarWidget-day-additional {
+    color: var(--ooui-text);
+    opacity: 0.67;
+}
+
+.mw-widget-calendarWidget-day-today {
+    box-shadow: inset 0 0 0 1px var(--ooui-accent);
+}
+
+.mw-widgets-datetime-calendarWidget {
+    background-color: var(--ooui-interface);
+    border-color: var(--ooui-interface-border);
+}
+
+.mw-widgets-datetime-calendarWidget:focus {
+    border-color: var(--ooui-accent);
+    box-shadow: inset 0 0 0 1px var(--ooui-accent),0 2px 2px 0 rgba(0,0,0,0.25);
+}
+
+.mw-changeslist-legend {
+    display: none;
+}
+
+.client-js .mw-changeslist ul {
+    margin-left: 0;
+}
+
+.mw-rcfilters-ui-savedLinksListItemWidget-label {
+    color: var(--ooui-accent);
+}
+
+a.smw-ask-action-btn.smw-ask-action-btn-lblue, a.smw-ask-action-btn.smw-ask-action-btn-lblue:visited {
+    background-color: var(--body-mid);
+    border-color: var(--body-mid);
+    color: var(--ooui-text);
+}
+
+#mw-abusefilter-disallow-preview, #mw-abusefilter-warn-preview, div.mw-abusefilter-editor {
+    border-color: var(--ooui-input-border);
+}
+
+.mw-destfile-warning {
+    background-color: var(--warningbox-bg);
+    border-color: var(--warningbox-border);
+    color: var(--text-color);
+}
+
+.gemw-header {
+    border-left-style: solid;
+    border-left-width: 0.25em;
+    display: flex;
+    margin-bottom: 3em;
+    padding-left: 1em;
+}
+
+.gemw-header.negative {
+    border-color: var(--gemw-negative-color);
+}
+
+.gemw-header.unchanged {
+    border-color: var(--gemw-unchanged-color);
+}
+
+.gemw-header .gemw-section-left {
+    flex: 1;
+}
+
+.gemw-header .gemw-name {
+    font-size: 1.15em;
+    font-weight: bold;
+    margin-bottom: 0;
+}
+
+.gemw-header .gemw-name a {
+    color: inherit;
+}
+
+.gemw-header .gemw-examine {
+    color: var(--byline-color);
+    font-size: 1.05em;
+    font-style: italic;
+    margin: 0 1em 1.25em 0;
+}
+
+.gemw-header .gemw-change {
+    display: inline-block;
+    font-size: 1rem;
+    font-weight: bold;
+    margin-left: 2em;
+    word-spacing: 0.5em;
+}
+
+.gemw-header .gemw-section-right {
+    text-align: right;
+}
+
+.gemw-header .gemw-time {
+    color: var(--byline-color);
+    font-weight: bold;
+}
+
+.ve-init-mw-desktopArticleTarget-toolbarPlaceholder-floating .ve-init-mw-desktopArticleTarget-toolbarPlaceholder-bar {
+    background: var(--ooui-interface);
+}
+
+.ve-init-mw-desktopArticleTarget-toolbarPlaceholder-bar {
+    border-bottom-color: var(--body-mid);
+}
+
+#mw-searchoptions .divider, .mw-prefs-tabs-wrapper.oo-ui-panelLayout-framed {
+    border-color: var(--body-border);
+}
+
+#mw-searchoptions h4 {
+    font-family: inherit;
+}
+
+#mw-searchoptions .oo-ui-labelElement:nth-of-type(odd) {
+    font-weight: bold;
+}
+
+#mw-search-interwiki li {
+    font-size: 90%;
+}
+
+.mw-widget-calendarWidget {
+    border-color: var(--ooui-interface-border);
+}
+
+.mw-widget-calendarWidget-day {
+    color: var(--ooui-text);
+}
+
+.mw-widget-calendarWidget-day-heading {
+    color: var(--ooui-text);
+}
+
+.mw-number-text {
+    color: var(--byline-color);
+}
+
+.mw-search-result-data {
+    color: var(--byline-color);
+}
+
+div.mw-abusefilter-editor {
+    border-color: var(--ooui-input-border);
+}
+
+.smw-ask-action-btn.smw-ask-action-btn-lblue:hover {
+    background-color: var(--smw-ask-action-btn-lblue-bg);
+    border-color: var(--smw-ask-action-btn-lblue-border-color);
+    color: var(--smw-ask-action-btn-lblue-color);
+}
+
+.smw-ask-action-btn.smw-ask-action-btn-lblue:visited {
+    background-color: var(--smw-ask-action-btn-lblue-bg);
+    border-color: var(--smw-ask-action-btn-lblue-border-color);
+    color: var(--smw-ask-action-btn-lblue-color);
+}
+
+a.smw-ask-action-btn.smw-ask-action-btn-lblue {
+    background-color: var(--body-mid);
+    border-color: var(--body-mid);
+    color: var(--ooui-text);
+}
+
+a.smw-ask-action-btn.smw-ask-action-btn-lblue:visited {
+    background-color: var(--body-mid);
+    border-color: var(--body-mid);
+    color: var(--ooui-text);
+}
+
+.mw-prefs-tabs-wrapper.oo-ui-panelLayout-framed {
+    border-color: var(--body-border);
+}
+
+#mw-searchoptions {
+    background-color: var(--body-mid);
+    border-color: transparent;
+}
+
+#mw-searchoptions .divider {
+    border-color: var(--body-border);
+}
+
+#mw-abusefilter-warn-preview {
+    border-color: var(--ooui-input-border);
+}
+
+#mw-abusefilter-disallow-preview {
+    border-color: var(--ooui-input-border);
+}
+
+.mw-rcfilters-ui-viewSwitchWidget label.oo-ui-labelWidget {
+    color: var(--byline-color);
+}
+
+.mw-rcfilters-ui-filterTagMultiselectWidget.oo-ui-widget-enabled .oo-ui-tagMultiselectWidget-handle {
+    background-color: var(--ooui-interface);
+    border-color: var(--ooui-interface-border);
+}
+
+.mw-rcfilters-ui-filterTagMultiselectWidget-views-select-widget.oo-ui-widget {
+    border-color: var(--ooui-interface-border);
+}
+
+.mw-echo-ui-pageNotificationsOptionWidget.oo-ui-optionWidget-selected {
+    background-color: var(--ooui-normal);
+    color: var(--ooui-accent);
+}
+
+.mw-echo-ui-pageNotificationsOptionWidget.oo-ui-optionWidget-highlighted {
+    background-color: var(--ooui-normal);
+    color: var(--text-color);
+}
+
+.mw-echo-ui-pageNotificationsOptionWidget.oo-ui-optionWidget-pressed.mw-echo-ui-pageNotificationsOptionWidget.oo-ui-optionWidget-highlighted, .mw-echo-ui-pageNotificationsOptionWidget.oo-ui-optionWidget-selected.mw-echo-ui-pageNotificationsOptionWidget.oo-ui-optionWidget-highlighted {
+    background-color: var(--ooui-normal--hover);
+}
+
+.mw-search-profile-tabs {
+    background-color: var(--body-mid);
+    border-color: transparent;
+}
+
+.smw-column-header {
+    color: var(--text-color);
+}
+
+.mw-footer li {
+    color: var(--background-text-color);
+}
+
+.smw-property-page-results .header-row > .header-title {
+    border-color: var(--ooui-interface-border);
+}
+
+.mw-footer {
+    color: var(--background-text-color);
+}
+
+.mw-footer a, .mw-footer a:active, .mw-footer a:visited {
+    color: var(--link-color);
+    text-decoration: underline;
+}
+
+.wgl-stickyheader #mw-history-compare > div:first-of-type {
+    top: 2.5rem;
+}
+
+.mw-echo-ui-notificationItemWidget-unread, .mw-echo-ui-notificationItemWidget:hover {
+    background-color: var(--ooui-normal--hover);
+}
+
+#mw-page-base {
+    background: none;
+}
+
+.smw-ask-action-btn.smw-ask-action-btn-lblue, .smw-ask-action-btn.smw-ask-action-btn-lblue:hover, .smw-ask-action-btn.smw-ask-action-btn-lblue:visited {
+    background-color: var(--body-mid);
+    border-color: var(--body-mid);
+    color: var(--ooui-text);
+}
+
+#mw-allmessagestable tbody:hover .am_default {
+    background-color: var(--diff-inline-deletedline);
+}
+
+.mw-datatable {
+    border-color: var(--wikitable-border);
+}
+
+table.mw-abuselog-details td, table.mw-abuselog-details th {
+    border-color: var(--wikitable-border);
+}
+
+.mw-rcfilters-ui-datePopupWidget .mw-rcfilters-ui-valuePickerWidget-title {
+    color: var(--byline-color);
+}
+
+.mw-parser-output a.external:active, .mw-parser-output a.external:visited, .mw-parser-output a.extiw:active, .mw-parser-output a.extiw:visited {
+    color: var(--link-color);
+}
+
+.mw-heading, h1, h2, h3, h4, h5, h6 {
+    color: var(--heading-color);
+    font-family: 'Alegreya', 'Palatino', 'Georgia', serif;
+}
+
+.mwe-popups .mw-ui-icon-element:not(.disabled):hover {
+    background: none;
+}
+
+.leaflet-vis-tooltip.lbl-bg-grey a, .leaflet-vis-tooltip.lbl-bg-grey a.mw-selflink.selflink, .leaflet-vis-tooltip.lbl-bg-grey a:active, .leaflet-vis-tooltip.lbl-bg-grey a:hover, .leaflet-vis-tooltip.lbl-bg-grey a:visited {
+    color: var(--link-color);
+    text-decoration: underline;
+}
+
+.sitedir-ltr .mw-dismissable-notice-body {
+    margin: 0;
+}
+
+table.mw-abuselog-details th {
+    background: var(--wikitable-header-bg);
+}
+
+.mw-highlight .linenos {
+    color: var(--byline-color);
+}
+
+.mw-apisandbox-toolbar {
+    background: var(--body-main);
+}
+
+.mw-datatable td {
+    background-color: var(--wikitable-bg);
+}
+
+.mw-echo-ui-notificationsInboxWidget-toolbarWrapper {
+    background: var(--body-main);
+}
+
+#mw-allmessagestable .am_actual:hover, #mw-allmessagestable .am_default:hover, #mw-allmessagestable tbody:hover td {
+    opacity: 0.8;
+}
+
+.mw-heading1, .mw-heading2, h1, h2 {
+    color: var(--heading-color);
+    font-family: 'Alegreya', 'Palatino', 'Georgia', serif;
+}
+
+.mw-rcfilters-ui-changesListWrapperWidget-previousChangesIndicator {
+    border-color: var(--sidebar);
+}
+
+.mw-datatable th {
+    border-color: var(--wikitable-border);
+}
+
+.client-js .mw-changeslist.mw-rcfilters-ui-changesListWrapperWidget-highlighted table.mw-enhanced-rc, .client-js .mw-changeslist.mw-rcfilters-ui-changesListWrapperWidget-highlighted ul {
+    margin-left: 1.5em;
+}
+
+.smw-ask-action-btn.smw-ask-action-btn-dblue, .smw-ask-action-btn.smw-ask-action-btn-dblue:hover, .smw-ask-action-btn.smw-ask-action-btn-dblue:visited {
+    background-color: var(--ooui-normal);
+    border-color: var(--ooui-normal-border);
+    color: var(--ooui-text);
+}
+
+#mw-history-compare > div:first-of-type {
+    background-color: var(--body-main);
+    border-bottom: 1px solid var(--body-dark);
+    padding: 0.25em 0;
+    position: sticky;
+    top: 0;
+}
+
+.client-js .mw-changeslist table.mw-enhanced-rc, .client-js .mw-changeslist ul {
+    margin-left: 0;
+}
+
+.mw-echo-ui-bundleNotificationItemWidget-group, .mw-echo-ui-crossWikiNotificationItemWidget-group {
+    background-color: var(--body-main);
+}
+
+.mw-json td, .mw-json th {
+    border-color: var(--wikitable-border);
+}
+
+.mw-datatable td, .mw-datatable th {
+    background-color: var(--wikitable-bg);
+}
+
+body.wgl-theme-browntown .leaflet-vis-tooltip.lbl-bg-grey a, body.wgl-theme-browntown .leaflet-vis-tooltip.lbl-bg-grey a.mw-selflink.selflink, body.wgl-theme-browntown .leaflet-vis-tooltip.lbl-bg-grey a:active, body.wgl-theme-browntown .leaflet-vis-tooltip.lbl-bg-grey a:hover, body.wgl-theme-browntown .leaflet-vis-tooltip.lbl-bg-grey a:visited, body.wgl-theme-dark .leaflet-vis-tooltip.lbl-bg-grey a, body.wgl-theme-dark .leaflet-vis-tooltip.lbl-bg-grey a.mw-selflink.selflink, body.wgl-theme-dark .leaflet-vis-tooltip.lbl-bg-grey a:active, body.wgl-theme-dark .leaflet-vis-tooltip.lbl-bg-grey a:hover, body.wgl-theme-dark .leaflet-vis-tooltip.lbl-bg-grey a:visited {
+    color: var(--link-color);
+    text-decoration: underline;
+}
+
+.mw-parser-output a.external, .mw-parser-output a.extiw {
+    color: var(--link-color);
+}
+
+.mw-highlight .hll a .linenos, .mw-highlight a:hover .linenos {
+    color: var(--text-color);
+}
+
+#mw-search-interwiki li, .searchalttitle {
+    font-size: 90%;
+}
+
+.mw-abusefilter-log-hidden-entry {
+    color: var(--subtle-color);
+}
+
+.mw-highlight {
+    background: none;
+}
+
+#mw-allmessagestable tbody:hover .am_actual {
+    background-color: var(--diff-addedline-background);
+}
+
+.mw-protectedpages-unknown {
+    color: var(--byline-color);
+}
+

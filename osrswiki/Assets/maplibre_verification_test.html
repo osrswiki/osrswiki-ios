@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MapLibre Bridge Test - Quick Verification</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            max-width: 600px;
+            margin: 20px auto;
+            padding: 20px;
+            background-color: #f8f9fa;
+        }
+        .test-result {
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 8px;
+            border: 2px solid;
+            font-weight: bold;
+        }
+        .success { background: #d4edda; border-color: #c3e6cb; color: #155724; }
+        .error { background: #f8d7da; border-color: #f5c6cb; color: #721c24; }
+        .pending { background: #fff3cd; border-color: #ffeaa7; color: #856404; }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            margin: 5px;
+            font-size: 16px;
+        }
+        button:hover { background: #0056b3; }
+        #console {
+            background: #2d3748;
+            color: #e2e8f0;
+            padding: 15px;
+            border-radius: 6px;
+            font-family: 'SF Mono', Monaco, monospace;
+            font-size: 14px;
+            max-height: 300px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+    <h1>🗺️ MapLibre Bridge Verification</h1>
+    <p>Testing if the restored map_bridge.js is working correctly...</p>
+    
+    <div id="bridge-test" class="test-result pending">
+        🔄 Checking bridge availability...
+    </div>
+    
+    <div id="handlers-test" class="test-result pending">
+        🔄 Testing message handlers...
+    </div>
+    
+    <div id="methods-test" class="test-result pending">
+        🔄 Testing bridge methods...
+    </div>
+    
+    <button onclick="runFullTest()">🔄 Re-run Tests</button>
+    <button onclick="clearConsole()">🗑️ Clear Console</button>
+    
+    <h3>Console Output:</h3>
+    <div id="console"></div>
+
+    <script>
+        let testResults = {};
+        
+        function log(message, type = 'info') {
+            const console = document.getElementById('console');
+            const timestamp = new Date().toLocaleTimeString();
+            const prefix = type === 'error' ? '❌' : type === 'success' ? '✅' : '🔍';
+            console.textContent += `[${timestamp}] ${prefix} ${message}\n`;
+            console.scrollTop = console.scrollHeight;
+            
+            // Also log to browser console
+            if (type === 'error') {
+                console.error(`[BRIDGE-TEST] ${message}`);
+            } else {
+                console.log(`[BRIDGE-TEST] ${message}`);
+            }
+        }
+        
+        function updateTestResult(testId, message, success) {
+            const element = document.getElementById(testId);
+            element.textContent = message;
+            element.className = `test-result ${success ? 'success' : 'error'}`;
+            testResults[testId] = success;
+        }
+        
+        function testBridgeAvailability() {
+            log('Testing bridge availability...');
+            
+            // Test 1: Check if webkit is available
+            if (typeof window.webkit === 'undefined') {
+                updateTestResult('bridge-test', '❌ window.webkit not available', false);
+                log('window.webkit is undefined', 'error');
+                return false;
+            }
+            
+            // Test 2: Check messageHandlers
+            if (!window.webkit.messageHandlers) {
+                updateTestResult('bridge-test', '❌ messageHandlers not available', false);
+                log('window.webkit.messageHandlers is undefined', 'error');
+                return false;
+            }
+            
+            // Test 3: Check mapBridge handler
+            if (!window.webkit.messageHandlers.mapBridge) {
+                updateTestResult('bridge-test', '❌ mapBridge handler missing', false);
+                log('window.webkit.messageHandlers.mapBridge is undefined', 'error');
+                return false;
+            }
+            
+            // Test 4: Check OsrsWikiBridge object
+            if (typeof window.OsrsWikiBridge === 'undefined') {
+                updateTestResult('bridge-test', '❌ OsrsWikiBridge object missing', false);
+                log('window.OsrsWikiBridge is undefined', 'error');
+                return false;
+            }
+            
+            updateTestResult('bridge-test', '✅ Bridge available and ready!', true);
+            log('Bridge components are available', 'success');
+            return true;
+        }
+        
+        function testMessageHandlers() {
+            log('Testing message handlers...');
+            
+            if (!testResults['bridge-test']) {
+                updateTestResult('handlers-test', '❌ Bridge not available', false);
+                return false;
+            }
+            
+            try {
+                // Test the log method first (safest)
+                window.webkit.messageHandlers.mapBridge.postMessage({
+                    action: 'log',
+                    message: 'Test message from verification page'
+                });
+                
+                updateTestResult('handlers-test', '✅ Message handlers working!', true);
+                log('Successfully sent test message to native layer', 'success');
+                return true;
+            } catch (error) {
+                updateTestResult('handlers-test', `❌ Handler error: ${error.message}`, false);
+                log(`Failed to send message: ${error.message}`, 'error');
+                return false;
+            }
+        }
+        
+        function testBridgeMethods() {
+            log('Testing bridge methods...');
+            
+            if (!testResults['bridge-test']) {
+                updateTestResult('methods-test', '❌ Bridge not available', false);
+                return false;
+            }
+            
+            const expectedMethods = [
+                'onMapPlaceholderMeasured',
+                'onCollapsibleToggled', 
+                'setHorizontalScroll',
+                'log'
+            ];
+            
+            for (const method of expectedMethods) {
+                if (typeof window.OsrsWikiBridge[method] !== 'function') {
+                    updateTestResult('methods-test', `❌ Missing method: ${method}`, false);
+                    log(`OsrsWikiBridge.${method} is not a function`, 'error');
+                    return false;
+                }
+                log(`OsrsWikiBridge.${method} exists and is callable`, 'success');
+            }
+            
+            // Test actual method call
+            try {
+                window.OsrsWikiBridge.log('Method test from verification page');
+                updateTestResult('methods-test', '✅ All bridge methods working!', true);
+                log('All bridge methods tested successfully', 'success');
+                return true;
+            } catch (error) {
+                updateTestResult('methods-test', `❌ Method execution error: ${error.message}`, false);
+                log(`Bridge method execution failed: ${error.message}`, 'error');
+                return false;
+            }
+        }
+        
+        function runFullTest() {
+            log('=== Starting MapLibre Bridge Verification ===');
+            clearResults();
+            
+            // Run tests in sequence
+            setTimeout(() => {
+                testBridgeAvailability();
+                setTimeout(() => {
+                    testMessageHandlers();
+                    setTimeout(() => {
+                        testBridgeMethods();
+                        setTimeout(() => {
+                            const allPassed = Object.values(testResults).every(result => result);
+                            log(`=== Test Summary: ${allPassed ? 'ALL TESTS PASSED' : 'SOME TESTS FAILED'} ===`, allPassed ? 'success' : 'error');
+                        }, 100);
+                    }, 100);
+                }, 100);
+            }, 100);
+        }
+        
+        function clearResults() {
+            testResults = {};
+            document.getElementById('bridge-test').className = 'test-result pending';
+            document.getElementById('handlers-test').className = 'test-result pending';
+            document.getElementById('methods-test').className = 'test-result pending';
+        }
+        
+        function clearConsole() {
+            document.getElementById('console').textContent = '';
+        }
+        
+        // Auto-run tests when page loads
+        window.addEventListener('load', function() {
+            log('MapLibre Bridge Verification Test loaded');
+            log('Waiting for bridge initialization...');
+            
+            // Give the bridge time to initialize, then run tests
+            setTimeout(runFullTest, 1500);
+        });
+    </script>
+</body>
+</html>

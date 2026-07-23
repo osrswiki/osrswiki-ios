@@ -1,0 +1,232 @@
+/*
+ * NAVIGATION MODULE (DEDUPLICATED)
+ * Removed 5 duplicate selectors
+ * Generated: navigation.css
+ */
+
+#tab-smw-property-value:checked + label.nav-label .usage-count {
+    background-color: var(--ooui-progressive);
+    border-radius: 12px;
+    color: #fff;
+    font-size: 11px;
+    font-weight: bold;
+    padding: 2px 6px;
+}
+
+#tab-smw-property-value:checked + label.nav-label .usage-count.moderate {
+    background-color: #b55e0c;
+    border-color: #b55e0c;
+    color: #fff;
+}
+
+#tab-smw-property-value:checked + label.nav-label .usage-count.high {
+    background-color: #9f261e;
+    border-color: #9f261e;
+    color: #fff;
+}
+
+.mw-widget-titleWidget-menu .mw-widget-titleOptionWidget-description {
+    color: var(--byline-color);
+    font-size: 0.9em;
+    font-style: italic;
+}
+
+.mw-templateData-template-map-list-menu-panel, .oo-ui-bookletLayout > .oo-ui-menuLayout-menu {
+    border-right-color: var(--ooui-interface-border);
+}
+
+.mw-rcfilters-ui-filterMenuHeaderWidget-title, .mw-rcfilters-ui-tagItemWidget-popup-content, .oo-ui-menuOptionWidget.oo-ui-widget-enabled.oo-ui-optionWidget {
+    color: var(--ooui-text);
+}
+
+.mw-rcfilters-ui-watchlistTopSectionWidget-separator {
+    border-color: var(--sidebar);
+}
+
+.mw-rcfilters-ui-itemMenuOptionWidget-header {
+    background-color: var(--ooui-interface-border);
+    border-bottom-color: var(--ooui-interface);
+}
+
+.mw-rcfilters-ui-itemMenuOptionWidget:not(:last-child):not(.mw-rcfilters-ui-itemMenuOptionWidget-identifier-talk) {
+    border-bottom-color: var(--ooui-normal-border);
+}
+
+.mw-rcfilters-ui-itemMenuOptionWidget-label-desc {
+    color: var(--text-color);
+}
+
+.mw-rcfilters-ui-filterMenuSectionOptionWidget {
+    background-color: var(--body-mid);
+}
+
+.mw-rcfilters-ui-itemMenuOptionWidget-view-namespaces {
+    border-top-color: var(--ooui-interface-border);
+}
+
+.mw-rcfilters-ui-datePopupWidget {
+    border-color: var(--ooui-interface-border);
+}
+
+.mw-rcfilters-ui-datePopupWidget .mw-rcfilters-ui-valuePickerWidget-title, .oo-ui-menuOptionWidget .mw-apisandbox-flag, .oo-ui-menuSectionOptionWidget {
+    color: var(--byline-color);
+}
+
+ul.tabbernav {
+    border: none;
+    font-family: inherit;
+    margin-bottom: 0;
+    margin-left: 2em;
+    margin-right: 2em;
+    padding: 0;
+}
+
+ul.tabbernav li.tabberactive > a {
+    background-color: var(--tabber-active-tab-bg);
+    border-bottom: none;
+    color: var(--tabber-active-tab-color);
+    position: relative;
+}
+
+ul.tabbernav li.tabberactive > a:hover {
+    background-color: var(--tabber-active-tab-hover-bg);
+    border-bottom: none;
+    border-color: var(--tabber-active-tab-hover-border-color);
+    color: var(--tabber-active-tab-hover-color);
+}
+
+ul.tabbernav li.tabberactive > a::after {
+    border-bottom: 2px solid var(--tabber-active-tab-border-hider-color);
+    bottom: -1px;
+    content: '';
+    left: 0;
+    position: absolute;
+    right: 0;
+}
+
+ul.tabbernav li a {
+    background-color: var(--tabber-inactive-tab-bg);
+    border-bottom: transparent;
+    border-color: var(--tabber-inactive-tab-border-color);
+    color: var(--tabber-inactive-tab-color);
+    display: inline-block;
+    font-size: 110%;
+    padding: 0.5em 1em;
+}
+
+ul.tabbernav li a:hover {
+    background-color: var(--tabber-inactive-tab-hover-bg);
+    border-color: var(--tabber-inactive-tab-hover-border-color);
+}
+
+ul.tabbernav li a:visited {
+    color: var(--tabber-inactive-tab-color);
+}
+
+.mw-rcfilters-ui-filterMenuHeaderWidget-header {
+    background-color: var(--ooui-interface);
+    border-bottom-color: var(--ooui-interface-border);
+}
+
+.mw-rcfilters-ui-menuSelectWidget-footer, .oo-ui-menuSelectWidget {
+    background-color: var(--ooui-interface);
+    border-color: var(--ooui-interface-border);
+}
+
+.oo-ui-menuSelectWidget-frameless {
+    box-shadow: inset 0 -1px 0 0 var(--ooui-normal-border);
+}
+
+.oo-ui-menuOptionWidget.oo-ui-optionWidget-highlighted, .oo-ui-menuOptionWidget.oo-ui-optionWidget-selected {
+    background-color: var(--ooui-normal--hover);
+    color: var(--ooui-text);
+}
+
+.oo-ui-menuOptionWidget.oo-ui-optionWidget-pressed.oo-ui-menuOptionWidget.oo-ui-optionWidget-highlighted, .oo-ui-menuOptionWidget.oo-ui-optionWidget-selected.oo-ui-menuOptionWidget.oo-ui-optionWidget-highlighted {
+    color: var(--ooui-accent);
+}
+
+.oo-ui-toolbar-bar .oo-ui-bookletLayout > .oo-ui-menuLayout-menu {
+    border-right-color: var(--body-mid);
+}
+
+.oo-ui-menuToolGroup {
+    border-left-color: var(--body-mid);
+    border-right-color: var(--body-mid);
+}
+
+.ve-ui-mwTwoPaneTransclusionDialogLayout > .oo-ui-menuLayout-menu {
+    border-right: var(--body-border);
+}
+
+.mw-prefs-tabs > .oo-ui-menuLayout-content > .oo-ui-indexLayout-stackLayout > .oo-ui-tabPanelLayout {
+    border-color: var(--body-border);
+}
+
+.oo-ui-menuSelectWidget {
+    background-color: var(--ooui-interface);
+    border-color: var(--ooui-interface-border);
+}
+
+.oo-ui-menuSectionOptionWidget {
+    color: var(--byline-color);
+}
+
+.oo-ui-menuOptionWidget.oo-ui-optionWidget-highlighted {
+    background-color: var(--ooui-normal--hover);
+    color: var(--ooui-text);
+}
+
+.oo-ui-menuOptionWidget.oo-ui-optionWidget-selected {
+    background-color: var(--ooui-normal--hover);
+    color: var(--ooui-text);
+}
+
+.oo-ui-menuOptionWidget.oo-ui-optionWidget-selected.oo-ui-menuOptionWidget.oo-ui-optionWidget-highlighted {
+    color: var(--ooui-accent);
+}
+
+.oo-ui-menuOptionWidget.oo-ui-optionWidget-pressed.oo-ui-menuOptionWidget.oo-ui-optionWidget-highlighted {
+    color: var(--ooui-accent);
+}
+
+.oo-ui-menuOptionWidget.oo-ui-widget-enabled.oo-ui-optionWidget {
+    color: var(--ooui-text);
+}
+
+.oo-ui-bookletLayout > .oo-ui-menuLayout-menu {
+    border-right-color: var(--ooui-interface-border);
+}
+
+.oo-ui-menuOptionWidget .mw-apisandbox-flag {
+    color: var(--byline-color);
+}
+
+.mw-rcfilters-ui-itemMenuOptionWidget-label-desc, .mw-rcfilters-ui-itemMenuOptionWidget-label-title {
+    color: var(--text-color);
+}
+
+.mw-templateData-template-map-list-menu-panel {
+    border-right-color: var(--ooui-interface-border);
+}
+
+.mw-rcfilters-ui-filterMenuHeaderWidget-title {
+    color: var(--ooui-text);
+}
+
+.mw-rcfilters-ui-filterMenuOptionWidget.oo-ui-flaggedElement-muted .mw-rcfilters-ui-itemMenuOptionWidget-label-desc, .mw-rcfilters-ui-filterMenuOptionWidget.oo-ui-flaggedElement-muted .mw-rcfilters-ui-itemMenuOptionWidget-label-title {
+    color: var(--subtle-color);
+}
+
+.mw-rcfilters-ui-filterMenuOptionWidget.oo-ui-flaggedElement-muted:not(.oo-ui-optionWidget-selected) {
+    background-color: var(--body-main);
+}
+
+.mw-rcfilters-ui-filterMenuSectionOptionWidget-header-title.oo-ui-labelElement-label {
+    color: var(--ooui-text);
+}
+
+.mw-prefs-tabs > .oo-ui-menuLayout-content > .oo-ui-indexLayout-stackLayout > .oo-ui-tabPanelLayout, .mw-prefs-tabs-wrapper.oo-ui-panelLayout-framed {
+    border-color: var(--body-border);
+}
+

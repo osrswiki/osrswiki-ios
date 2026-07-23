@@ -1,0 +1,31 @@
+{
+  "configurations" : [
+    {
+      "id" : "9F4B8C2A-4A8F-4E8C-8F9A-8C2A4A8F4E8C",
+      "name" : "MapCacheAnalysis",
+      "options" : {
+        "testExecutionOrdering" : "random"
+      }
+    }
+  ],
+  "defaultOptions" : {
+    "testExecutionOrdering" : "random",
+    "testTimeoutsEnabled" : true,
+    "maximumTestExecutionTimeAllowance" : 300
+  },
+  "testTargets" : [
+    {
+      "target" : {
+        "containerPath" : "container:osrswiki.xcodeproj",
+        "identifier" : "osrswikiTests",
+        "name" : "osrswikiTests"
+      },
+      "testPlan" : {
+        "includedTests" : [
+          "MapLibrePreloadingIntegrationTest/testRealMapFloorPreloadingBehavior"
+        ]
+      }
+    }
+  ],
+  "version" : 1
+}

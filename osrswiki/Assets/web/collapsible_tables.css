@@ -1,0 +1,347 @@
+/*
+        Styles for the OSRS Wiki infobox.
+        These rules use the app's theme-aware variables.
+*/
+
+/* FOUC Fix: Hide raw infoboxes until JavaScript transforms them */
+body:not(.js-transforms-complete) .infobox {
+    opacity: 0;
+}
+
+/* Show infoboxes after transformation or when wrapped in collapsible container */
+body.js-transforms-complete .infobox,
+.collapsible-container .infobox {
+    opacity: 1;
+}
+
+
+/* Base styling for all infobox containers. */
+.infobox {
+        background: var(--wikitable-bg);
+        border: 1px solid var(--wikitable-border);
+        font-size: 0.85em;
+        margin: 0; /* Margin is handled by the collapsible content container */
+        border-collapse: collapse;
+        box-shadow: 0 0.25rem 0.35rem -0.25rem rgba(0,0,0,0.1);
+        word-break: break-word;
+}
+
+/* The main infobox should fill its container. */
+.collapsible-container .main-infobox {
+        width: 100%;
+        table-layout: fixed;
+}
+
+/*
+        `table-layout: fixed` ensures all columns are of uniform width.
+        A total width is set to constrain the layout algorithm.
+*/
+.infobox.infobox-bonuses {
+        table-layout: fixed;
+        max-width: none;
+        /* Total width is the sum of the desired column widths:
+                       250px (bonuses) + 153px (image1) + 153px (image2) = 556px */
+        width: 556px;
+}
+
+/* Generic rule for all images in an infobox. */
+.infobox img {
+        margin: 0 auto; /* Center the image horizontally */
+        border-radius: 0;
+        max-width: 100%; /* Prevent image from overflowing its container */
+        width: auto; /* Allow image to use its natural width */
+        height: auto;
+        display: block;
+}
+
+/*
+        For small icons, we only need to ensure they are centered.
+        They do not need `max-width: none`.
+*/
+.infobox .infobox-nested img,
+.infobox .infobox-subheader img {
+        display: inline-block;
+        vertical-align: middle;
+}
+
+/*
+        For large equipment images, `max-width: none` is the key to forcing
+        the table to expand and enable horizontal scrolling.
+*/
+.infobox .infobox-bonuses-image img {
+        display: inline-block;
+        max-width: none;
+        vertical-align: middle;
+}
+
+.mw-kartographer-map {
+        box-sizing: border-box !important;
+        padding: 0 !important;
+        border: none !important;
+        width: 100% !important;
+        min-height: 200px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+}
+
+/* General styling for header and data cells */
+.infobox > tbody > tr > td,
+.infobox > tbody > tr > th {
+        background-color: transparent;
+        color: var(--wikitable-color);
+        padding: 0.25em 0.5em;
+        line-height: 1.6em;
+        text-align: left;
+        vertical-align: top;
+}
+
+.infobox .infobox-header,
+.infobox .infobox-subheader {
+        background-color: var(--wikitable-header-bg);
+        color: var(--wikitable-color);
+        font-weight: bold;
+        text-align: center;
+}
+
+.infobox .infobox-header {
+        font-size: 1.15em;
+        line-height: 1.4em;
+        padding: 0.5em 0;
+}
+
+.infobox .infobox-subheader {
+        line-height: 2em;
+        /* Set an explicit width on the subheader that spans the icon columns.
+                       In a fixed-layout table, this width is distributed to the columns it spans. */
+        width: 250px;
+}
+
+.infobox th:not(.infobox-header):not(.infobox-subheader):not(.infobox-nested) {
+        text-align: right;
+        border-right: 2px solid var(--colorsurfacevariant);
+}
+
+.infobox .infobox-full-width-content {
+        padding: 0;
+        text-align: center;
+}
+
+/*
+        ==============================================================================
+        Styles for generic collapsible containers.
+        ==============================================================================
+*/
+
+.collapsible-container {
+        border-radius: 4px;
+        /* Remove forced dimensions - let child determine size */
+        width: auto;
+        /* No max-width override - child content controls size */
+        overflow: hidden; /* This clips the corners for the border-radius */
+        background-color: var(--colorsurfacevariant);
+        color: var(--coloronsurfacevariant);
+        display: block;
+        /* Default fallback for unmatched content */
+        margin: 1em 0;
+        width: fit-content;
+        /* margin and float handled by specific rules below */
+}
+
+/* True transparent wrapper behavior - containers inherit exact child positioning */
+
+/* Float Right: Match child's right-floating behavior exactly */
+.collapsible-container:has([class*="floatright"], [class*="-right"], .archivelist, .shortcut, .mw-halign-right, .infobox:not(.skill-info):not(.infobox-skill):not(.infobox-bonuses), .multi-infobox) {
+        float: right;
+        margin: 0.5em 0 1em 1em; /* Match typical right-floating margin */
+        width: fit-content; /* Wrap around child exactly */
+}
+
+/* Float Left: Match child's left-floating behavior exactly */
+.collapsible-container:has([class*="floatleft"], [class*="-left"], .mw-halign-left) {
+        float: left;
+        margin: 0.5em 1em 1em 0; /* Match typical left-floating margin */
+        width: fit-content; /* Wrap around child exactly */
+}
+
+/* No Float: Match child's normal document flow positioning */
+.collapsible-container:has(.infobox.skill-info, .infobox.infobox-skill, .infobox-bonuses, [class*="-center"], .mw-halign-center, .mw-halign-none) {
+        float: none;
+        margin: 1em 0; /* Normal document flow - NOT centered */
+        width: fit-content; /* Wrap around child exactly */
+}
+
+/* Full Width Content (navboxes, large tables) */
+.collapsible-container:has(.navbox, .wikitable) {
+        width: 100%; /* Match full-width content */
+        max-width: calc(100vw - 32px); /* Account for body margin (16px each side) */
+        margin: 1em auto 0; /* Match navbox margins */
+        float: none;
+        /* Enable horizontal scrolling for wide content */
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+}
+
+/* ========================================================================
+   Mobile Responsive Behavior - Override floating on narrow screens
+   Matches MediaWiki's body.skin--responsive responsive system
+   ========================================================================*/
+@media screen and (max-width: 768px) {
+        /* Override all floating containers to be non-floating on mobile */
+        .collapsible-container:has([class*="floatright"], [class*="-right"], .archivelist, .shortcut, .mw-halign-right, .infobox:not(.skill-info):not(.infobox-skill):not(.infobox-bonuses), .multi-infobox),
+        .collapsible-container:has([class*="floatleft"], [class*="-left"], .mw-halign-left) {
+                float: none !important;
+                clear: both !important;
+                margin: 1em auto !important; /* Center on mobile like web */
+                width: fit-content;
+        }
+        
+        /* Ensure all containers are properly centered on mobile */
+        .collapsible-container {
+                margin-left: auto;
+                margin-right: auto;
+        }
+}
+
+
+.collapsible-header {
+        display: flex;
+        align-items: center;
+        padding: 12px;
+        cursor: pointer;
+        -webkit-user-select: none;
+        -ms-user-select: none;
+        user-select: none;
+}
+
+.collapsible-header .title-wrapper {
+        flex-grow: 1;
+        font-weight: bold;
+}
+
+.collapsible-header .icon {
+        width: 20px;
+        height: 20px;
+        flex-shrink: 0;
+        background-repeat: no-repeat;
+        background-position: center;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20'%3E%3Cpath d='M17.5 4.75l-7.5 7.5-7.5-7.5L1 6.25l9 9 9-9z' fill='currentColor'/%3E%3C/svg%3E");
+}
+
+.collapsible-container:not(.collapsed) .icon {
+        transform: rotate(180deg);
+}
+
+/*
+        `overflow-y: hidden` is required for the vertical collapse animation.
+        `overflow-x: auto` allows the container to scroll horizontally if its
+        content (like a wide table) is wider than the container.
+*/
+.collapsible-content {
+        padding: 12px 12px 0 12px; /* Remove bottom padding since footer handles it */
+        overflow-y: hidden;
+        overflow-x: auto;
+}
+
+/* FOUC Fix: Ensure collapsed state is immediately applied via CSS */
+.collapsible-container.collapsed .collapsible-content {
+        height: 0 !important; /* Use !important to override inline style 'auto' */
+        padding-top: 0;
+        padding-bottom: 0;
+        overflow: hidden; /* Prevent content from showing during transitions */
+}
+
+/*
+ * ==============================================================================
+ * Close Footer Styles (Wikipedia-inspired UX) - Mirrors header design
+ * ==============================================================================
+ */
+
+.collapsible-close-footer {
+        border-top: 1px solid var(--wikitable-border);
+        background-color: var(--colorsurfacevariant);
+        margin-bottom: 0; /* Remove extra bottom margin to balance with header */
+}
+
+.collapsible-close-button {
+        display: flex;
+        align-items: center;
+        padding: 12px;
+        cursor: pointer;
+        -webkit-user-select: none;
+        -ms-user-select: none;
+        user-select: none;
+        background-color: var(--colorsurfacevariant);
+        color: var(--coloronsurfacevariant);
+}
+
+.collapsible-close-button .title-wrapper {
+        flex-grow: 1;
+        font-weight: normal; /* Use regular font weight for "Close" text */
+        text-align: left; /* Left align the "Close" text to match header */
+}
+
+.collapsible-close-button .icon {
+        width: 20px;
+        height: 20px;
+        flex-shrink: 0;
+        background-repeat: no-repeat;
+        background-position: center;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20'%3E%3Cpath d='M17.5 4.75l-7.5 7.5-7.5-7.5L1 6.25l9 9 9-9z' fill='currentColor'/%3E%3C/svg%3E");
+        transform: rotate(0deg); /* Chevron pointing down for "close" */
+}
+
+/* Hide close footer when container is collapsed */
+.collapsible-container.collapsed .collapsible-close-footer {
+        display: none;
+}
+
+/* Accessibility: Focus styles for keyboard navigation */
+.collapsible-close-button:focus {
+        outline: 2px solid var(--link-color);
+        outline-offset: 2px;
+}
+
+/*
+ * ==============================================================================
+ * Final styles for the Equipment Bonuses Infobox.
+ * These rules correct alignment and border discrepancies with the live wiki.
+ * ==============================================================================
+ */
+
+/* Center-align the numeric bonus values horizontally. */
+.infobox-bonuses td:not(.infobox-bonuses-image):not(.infobox-padding) {
+        text-align: center;
+}
+
+/* Vertically center the main section headers. */
+.infobox-bonuses .infobox-subheader {
+        vertical-align: middle;
+}
+
+/* Add vertical borders between icon headers and the data cells below them. */
+.infobox-bonuses th.infobox-nested ~ th.infobox-nested,
+.infobox-bonuses td:not(.infobox-bonuses-image):not(.infobox-padding) ~ td:not(.infobox-bonuses-image):not(.infobox-padding) {
+        border-left: 2px solid var(--wikitable-header-bg);
+}
+
+/* Ensure subheader icons and text appear on the same line and are vertically centered. */
+.infobox-bonuses .infobox-subheader .mw-default-size,
+.infobox-bonuses .infobox-subheader > a {
+        display: inline-block;
+        vertical-align: middle;
+}
+
+/* Add a border, center content, and set an explicit width for the image columns. */
+.infobox-bonuses .infobox-bonuses-image {
+        border: 1px solid var(--wikitable-border);
+        text-align: center;
+        vertical-align: middle;
+        width: 153px;
+}
+
+/* Center the content of the nested icon cells, overriding the global defaults. */
+.infobox-bonuses th.infobox-nested {
+        vertical-align: middle;
+        text-align: center;
+}

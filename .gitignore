@@ -1,0 +1,56 @@
+# iOS-specific ignores for public repo
+
+# Xcode
+build/
+DerivedData/
+*.pbxuser
+!default.pbxuser
+*.mode1v3
+!default.mode1v3
+*.mode2v3
+!default.mode2v3
+*.perspectivev3
+!default.perspectivev3
+xcuserdata/
+*.xccheckout
+*.moved-aside
+*.xcuserstate
+*.xcscmblueprint
+# Ignore user-specific schemes but allow shared schemes
+xcuserdata/*/xcschemes/
+# Allow shared schemes
+!*/xcshareddata/xcschemes/*.xcscheme
+
+# iOS
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Session files (development only)
+.claude-env
+.claude-device-*
+.claude-app-id
+.claude-simulator-*
+
+# CocoaPods
+Pods/
+*.xcworkspace
+
+# Carthage
+Carthage/Build
+
+# Swift Package Manager
+.build/
+
+# Temporary files
+*.tmp
+*.log
+.DS_Store
+
+# Immutable release map assets are materialized for builds, never committed.
+*.mbtiles
+
+# Development logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*

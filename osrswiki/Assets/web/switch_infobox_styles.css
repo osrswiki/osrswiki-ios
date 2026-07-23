@@ -1,0 +1,111 @@
+/*
+ * Official CSS for the infobox switcher, provided by user.
+ * Plus reconstructed styles for base functionality.
+ */
+
+.infobox-buttons,
+.switch-infobox-triggers {
+    text-align: center;
+    max-width: 300px;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 4px;
+    padding: 4px 0;
+    margin: 0 auto; /* Center the container horizontally */
+    /* Removed min-width: max-content to allow better wrapping */
+}
+
+/* When inside an infobox, give the button container the infobox's background color. */
+.infobox .infobox-buttons {
+    background-color: var(--colorsurfacevariant);
+    border-radius: 4px; /* Add rounded corners to match the container */
+    margin: 4px auto; /* Add some vertical margin for spacing */
+    padding: 4px; /* Add some internal padding */
+    /* Removed max-width: fit-content to respect parent's 300px limit */
+}
+
+/* Make the caption element that holds the button container transparent */
+.infobox .infobox-switch-buttons-caption {
+    background-color: transparent;
+    padding: 0; /* Remove any default padding from the caption itself */
+}
+
+
+.switch-infobox .switch-infobox-triggers .button,
+.infobox-switch .infobox-buttons .button,
+.infobox-wrapper .infobox-buttons .button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--body-light);
+    border: 1px solid var(--ooui-interface-border);
+    color: var(--text-color);
+    cursor: pointer;
+    font-size: 0.75rem;
+    font-weight: normal;
+    line-height: 1.2;
+    /* Flexible dimensions - let content and container determine size */
+    min-width: 4rem; /* Minimum width to prevent squishing */
+    height: auto; /* Allow natural height */
+    margin: 0.25em;
+    padding: 0.25em 0.625em;
+    box-sizing: border-box;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+    flex: 0 1 auto; /* Don't grow, can shrink, auto basis */
+    transition: background-color 100ms, color 100ms, border-color 100ms;
+    user-select: none;
+}
+
+.switch-infobox-triggers .trigger.button[disabled="disabled"],
+.infobox-buttons .button[disabled="disabled"],
+.infobox-buttons .button.button-selected,
+.switch-infobox-triggers .trigger.button.button-selected {
+    /* Using inverted colors as this was deemed acceptable. */
+    background: var(--text-color);
+    border-color: var(--text-color);
+    color: var(--body-light);
+    font-weight: normal;
+}
+
+/* --- Reconstructed functional styles --- */
+
+/* Hide the resource pool for Module:Infobox switchers */
+.infobox-switch-resources {
+    display: none;
+}
+
+/* By default, hide all legacy switchable items/panes */
+.switch-infobox .item {
+    display: none;
+}
+
+/* Show only the active/selected legacy item */
+.switch-infobox .item.showing {
+    display: block;
+}
+
+/* Hide synced switch items by default */
+.rsw-synced-switch-item {
+    display: none;
+}
+
+/* Show the active synced switch item */
+.rsw-synced-switch-item.showing {
+    display: block;
+}
+
+/* Gender Render Styles */
+.gender-render-hidden {
+    display: none !important;
+}
+
+/* --- FINAL FIX: Gap between collapsible header and switcher --- */
+/* The gap is caused by padding on both the header and the content area below it. */
+/* These rules reduce that padding, but only for collapsible infoboxes. */
+
+.collapsible-container:has(table.infobox) > .collapsible-content {
+    padding-top: 0px;
+}

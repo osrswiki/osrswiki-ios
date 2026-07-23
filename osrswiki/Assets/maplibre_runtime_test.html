@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>MapLibre Runtime Test</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .test-widget { 
+            border: 2px solid red; 
+            background: yellow; 
+            margin: 20px 0;
+            padding: 10px;
+        }
+        .debug-info { 
+            background: #f0f0f0; 
+            padding: 10px; 
+            margin: 10px 0; 
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <h1>🧪 MapLibre Runtime Test</h1>
+    <p>This page tests whether MapLibre widgets actually render native maps.</p>
+    
+    <div class="debug-info" id="bridge-status">
+        Bridge Status: <span id="bridge-result">❌ Not Connected</span>
+    </div>
+    
+    <h2>Test Widget (should show native map, not static image):</h2>
+    <div id="test-map" 
+         class="maplibre-widget test-widget" 
+         data-map='{"lat": 3094, "lng": 3094, "zoom": 4, "floor": 0}'
+         style="width: 300px; height: 200px;">
+        🖼️ PLACEHOLDER - If you see this text, MapLibre is NOT working
+    </div>
+    
+    <div class="debug-info">
+        <strong>Expected Behavior:</strong><br>
+        ✅ Red border should disappear (native view overlays)<br>
+        ✅ Yellow background should be hidden by map<br>
+        ✅ Interactive map should appear<br>
+        ❌ Should NOT see "PLACEHOLDER" text<br>
+    </div>
+
+    <div class="debug-info" id="debug-log">
+        <strong>Debug Log:</strong><br>
+        <div id="log-output"></div>
+    </div>
+
+    <script>
+        // Debug logging function
+        function debugLog(message) {
+            const logOutput = document.getElementById('log-output');
+            const timestamp = new Date().toLocaleTimeString();
+            logOutput.innerHTML += `[${timestamp}] ${message}<br>`;
+            console.log(`[MapLibre Test] ${message}`);
+        }
+
+        // Test bridge availability
+        debugLog('🔍 Checking if OsrsWikiBridge is available...');
+        
+        if (typeof window.OsrsWikiBridge !== 'undefined') {
+            debugLog('✅ OsrsWikiBridge object found');
+            document.getElementById('bridge-result').textContent = '✅ Connected';
+            document.getElementById('bridge-result').style.color = 'green';
+            
+            // Test bridge communication
+            debugLog('📡 Testing bridge communication...');
+            try {
+                window.OsrsWikiBridge.log('RUNTIME_TEST: Bridge communication test');
+                debugLog('✅ Bridge log call succeeded');
+                
+                // Simulate widget measurement (what should happen automatically)
+                setTimeout(() => {
+                    debugLog('📏 Simulating widget measurement...');
+                    const widget = document.getElementById('test-map');
+                    const rect = widget.getBoundingClientRect();
+                    const rectJson = JSON.stringify({
+                        x: Math.round(rect.x), 
+                        y: Math.round(rect.y), 
+                        width: Math.round(rect.width), 
+                        height: Math.round(rect.height)
+                    });
+                    const mapData = widget.getAttribute('data-map');
+                    
+                    debugLog(`📐 Widget bounds: ${rectJson}`);
+                    debugLog(`🗺️  Map data: ${mapData}`);
+                    
+                    // This should trigger native map rendering
+                    window.OsrsWikiBridge.onMapPlaceholderMeasured('test-map', rectJson, mapData);
+                    debugLog('✅ onMapPlaceholderMeasured called');
+                    
+                    // Check if widget changed after 2 seconds
+                    setTimeout(() => {
+                        const widgetText = widget.textContent.trim();
+                        if (widgetText.includes('PLACEHOLDER')) {
+                            debugLog('❌ FAIL: Widget still shows placeholder text');
+                            debugLog('❌ MapLibre native rendering is NOT working');
+                        } else {
+                            debugLog('✅ Widget text changed - possible success');
+                        }
+                    }, 2000);
+                }, 1000);
+                
+            } catch (error) {
+                debugLog(`❌ Bridge call failed: ${error}`);
+            }
+        } else {
+            debugLog('❌ OsrsWikiBridge object NOT found');
+            debugLog('❌ Bridge is not loaded - checking for external script...');
+            
+            // Check if external script was loaded
+            const scripts = Array.from(document.scripts);
+            const bridgeScript = scripts.find(s => s.src && s.src.includes('map_bridge.js'));
+            if (bridgeScript) {
+                debugLog(`🔍 Found bridge script: ${bridgeScript.src}`);
+                debugLog('⏳ Script found but OsrsWikiBridge not available - loading issue');
+            } else {
+                debugLog('❌ No map_bridge.js script found in page');
+                debugLog('❌ External script not being loaded by IOSAssetHandler');
+            }
+        }
+
+        // Monitor for any changes to the widget
+        const observer = new MutationObserver((mutations) => {
+            mutations.forEach((mutation) => {
+                if (mutation.target.id === 'test-map') {
+                    debugLog('🔄 Widget DOM changed - native overlay may be active');
+                }
+            });
+        });
+        
+        observer.observe(document.getElementById('test-map'), {
+            attributes: true,
+            childList: true,
+            subtree: true
+        });
+
+        debugLog('🎯 Test setup complete - monitor for native map rendering');
+    </script>
+
+    <!-- Load the bridge script (this should happen automatically via osrsPageHtmlBuilder) -->
+    <script src="app-assets://localhost/web/map_bridge.js"></script>
+</body>
+</html>

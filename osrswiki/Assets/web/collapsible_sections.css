@@ -1,0 +1,19 @@
+/*
+ * When a .mw-collapsible container also has the .mw-collapsed class,
+ * hide the .mw-collapsible-content div that is inside it.
+ * This does NOT hide the trigger text.
+ */
+.mw-collapsible.mw-collapsed .mw-collapsible-content {
+    display: none;
+}
+
+/* Style the trigger text to look like a link */
+.collapsed-sec {
+    font-family: 'Rubik', 'Segoe UI', 'Arial', sans-serif;
+    font-weight: bold;
+}
+
+a.collapsible-toggle-link {
+    color: var(--link-color);
+    text-decoration: none;
+}

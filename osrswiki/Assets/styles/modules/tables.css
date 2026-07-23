@@ -1,0 +1,826 @@
+/*
+ * TABLES MODULE (CONSOLIDATED)
+ * Rules consolidated for efficiency
+ * Generated: tables.css
+ */
+
+.table-positive, .table-yes {
+    background: var(--table-yes-background);
+    color: var(--table-yes-color);
+}
+
+.table-negative, .table-no {
+    background: var(--table-no-background);
+    color: var(--table-no-color);
+}
+
+.table-maybe {
+    background: var(--table-maybe-background);
+    color: var(--table-maybe-color);
+}
+
+.table-na {
+    background: var(--table-na-background);
+    color: var(--table-na-color);
+    text-align: center;
+    vertical-align: middle;
+}
+
+.table-bg-always, .table-bg-blue {
+    background: var(--droptable-always-background);
+    color: var(--droptable-text-color);
+}
+
+.table-bg-common, .table-bg-green {
+    background: var(--droptable-common-background);
+    color: var(--droptable-text-color);
+}
+
+.table-bg-uncommon, .table-bg-yellow {
+    background: var(--droptable-uncommon-background);
+    color: var(--droptable-text-color);
+}
+
+.table-bg-rare, .table-bg-orange {
+    background: var(--droptable-rare-background);
+    color: var(--droptable-text-color);
+}
+
+.table-bg-veryrare, .table-bg-red {
+    background: var(--droptable-veryrare-background);
+    color: var(--droptable-text-color);
+}
+
+.table-bg-random, .table-bg-pink {
+    background: var(--droptable-random-background);
+    color: var(--droptable-text-color);
+}
+
+.table-bg-fade {
+    background: var(--wikitable-alternating-bg);
+    color: var(--wikitable-color);
+    opacity: 0.6;
+}
+
+.table-noborder {
+    border-left-style: hidden !important;
+    border-right-style: hidden !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+}
+
+table.alternating-cols td:nth-child(odd), table.alternating-rows tr:nth-child(odd) {
+    background: var(--wikitable-alternating-bg);
+}
+
+.page-Special_ListFiles .TablePager_col_thumb, .table-center, table.align-center-1 td:nth-of-type(1), table.align-center-10 td:nth-of-type(10), table.align-center-11 td:nth-of-type(11), table.align-center-12 td:nth-of-type(12), table.align-center-13 td:nth-of-type(13), table.align-center-14 td:nth-of-type(14), table.align-center-15 td:nth-of-type(15), table.align-center-16 td:nth-of-type(16), table.align-center-17 td:nth-of-type(17), table.align-center-18 td:nth-of-type(18), table.align-center-19 td:nth-of-type(19), table.align-center-2 td:nth-of-type(2), table.align-center-20 td:nth-of-type(20), table.align-center-3 td:nth-of-type(3), table.align-center-4 td:nth-of-type(4), table.align-center-5 td:nth-of-type(5), table.align-center-6 td:nth-of-type(6), table.align-center-7 td:nth-of-type(7), table.align-center-8 td:nth-of-type(8), table.align-center-9 td:nth-of-type(9) {
+    text-align: center;
+}
+
+.table-left, table.align-left-1 td:nth-of-type(1), table.align-left-10 td:nth-of-type(10), table.align-left-11 td:nth-of-type(11), table.align-left-12 td:nth-of-type(12), table.align-left-13 td:nth-of-type(13), table.align-left-14 td:nth-of-type(14), table.align-left-15 td:nth-of-type(15), table.align-left-16 td:nth-of-type(16), table.align-left-17 td:nth-of-type(17), table.align-left-18 td:nth-of-type(18), table.align-left-19 td:nth-of-type(19), table.align-left-2 td:nth-of-type(2), table.align-left-20 td:nth-of-type(20), table.align-left-3 td:nth-of-type(3), table.align-left-4 td:nth-of-type(4), table.align-left-5 td:nth-of-type(5), table.align-left-6 td:nth-of-type(6), table.align-left-7 td:nth-of-type(7), table.align-left-8 td:nth-of-type(8), table.align-left-9 td:nth-of-type(9) {
+    text-align: left;
+}
+
+.table-right, table.align-right-1 td:nth-of-type(1), table.align-right-10 td:nth-of-type(10), table.align-right-11 td:nth-of-type(11), table.align-right-12 td:nth-of-type(12), table.align-right-13 td:nth-of-type(13), table.align-right-14 td:nth-of-type(14), table.align-right-15 td:nth-of-type(15), table.align-right-16 td:nth-of-type(16), table.align-right-17 td:nth-of-type(17), table.align-right-18 td:nth-of-type(18), table.align-right-19 td:nth-of-type(19), table.align-right-2 td:nth-of-type(2), table.align-right-20 td:nth-of-type(20), table.align-right-3 td:nth-of-type(3), table.align-right-4 td:nth-of-type(4), table.align-right-5 td:nth-of-type(5), table.align-right-6 td:nth-of-type(6), table.align-right-7 td:nth-of-type(7), table.align-right-8 td:nth-of-type(8), table.align-right-9 td:nth-of-type(9) {
+    text-align: right;
+}
+
+.content .mw-highlight-lines pre, .mw-content-ltr.content .mw-highlight-lines pre {
+    box-shadow: inset 2.75em 0 0 var(--mw-code-background-color);
+}
+
+.mw-datatable td, .mw_metadata td {
+    background-color: var(--wikitable-bg);
+}
+
+.mw-datatable th, .mw_metadata th, .wikitable.sortable th:hover {
+    background-color: var(--wikitable-header-bg);
+}
+
+.mw-datatable, .wikitable > * > tr > td, .wikitable > tr > td, table.mw-abuselog-details td {
+    border-color: var(--wikitable-border);
+}
+
+.mw-datatable tr:hover td {
+    background-color: var(--wikitable-bg-lighter);
+}
+
+.questdetails {
+    background-color: var(--wikitable-bg);
+    border: 1px solid var(--wikitable-border);
+    border-collapse: separate;
+    width: 100%;
+}
+
+.questdetails th {
+    background-color: var(--wikitable-header-bg);
+    text-align: left;
+}
+
+.questdetails-header {
+    background-color: var(--wikitable-header-bg);
+    padding: 0.5em 1em;
+    width: 125px;
+}
+
+.questdetails-info {
+    padding-left: 1em;
+    padding-right: 2em;
+}
+
+.mw-usertoollinks-contribs-no-edits:visited {
+    color: var(--redlink-color);
+}
+
+.CategoryTreeToggle {
+    color: var(--link-color);
+}
+
+.mw-content-ltr .redirectText li:first-child {
+    background: 0;
+    padding: 0;
+}
+
+.mw-content-ltr .redirectText li:first-child::before {
+    -webkit-mask: url(https://oldschool.runescape.wiki/images/Redirect-arrow.svg) no-repeat 50% 50% / contain;
+    background: currentcolor;
+    content: '';
+    display: inline-block;
+    float: left;
+    height: 20px;
+    margin: 0.25em 0.5em 0.25em 0;
+    mask: url(https://oldschool.runescape.wiki/images/Redirect-arrow.svg) no-repeat 50% 50% / contain;
+    width: 47px;
+}
+
+.wikitable {
+    background: var(--wikitable-bg);
+    border-color: var(--wikitable-border);
+    box-shadow: 0 0.25rem 0.35rem -0.25rem rgba(0,0,0,0.1);
+    color: var(--wikitable-color);
+}
+
+.tabber .wikitable {
+    box-shadow: none;
+}
+
+table.wikitable td.no-cell-spacing {
+    height: 0;
+    padding: 0;
+}
+
+table.wikitable td.no-cell-spacing table {
+    height: calc(100% + 2px);
+    margin: -1px;
+    width: calc(100% + 2px);
+}
+
+table.mw-abuselog-details {
+    background: var(--wikitable-bg);
+    border-color: var(--wikitable-border);
+}
+
+.mw-json th {
+    background: var(--wikitable-header-bg);
+}
+
+.mw-json td {
+    background: var(--wikitable-bg);
+}
+
+.questdetails tr:nth-child(odd) .questdetails-header {
+    background-color: var(--wikitable-alternating-bg);
+}
+
+.growth-stage-table td.growth-stage {
+    text-align: center;
+    vertical-align: bottom;
+}
+
+.inventorytable {
+    background-image: url(https://oldschool.runescape.wiki/images/Inventory_tab.png);
+    background-repeat: no-repeat;
+    padding: 13px 16px 10px;
+    width: 204px;
+}
+
+.lootingbagtable {
+    background-image: url(https://oldschool.runescape.wiki/images/Looting_bag_tab.png);
+    background-repeat: no-repeat;
+    padding: 31px 17px 20px 12px;
+    width: 204px;
+}
+
+.menagerietable {
+    background-image: url(https://oldschool.runescape.wiki/images/Menagerie_interface.png);
+    background-position: top left;
+    background-repeat: no-repeat;
+    border-spacing: 0;
+    height: 334px;
+    padding: 56px 28px 34px 6px;
+    table-layout: fixed;
+    width: 512px;
+}
+
+.lootingbagtable.storage-left {
+    clear: left;
+    float: left;
+    margin-right: 7px;
+}
+
+.lootingbagtable.storage-center, .runepouchtable.storage-center {
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.lootingbagtable.storage-right {
+    clear: right;
+    float: right;
+    margin-left: 7px;
+}
+
+.inventorytable td {
+    height: 36px;
+    width: 43px;
+}
+
+.lootingbagtable td {
+    height: 32px;
+    width: 44px;
+}
+
+.menagerietable td {
+    border: 0;
+    height: 32px;
+    padding: 0;
+    position: relative;
+    text-align: center;
+    vertical-align: middle;
+    width: 46px;
+}
+
+.lootingbagtable .inv-quantity-text {
+    color: #ff0;
+    font-family: 'RuneScape Small', monospace;
+    font-size: 12pt;
+    left: 4px;
+    pointer-events: none;
+    position: absolute;
+    text-shadow: 1px 1px 0px #000;
+    top: -8px;
+    z-index: 10;
+}
+
+.equipment .inv-quantity-text.qty-1, .lootingbagtable .inv-quantity-text.qty-1 {
+    color: #ff0;
+}
+
+.equipment .inv-quantity-text.qty-100k, .lootingbagtable .inv-quantity-text.qty-100k {
+    color: #fff;
+}
+
+.equipment .inv-quantity-text.qty-10m, .lootingbagtable .inv-quantity-text.qty-10m {
+    color: #01ff80;
+}
+
+.client-js .mw-changeslist table.mw-enhanced-rc {
+    margin-left: 0;
+}
+
+.succession th {
+    background: var(--body-mid);
+    font-size: 90%;
+    width: 33%;
+}
+
+.succession td {
+    background: var(--body-light);
+}
+
+td.noted-item a {
+    line-height: 28px;
+    width: 32px;
+}
+
+tr.mw-abusefilter-list-disabled {
+    color: var(--byline-color);
+    font-style: italic;
+}
+
+.sitedir-ltr .mw-dismissable-notice-close {
+    float: none;
+    text-align: right;
+}
+
+.cdx-button.cdx-button--action-destructive:not(:disabled) {
+    background-color: var(--errorbox-border);
+    border-color: var(--errorbox-border);
+    color: #fff;
+}
+
+.cdx-button.cdx-button--weight-quiet.cdx-button--action-destructive, .cdx-button.cdx-button--weight-quiet.cdx-button--action-destructive:focus, input[type='checkbox']:focus + .cdx-button.cdx-button--weight-quiet.cdx-button--action-destructive {
+    color: var(--text-color);
+}
+
+.cdx-button.cdx-button--weight-quiet.cdx-button--action-destructive:hover, input[type='checkbox']:hover + .cdx-button.cdx-button--weight-quiet.cdx-button--action-destructive {
+    background-color: rgba(0,24,73,0.02745098);
+    border-color: transparent;
+    color: var(--text-color);
+}
+
+.cdx-button.cdx-button--weight-quiet.cdx-button--action-destructive:active, input[type='checkbox']:active + .cdx-button.cdx-button--weight-quiet.cdx-button--action-destructive {
+    background-color: rgba(0,36,73,0.08235294);
+    border-color: #72777d;
+    color: var(--text-color);
+}
+
+li.gallerybox div.thumb {
+    background-color: var(--thumb-bg);
+    border: none;
+    border-radius: 2px;
+    padding: 2px;
+}
+
+.mwe-popups .mwe-popups-container.mwe-popups-no-image-tri:before {
+    border-bottom: none;
+}
+
+.mwe-popups .mwe-popups-container.mwe-popups-no-image-tri:after {
+    border-bottom-color: var(--body-light);
+}
+
+.mwe-popups .mwe-popups-extract {
+    color: var(--text-color);
+    line-height: 1.4;
+}
+
+.mwe-popups .mwe-popups-extract[dir='ltr']:after {
+    background-image: linear-gradient(to right,rgba(49,62,89,0),var(--body-light) 50%);
+}
+
+.mw-diff-table-prefix .mw-diff-inline-legend .mw-diff-inline-legend-ins {
+    background: var(--diff-addedline-background);
+    border-radius: 2px;
+    color: var(--text-color);
+    padding: 2px 4px;
+}
+
+.mw-diff-table-prefix .mw-diff-inline-legend .mw-diff-inline-legend-del {
+    background: var(--diff-inline-deletedline);
+    border-radius: 2px;
+    color: var(--text-color);
+    padding: 2px 4px;
+}
+
+.skill-thieving:hover > a:last-child {
+    background: #713684;
+}
+
+.skill-smithing:hover > a:last-child {
+    background: #b69213;
+}
+
+.searchResultImage .searchResultImage-thumbnail img {
+    border-color: var(--body-border);
+    border-radius: 2px;
+}
+
+td.famtreesub {
+    margin: 0;
+    padding: 0;
+}
+
+td.famtreesub table {
+    border-spacing: 0;
+    margin: 0;
+    padding: 0;
+    width: 100%;
+}
+
+td.famtreesub table td {
+    height: 1em;
+    width: 1em;
+}
+
+td.famtreeleaf {
+    background: var(--body-light);
+    border: 1px solid var(--body-border);
+    padding: 0.2em;
+    text-align: center;
+}
+
+.watchlistredir {
+    font-style: italic;
+}
+
+tr.mw-abusefilter-list-disabled td {
+    color: var(--byline-color);
+}
+
+.mw-abusefilter-log-hidden-entry, .tdg-templateDataParamWidget-param-description {
+    color: var(--subtle-color);
+}
+
+.smwb-theme-light .smwb-actions {
+    background-color: var(--body-mid);
+}
+
+.smwb-theme-light .smwb-factbox {
+    border-left-color: var(--body-mid);
+}
+
+.smwb-theme-light .smwb-ifactbox {
+    border-right-color: var(--body-mid);
+}
+
+.highcharts-scrollbar-track {
+    fill: transparent !important;
+    stroke: var(--ooui-interface-border);
+}
+
+.highcharts-scrollbar-thumb {
+    fill: var(--ooui-normal);
+    stroke: var(--ooui-normal-border);
+}
+
+.gemw-container.gemw-historical .gemw-header.neutral {
+    border-color: var(--gemw-historical-border-color);
+}
+
+.tippy-tooltip.light-border-theme {
+    background-color: var(--body-light);
+    border: 1px solid var(--body-border);
+    border-radius: 4px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+    color: var(--text-color);
+}
+
+.tippy-tooltip.light-border-theme .tippy-arrow {
+    border-top-color: var(--body-light);
+}
+
+.tippy-tooltip.light-border-theme .tippy-arrow:after {
+    border-top-color: var(--body-light) !important;
+}
+
+.js-tooltip-arrow.js-tooltip-arrow-pointright {
+    border-left-color: var(--body-border);
+    border-right-color: transparent;
+    border-right-width: 0;
+}
+
+.smw-ask-options fieldset {
+    border: 1px solid var(--sidebar);
+    border-color: var(--sidebar);
+    border-radius: 4px;
+    margin: 8px 0;
+    padding: 12px;
+}
+
+.strike > span:after {
+    background: var(--sidebar);
+    content: '';
+    display: inline-block;
+    height: 1px;
+    left: 0.5em;
+    margin-right: -50%;
+    position: relative;
+    vertical-align: middle;
+    width: 50%;
+}
+
+.strike > span:before {
+    margin-left: -50%;
+    right: 0.5em;
+}
+
+.smw-ask-options-fields tr td {
+    background-color: var(--smw-ask-options-even-bg);
+    border: 1px solid var(--body-border);
+    padding: 6px 10px;
+}
+
+.smw-ask-options-fields tr:nth-child(odd) td {
+    background-color: var(--smw-ask-options-odd-bg);
+}
+
+.smw-property-page-results .smw-table .header-row {
+    color: var(--text-color);
+    font-weight: bold;
+}
+
+.smwb-theme-light .smwb-prophead {
+    background-color: var(--body-mid);
+    border: 1px solid var(--body-border);
+    font-weight: bold;
+    padding: 4px 8px;
+}
+
+.smwb-theme-light .smwb-propval {
+    background-color: var(--body-light);
+    border: 1px solid var(--body-border);
+    padding: 4px 8px;
+}
+
+.pollbox table {
+    border-collapse: collapse;
+    font-size: 14px;
+    width: 100%;
+}
+
+.pollbox td {
+    padding: 0px;
+}
+
+.pollquestion td:first-child::before {
+    background: url(/images/Poll_shield.png?c691a);
+    background-position: top;
+    background-repeat: no-repeat;
+    content: "";
+    height: 14px;
+    left: 0;
+    position: absolute;
+    top: 4px;
+    width: 10px;
+}
+
+.pollquestion td:first-child {
+    padding-left: 16px;
+    padding-right: 0.7em;
+    position: relative;
+    width: 32%;
+}
+
+.pollquestion td.pollpercent {
+    box-sizing: border-box;
+    padding-left: 17px;
+    padding-right: 8px;
+}
+
+.pollquestion td:last-child {
+    padding-left: 0.7em;
+    width: 22%;
+}
+
+.pollquestion .pollnote td {
+    padding: 20px 5px;
+    padding-bottom: 5px;
+    width: 100%;
+}
+
+.pollquestion .pollnote td::before {
+    content: none;
+}
+
+.archivepollq th {
+    font-weight: normal;
+    padding: 15px 0 0 0;
+    text-align: left;
+}
+
+.archivepollq td:first-child {
+    padding-left: 16px;
+    padding-right: 0.7em;
+    position: relative;
+    width: 80%;
+}
+
+.archivepollq td.archivepollpercent {
+    border: 1px solid var(--body-border);
+    box-sizing: border-box;
+    padding: 2px;
+}
+
+.archivepollq td:last-child {
+    padding-left: 0.7em;
+    text-align: right;
+}
+
+.archivepollq .archivepollnote > td {
+    padding: 20px 5px;
+    padding-bottom: 5px;
+    text-align: left;
+    width: 100%;
+}
+
+.tdg-templateDataParamWidget-param-alias, .tdg-templateDataParamWidget-param-alias:first-child {
+    background-color: var(--ooui-normal);
+    border-color: var(--ooui-normal-border);
+}
+
+.equipment-ikod strong {
+    color: red;
+    font-weight: normal;
+}
+
+.runepouchtable {
+    background-image: url(/images/Rune_pouch_background.png?30a74);
+    padding: 24px 7px 6px;
+    width: 158px;
+}
+
+.runepouchtable.storage-left {
+    margin-left: 23px;
+}
+
+.runepouchtable.storage-right {
+    margin-right: 23px;
+}
+
+.runepouchtable td {
+    height: 32px;
+    line-height: 1.6em;
+    width: 32px;
+}
+
+.runepouchtable td.middle-rune {
+    padding-left: 24px;
+    padding-right: 24px;
+}
+
+.divinerunepouch td.middle-rune {
+    padding-left: 6px;
+    padding-right: 6px;
+}
+
+.divinerunepouch td.middle-rune + td.middle-rune {
+    padding-left: 0;
+}
+
+.equipment .inv-quantity-text {
+    position: absolute;
+    top: -3px;
+}
+
+.runepouchtable .inv-quantity-text {
+    left: -1px;
+}
+
+.runepouchtable td.middle-rune .inv-quantity-text {
+    left: 23px;
+}
+
+.divinerunepouch td.middle-rune .inv-quantity-text {
+    left: 5px;
+}
+
+.divinerunepouch td.middle-rune + td.middle-rune .inv-quantity-text {
+    left: 0;
+}
+
+.transcript {
+    background: var(--body-light);
+    border-radius: 0 0 120px 120px / 0 0 8px 8px;
+    box-shadow: 0 0.25rem 0.35rem -0.25rem rgba(0,0,0,0.3);
+    clear: left;
+    margin-bottom: 1em;
+    max-width: 90ch;
+    overflow: hidden;
+    padding: 0.5em 1em 1em;
+}
+
+.transcript.godletter {
+    margin: 1em auto;
+    max-width: 60ch;
+    padding: 1em 1.5em;
+}
+
+.transcript-chatbox-image {
+    display: inline-block;
+    margin-right: 5px;
+    position: relative;
+    text-align: center;
+    width: 32px;
+}
+
+.transcript-chatbox-image + .transcript-chatbox-image {
+    left: -10px;
+    margin-right: 0;
+    top: 10px;
+}
+
+.transcript-opt::before {
+    -webkit-mask: url(/images/Black-chevron.svg?00549) no-repeat 50% 50% / contain;
+    background: currentcolor;
+    content: '';
+    display: inline-block;
+    height: 10px;
+    margin-right: 5px;
+    mask: url(/images/Black-chevron.svg?00549) no-repeat 50% 50% / contain;
+    width: 7px;
+}
+
+#toc li a span.toctext span span:nth-child(2), .floornumber-setting-gb #toc li a span.toctext span span:nth-child(2), .floornumber-setting-us #toc li a span.toctext span span:nth-child(1) {
+    display: none;
+}
+
+.floornumber-setting-gb #toc li a span.toctext span span:nth-child(1), .floornumber-setting-us #toc li a span.toctext span span:nth-child(2) {
+    display: inline;
+}
+
+.floornumber-override-gb #toc li a span.toctext span span:nth-child(2), .floornumber-override-us #toc li a span.toctext span span:nth-child(1) {
+    display: none !important;
+}
+
+.floornumber-override-gb #toc li a span.toctext span span:nth-child(1), .floornumber-override-us #toc li a span.toctext span span:nth-child(2) {
+    display: inline !important;
+}
+
+.mainpage-header .header-intro {
+    flex: 2;
+}
+
+.mainpage-header .header-intro p {
+    font-size: 1.1em;
+    line-height: 1.7em;
+}
+
+.skill-thieving span a {
+    background: #91689e;
+}
+
+.skill-smithing span a {
+    background: #d2b244;
+}
+
+.mainpage-trailblazer {
+    grid-area: event;
+}
+
+.mainpage-trailblazer .tb-logo {
+    margin-bottom: 0.9rem;
+}
+
+.mainpage-trailblazer .tile-row {
+    grid-template-columns: repeat(4,1fr);
+}
+
+.transcript-opt.disabled {
+    filter: opacity(0.5);
+}
+
+.transcript s {
+    text-decoration-color: var(--transcript-strikethrough-color);
+}
+
+.transcript .template-colour {
+    text-shadow: 1px 1px #000a;
+}
+
+.client-js .mw-changeslist.mw-rcfilters-ui-changesListWrapperWidget-highlighted table.mw-enhanced-rc {
+    margin-left: 1.5em;
+}
+
+a[href="/w/User:BotDiesel2m"] {
+    color: var(--awb-purple);
+}
+
+.wikitable.sortable th {
+    cursor: pointer;
+    position: relative;
+}
+
+/* Auto-integrated CSS - 2025-08-10 10:12:50 */
+
+.wikitable > tr > td {
+    border-color: var(--wikitable-border);
+}
+
+.wikitable > * > tr > td {
+    border-color: var(--wikitable-border);
+}
+
+/* Auto-integrated CSS - 2025-08-10 10:18:52 */
+
+.table-positive {
+    background: var(--table-yes-background);
+}
+
+.table-yes {
+    background: var(--table-yes-background);
+    color: var(--table-yes-color);
+}
+
+.wikitable > * > tr > td.table-noborder, .wikitable > * > tr > th.table-noborder, .wikitable > tr > td.table-noborder, .wikitable > tr > th.table-noborder {
+    border-left-style: hidden;
+    border-right-style: hidden;
+    padding-left: 0;
+    padding-right: 0;
+}
+
+.wikitable > * > tr > td, .wikitable > * > tr > th, .wikitable > tr > td, .wikitable > tr > th {
+    border-color: var(--wikitable-border);
+}
+
+.table-negative {
+    background: var(--table-no-background);
+}
+
+.wikitable > * > tr > th, .wikitable > tr > th {
+    background-color: var(--wikitable-header-bg);
+}
+
+.table-no {
+    background: var(--table-no-background);
+    color: var(--table-no-color);
+}

@@ -1,0 +1,171 @@
+/*
+ * GAMING MODULE (DEDUPLICATED)
+ * Removed 10 duplicate selectors
+ * Generated: gaming.css
+ */
+
+.item-drops .beast-version {
+    font-size: smaller;
+    font-style: italic;
+}
+
+.skill-melee span a {
+    background: #bc483d;
+}
+
+.skill-ranged span a {
+    background: #748d36;
+}
+
+.skill-magic span a {
+    background: #6274ab;
+}
+
+.skill-fletching span a {
+    background: #3e8e9a;
+}
+
+.skill-woodcutting span a {
+    background: #59924f;
+}
+
+.skill-mining span a {
+    background: #6385a8;
+}
+
+.combat-styles-icons a {
+    border-radius: 3px;
+    border: 1px solid var(--body-border);
+    display: inline-block;
+    margin: 2px;
+    min-width: 26px;
+    padding: 4px;
+    text-align: center;
+    transition: background-color 0.2s;
+}
+
+.combat-styles-icons a:hover {
+    background: var(--body-light);
+    border-color: var(--ooui-progressive);
+}
+
+.combat-styles-header a {
+    color: var(--text-color);
+}
+
+.quest-action {
+    font-style: italic;
+    margin: 0 5%;
+    text-align: center;
+}
+
+.quest-action:after, .quest-action:before {
+    content: '———';
+    letter-spacing: -1px;
+    margin: 4px;
+}
+
+.skill-agility:hover > a:last-child, .skill-melee:hover > a:last-child {
+    background: #932419;
+}
+
+.skill-ranged:hover > a:last-child {
+    background: #4c6215;
+}
+
+.skill-magic:hover > a:last-child {
+    background: #304791;
+}
+
+.skill-fishing:hover > a:last-child, .skill-fletching:hover > a:last-child {
+    background: #1a6671;
+}
+
+.skill-cooking:hover > a:last-child {
+    background: #713684;
+}
+
+.skill-farming:hover > a:last-child, .skill-woodcutting:hover > a:last-child {
+    background: #306f25;
+}
+
+.skill-mining:hover > a:last-child {
+    background: #315f8d;
+}
+
+.mw-widget-calendarWidget-item-selected {
+    background-color: var(--ooui-progressive--hover);
+}
+
+.ve-ui-desktopContext .ve-ui-linkContextItem .ve-ui-linkContextItem-label {
+    border-color: var(--body-border);
+}
+
+.ve-ui-mwReferenceContextItem-muted {
+    color: var(--byline-color);
+}
+
+.quest-action:before {
+    content: '———';
+    letter-spacing: -1px;
+    margin: 4px;
+}
+
+.quest-action:after {
+    content: '———';
+    letter-spacing: -1px;
+    margin: 4px;
+}
+
+.skill-agility:hover > a:last-child {
+    background: #932419;
+}
+
+.skill-melee:hover > a:last-child {
+    background: #932419;
+}
+
+.skill-fishing:hover > a:last-child {
+    background: #1a6671;
+}
+
+.skill-fletching:hover > a:last-child {
+    background: #1a6671;
+}
+
+.skill-farming:hover > a:last-child {
+    background: #306f25;
+}
+
+.skill-woodcutting:hover > a:last-child {
+    background: #306f25;
+}
+
+.pollquestion data::after, .pollquestion data::before {
+    content: "";
+    height: 15px;
+    position: absolute;
+}
+
+.skill-cooking:hover > a:last-child, .skill-thieving:hover > a:last-child {
+    color: var(--link-color);
+    position: relative;
+    text-decoration: underline;
+}
+
+.skill-fishing span a, .skill-fletching span a {
+    position: relative;
+}
+
+.skill-cooking span a, .skill-thieving span a {
+    position: relative;
+}
+
+.skill-farming span a, .skill-woodcutting span a {
+    position: relative;
+}
+
+.skill-agility span a, .skill-melee span a {
+    position: relative;
+}
+

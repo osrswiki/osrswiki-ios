@@ -1,0 +1,146 @@
+/*
+ * MEDIA MODULE (DEDUPLICATED)
+ * Removed 6 duplicate selectors
+ * Generated: media.css
+ */
+
+.mw-mmv-post-image {
+    background-color: var(--body-main);
+    color: var(--text-color);
+}
+
+.scp img {
+    height: auto;
+    image-rendering: crisp-edges;
+    max-width: 32px;
+}
+
+.equipment-stats data img {
+    vertical-align: bottom;
+}
+
+.equipment-ikod img {
+    cursor: help;
+}
+
+.mainpage-recent-updates .tile-halves:hover .tile-top img {
+    transform: scale(1.04);
+}
+
+.tile-halves:hover .tile-top.tile-image img {
+    transform: scale(1.1);
+    transition: 0.5s ease-out;
+}
+
+.tile-top.tile-image img {
+    max-height: 200px;
+    object-fit: cover;
+    transition: 0.4s ease-out;
+    width: 100%;
+}
+
+.extimage div, .page-Special_ListFiles a.mw-file-description img {
+    height: inherit;
+    width: inherit;
+}
+
+.filehistory a img {
+    border: 1px solid var(--body-border);
+}
+
+#file img {
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16'%3E%3Cpath d='M0 0h8v16h8V8H0z' opacity='.13'/%3E%3C/svg%3E") repeat;
+    border: 1px solid var(--body-border);
+    height: auto;
+    max-width: 100%;
+}
+
+#file img:hover {
+    background: none;
+    cursor: pointer;
+}
+
+.mw-mmv-image-metadata {
+    background-color: var(--body-light);
+    background: var(--body-light);
+    border-color: var(--body-mid);
+    border: 1px solid var(--body-border);
+    padding: 1em;
+}
+
+.mw-mmv-dialog {
+    background-color: var(--body-light);
+    background: var(--body-main);
+    border: 1px solid var(--body-border);
+}
+
+.mw-mmv-dialog .mw-mmv-dialog-down-arrow {
+    background-color: var(--body-light);
+    border-top-color: var(--body-border);
+}
+
+.extimage a {
+    border: 1px solid var(--body-border);
+    display: inline-block;
+    padding: 2px;
+}
+
+.extimage a:hover {
+    border-color: var(--ooui-progressive);
+}
+
+.extimage img {
+    display: block;
+    height: inherit;
+    max-width: 100%;
+    width: inherit;
+}
+
+.noted-item img {
+    transform: scale(0.65);
+}
+
+.oswf-tile .oswf-img {
+    display: block;
+    float: right;
+    max-width: 75px;
+}
+
+.oswf-tile .oswf-img img {
+    height: auto;
+    max-width: 100%;
+}
+
+.gemw-header .gemw-change img {
+    vertical-align: baseline;
+}
+
+.ve-ui-mwGalleryDialog .ve-ui-mwGalleryDialog-image-container, .ve-ui-mwGalleryDialog-innerMenuLayout > .oo-ui-menuLayout-menu, .ve-ui-mwGalleryDialog-menuLayout > .oo-ui-menuLayout-menu {
+    border-color: var(--body-border);
+}
+
+.ve-ui-mwGalleryDialog-menuLayout > .oo-ui-menuLayout-menu {
+    border-color: var(--body-border);
+}
+
+.ve-ui-mwGalleryDialog-innerMenuLayout > .oo-ui-menuLayout-menu {
+    border-color: var(--body-border);
+}
+
+.ve-ui-mwGalleryDialog .ve-ui-mwGalleryDialog-image-container {
+    border-color: var(--body-border);
+}
+
+#file img, .filehistory a img {
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16'%3E%3Cpath d='M0 0h8v16h8V8H0z' opacity='.13'/%3E%3C/svg%3E") repeat;
+}
+
+.page-Special_ListFiles a.mw-file-description img {
+    height: inherit;
+    width: inherit;
+}
+
+.page-Special_ListFiles .TablePager_col_thumb {
+    text-align: center;
+}
+

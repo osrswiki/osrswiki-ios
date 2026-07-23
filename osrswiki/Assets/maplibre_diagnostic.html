@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MapLibre Bridge Diagnostic</title>
+    <style>
+        body { 
+            font-family: -apple-system, system-ui, sans-serif; 
+            margin: 20px; 
+            background: #f0f0f0; 
+        }
+        .status { 
+            padding: 10px; 
+            margin: 10px 0; 
+            border-radius: 5px; 
+        }
+        .pass { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .fail { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .info { background: #cce7ff; color: #004085; border: 1px solid #b3d7ff; }
+        pre { background: #fff; padding: 10px; border: 1px solid #ddd; overflow: auto; }
+    </style>
+</head>
+<body>
+    <h1>🗺️ MapLibre Bridge Diagnostic</h1>
+    <p>Testing MapLibre bridge functionality in iOS WebView...</p>
+    
+    <div id="results"></div>
+    
+    <h2>Console Output:</h2>
+    <pre id="console-output"></pre>
+    
+    <script>
+        // Capture console output
+        const consoleOutput = document.getElementById('console-output');
+        const results = document.getElementById('results');
+        
+        function addResult(message, type = 'info') {
+            const div = document.createElement('div');
+            div.className = `status ${type}`;
+            div.textContent = message;
+            results.appendChild(div);
+            
+            // Also add to console output
+            consoleOutput.textContent += `[${new Date().toLocaleTimeString()}] ${message}\n`;
+        }
+        
+        function runDiagnostic() {
+            addResult('🔍 Starting MapLibre bridge diagnostic...');
+            addResult('🔍 Asset loading path investigation:');
+            addResult('   - Attempting to load: app-assets://localhost/web/map_bridge.js');
+            addResult('   - Expected: Should find file in iOS bundle');
+            addResult('   - Debug: iOS may flatten Assets/web/map_bridge.js to just map_bridge.js');
+            
+            // Test 1: Check if we can load external script
+            addResult('Test 1: Loading map_bridge.js...');
+            const script = document.createElement('script');
+            script.src = 'app-assets://localhost/web/map_bridge.js';
+            
+            script.onload = function() {
+                addResult('✅ map_bridge.js loaded successfully', 'pass');
+                continueTests();
+            };
+            
+            script.onerror = function(e) {
+                addResult('❌ map_bridge.js failed to load', 'fail');
+                addResult('Error details: ' + e.toString(), 'fail');
+            };
+            
+            document.head.appendChild(script);
+        }
+        
+        function continueTests() {
+            // Test 2: Check if OsrsWikiBridge exists
+            addResult('Test 2: Checking OsrsWikiBridge availability...');
+            
+            if (typeof window.OsrsWikiBridge !== 'undefined') {
+                addResult('✅ OsrsWikiBridge object exists', 'pass');
+                
+                // Test 3: Check bridge methods
+                const expectedMethods = ['onMapPlaceholderMeasured', 'onCollapsibleToggled', 'setHorizontalScroll', 'log'];
+                let methodsFound = 0;
+                
+                expectedMethods.forEach(method => {
+                    if (typeof window.OsrsWikiBridge[method] === 'function') {
+                        addResult(`✅ Method ${method} found`, 'pass');
+                        methodsFound++;
+                    } else {
+                        addResult(`❌ Method ${method} missing`, 'fail');
+                    }
+                });
+                
+                if (methodsFound === expectedMethods.length) {
+                    addResult('✅ All required bridge methods available', 'pass');
+                    testBridgeCommunication();
+                } else {
+                    addResult(`❌ Only ${methodsFound}/${expectedMethods.length} methods found`, 'fail');
+                }
+            } else {
+                addResult('❌ OsrsWikiBridge object not found', 'fail');
+            }
+        }
+        
+        function testBridgeCommunication() {
+            addResult('Test 3: Testing bridge communication...');
+            
+            // Test webkit availability
+            if (!window.webkit) {
+                addResult('❌ window.webkit not available', 'fail');
+                return;
+            }
+            
+            if (!window.webkit.messageHandlers) {
+                addResult('❌ webkit.messageHandlers not available', 'fail');
+                return;
+            }
+            
+            if (!window.webkit.messageHandlers.mapBridge) {
+                addResult('❌ webkit.messageHandlers.mapBridge not available', 'fail');
+                addResult('Available handlers: ' + Object.keys(window.webkit.messageHandlers).join(', '), 'info');
+                return;
+            }
+            
+            addResult('✅ webkit.messageHandlers.mapBridge is available', 'pass');
+            
+            // Test actual bridge call
+            try {
+                window.OsrsWikiBridge.log('DIAGNOSTIC_TEST_MESSAGE');
+                addResult('✅ Bridge log call executed without error', 'pass');
+                
+                // Test map placeholder call
+                window.OsrsWikiBridge.onMapPlaceholderMeasured(
+                    'diagnostic-test-map',
+                    '{"x": 10, "y": 20, "width": 300, "height": 200}',
+                    '{"latitude": 45.0, "longitude": -122.0, "zoom": 10}'
+                );
+                addResult('✅ Bridge onMapPlaceholderMeasured call executed without error', 'pass');
+                
+                addResult('🎉 All tests passed - MapLibre bridge should be working!', 'pass');
+            } catch (error) {
+                addResult('❌ Bridge communication failed: ' + error.message, 'fail');
+            }
+        }
+        
+        // Start diagnostic when page loads
+        window.addEventListener('load', function() {
+            addResult('📱 Diagnostic page loaded in iOS WebView');
+            addResult('User agent: ' + navigator.userAgent, 'info');
+            setTimeout(runDiagnostic, 500);
+        });
+    </script>
+</body>
+</html>

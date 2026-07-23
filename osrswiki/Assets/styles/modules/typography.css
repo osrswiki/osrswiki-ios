@@ -1,0 +1,139 @@
+/*
+ * TYPOGRAPHY MODULE (DEDUPLICATED)
+ * Removed 2 duplicate selectors
+ * Generated: typography.css
+ */
+
+.mw-heading1, .mw-heading2, h1, h1, .mw-heading1, h2, h2, .mw-heading2 {
+    border-color: var(--sidebar);
+}
+
+.mw-heading, h3, h4, h5, h6, h4, h5, h6 {
+    color: var(--text-color);
+}
+
+.mw-parser-output h2:first-of-type {
+    clear: left;
+}
+
+.font-runescape {
+    font-family: 'RuneScape';
+    font-family: 'RuneScape', 'runescape_plain', sans-serif;
+}
+
+h1, h2 {
+    border-color: var(--sidebar) !important;
+}
+
+h3, h4, h5, h6 {
+    color: var(--text-color) !important;
+}
+
+.cdx-text-input__input:enabled {
+    background-color: var(--ooui-input);
+    border-color: var(--ooui-input-border);
+    color: var(--text-color);
+}
+
+.cdx-text-input__input:enabled:hover {
+    border-color: var(--ooui-input-border--hover);
+}
+
+.cdx-text-input__input:enabled:focus {
+    border-color: var(--ooui-accent);
+    box-shadow: inset 0 0 0 1px var(--ooui-accent);
+}
+
+.documentation h2 {
+    border-color: var(--documentation-border);
+}
+
+.font-runescape-bold {
+    font-family: 'RuneScape';
+    font-weight: bold;
+}
+
+.font-runescape-small {
+    font-family: 'RuneScape Small';
+}
+
+.font-runescape-quill-8 {
+    font-family: 'RuneScape Quill 8';
+}
+
+.mainpage-header .header-intro h1 {
+    border: none;
+    font-size: 2.5em;
+    font-weight: bold;
+    margin: 0 0 0.15em;
+}
+
+.mainpage-recent-updates h2 {
+    margin: -0.5em 0 0.3em;
+}
+
+.mainpage-contents h2 {
+    margin: 0;
+    padding: 0;
+}
+
+.tile h2, .tile-halves h2 {
+    border: none;
+    font-size: 1.4em;
+    font-weight: bold;
+    margin: 0 0 0.4em;
+}
+
+.tile .byline + h2, .tile-halves .byline + h2 {
+    margin-top: -0.5em;
+}
+
+.tile.dark h2 {
+    color: var(--tile-dark-header-color);
+}
+
+.mainpage-editing h2 {
+    color: #fff;
+}
+
+.ve-ui-specialCharacterPage h3 {
+    color: var(--byline-color);
+}
+
+h1 {
+    border-color: var(--sidebar);
+}
+
+h2 {
+    border-color: var(--sidebar);
+}
+
+h3 {
+    color: var(--text-color);
+}
+
+h4 {
+    color: var(--text-color);
+}
+
+h5 {
+    color: var(--text-color);
+}
+
+h6 {
+    color: var(--text-color);
+}
+
+.mainpage-editing a, .mainpage-editing h2 {
+    color: #fff;
+}
+
+.mainpage-body h2 a {
+    color: var(--text-color);
+}
+
+.documentation h2, .documentation hr {
+    color: var(--text-color);
+    font-family: 'Alegreya','Palatino','Georgia',serif;
+}
+

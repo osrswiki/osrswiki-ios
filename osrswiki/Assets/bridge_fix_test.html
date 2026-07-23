@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Bridge Fix Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .status { padding: 10px; margin: 10px 0; border-radius: 5px; }
+        .success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .failure { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .widget-test { 
+            width: 300px; 
+            height: 200px; 
+            background: #ffeb3b; 
+            border: 3px solid #f44336; 
+            margin: 20px 0;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔧 Bridge Fix Verification</h1>
+    <p>This page tests if the bridge conflict has been resolved.</p>
+    
+    <div id="bridge-status" class="status">
+        🔍 Checking bridge status...
+    </div>
+    
+    <div id="external-status" class="status">
+        ⏳ Waiting for external script...
+    </div>
+    
+    <h2>Test MapLibre Widget:</h2>
+    <div id="test-widget" 
+         class="maplibre-widget widget-test" 
+         data-map='{"lat": 3094, "lng": 3094, "zoom": 4, "floor": 0}'>
+        🟡 PLACEHOLDER - Should become interactive map
+    </div>
+    
+    <div id="results" class="status">
+        ⏳ Test in progress...
+    </div>
+
+    <script>
+        let bridgeLoadedFromExternal = false;
+        let bridgeCallSucceeded = false;
+        
+        // Check if bridge exists immediately (would indicate inline bridge still present)
+        if (typeof window.OsrsWikiBridge !== 'undefined') {
+            document.getElementById('bridge-status').innerHTML = 
+                '❌ Bridge exists immediately - inline bridge may still be present';
+            document.getElementById('bridge-status').className = 'status failure';
+        } else {
+            document.getElementById('bridge-status').innerHTML = 
+                '✅ No immediate bridge - waiting for external script to load';
+            document.getElementById('bridge-status').className = 'status success';
+        }
+        
+        // Function to test bridge after external script loads
+        function testBridgeAfterLoad() {
+            setTimeout(() => {
+                if (typeof window.OsrsWikiBridge !== 'undefined') {
+                    document.getElementById('external-status').innerHTML = 
+                        '✅ External script loaded - bridge now available';
+                    document.getElementById('external-status').className = 'status success';
+                    bridgeLoadedFromExternal = true;
+                    
+                    // Test bridge functionality
+                    try {
+                        window.OsrsWikiBridge.log('BRIDGE_FIX_TEST: Testing bridge communication');
+                        
+                        // Test widget measurement
+                        const widget = document.getElementById('test-widget');
+                        const rect = widget.getBoundingClientRect();
+                        const rectJson = JSON.stringify({
+                            x: Math.round(rect.x), 
+                            y: Math.round(rect.y), 
+                            width: Math.round(rect.width), 
+                            height: Math.round(rect.height)
+                        });
+                        const mapData = widget.getAttribute('data-map');
+                        
+                        window.OsrsWikiBridge.onMapPlaceholderMeasured('test-widget', rectJson, mapData);
+                        bridgeCallSucceeded = true;
+                        
+                        // Update results
+                        updateResults();
+                        
+                    } catch (error) {
+                        document.getElementById('results').innerHTML = 
+                            `❌ Bridge call failed: ${error.message}`;
+                        document.getElementById('results').className = 'status failure';
+                    }
+                } else {
+                    document.getElementById('external-status').innerHTML = 
+                        '❌ External script failed to load or create bridge';
+                    document.getElementById('external-status').className = 'status failure';
+                    updateResults();
+                }
+            }, 2000); // Wait 2 seconds for external script
+        }
+        
+        function updateResults() {
+            const resultsDiv = document.getElementById('results');
+            
+            if (bridgeLoadedFromExternal && bridgeCallSucceeded) {
+                resultsDiv.innerHTML = '🎉 SUCCESS: Bridge fix worked! External script loaded and functions properly.';
+                resultsDiv.className = 'status success';
+            } else if (bridgeLoadedFromExternal) {
+                resultsDiv.innerHTML = '⚠️ PARTIAL: Bridge loaded but calls failed - check Swift native handler.';
+                resultsDiv.className = 'status failure';
+            } else {
+                resultsDiv.innerHTML = '❌ FAILURE: External bridge script did not load properly.';
+                resultsDiv.className = 'status failure';
+            }
+        }
+        
+        // Start test
+        testBridgeAfterLoad();
+        
+        // Final check after 5 seconds
+        setTimeout(() => {
+            if (!bridgeLoadedFromExternal) {
+                updateResults();
+            }
+        }, 5000);
+    </script>
+
+    <!-- This should now load and execute properly -->
+    <script src="app-assets://localhost/web/map_bridge.js"></script>
+</body>
+</html>
