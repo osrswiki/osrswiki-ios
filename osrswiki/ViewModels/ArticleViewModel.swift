@@ -2309,93 +2309,6 @@ class ArticleViewModel: NSObject, ObservableObject {
                 });
                 console.log('📱 iOS: Removed', editLinks.length, 'edit links');
 
-                // FEATURE PARITY FIX 2: Apply Alegreya font to page title and headings like Android
-                console.log('📱 iOS: Starting Alegreya font application...');
-
-                // Test document state
-                console.log('📱 iOS: Document ready state:', document.readyState);
-                console.log('📱 iOS: Document body exists:', !!document.body);
-
-                const pageHeader = document.querySelector('h1.page-header');
-                const allHeadings = document.querySelectorAll('h1, h2, h3, h4, h5, h6');
-
-                console.log('📱 iOS: Found page header:', !!pageHeader);
-                console.log('📱 iOS: Found', allHeadings.length, 'headings total');
-
-                // Test font availability using different methods
-                console.log('📱 iOS: Testing font availability...');
-
-                // Method 1: Check if font is loaded
-                if (document.fonts && document.fonts.check) {
-                    const alegreyaBoldLoaded = document.fonts.check('16px "Alegreya-Bold"');
-                    const alegreyaLoaded = document.fonts.check('16px Alegreya');
-                    console.log('📱 iOS: Alegreya-Bold loaded:', alegreyaBoldLoaded);
-                    console.log('📱 iOS: Alegreya loaded:', alegreyaLoaded);
-                }
-
-                // Method 2: Create test element to see computed font
-                const testElement = document.createElement('div');
-                testElement.style.fontFamily = '"Alegreya-Bold", "Alegreya", Georgia, serif';
-                testElement.style.fontSize = '16px';
-                testElement.textContent = 'Test';
-                testElement.style.position = 'absolute';
-                testElement.style.left = '-9999px';
-                document.body.appendChild(testElement);
-                const computedFont = window.getComputedStyle(testElement).fontFamily;
-                document.body.removeChild(testElement);
-                console.log('📱 iOS: Test element computed fontFamily:', computedFont);
-
-                if (pageHeader) {
-                    console.log('📱 iOS: Applying font to page header...');
-                    pageHeader.style.fontFamily = '"Alegreya-Bold", "Alegreya", Georgia, serif';
-                    pageHeader.style.fontWeight = 'bold';
-                    console.log('📱 iOS: Applied font to page header');
-
-                    // Force style recalculation
-                    pageHeader.offsetHeight;
-
-                    // Check what font was actually applied
-                    const appliedFont = window.getComputedStyle(pageHeader).fontFamily;
-                    console.log('📱 iOS: Page header final computed fontFamily:', appliedFont);
-                } else {
-                    console.log('📱 iOS: No page header found');
-                }
-
-                console.log('📱 iOS: Processing', allHeadings.length, 'headings...');
-                allHeadings.forEach((heading, index) => {
-                    try {
-                        const level = parseInt(heading.tagName.substring(1));
-                        const fontFamily = level <= 2 ? '"Alegreya-Bold", "Alegreya", Georgia, serif' : '"Alegreya-Medium", "Alegreya", Georgia, serif';
-                        const fontWeight = level <= 2 ? 'bold' : '500';
-
-                        heading.style.fontFamily = fontFamily;
-                        heading.style.fontWeight = fontWeight;
-
-                        // Force style recalculation
-                        heading.offsetHeight;
-
-                        // Debug first few headings
-                        if (index < 3) {
-                            const appliedFont = window.getComputedStyle(heading).fontFamily;
-                            console.log('📱 iOS: Heading', heading.tagName, 'level', level, 'set to:', fontFamily);
-                            console.log('📱 iOS: Heading', heading.tagName, 'computed fontFamily:', appliedFont);
-                            console.log('📱 iOS: Heading text:', heading.textContent.substring(0, 50));
-                        }
-                    } catch (headingError) {
-                        console.error('📱 iOS: Error processing heading', index, ':', headingError);
-                    }
-                });
-
-                console.log('📱 iOS: ✅ Successfully applied Alegreya fonts to', allHeadings.length, 'headings');
-
-                // DEBUG: Test if :has() selector is actually supported in this WebKit version
-                const hasSupported = CSS.supports('selector(.test:has(.child))');
-                console.log('📱 iOS WebKit :has() support:', hasSupported);
-
-                // DEBUG: Check actual HTML structure
-                const infoboxes = document.querySelectorAll('.infobox');
-                console.log('📱 iOS: Found', infoboxes.length, 'infoboxes');
-
                 console.log('📱 iOS: ✅ All styling fixes completed successfully');
 
             } catch (error) {
@@ -2403,18 +2316,6 @@ class ArticleViewModel: NSObject, ObservableObject {
                 console.error('📱 iOS: Error name:', error.name);
                 console.error('📱 iOS: Error message:', error.message);
                 console.error('📱 iOS: Error stack:', error.stack);
-
-                // Try to continue with minimal fixes if main script fails
-                try {
-                    console.log('📱 iOS: Attempting fallback font application...');
-                    const pageHeader = document.querySelector('h1.page-header');
-                    if (pageHeader) {
-                        pageHeader.style.fontFamily = 'Alegreya-Bold, Georgia, serif';
-                        console.log('📱 iOS: Fallback - applied font to page header');
-                    }
-                } catch (fallbackError) {
-                    console.error('📱 iOS: Even fallback failed:', fallbackError);
-                }
             }
         })();
         """
@@ -3101,18 +3002,20 @@ class ArticleViewModel: NSObject, ObservableObject {
                     return -1;
                 }
 
-                const headerOffset = Math.max(72, Math.min(132, Math.round(window.innerHeight * 0.10)));
-                element.style.scrollMarginTop = headerOffset + 'px';
-                const rectTop = element.getBoundingClientRect().top;
-                let offsetY = 0;
-                let node = element;
-                while (node) {
-                    offsetY += node.offsetTop || 0;
-                    node = node.offsetParent;
+                const headerOffset = (function() {
+                    const cs = getComputedStyle(document.documentElement);
+                    const parsePx = function(value) {
+                        const n = parseFloat(value);
+                        return Number.isFinite(n) ? n : 0;
+                    };
+                    return Math.max(parsePx(cs.scrollPaddingTop), parsePx(cs.paddingTop), 0);
+                })();
+                if (headerOffset > 0) {
+                    element.style.scrollMarginTop = headerOffset + 'px';
                 }
+                const rectTop = element.getBoundingClientRect().top;
                 const scrollTop = window.pageYOffset || document.documentElement.scrollTop || 0;
-                const targetY = Math.max(0, Math.max(scrollTop + rectTop, offsetY) - headerOffset);
-                try { element.scrollIntoView(true); } catch (e) {}
+                const targetY = Math.max(0, scrollTop + rectTop - headerOffset);
                 try { window.scrollTo(0, targetY); } catch (e2) {}
                 return targetY;
             })();

@@ -89,6 +89,24 @@ final class ArticleFeedbackFixesUITests: XCTestCase {
         attachScreenshot(named: "after-two-quick-back-swipes")
     }
 
+    func testInfoboxStateChipsDoNotShiftArticleChrome() throws {
+        assertInfoboxStateChipsKeepChromePinned(
+            title: "Amulet of glory",
+            path: "Amulet_of_glory",
+            chips: ["Uncharged", "1", "2", "6"],
+            screenshotName: "glory-after-state-taps"
+        )
+    }
+
+    func testInfoboxStateChipsDoNotShiftArticleChromeOnRingOfWealth() throws {
+        assertInfoboxStateChipsKeepChromePinned(
+            title: "Ring of wealth",
+            path: "Ring_of_wealth",
+            chips: ["Uncharged", "1", "5"],
+            screenshotName: "ring-of-wealth-after-state-taps"
+        )
+    }
+
     func testContentsSwipeWorksBeforeArticleFinishesLoading() throws {
         launchArticle(
             title: "Amulet of glory",
@@ -176,6 +194,67 @@ final class ArticleFeedbackFixesUITests: XCTestCase {
             maxLuma = max(maxLuma, luma)
         }
         return (total / count) < 16 && (maxLuma - minLuma) < 10
+    }
+
+    private func assertInfoboxStateChipsKeepChromePinned(
+        title: String,
+        path: String,
+        chips: [String],
+        screenshotName: String
+    ) {
+        launchArticle(title: title, path: path)
+        ensureArticleVisible(title: title)
+
+        let heading = app.staticTexts[title].firstMatch
+        XCTAssertTrue(heading.waitForExistence(timeout: 20), app.debugDescription)
+        let webView = articleWebView()
+        XCTAssertTrue(webView.waitForExistence(timeout: 8))
+
+        let titleY = heading.frame.minY
+        let webY = webView.frame.minY
+        XCTAssertGreaterThan(titleY, 48, "Page title must sit below overlay chrome, not under it")
+
+        for chip in chips {
+            tapInfoboxChip(chip)
+            RunLoop.current.run(until: Date().addingTimeInterval(0.45))
+            XCTAssertEqual(
+                heading.frame.minY,
+                titleY,
+                accuracy: 2.0,
+                "Tapping infobox state '\(chip)' shifted the page title"
+            )
+            XCTAssertEqual(
+                webView.frame.minY,
+                webY,
+                accuracy: 2.0,
+                "Tapping infobox state '\(chip)' shifted the article web view"
+            )
+        }
+        attachScreenshot(named: screenshotName)
+    }
+
+    private func tapInfoboxChip(_ label: String) {
+        let webView = articleWebView()
+        let exact = webView.descendants(matching: .any).matching(NSPredicate(format: "label == %@", label)).firstMatch
+        if exact.waitForExistence(timeout: 2), exact.isHittable {
+            exact.tap()
+            return
+        }
+
+        // WebKit often concatenates the chip row into one AX node:
+        // "Uncharged\n1\n2\n3\n4\n5\n6". Tap the top strip of that node.
+        let grouped = webView.descendants(matching: .any).matching(
+            NSPredicate(format: "label CONTAINS[c] %@", label)
+        ).firstMatch
+        XCTAssertTrue(grouped.waitForExistence(timeout: 8), app.debugDescription)
+        let lines = grouped.label
+            .split(whereSeparator: { $0.isNewline || $0 == " " })
+            .map(String.init)
+            .filter { !$0.isEmpty }
+        let index = lines.firstIndex { $0.caseInsensitiveCompare(label) == .orderedSame } ?? 0
+        let count = max(lines.count, 1)
+        let dx = (CGFloat(index) + 0.5) / CGFloat(count)
+        grouped.coordinate(withNormalizedOffset: CGVector(dx: dx, dy: 0.03)).tap()
     }
 
     private func launchArticle(title: String, path: String, extraArguments: [String] = []) {

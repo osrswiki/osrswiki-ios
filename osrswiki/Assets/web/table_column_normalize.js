@@ -47,8 +47,9 @@
     img.style.setProperty('width', 'auto', 'important');
     img.style.setProperty('object-fit', 'contain', 'important');
     img.style.setProperty('vertical-align', 'middle', 'important');
-    // CSS max-height cannot beat WebKit's 1em skill/rune wrappers. Android
-    // already sizes these correctly with height:auto; iOS needs a real 2em.
+    // Wiki/Minerva wrappers can still pin table glyphs to 1em on WebKit.
+    // Android is already height:auto + max 2em; iOS needs an explicit 2em
+    // height so those wrappers cannot shrink the bitmap.
     if (isIOSWebKit()) {
       img.style.setProperty('height', '2em', 'important');
       img.style.setProperty('min-height', '2em', 'important');

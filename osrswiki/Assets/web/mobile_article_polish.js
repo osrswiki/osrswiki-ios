@@ -134,6 +134,26 @@
     ));
   }
 
+  function isProseBannerTable(table) {
+    return !!(table && table.matches && table.matches(
+      'table.messagebox, table.ambox, table.mbox, table.notebox, ' +
+      'table.tmbox, table.cmbox, table.ombox, table.imbox, table.fmbox'
+    ));
+  }
+
+  function unwrapGeneratedScrollSurface(table) {
+    const surface = table && table.parentElement;
+    if (!surface || !surface.classList ||
+        !surface.classList.contains('osrs-scroll-generated-surface')) {
+      return;
+    }
+    const parent = surface.parentElement;
+    if (!parent) return;
+    parent.insertBefore(table, surface);
+    demoteGenericScrollSurface(surface);
+    surface.remove();
+  }
+
   function initializeLogicalScrollStart(surface) {
     if (!surface || surface.dataset.osrsScrollStartInitialized === 'true') return;
     // CSSOM uses zero for the inline-start edge in LTR and the start edge of RTL scrollports.
@@ -256,6 +276,10 @@
 
   function markScrollableTables(root) {
     root.querySelectorAll('table').forEach((table) => {
+      if (isProseBannerTable(table)) {
+        unwrapGeneratedScrollSurface(table);
+        return;
+      }
       if (isProtectedTableRole(table) ||
           table.closest('.navbox, .scrollable-table-wrapper')) return;
       const existingLocalSurface = table.closest('.osrs-local-scroll-surface');
@@ -322,6 +346,26 @@
     });
   }
 
+  function articleChromeOffsetPx() {
+    const cs = getComputedStyle(document.documentElement);
+    const parsePx = function(value) {
+      const n = parseFloat(value);
+      return Number.isFinite(n) ? n : 0;
+    };
+    return Math.max(parsePx(cs.scrollPaddingTop), parsePx(cs.paddingTop), 0);
+  }
+
+  function scrollArticleTargetBelowChrome(element, headerOffset) {
+    if (!element) return;
+    const offset = Number.isFinite(headerOffset) ? headerOffset : articleChromeOffsetPx();
+    if (offset > 0) {
+      element.style.scrollMarginTop = offset + 'px';
+    }
+    const rectTop = element.getBoundingClientRect().top;
+    const scrollTop = window.pageYOffset || document.documentElement.scrollTop || 0;
+    window.scrollTo(0, Math.max(0, scrollTop + rectTop - offset));
+  }
+
   let scheduled = false;
   function applyPolish() {
     scheduled = false;
@@ -365,11 +409,27 @@
     const target = event.target;
     if (!(target instanceof Element)) return;
     const help = target.closest('.floornumber-help, .floor-convention, a[href*="Special:Preferences"]');
-    if (!help) return;
-    event.preventDefault();
-    event.stopPropagation();
-    if (window.OsrsWikiBridge && typeof window.OsrsWikiBridge.openFloorNumberingSettings === 'function') {
-      window.OsrsWikiBridge.openFloorNumberingSettings();
+    if (help) {
+      event.preventDefault();
+      event.stopPropagation();
+      if (window.OsrsWikiBridge && typeof window.OsrsWikiBridge.openFloorNumberingSettings === 'function') {
+        window.OsrsWikiBridge.openFloorNumberingSettings();
+      }
+      return;
     }
+    const link = target.closest('a[href^="#"]');
+    if (!link) return;
+    const chromeOffset = articleChromeOffsetPx();
+    if (chromeOffset <= 0) return;
+    const href = link.getAttribute('href') || '';
+    if (href.length < 2) return;
+    let id = href.slice(1);
+    try { id = decodeURIComponent(id); } catch (e) {}
+    if (!id) return;
+    const destination = document.getElementById(id) ||
+      (window.CSS && CSS.escape && document.querySelector('#' + CSS.escape(id)));
+    if (!destination) return;
+    event.preventDefault();
+    scrollArticleTargetBelowChrome(destination, chromeOffset);
   }, true);
 })();

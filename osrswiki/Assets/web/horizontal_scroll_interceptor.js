@@ -19,6 +19,9 @@
     let latestTouchSequence = 0;
     let activeTouchStartX = 0;
     let activeScrollOwner = null;
+    let sequenceAxisLock = null;
+    let startCanScrollPositive = false;
+    let startCanScrollNegative = false;
     const touchOwnershipSnapshots = new Map();
     const maxTouchOwnershipSnapshots = 16;
     const scrollSurfaceMarker = 'osrsScrollAffordanceBound';
@@ -59,11 +62,19 @@
         }
     }
 
+    function isProseBannerTable(table) {
+        return !!(table && table.matches && table.matches(
+            'table.messagebox, table.ambox, table.mbox, table.notebox, ' +
+            'table.tmbox, table.cmbox, table.ombox, table.imbox, table.fmbox'
+        ));
+    }
+
     function getScrollSurfaceForTable(table) {
         if (!table || !table.closest) {
             return null;
         }
-        if (table.matches('.main-infobox, .osrs-map-table') ||
+        if (isProseBannerTable(table) ||
+            table.matches('.main-infobox, .osrs-map-table') ||
             table.closest('.collapsible-primary-infobox, .collapsible-map-table, .osrs-recipe-unit')) {
             return null;
         }
@@ -387,14 +398,33 @@
 
     function canConsumeHorizontalDelta(owner, deltaX) {
         if (!owner) return false;
-        const maxScroll = owner.scrollWidth - owner.clientWidth;
-        if (maxScroll <= 2) return false;
-        const scrollLeft = owner.scrollLeft;
-        const atStart = scrollLeft <= 1;
-        const atEnd = scrollLeft >= maxScroll - 1;
+        const capacity = horizontalEdgeCapacity(owner);
+        if (!capacity.hasOverflow) return false;
         if (Math.abs(deltaX) < 10) return true;
-        if (deltaX > 0) return !atStart;
-        return !atEnd;
+        if (deltaX > 0) return capacity.canPositive;
+        return capacity.canNegative;
+    }
+
+    // Snapshot of whether this pointer could pan the local scroller when it
+    // began. Live scrollLeft is not used to hand off the same finger sequence
+    // to article swipe after the table hits an edge. Subpixel leftovers on the
+    // trailing edge must still count as terminal so a new swipe can open
+    // contents the way a zero scrollLeft opens back.
+    function horizontalEdgeCapacity(owner) {
+        if (!owner) {
+            return { hasOverflow: false, canPositive: false, canNegative: false };
+        }
+        const maxScroll = owner.scrollWidth - owner.clientWidth;
+        if (maxScroll <= 2) {
+            return { hasOverflow: false, canPositive: false, canNegative: false };
+        }
+        const scrollLeft = owner.scrollLeft;
+        const edgeSlop = 8;
+        return {
+            hasOverflow: true,
+            canPositive: scrollLeft > edgeSlop,
+            canNegative: scrollLeft < maxScroll - edgeSlop
+        };
     }
 
     function scrollOwnerForTarget(target) {
@@ -464,6 +494,31 @@
         }
     }
 
+    function claimLocalSequence(owner) {
+        sequenceAxisLock = 'local';
+        isHorizontallyScrollable = true;
+        latestTouchOwnedByLocalHorizontalContent = true;
+        rememberTouchOwnership(activeTouchSequence, true);
+        gestureSequence += 1;
+        activeGestureId = 'article-local-' + gestureSequence;
+        activeGestureOwner = owner
+            ? (owner.getAttribute('aria-label') || owner.id || 'local-scroll-surface')
+            : 'local-scroll-surface';
+        notifyGesturePhase('begin', activeGestureId, activeGestureOwner, true);
+        log('Claimed native gesture ' + activeGestureId + ' for ' + activeGestureOwner);
+    }
+
+    function beginNavigationSequence() {
+        sequenceAxisLock = 'navigation';
+        isHorizontallyScrollable = false;
+        latestTouchOwnedByLocalHorizontalContent = false;
+        rememberTouchOwnership(activeTouchSequence, false);
+        gestureSequence += 1;
+        activeGestureId = 'article-touch-' + gestureSequence;
+        activeGestureOwner = 'article-navigation';
+        notifyGesturePhase('begin', activeGestureId, activeGestureOwner, false);
+    }
+
     document.addEventListener('touchstart', function(event) {
         // Additional fingers belong to the current primary touch even when that touch started on
         // ordinary article content. Never let a pinch advance the immutable sequence snapshot.
@@ -474,9 +529,13 @@
         latestTouchOwnedByLocalHorizontalContent = false;
         activeTouchStartX = event.touches && event.touches[0] ? event.touches[0].clientX : 0;
         activeScrollOwner = null;
+        sequenceAxisLock = null;
+        startCanScrollPositive = false;
+        startCanScrollNegative = false;
         // Force-disable app back swipe for GE chart interactions
         if (isInGEChart(target)) {
             geChartTouchActive = true;
+            sequenceAxisLock = 'local';
             gestureSequence += 1;
             activeGestureId = 'article-local-' + gestureSequence;
             activeGestureOwner = 'price-chart';
@@ -490,23 +549,24 @@
         log('Touch on: ' + target.tagName + ' ' + (target.className || '') + 
             ' at (' + Math.round(event.touches[0].clientX) + ', ' + Math.round(event.touches[0].clientY) + ')');
         
-        // Check if the touch target is inside a scrollable container.
         const owner = scrollOwnerForTarget(target);
         activeScrollOwner = owner;
-        isHorizontallyScrollable = !!owner;
-        latestTouchOwnedByLocalHorizontalContent = isHorizontallyScrollable;
-        rememberTouchOwnership(activeTouchSequence, isHorizontallyScrollable);
+        const capacity = horizontalEdgeCapacity(owner);
+        startCanScrollPositive = capacity.canPositive;
+        startCanScrollNegative = capacity.canNegative;
         notifyTouchSequence(activeTouchSequence);
-        log('Scrollable: ' + isHorizontallyScrollable);
-        
-        gestureSequence += 1;
-        activeGestureId = (isHorizontallyScrollable ? 'article-local-' : 'article-touch-') + gestureSequence;
-        activeGestureOwner = owner
-            ? (owner.getAttribute('aria-label') || owner.id || 'local-scroll-surface')
-            : 'article-navigation';
-        notifyGesturePhase('begin', activeGestureId, activeGestureOwner, isHorizontallyScrollable);
-        if (isHorizontallyScrollable) {
-            log('Claimed native gesture ' + activeGestureId + ' for ' + activeGestureOwner);
+        if (capacity.hasOverflow && capacity.canPositive && capacity.canNegative) {
+            // Interior of a scroller: this whole pointer sequence stays local,
+            // including rubber-band/momentum into an edge.
+            claimLocalSequence(owner);
+        } else if (capacity.hasOverflow) {
+            // Already at a terminal edge. Wait for the first horizontal move:
+            // into the table stays local; off the edge may become article swipe.
+            beginNavigationSequence();
+            sequenceAxisLock = null;
+            log('Scrollable at terminal edge; waiting for direction');
+        } else {
+            beginNavigationSequence();
         }
     }, { passive: true });
 
@@ -515,29 +575,27 @@
      */
     document.addEventListener('touchmove', function(event) {
         if (activeTouchSequence === null || geChartTouchActive) return;
+        if (sequenceAxisLock !== null) return;
         const owner = activeScrollOwner;
         if (!owner || !event.touches || !event.touches.length) return;
         const deltaX = event.touches[0].clientX - activeTouchStartX;
-        const consume = canConsumeHorizontalDelta(owner, deltaX);
-        latestTouchOwnedByLocalHorizontalContent = consume;
-        rememberTouchOwnership(activeTouchSequence, consume);
-        if (!consume && isHorizontallyScrollable) {
-            notifyGesturePhase('end', activeGestureId, activeGestureOwner, false);
-            isHorizontallyScrollable = false;
-            activeGestureId = null;
-            activeGestureOwner = null;
-        } else if (consume && !isHorizontallyScrollable) {
-            gestureSequence += 1;
-            activeGestureId = 'article-local-' + gestureSequence;
-            activeGestureOwner = owner.getAttribute('aria-label') || owner.id || 'local-scroll-surface';
-            isHorizontallyScrollable = true;
-            notifyGesturePhase('begin', activeGestureId, activeGestureOwner, true);
+        if (Math.abs(deltaX) < 10) return;
+        const canConsume = deltaX > 0 ? startCanScrollPositive : startCanScrollNegative;
+        if (canConsume) {
+            claimLocalSequence(owner);
+        } else {
+            sequenceAxisLock = 'navigation';
+            latestTouchOwnedByLocalHorizontalContent = false;
+            rememberTouchOwnership(activeTouchSequence, false);
         }
     }, { passive: true });
 
     function resetScrollState() {
         activeTouchSequence = null;
         activeScrollOwner = null;
+        sequenceAxisLock = null;
+        startCanScrollPositive = false;
+        startCanScrollNegative = false;
         if (geChartTouchActive) {
             geChartTouchActive = false;
             log('GE chart touchend: ending ' + activeGestureId);

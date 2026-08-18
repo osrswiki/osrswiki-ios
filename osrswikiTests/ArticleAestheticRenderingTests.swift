@@ -915,18 +915,95 @@ final class ArticleAestheticRenderingTests: XCTestCase {
         XCTAssertGreaterThan(state["bodyFontSize"] as? Double ?? 0, 20)
     }
 
+    func testInArticleTocCaptionsAndProseBannersStayFullWidthThemedAndUnscrolled() async throws {
+        let polish = try readAsset("Assets/web/mobile_article_polish.js")
+        let interceptor = try readAsset("Assets/web/horizontal_scroll_interceptor.js")
+        let fixes = try readAsset("Assets/styles/fixes.css")
+        let pixel = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=="
+        let html = """
+        <!doctype html>
+        <html style="--text-color:#112233;">
+        <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <style>
+        html, body { margin: 0; width: 375px; }
+        \(fixes)
+        </style>
+        </head>
+        <body>
+          <figure class="mw-halign-left" style="float:left;width:150px;height:180px;margin:0;">
+            <img class="mw-file-element" width="150" height="180" src="\(pixel)">
+          </figure>
+          <p>Short lead that wraps beside the vignette.</p>
+          <div id="toc" class="toc"><div class="toctitle"><h2>Contents</h2></div><ul><li>Details</li></ul></div>
+          <table class="messagebox" role="presentation">
+            <tbody><tr>
+              <td class="messagebox-image">!</td>
+              <td>
+                <span class="messagebox-title"><b>This quest has a quick guide.</b></span>
+                <div class="messagebox-text">It briefly summarises the steps needed to complete the quest.</div>
+              </td>
+            </tr></tbody>
+          </table>
+          <figure><img src="\(pixel)" width="80" height="80"><figcaption id="plainCaption">A themed figure caption.</figcaption></figure>
+          <div class="thumbinner"><div class="thumbcaption" id="mapCaption">Slepe, showing locations of the church</div></div>
+          <script>\(polish)</script>
+          <script>\(interceptor)</script>
+        </body>
+        </html>
+        """
+
+        try await load(html)
+        let state = try await evaluate("""
+        (() => {
+            window.OSRSApplyArticlePolish();
+            const toc = document.querySelector('#toc');
+            const box = document.querySelector('table.messagebox');
+            const caption = document.getElementById('plainCaption');
+            const mapCaption = document.getElementById('mapCaption');
+            const tocCs = getComputedStyle(toc);
+            return {
+                tocDisplay: tocCs.display,
+                tocClear: tocCs.clear,
+                tocWidth: toc.getBoundingClientRect().width,
+                viewportWidth: document.documentElement.clientWidth,
+                messageboxParent: box.parentElement && box.parentElement.className,
+                messageboxScrollWidth: box.scrollWidth,
+                messageboxClientWidth: box.clientWidth,
+                messageboxSurface: !!box.closest('.osrs-local-scroll-surface'),
+                captionColor: getComputedStyle(caption).color,
+                mapCaptionColor: getComputedStyle(mapCaption).color
+            };
+        })()
+        """)
+
+        XCTAssertEqual(state["tocDisplay"] as? String, "block")
+        XCTAssertEqual(state["tocClear"] as? String, "both")
+        XCTAssertGreaterThanOrEqual(state["tocWidth"] as? Double ?? 0, (state["viewportWidth"] as? Double ?? 0) - 8)
+        XCTAssertEqual(state["messageboxSurface"] as? Bool, false)
+        XCTAssertFalse((state["messageboxParent"] as? String ?? "").contains("osrs-article-scroll-region"))
+        XCTAssertLessThanOrEqual(
+            (state["messageboxScrollWidth"] as? Double ?? 99) - (state["messageboxClientWidth"] as? Double ?? 0),
+            2
+        )
+        XCTAssertEqual(state["captionColor"] as? String, "rgb(17, 34, 51)")
+        XCTAssertEqual(state["mapCaptionColor"] as? String, "rgb(17, 34, 51)")
+    }
+
     func testMobileArticlePolishUsesSemanticTableRolesWithoutVisualScrollCues() async throws {
         let polish = try readAsset("Assets/web/mobile_article_polish.js")
         let horizontalScroll = try readAsset("Assets/web/horizontal_scroll_interceptor.js")
         let fixes = try readAsset("Assets/styles/fixes.css")
         let switchInfoboxStyles = try readAsset("Assets/web/switch_infobox_styles.css")
         let pixel = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=="
+        // Intrinsic 32x32 bitmap: width:auto + height:auto use the image size, not the HTML attributes.
+        let bitmap32 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAIAAAD8GO2jAAAAKklEQVR42mMwnplGU8QwasGoBaMWjFowasGoBaMWjFowasGoBaMWjFowasGoBaMWDBULAHLzyD25ip3jAAAAAElFTkSuQmCC"
         let html = """
         <!doctype html>
         <html>
         <head><meta name="viewport" content="width=device-width, initial-scale=1"><style>\(switchInfoboxStyles)\n\(fixes)</style></head>
         <body>
-          <p id="transport">Walk <span style="padding:25.6px"><span><img id="inline" class="mw-file-element" width="18" height="17" src="\(pixel)"></span></span> north.</p>
+          <p id="transport">Walk <span style="padding:25.6px"><span><img id="inline" class="mw-file-element" width="32" height="32" src="\(bitmap32)"></span></span> north.</p>
           <table class="infobox"><tbody><tr><td class="infobox-image"><img id="portrait" class="mw-file-element" width="130" height="367" src="\(pixel)"></td></tr></tbody></table>
           <figure id="vignette" class="mw-halign-left"><img class="mw-file-element" width="140" height="251" src="\(pixel)"></figure>
           <div class="collapsible-content" id="collapse"><table class="wikitable" style="min-width:720px"><tbody><tr><td>Combat stats</td></tr></tbody></table></div>
@@ -1001,8 +1078,13 @@ final class ArticleAestheticRenderingTests: XCTestCase {
         """)
 
         XCTAssertEqual(state["inlineClass"] as? Bool, true)
-        XCTAssertEqual(state["inlineDisplay"] as? String, "inline")
-        XCTAssertLessThanOrEqual(state["inlineWidth"] as? Double ?? 100, 24)
+        let inlineDisplay = state["inlineDisplay"] as? String
+        XCTAssertTrue(
+            inlineDisplay == "inline" || inlineDisplay == "inline-block",
+            "prose icons must stay in the line box, not become block; got \(inlineDisplay ?? "nil")"
+        )
+        XCTAssertGreaterThanOrEqual(state["inlineWidth"] as? Double ?? 0, 28)
+        XCTAssertLessThanOrEqual(state["inlineWidth"] as? Double ?? 100, 48)
         XCTAssertEqual(state["notePaddingLeft"] as? Double ?? -1, 0, accuracy: 0.5)
         XCTAssertEqual(state["portraitClass"] as? Bool, true)
         XCTAssertLessThanOrEqual(state["portraitWidth"] as? Double ?? 999, 220)
@@ -1426,6 +1508,11 @@ final class ArticleAestheticRenderingTests: XCTestCase {
         XCTAssertTrue(interceptor.contains("notifyGesturePhase('begin'"))
         XCTAssertTrue(interceptor.contains("resetScrollState()"))
         XCTAssertTrue(interceptor.contains("canConsumeHorizontalDelta"))
+        XCTAssertTrue(interceptor.contains("horizontalEdgeCapacity"))
+        XCTAssertTrue(interceptor.contains("sequenceAxisLock"))
+        XCTAssertTrue(interceptor.contains("const edgeSlop = 8"))
+        XCTAssertTrue(interceptor.contains("isProseBannerTable"))
+        XCTAssertFalse(interceptor.contains("if (!consume && isHorizontallyScrollable)"))
         XCTAssertTrue(interceptor.contains("overflowingHorizontalOwner"))
         XCTAssertTrue(interceptor.contains("'article-navigation'"))
         XCTAssertTrue(interceptor.contains("article-touch-"))
@@ -1458,15 +1545,27 @@ final class ArticleAestheticRenderingTests: XCTestCase {
         XCTAssertTrue(iosAesthetics.contains("display: inline-flex !important"))
         XCTAssertTrue(iosAesthetics.contains("align-items: center !important"))
         XCTAssertTrue(iosAesthetics.contains(":is(p, li, dd, figcaption) img.mw-file-element"))
-        XCTAssertTrue(iosAesthetics.contains("vertical-align: -0.2em !important"))
+        XCTAssertFalse(iosAesthetics.contains("vertical-align: -0.2em !important"))
+        XCTAssertFalse(
+            iosAesthetics.contains("height: 1em !important"),
+            "Do not shrink iOS prose icons to 1em to fake alignment; keep Android 2em density."
+        )
+        XCTAssertFalse(iosAesthetics.contains("max-height: 1em !important"))
+        XCTAssertFalse(iosAesthetics.contains("max-width: 1.25em !important"))
         XCTAssertTrue(iosAesthetics.contains("overflow: hidden !important"))
-        XCTAssertTrue(iosAesthetics.contains("display: block !important"))
+        XCTAssertTrue(iosAesthetics.contains("scroll-padding-top:"))
+        XCTAssertTrue(iosAesthetics.contains("line-height: 0 !important"))
+        XCTAssertTrue(iosAesthetics.contains("max-height: 2em !important"))
+        XCTAssertTrue(iosAesthetics.contains("vertical-align: middle !important"))
         XCTAssertFalse(iosAesthetics.contains("vertical-align: text-bottom !important"))
     }
 
     func testInteractivePriceChartAndHiddenStatePrewarmContracts() throws {
         let chart = try readAsset("Assets/web/ge_charts_init.js")
         let switcher = try readAsset("Assets/web/switch_infobox.js")
+        let fonts = try readAsset("Assets/styles/fonts.css")
+        let articleViewModel = try readSource("ViewModels/ArticleViewModel.swift")
+        let htmlBuilder = try readSource("Services/osrsPageHtmlBuilder.swift")
 
         XCTAssertTrue(chart.contains("overflow:hidden !important"))
         XCTAssertTrue(chart.contains("zoomType: 'x'"))
@@ -1479,7 +1578,141 @@ final class ArticleAestheticRenderingTests: XCTestCase {
         XCTAssertTrue(chart.contains("Highcharts never became available"))
         XCTAssertTrue(switcher.contains("data-default-version"))
         XCTAssertTrue(switcher.contains("preloader.decode()"))
+        XCTAssertTrue(switcher.contains("updateExistingImage"))
+        XCTAssertTrue(switcher.contains("lockSwitcherMinBlockSize"))
+        XCTAssertFalse(switcher.contains("container.classList.contains('infobox-bonuses')"))
         XCTAssertFalse(switcher.contains("\n            stabilizeInfoboxWidth(mainInfobox"))
+        XCTAssertTrue(fonts.contains("font-display: optional"))
+        XCTAssertFalse(articleViewModel.contains("pageHeader.style.fontFamily"))
+        XCTAssertTrue(htmlBuilder.contains("osrs-article-first-paint"))
+        XCTAssertTrue(htmlBuilder.contains("alegreya_bold.ttf"))
+        XCTAssertTrue(htmlBuilder.contains("--osrs-article-safe-area-top"))
+        XCTAssertTrue(htmlBuilder.contains("padding-top: calc(var(--osrs-article-safe-area-top) + var(--osrs-article-chrome-clearance))"))
+        XCTAssertFalse(htmlBuilder.contains("env(safe-area-inset-top"))
+        let iosAesthetics = try readAsset("Assets/styles/ios-article-aesthetics.css")
+        XCTAssertTrue(iosAesthetics.contains("var(--osrs-article-safe-area-top, 0px)"))
+        XCTAssertFalse(iosAesthetics.contains("env(safe-area-inset-top"))
+    }
+
+    func testFirstPaintReservesPageTitleAndChromeClearance() async throws {
+        let firstPaint = osrsPageHtmlBuilder.articleFirstPaintStyle(
+            chromeClearancePx: 64,
+            safeAreaTopPx: 59,
+            safeAreaBottomPx: 34
+        )
+        let html = """
+        <!doctype html>
+        <html>
+        <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        \(firstPaint)
+        </head>
+        <body style="margin:0">
+        <h1 class="page-header">Varrock</h1>
+        <p id="lead">Capital of Misthalin.</p>
+        </body>
+        </html>
+        """
+        try await load(html)
+        let before = try await evaluate("""
+        (() => {
+            const lead = document.getElementById('lead');
+            const html = document.documentElement;
+            return {
+                top: lead.getBoundingClientRect().top,
+                paddingTop: getComputedStyle(html).paddingTop
+            };
+        })()
+        """)
+        _ = try await evaluate("""
+        (() => {
+            const style = document.createElement('style');
+            style.textContent = 'html { padding-top: calc(var(--osrs-article-safe-area-top, 0px) + var(--osrs-article-chrome-clearance, 56px)) !important; }';
+            document.head.appendChild(style);
+            document.body.offsetHeight;
+            return { ok: true };
+        })()
+        """)
+        let after = try await evaluate("""
+        (() => {
+            const lead = document.getElementById('lead');
+            return { top: lead.getBoundingClientRect().top };
+        })()
+        """)
+        XCTAssertEqual(before["paddingTop"] as? String, "123px")
+        XCTAssertEqual(before["top"] as? Double ?? 0, after["top"] as? Double ?? -1, accuracy: 1.0)
+        XCTAssertGreaterThan(before["top"] as? Double ?? 0, 120)
+    }
+
+    func testInfoboxStateSwitchKeepsBoxHeightStable() async throws {
+        let bootstrap = try readAsset("Assets/web/infobox_switcher_bootstrap.js")
+        let switcher = try readAsset("Assets/web/switch_infobox.js")
+        let tiny = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='18' height='29'><rect width='18' height='29' fill='%23c00'/></svg>"
+        let large = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='80' height='120'><rect width='80' height='120' fill='%2300c'/></svg>"
+        let html = """
+        <!doctype html>
+        <html>
+        <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <style>
+        body { margin: 16px; width: 343px; }
+        table.infobox { width: 100%; border-collapse: collapse; }
+        table.infobox img { max-width: 100%; height: auto; }
+        </style>
+        </head>
+        <body>
+        <table class="infobox infobox-switch" data-resource-class=".infobox-resources-Item">
+            <caption>
+                <div class="infobox-buttons" data-default-version="1">
+                    <span data-switch-index="1" class="button">A</span>
+                    <span data-switch-index="2" class="button">B</span>
+                </div>
+            </caption>
+            <tbody>
+                <tr><th class="infobox-header" data-attr-param="name">Short name</th></tr>
+                <tr><td data-attr-param="image"><img width="18" height="29" class="mw-file-element" src="\(tiny)"></td></tr>
+            </tbody>
+        </table>
+        <div class="infobox-resources-Item infobox-switch-resources">
+            <div data-attr-param="name">
+                <span data-attr-index="1">Short name</span>
+                <span data-attr-index="2">A substantially longer infobox title that wraps on a phone-width column</span>
+            </div>
+            <div data-attr-param="image">
+                <span data-attr-index="1"><img width="18" height="29" class="mw-file-element" src="\(tiny)"></span>
+                <span data-attr-index="2"><img width="80" height="120" class="mw-file-element" src="\(large)"></span>
+            </div>
+        </div>
+        <script>\(bootstrap)</script>
+        <script>\(switcher)</script>
+        <script>initializeInfoboxSwitcher();</script>
+        </body>
+        </html>
+        """
+        try await load(html)
+        try await Task.sleep(nanoseconds: 250_000_000)
+        let before = try await evaluate("""
+        (() => {
+            const box = document.querySelector('.infobox-switch');
+            return { height: box.getBoundingClientRect().height, ready: box.dataset.osrsSwitcherReady || '' };
+        })()
+        """)
+        _ = try await evaluate("(() => { performSwitch('2'); return { ok: true }; })()")
+        let after = try await evaluate("""
+        (() => {
+            const box = document.querySelector('.infobox-switch');
+            const selected = document.querySelector('.button-selected');
+            return {
+                height: box.getBoundingClientRect().height,
+                selected: (selected && selected.textContent) || '',
+                minHeight: box.style.minHeight
+            };
+        })()
+        """)
+        XCTAssertEqual(before["ready"] as? String, "true")
+        XCTAssertEqual(after["selected"] as? String, "B")
+        XCTAssertFalse((after["minHeight"] as? String ?? "").isEmpty)
+        XCTAssertEqual(before["height"] as? Double ?? 0, after["height"] as? Double ?? -1, accuracy: 2.0)
     }
 
     func testBuilderAppliesUserArticleTextScaleExactlyOnce() async throws {

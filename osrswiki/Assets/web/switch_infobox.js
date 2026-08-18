@@ -60,6 +60,7 @@ function initializePage() {
                 (selectedButton && selectedButton.getAttribute('data-switch-index')) ||
                 mainButtons[0].getAttribute('data-switch-index');
             performSwitch(initialIndex);
+            lockSwitcherMinBlockSize();
             mainInfobox.dataset.osrsSwitcherReady = 'true';
             document.querySelectorAll('.switch-infobox, .rsw-synced-switch').forEach(function(box) {
                 box.dataset.osrsSwitcherReady = 'true';
@@ -124,25 +125,77 @@ function populatePlaceholders(container, resources, switchIndex) {
                 newContentElement = resourceGroup.querySelector('[data-attr-index="0"]');
             }
             if (newContentElement) {
-                // For the large equipped-cape images, update attributes directly to prevent repaint flash.
-                if ((paramName === 'image' || paramName === 'altimage') && container.classList.contains('infobox-bonuses')) {
-                    const oldImg = placeholder.querySelector('img');
-                    const newImg = newContentElement.querySelector('img');
-                    if (oldImg && newImg) {
-                        oldImg.src = newImg.src;
-                        if (newImg.hasAttribute('srcset')) {
-                            oldImg.srcset = newImg.getAttribute('srcset');
-                        } else {
-                            oldImg.removeAttribute('srcset');
-                        }
-                    } else {
-                        placeholder.innerHTML = fixUrls(newContentElement.innerHTML); // Fallback
-                    }
-                } else {
-                    // For all other content, standard replacement is fine.
-                    placeholder.innerHTML = fixUrls(newContentElement.innerHTML);
-                }
+                replacePlaceholderFromResource(placeholder, newContentElement);
             }
+        }
+    });
+}
+
+function replacePlaceholderFromResource(placeholder, newContentElement) {
+    const incoming = fixUrls(newContentElement.innerHTML);
+    const oldImg = placeholder.querySelector('img');
+    const scratch = document.createElement('div');
+    scratch.innerHTML = incoming;
+    const newImg = scratch.querySelector('img');
+    if (oldImg && newImg) {
+        updateExistingImage(oldImg, newImg);
+        return;
+    }
+    placeholder.innerHTML = incoming;
+}
+
+function updateExistingImage(oldImg, newImg) {
+    const copyAttrs = ['src', 'srcset', 'width', 'height', 'alt', 'class'];
+    copyAttrs.forEach((attr) => {
+        if (newImg.hasAttribute(attr)) {
+            oldImg.setAttribute(attr, newImg.getAttribute(attr));
+        } else if (attr === 'srcset' || attr === 'alt') {
+            oldImg.removeAttribute(attr);
+        }
+    });
+    const width = Number(newImg.getAttribute('width'));
+    const height = Number(newImg.getAttribute('height'));
+    if (width > 0 && height > 0) {
+        oldImg.style.aspectRatio = width + ' / ' + height;
+        oldImg.style.height = 'auto';
+    }
+}
+
+function lockSwitcherMinBlockSize() {
+    document.querySelectorAll('.infobox-switch[data-resource-class]').forEach((infobox) => {
+        const resourceClass = infobox.getAttribute('data-resource-class');
+        const resources = resourceClass ? document.querySelector(resourceClass) : null;
+        if (!resources) return;
+
+        const indices = Array.from(
+            infobox.querySelectorAll('.infobox-buttons .button[data-switch-index]')
+        ).map((button) => button.getAttribute('data-switch-index')).filter(Boolean);
+        if (indices.length === 0) return;
+
+        const hostWidth = infobox.getBoundingClientRect().width;
+        if (hostWidth < 1) return;
+
+        const probe = infobox.cloneNode(true);
+        probe.setAttribute('aria-hidden', 'true');
+        probe.style.cssText = [
+            'position:absolute',
+            'left:-10000px',
+            'top:0',
+            'visibility:hidden',
+            'pointer-events:none',
+            'width:' + hostWidth + 'px'
+        ].join(';');
+        infobox.parentNode.appendChild(probe);
+
+        let maxHeight = infobox.getBoundingClientRect().height;
+        indices.forEach((index) => {
+            populatePlaceholders(probe, resources, index);
+            maxHeight = Math.max(maxHeight, probe.getBoundingClientRect().height);
+        });
+        probe.remove();
+
+        if (maxHeight > 0) {
+            infobox.style.minHeight = Math.ceil(maxHeight) + 'px';
         }
     });
 }

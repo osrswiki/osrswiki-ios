@@ -75,12 +75,20 @@ html {
     vertical-align: middle !important;
 }
 
-/* One clearance: remaining env() (0 when the web view is already inset) plus
-   the compact bar and the paired gap. Do not also pad body — that doubled
-   the title offset and left a hole under the overlay chrome. */
+/* One clearance: UIKit-baked safe-area pixels plus the compact bar and the
+   paired gap. Do not read env(safe-area-inset-*) here — WebKit reports 0 on
+   the first paint, then jumps the title out from under the overlay.
+   scroll-padding-top keeps in-article hash / TOC jumps on the same inset so
+   headings land below the overlay instead of under it. */
 html {
-    padding-top: calc(env(safe-area-inset-top, 0px) + var(--osrs-article-chrome-clearance, 56px)) !important;
-    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + var(--osrs-article-chrome-clearance, 56px)) !important;
+    padding-top: calc(var(--osrs-article-safe-area-top, 0px) + var(--osrs-article-chrome-clearance, 56px)) !important;
+    padding-bottom: calc(var(--osrs-article-safe-area-bottom, 0px) + var(--osrs-article-chrome-clearance, 56px)) !important;
+    scroll-padding-top: calc(var(--osrs-article-safe-area-top, 0px) + var(--osrs-article-chrome-clearance, 56px)) !important;
+    scroll-padding-bottom: calc(var(--osrs-article-safe-area-bottom, 0px) + var(--osrs-article-chrome-clearance, 56px)) !important;
+}
+
+:is(h1, h2, h3, h4, h5, h6, .mw-headline, .mw-heading, caption) {
+    scroll-margin-top: calc(var(--osrs-article-safe-area-top, 0px) + var(--osrs-article-chrome-clearance, 56px));
 }
 
 body {
@@ -320,9 +328,11 @@ table.osrs-map-table > :is(thead, tbody, tfoot) > tr > :is(th, td):has(.mw-karto
     white-space: normal !important;
 }
 
-/* WebKit adds a descender gap under replaced images when they stay `inline`
-   or `inline-flex`. Clip each prose file span to a 1em inline-block so the
-   glyph sits on the x-height without growing the line below the text. */
+/* WebKit line boxes add a font-metric descender strut under replaced images
+   (alphabetic baseline + descender). Chromium with Android's inline-block +
+   line-height:0 wrapper does not, which is why the same bitmap sits lower on
+   iOS. Kill that extra strut only. Keep Android's 2em cap and auto height so
+   the glyph is not rescaled smaller than Android. */
 .mw-parser-output :is(p, li, dd, figcaption) :is(.osrs-inline-icon-wrapper, span.mw-default-size),
 .mw-body-content :is(p, li, dd, figcaption) :is(.osrs-inline-icon-wrapper, span.mw-default-size),
 :is(p, li, dd, figcaption) :is(.osrs-inline-icon-wrapper, span.mw-default-size),
@@ -332,29 +342,29 @@ table.osrs-map-table > :is(thead, tbody, tfoot) > tr > :is(th, td):has(.mw-karto
     display: inline-block !important;
     align-items: unset !important;
     font-size: inherit !important;
-    height: 1em !important;
-    line-height: 1 !important;
-    max-height: 1em !important;
+    height: auto !important;
+    line-height: 0 !important;
+    max-height: none !important;
     min-height: 0 !important;
     margin: 0 0.08em 0 0 !important;
     overflow: hidden !important;
     padding: 0 !important;
-    vertical-align: -0.2em !important;
+    vertical-align: top !important;
 }
 
 :is(p, li, dd, figcaption) img.osrs-inline-icon,
 :is(p, li, dd, figcaption) span.mw-default-size img.mw-file-element,
 :is(p, li, dd, figcaption) img.mw-file-element {
-    display: block !important;
-    height: 1em !important;
-    max-height: 1em !important;
-    max-width: 1.25em !important;
+    display: inline-block !important;
+    height: auto !important;
+    max-height: 2em !important;
+    max-width: 2em !important;
     min-height: 0 !important;
     margin: 0 !important;
     object-fit: contain !important;
     padding: 0 !important;
     border: 0 !important;
-    vertical-align: top !important;
+    vertical-align: middle !important;
     width: auto !important;
 }
 

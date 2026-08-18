@@ -576,13 +576,13 @@ final class ArticleNavigationIdentityTests: XCTestCase {
     func testContentsScrollScriptKeepsSelectedHeadingBelowNativeChrome() {
         let script = ArticleViewModel.osrsScrollToSectionScript(for: "Other_Fixes_&_What's_Next")
 
-        XCTAssertTrue(script.contains("offsetTop"))
-        XCTAssertTrue(script.contains("offsetParent"))
+        XCTAssertFalse(script.contains("scrollIntoView"))
+        XCTAssertFalse(script.contains("element.scrollIntoView(true)"))
         XCTAssertTrue(script.contains("headerOffset"))
+        XCTAssertTrue(script.contains("scrollPaddingTop"))
+        XCTAssertTrue(script.contains("paddingTop"))
         XCTAssertTrue(script.contains("getBoundingClientRect().top"))
         XCTAssertTrue(script.contains("window.scrollTo"))
-        XCTAssertTrue(script.contains("scrollIntoView"))
-        XCTAssertTrue(script.contains("element.scrollIntoView(true)"))
         XCTAssertTrue(script.contains(#""Other_Fixes_&_What's_Next""#))
     }
 

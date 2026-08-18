@@ -1,17 +1,20 @@
 /* RuneScape Fonts - Custom OSRS themed fonts */
 @font-face {
+  font-display: optional;
   font-family: 'runescape_plain';
   /* The URL uses iOS app-assets:// scheme handled by IOSAssetHandler */
   src: url('app-assets://localhost/fonts/runescape_plain.ttf');
 }
 
 @font-face {
+  font-display: optional;
   font-family: 'runescape_bold';
   src: url('app-assets://localhost/fonts/runescape_bold.ttf');
 }
 
 /* Alegreya Font Family - Serif for large text and headings */
 @font-face {
+  font-display: optional;
   font-family: 'Alegreya';
   font-weight: 500;
   font-style: normal;
@@ -19,6 +22,7 @@
 }
 
 @font-face {
+  font-display: optional;
   font-family: 'Alegreya';
   font-weight: 500;
   font-style: italic;
@@ -26,6 +30,7 @@
 }
 
 @font-face {
+  font-display: optional;
   font-family: 'Alegreya';
   font-weight: 600;
   font-style: normal;
@@ -33,6 +38,7 @@
 }
 
 @font-face {
+  font-display: optional;
   font-family: 'Alegreya';
   font-weight: 600;
   font-style: italic;
@@ -40,6 +46,7 @@
 }
 
 @font-face {
+  font-display: optional;
   font-family: 'Alegreya';
   font-weight: 700;
   font-style: normal;
@@ -47,6 +54,7 @@
 }
 
 @font-face {
+  font-display: optional;
   font-family: 'Alegreya';
   font-weight: 700;
   font-style: italic;
@@ -54,6 +62,7 @@
 }
 
 @font-face {
+  font-display: optional;
   font-family: 'Alegreya';
   font-weight: 800;
   font-style: normal;
@@ -61,6 +70,7 @@
 }
 
 @font-face {
+  font-display: optional;
   font-family: 'Alegreya';
   font-weight: 800;
   font-style: italic;
@@ -68,6 +78,7 @@
 }
 
 @font-face {
+  font-display: optional;
   font-family: 'Alegreya';
   font-weight: 900;
   font-style: normal;
@@ -75,6 +86,7 @@
 }
 
 @font-face {
+  font-display: optional;
   font-family: 'Alegreya';
   font-weight: 900;
   font-style: italic;
@@ -83,6 +95,7 @@
 
 /* Rubik Font Family - Sans-serif for UI elements */
 @font-face {
+  font-display: optional;
   font-family: 'Rubik';
   font-weight: 400;
   font-style: normal;
@@ -90,6 +103,7 @@
 }
 
 @font-face {
+  font-display: optional;
   font-family: 'Rubik';
   font-weight: 400;
   font-style: italic;
@@ -97,6 +111,7 @@
 }
 
 @font-face {
+  font-display: optional;
   font-family: 'Rubik';
   font-weight: 500;
   font-style: normal;
@@ -104,6 +119,7 @@
 }
 
 @font-face {
+  font-display: optional;
   font-family: 'Rubik';
   font-weight: 500;
   font-style: italic;
@@ -111,6 +127,7 @@
 }
 
 @font-face {
+  font-display: optional;
   font-family: 'Rubik';
   font-weight: 600;
   font-style: normal;
@@ -118,6 +135,7 @@
 }
 
 @font-face {
+  font-display: optional;
   font-family: 'Rubik';
   font-weight: 600;
   font-style: italic;
@@ -125,6 +143,7 @@
 }
 
 @font-face {
+  font-display: optional;
   font-family: 'Rubik';
   font-weight: 700;
   font-style: normal;
@@ -132,6 +151,7 @@
 }
 
 @font-face {
+  font-display: optional;
   font-family: 'Rubik';
   font-weight: 700;
   font-style: italic;
@@ -140,6 +160,7 @@
 
 /* Atkinson Hyperlegible Next Font Family - Sans-serif for body/reading content (replaces Inter) */
 @font-face {
+  font-display: optional;
   font-family: 'Inter';
   font-weight: 400;
   font-style: normal;
@@ -147,6 +168,7 @@
 }
 
 @font-face {
+  font-display: optional;
   font-family: 'Inter';
   font-weight: 400;
   font-style: italic;
@@ -154,6 +176,7 @@
 }
 
 @font-face {
+  font-display: optional;
   font-family: 'Inter';
   font-weight: 500;
   font-style: normal;
@@ -161,6 +184,7 @@
 }
 
 @font-face {
+  font-display: optional;
   font-family: 'Inter';
   font-weight: 500;
   font-style: italic;
@@ -169,6 +193,7 @@
 
 /* Alegreya Sans Font Family - Sans-serif for UI elements */
 @font-face {
+  font-display: optional;
   font-family: 'Alegreya Sans';
   font-weight: 400;
   font-style: normal;
@@ -176,6 +201,7 @@
 }
 
 @font-face {
+  font-display: optional;
   font-family: 'Alegreya Sans';
   font-weight: 400;
   font-style: italic;
@@ -183,6 +209,7 @@
 }
 
 @font-face {
+  font-display: optional;
   font-family: 'Alegreya Sans';
   font-weight: 700;
   font-style: normal;
@@ -190,6 +217,7 @@
 }
 
 @font-face {
+  font-display: optional;
   font-family: 'Alegreya Sans';
   font-weight: 500;
   font-style: normal;
@@ -197,6 +225,7 @@
 }
 
 @font-face {
+  font-display: optional;
   font-family: 'Alegreya Sans';
   font-weight: 500;
   font-style: italic;
@@ -204,6 +233,7 @@
 }
 
 @font-face {
+  font-display: optional;
   font-family: 'Alegreya Sans';
   font-weight: 700;
   font-style: normal;
@@ -211,6 +241,7 @@
 }
 
 @font-face {
+  font-display: optional;
   font-family: 'Alegreya Sans';
   font-weight: 700;
   font-style: italic;
@@ -219,6 +250,7 @@
 
 /* Alegreya SC Font Family - Small caps for headers and labels */
 @font-face {
+  font-display: optional;
   font-family: 'Alegreya SC';
   font-weight: 400;
   font-style: normal;
@@ -226,6 +258,7 @@
 }
 
 @font-face {
+  font-display: optional;
   font-family: 'Alegreya SC';
   font-weight: 500;
   font-style: normal;
@@ -233,6 +266,7 @@
 }
 
 @font-face {
+  font-display: optional;
   font-family: 'Alegreya SC';
   font-weight: 700;
   font-style: normal;

@@ -378,11 +378,15 @@ class osrsPageHtmlBuilder {
         let chromeClearance = Int(
             (osrsSearchControlGeometry.compactHeight + osrsOverlayChromeMetrics.pairedEdgeGap + 8).rounded()
         )
+        let safeAreaTop = Int(osrsOverlayChromeMetrics.topInset.rounded())
+        let safeAreaBottom = Int(osrsOverlayChromeMetrics.bottomInset.rounded())
         let readerPreferenceStyle = """
         <style id="osrs-article-reader-preferences">
             html:root {
                 --osrs-article-user-text-scale: \(articleTextScaleLiteral);
                 --osrs-article-chrome-clearance: \(chromeClearance)px;
+                --osrs-article-safe-area-top: \(safeAreaTop)px;
+                --osrs-article-safe-area-bottom: \(safeAreaBottom)px;
             }
         </style>
         """
@@ -466,13 +470,22 @@ class osrsPageHtmlBuilder {
         // Create table collapse preference script
         let tableCollapseScript = createTableCollapseScript(collapseTablesEnabled: collapseTablesEnabled)
 
-        // Preload the main web font to improve rendering performance
+        // Preload the heading face used by h1.page-header so first paint
+        // does not wait for a late @font-face swap that restyles the title.
         let fontPreloadLink: String
         if includeAssetLinks {
-            fontPreloadLink = "<link rel=\"preload\" href=\"\(customScheme)://localhost/fonts/runescape_plain.ttf\" as=\"font\" type=\"font/ttf\" crossorigin=\"anonymous\">"
+            fontPreloadLink = """
+            <link rel="preload" href="\(customScheme)://localhost/fonts/alegreya_bold.ttf" as="font" type="font/ttf" crossorigin="anonymous">
+            <link rel="preload" href="\(customScheme)://localhost/fonts/runescape_plain.ttf" as="font" type="font/ttf" crossorigin="anonymous">
+            """
         } else {
             fontPreloadLink = "<!-- Font preload handled by injected CSS -->"
         }
+        let articleFirstPaintStyle = osrsPageHtmlBuilder.articleFirstPaintStyle(
+            chromeClearancePx: chromeClearance,
+            safeAreaTopPx: safeAreaTop,
+            safeAreaBottomPx: safeAreaBottom
+        )
 
         // Build final HTML document
         let finalHtml = """
@@ -481,6 +494,7 @@ class osrsPageHtmlBuilder {
         <head>
             <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
             <title>\(documentTitle)</title>
+            \(articleFirstPaintStyle)
             \(fontPreloadLink)
             \(cssLinks)
             \(readerPreferenceStyle)
@@ -502,6 +516,46 @@ class osrsPageHtmlBuilder {
         print("\(logTag): buildFullHtmlDocument() took \(Int(elapsedTime))ms")
 
         return finalHtml
+    }
+
+    static func articleFirstPaintStyle(
+        chromeClearancePx: Int,
+        safeAreaTopPx: Int = 0,
+        safeAreaBottomPx: Int = 0
+    ) -> String {
+        let chromePadding: String
+        if chromeClearancePx > 0 || safeAreaTopPx > 0 || safeAreaBottomPx > 0 {
+            chromePadding = """
+                    html:root {
+                        --osrs-article-safe-area-top: \(safeAreaTopPx)px;
+                        --osrs-article-safe-area-bottom: \(safeAreaBottomPx)px;
+                        --osrs-article-chrome-clearance: \(chromeClearancePx)px;
+                    }
+                    html {
+                        padding-top: calc(var(--osrs-article-safe-area-top) + var(--osrs-article-chrome-clearance)) !important;
+                        padding-bottom: calc(var(--osrs-article-safe-area-bottom) + var(--osrs-article-chrome-clearance)) !important;
+                    }
+            """
+        } else {
+            chromePadding = ""
+        }
+        return """
+        <style id="osrs-article-first-paint">
+        \(chromePadding)
+                    h1.page-header {
+                        font-family: 'Alegreya', 'Palatino', 'Georgia', serif !important;
+                        font-weight: bold !important;
+                        font-size: 1.8em !important;
+                        line-height: 1.3 !important;
+                        margin-top: 0 !important;
+                        margin-bottom: 0.6em !important;
+                        padding-bottom: 0.2em !important;
+                        min-height: 1.3em;
+                        border-bottom: 1px solid var(--sidebar-color, currentColor);
+                        box-sizing: border-box;
+                    }
+        </style>
+        """
     }
 
     /// Get a proper bundle URL for an asset (CSS/JS) that can be loaded by WKWebView

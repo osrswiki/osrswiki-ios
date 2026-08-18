@@ -339,21 +339,42 @@ struct osrsGlassIconButton: View {
 /// bar. Article floating chrome uses the home tab-bar-to-screen-edge distance
 /// so every surface sits the same distance from the nearest physical edge.
 enum osrsOverlayChromeMetrics {
-    static var topInset: CGFloat {
+    private static let cacheLock = NSLock()
+    private static var cachedTopInset: CGFloat = 59
+    private static var cachedBottomInset: CGFloat = 34
+
+    private static func liveWindowSafeArea() -> UIEdgeInsets? {
+        guard Thread.isMainThread else { return nil }
         let scene = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first
-        return scene?.keyWindow?.safeAreaInsets.top
-            ?? scene?.windows.first?.safeAreaInsets.top
-            ?? 59
+        let window = scene?.keyWindow ?? scene?.windows.first
+        return window?.safeAreaInsets
+    }
+
+    static var topInset: CGFloat {
+        if let insets = liveWindowSafeArea() {
+            cacheLock.lock()
+            cachedTopInset = insets.top
+            cacheLock.unlock()
+            return insets.top
+        }
+        cacheLock.lock()
+        defer { cacheLock.unlock() }
+        return cachedTopInset
     }
 
     /// Paired gap: Dynamic Island → search bar, and search bar → first content.
     static let pairedEdgeGap: CGFloat = 8
 
     static var bottomInset: CGFloat {
-        let scene = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first
-        return scene?.keyWindow?.safeAreaInsets.bottom
-            ?? scene?.windows.first?.safeAreaInsets.bottom
-            ?? 34
+        if let insets = liveWindowSafeArea() {
+            cacheLock.lock()
+            cachedBottomInset = insets.bottom
+            cacheLock.unlock()
+            return insets.bottom
+        }
+        cacheLock.lock()
+        defer { cacheLock.unlock() }
+        return cachedBottomInset
     }
 
     static func tabContentClearance(for dynamicTypeSize: DynamicTypeSize) -> CGFloat {
