@@ -57,6 +57,11 @@ final class ArticleAestheticRenderingTests: XCTestCase {
         XCTAssertFalse(tables.contains("body:not(.js-transforms-complete) .infobox"))
         XCTAssertTrue(tables.contains(".mw-parser-output > table.infobox"))
         XCTAssertTrue(collapsible.contains("authoredMapId"))
+        XCTAssertFalse(collapsible.contains("Tap to collapse"))
+        XCTAssertFalse(collapsible.contains("Tap to expand"))
+        XCTAssertTrue(fixes.contains("mask-image:"))
+        XCTAssertTrue(fixes.contains("text-overflow: ellipsis"))
+        XCTAssertTrue(tables.contains("mask-image:"))
         let afterTransforms = String(collapsible[collapsible.range(of: "js-transforms-complete")!.upperBound...])
         let stylingCompleteRange = try XCTUnwrap(afterTransforms.range(of: "Event: StylingScriptsComplete"))
         let mapMeasureRange = try XCTUnwrap(afterTransforms.range(of: "measureAndPreloadMaps();"))
@@ -984,7 +989,7 @@ final class ArticleAestheticRenderingTests: XCTestCase {
             bonusesWrapped: document.getElementById('bonuses').parentElement.classList.contains('osrs-article-scroll-region'),
             bonusesFloat: getComputedStyle(document.getElementById('bonuses')).float,
             bonusesOverflow: bonusesMaxScroll,
-            bonusesWidth: document.getElementById('bonuses').getBoundingClientRect().width,
+            bonusesWidth: bonusesSurface.getBoundingClientRect().width,
             recipeClass: recipe.classList.contains('osrs-intrinsic-table'),
             recipeWidth: recipe.getBoundingClientRect().width,
             mapClass: mapTable.classList.contains('osrs-map-table'),
@@ -996,7 +1001,7 @@ final class ArticleAestheticRenderingTests: XCTestCase {
         """)
 
         XCTAssertEqual(state["inlineClass"] as? Bool, true)
-        XCTAssertEqual(state["inlineDisplay"] as? String, "inline-block")
+        XCTAssertEqual(state["inlineDisplay"] as? String, "inline")
         XCTAssertLessThanOrEqual(state["inlineWidth"] as? Double ?? 100, 24)
         XCTAssertEqual(state["notePaddingLeft"] as? Double ?? -1, 0, accuracy: 0.5)
         XCTAssertEqual(state["portraitClass"] as? Bool, true)
@@ -1187,7 +1192,7 @@ final class ArticleAestheticRenderingTests: XCTestCase {
         XCTAssertTrue((state["containerWidths"] as? [Double] ?? []).allSatisfy {
             $0 < (state["viewportWidth"] as? Double ?? 0)
         })
-        XCTAssertEqual(state["footerDisplays"] as? [String], Array(repeating: "none", count: 5))
+        XCTAssertEqual(state["footerDisplays"] as? [String], Array(repeating: "block", count: 5))
     }
 
     func testTeleportationOptionsKeepsFourMapsInOneContainedDisclosureAcrossCollapseCycles() async throws {
@@ -1419,8 +1424,11 @@ final class ArticleAestheticRenderingTests: XCTestCase {
         XCTAssertTrue(interceptor.contains("setHorizontalScrollGesture"))
         XCTAssertTrue(interceptor.contains("activeGestureId"))
         XCTAssertTrue(interceptor.contains("notifyGesturePhase('begin'"))
-        XCTAssertTrue(interceptor.contains("resetScrollState('end')"))
+        XCTAssertTrue(interceptor.contains("resetScrollState()"))
+        XCTAssertTrue(interceptor.contains("canConsumeHorizontalDelta"))
+        XCTAssertTrue(interceptor.contains("overflowingHorizontalOwner"))
         XCTAssertTrue(interceptor.contains("'article-navigation'"))
+        XCTAssertTrue(interceptor.contains("article-touch-"))
         XCTAssertTrue(interceptor.contains("isHorizontallyScrollable"))
         XCTAssertFalse(interceptor.contains("createElement('span')"))
         XCTAssertTrue(mapBridge.contains("isLocalOwner: !!isLocalOwner"))
@@ -1447,6 +1455,13 @@ final class ArticleAestheticRenderingTests: XCTestCase {
         XCTAssertFalse(articleViewModel.contains("2px solid var(--coloroutline)"))
         XCTAssertFalse(articleViewModel.contains("applyFinalStylingFixes"))
         XCTAssertTrue(iosAesthetics.contains("border: 1px solid var(--wikitable-border) !important"))
+        XCTAssertTrue(iosAesthetics.contains("display: inline-flex !important"))
+        XCTAssertTrue(iosAesthetics.contains("align-items: center !important"))
+        XCTAssertTrue(iosAesthetics.contains(":is(p, li, dd, figcaption) img.mw-file-element"))
+        XCTAssertTrue(iosAesthetics.contains("vertical-align: -0.2em !important"))
+        XCTAssertTrue(iosAesthetics.contains("overflow: hidden !important"))
+        XCTAssertTrue(iosAesthetics.contains("display: block !important"))
+        XCTAssertFalse(iosAesthetics.contains("vertical-align: text-bottom !important"))
     }
 
     func testInteractivePriceChartAndHiddenStatePrewarmContracts() throws {

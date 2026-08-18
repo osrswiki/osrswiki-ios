@@ -3868,12 +3868,11 @@ ul.tabbernav li a:visited {
 }
 
 .mw-parser-output a.external {
-    /* External link icon and padding removed to fix spacing issues */
-    /* background-image: var(--external-icon); */
-    /* background-position: right center; */
-    /* background-repeat: no-repeat; */
+    background-image: none;
+    background-position: right center;
+    background-repeat: no-repeat;
     color: var(--link-color);
-    /* padding-right: 15px; */
+    padding-right: 0;
 }
 
 .mw-kartographer-interactive .leaflet-popup-content a, .mw-kartographer-interactive .leaflet-popup-content a:active, .mw-parser-output a.external:active {

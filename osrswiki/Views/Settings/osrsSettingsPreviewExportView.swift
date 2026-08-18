@@ -141,7 +141,7 @@ private struct osrsSettingsPreviewTableWebView: UIViewRepresentable {
                     } else {
                         container.classList.remove('collapsed');
                         if (content) { content.style.height = 'auto'; }
-                        if (title) { title.innerHTML = 'Varrock facilities<span style="font-weight: normal;">: Tap to collapse</span>'; }
+                        if (title) { title.textContent = 'Varrock facilities'; }
                     }
                 });
                 document.body.style.visibility = 'visible';
@@ -305,7 +305,7 @@ private enum osrsSettingsPreviewExportContent {
           <h2><span class="mw-headline" id="Facilities">Facilities</span></h2>
           <div class="collapsible-container collapsible-wikitable primary-collapsible">
             <div class="collapsible-header">
-              <div class="title-wrapper">Varrock facilities<span style="font-weight: normal;">: Tap to collapse</span></div>
+              <div class="title-wrapper"><span class="collapsible-label">Varrock facilities</span></div>
               <span class="icon"></span>
             </div>
             <div class="collapsible-content" style="height: auto;">

@@ -204,6 +204,9 @@ final class StaticSettingsPreviewSourceGuardTest: XCTestCase {
         let builder = try source(root, "platforms/ios/osrswiki/Services/osrsPageHtmlBuilder.swift")
 
         XCTAssertTrue(appearance.contains("in: osrsThemeManager.articleTextScaleRange"))
+        XCTAssertTrue(appearance.contains("frame(height: 36"))
+        XCTAssertTrue(appearance.contains("transaction { $0.animation = nil }"))
+        XCTAssertTrue(appearance.contains("animation(nil, value: themeManager.floorNumberingMode)"))
         XCTAssertTrue(article.contains(".onChange(of: themeManager.articleTextScale)"))
         XCTAssertTrue(article.contains("themeManager.swipeRightToGoBackEnabled ?"))
         XCTAssertTrue(article.contains("themeManager.swipeLeftToShowContentsEnabled ?"))

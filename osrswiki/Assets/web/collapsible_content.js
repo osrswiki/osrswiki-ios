@@ -186,11 +186,7 @@
         const label = document.createElement('span');
         label.className = 'collapsible-label';
         label.textContent = captionText;
-        const state = document.createElement('span');
-        state.className = 'collapsible-state';
-        state.textContent = isCollapsed ? 'Tap to expand' : 'Tap to collapse';
         titleWrapper.appendChild(label);
-        titleWrapper.appendChild(state);
 
         container.setAttribute('aria-expanded', String(!isCollapsed));
         const header = container.querySelector(':scope > .collapsible-header');
@@ -842,6 +838,9 @@
         if (typeof initializeInfoboxSwitcher === 'function') initializeInfoboxSwitcher();
         document.querySelectorAll('.collapsible-content').forEach(absorbDisclosureChildren);
         scheduleDisclosureInnerInsets();
+        if (typeof window.OSRSApplyArticlePolish === 'function') {
+            window.OSRSApplyArticlePolish();
+        }
         document.body.classList.add('js-transforms-complete');
 
         const finishedAt = window.performance && performance.now ? performance.now() : Date.now();
@@ -865,7 +864,9 @@
     }
 
     window.OSRSInitializeCollapsibleContent = initialize;
-    if (document.readyState === 'loading') {
+    if (document.body) {
+        initialize();
+    } else if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', initialize, { once: true });
     } else {
         initialize();

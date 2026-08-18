@@ -60,6 +60,8 @@ struct AppearanceSettingsView: View {
                         )
                     }
                     .id("floor_numbering")
+                    .transaction { $0.animation = nil }
+                    .animation(nil, value: themeManager.floorNumberingMode)
                     .listRowBackground(
                         floorNumberingPulse
                             ? Color(osrsTheme.primary).opacity(0.28)
@@ -215,7 +217,8 @@ private struct osrsAppearancePreferenceLabel: View {
                 Text(summary)
                     .font(.caption)
                     .foregroundStyle(Color(osrsTheme.secondaryTextColor))
-                    .fixedSize(horizontal: false, vertical: true)
+                    .lineLimit(2)
+                    .frame(height: 36, alignment: .topLeading)
             }
         }
     }

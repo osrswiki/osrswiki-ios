@@ -92,19 +92,7 @@ class SearchViewModel: ObservableObject {
                     query: trimmedQuery,
                     limit: searchLimit,
                     offset: searchOffset
-                ) { [weak self] partial in
-                    guard let self else { return }
-                    Task { @MainActor in
-                        guard generation == self.searchGeneration else { return }
-                        await self.applySearchResponse(
-                            partial,
-                            query: trimmedQuery,
-                            isNewSearch: isNewSearch,
-                            generation: generation,
-                            completed: false
-                        )
-                    }
-                }
+                )
 
                 guard !Task.isCancelled, generation == searchGeneration else { return }
                 await applySearchResponse(

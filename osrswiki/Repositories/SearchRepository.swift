@@ -57,25 +57,11 @@ class SearchRepository {
                     URLQueryItem(name: "gsrprop", value: "snippet|size|wordcount|timestamp"),
                     URLQueryItem(name: "gsrsort", value: "relevance")
                 ],
-                includeExtracts: false
+                includeExtracts: true
             )
 
             let openSearchPages = await openSearchResult
-            if offset == 0, let onPartialResults, !openSearchPages.isEmpty {
-                onPartialResults(makeSearchResponse(
-                    pages: openSearchPages,
-                    offset: offset,
-                    hasMore: true
-                ))
-            }
             let fulltextFetch = try await fulltextResult
-            if offset == 0, let onPartialResults {
-                onPartialResults(makeSearchResponse(
-                    pages: SearchQueryPolicy.merge(prefix: [], fulltext: fulltextFetch.pages, for: query),
-                    offset: offset,
-                    hasMore: fulltextFetch.hasMore
-                ))
-            }
             let prefixFetch = try await prefixResult
             let rankedPages = SearchQueryPolicy.merge(
                 prefix: prefixFetch.pages,
@@ -83,7 +69,8 @@ class SearchRepository {
                 for: query
             )
             return makeSearchResponse(
-                pages: rankedPages,
+                pages: fillOpenSearchPreviews(pages: rankedPages, openSearchPages: openSearchPages)
+                    .map { $0.withPreviewFallback() },
                 offset: offset,
                 hasMore: fulltextFetch.hasMore
             )
@@ -119,11 +106,12 @@ class SearchRepository {
         hasMore: Bool
     ) -> SearchResponse {
         let searchResults = pages.map { apiResult in
-            SearchResult(
+            let preview = firstNonBlank(apiResult.snippet, apiResult.extract)
+            return SearchResult(
                 id: apiResult.pageid > 0 ? String(apiResult.pageid) : "title:\(apiResult.title)",
                 title: apiResult.title,
-                description: apiResult.snippet?.htmlStripped(),
-                rawSnippet: apiResult.snippet,
+                description: preview?.htmlStripped(),
+                rawSnippet: preview,
                 url: URL(string: "https://oldschool.runescape.wiki/w/\(apiResult.title.replacingOccurrences(of: " ", with: "_"))")!,
                 thumbnailUrl: apiResult.thumbnail.flatMap { URL(string: $0.source) },
                 ns: apiResult.ns,
@@ -137,6 +125,22 @@ class SearchRepository {
         }
         let totalHits = offset + searchResults.count + (hasMore ? 1 : 0)
         return SearchResponse(results: searchResults, hasMore: hasMore, totalCount: totalHits)
+    }
+
+    private func fillOpenSearchPreviews(
+        pages: [WikiGeneratedSearchPage],
+        openSearchPages: [WikiGeneratedSearchPage]
+    ) -> [WikiGeneratedSearchPage] {
+        guard !openSearchPages.isEmpty else { return pages }
+        return pages.map { page in
+            if firstNonBlank(page.snippet, page.extract) != nil { return page }
+            guard let open = openSearchPages.first(where: {
+                $0.title.compare(page.title, options: [.caseInsensitive, .diacriticInsensitive]) == .orderedSame
+            }) else {
+                return page
+            }
+            return page.enriched(with: open)
+        }
     }
 
     private func fetchOpenSearchPagesIfNeeded(query: String, limit: Int, offset: Int) async -> [WikiGeneratedSearchPage] {

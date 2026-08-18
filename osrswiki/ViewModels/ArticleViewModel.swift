@@ -2207,7 +2207,7 @@ class ArticleViewModel: NSObject, ObservableObject {
             console.log('📱 iOS: Injected CSS styles via WKUserScript');
             """
 
-            let cssUserScript = WKUserScript(source: cssInjectionScript, injectionTime: .atDocumentEnd, forMainFrameOnly: true)
+            let cssUserScript = WKUserScript(source: cssInjectionScript, injectionTime: .atDocumentStart, forMainFrameOnly: true)
             webView.configuration.userContentController.addUserScript(cssUserScript)
         }
 

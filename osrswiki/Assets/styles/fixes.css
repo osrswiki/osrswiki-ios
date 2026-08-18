@@ -255,24 +255,107 @@ span.mw-default-size[typeof^="mw:File"] img.mw-file-element {
     width: auto !important;
 }
 
-/* Mobile reading geometry shared with Android. Small semantic images stay in the prose flow;
-   portrait/vignette art is capped by both line measure and viewport height. */
-.osrs-inline-icon-wrapper,
-.osrs-inline-icon {
+/* First-paint prose icons: keep the MediaWiki file span as a true inline box
+   so WebKit does not add an inline-flex / inline-block descender strut.
+   Size the glyph to 1em and optically center it on the x-height. Table and
+   infobox cells keep the denser rules further down. */
+p span.mw-default-size,
+p .osrs-inline-icon-wrapper,
+li span.mw-default-size,
+li .osrs-inline-icon-wrapper,
+dd span.mw-default-size,
+dd .osrs-inline-icon-wrapper,
+figcaption span.mw-default-size,
+figcaption .osrs-inline-icon-wrapper,
+p span.mw-default-size > a,
+p .osrs-inline-icon-wrapper > a,
+li span.mw-default-size > a,
+li .osrs-inline-icon-wrapper > a,
+dd span.mw-default-size > a,
+dd .osrs-inline-icon-wrapper > a,
+figcaption span.mw-default-size > a,
+figcaption .osrs-inline-icon-wrapper > a {
+    display: inline !important;
+    height: auto !important;
+    line-height: inherit !important;
+    margin: 0 !important;
+    max-height: none !important;
+    min-height: 0 !important;
+    padding: 0 !important;
+    vertical-align: baseline !important;
+}
+
+td p span.mw-default-size,
+td li span.mw-default-size,
+th p span.mw-default-size,
+th li span.mw-default-size,
+td p .osrs-inline-icon-wrapper,
+td li .osrs-inline-icon-wrapper,
+th p .osrs-inline-icon-wrapper,
+th li .osrs-inline-icon-wrapper {
     display: inline-block !important;
     height: auto !important;
+    max-height: none !important;
     line-height: 0 !important;
+    vertical-align: middle !important;
+}
+
+p img.osrs-inline-icon,
+p img.mw-file-element,
+li img.osrs-inline-icon,
+li img.mw-file-element,
+dd img.osrs-inline-icon,
+dd img.mw-file-element,
+figcaption img.osrs-inline-icon,
+figcaption img.mw-file-element {
+    display: inline !important;
+    height: 1em !important;
+    max-height: 1em !important;
+    max-width: 1.25em !important;
+    min-height: 0 !important;
+    margin: 0 0.12em 0 0 !important;
+    object-fit: contain !important;
+    padding: 0 !important;
+    border: 0 !important;
+    vertical-align: -0.2em !important;
+    width: auto !important;
+}
+
+td p img.mw-file-element,
+td li img.mw-file-element,
+th p img.mw-file-element,
+th li img.mw-file-element,
+td p img.osrs-inline-icon,
+td li img.osrs-inline-icon,
+th p img.osrs-inline-icon,
+th li img.osrs-inline-icon {
+    display: inline-block !important;
+    height: auto !important;
+    max-height: 2em !important;
+    max-width: 2em !important;
+    vertical-align: middle !important;
+}
+
+/* Mobile reading geometry shared with Android. Small semantic images stay in the prose flow
+   and occupy a line box similar to the surrounding text so icon rows do not grow extra
+   leading below the glyph. */
+.osrs-inline-icon-wrapper,
+.osrs-inline-icon {
+    display: inline !important;
+    height: auto !important;
+    line-height: inherit !important;
     margin: 0 0.08em 0 0 !important;
     padding: 0 !important;
-    vertical-align: top !important;
+    vertical-align: baseline !important;
     width: auto !important;
 }
 
 img.osrs-inline-icon {
-    max-height: 2em !important;
-    max-width: 2em !important;
+    display: inline !important;
+    max-height: 1.15em !important;
+    max-width: 1.15em !important;
     object-fit: contain !important;
-    vertical-align: middle !important;
+    vertical-align: -0.2em !important;
 }
 
 .osrs-inline-lore-note {
@@ -290,6 +373,222 @@ img.osrs-inline-icon {
     line-height: 1 !important;
     margin: 0 !important;
     padding: 0 !important;
+}
+
+/* Locally rendered article controls. Keep this in shared CSS so iOS/Android
+   copies cannot drift apart when assets are synced from this file. */
+.osrs-calculator-layout {
+    align-items: start;
+    display: grid;
+    gap: 0.75em;
+    grid-template-columns: minmax(0, 1fr);
+    margin: 0.75em 0 1em;
+}
+
+.osrs-calculator-templates {
+    float: none !important;
+    margin: 0 !important;
+    max-width: 100%;
+    width: 100% !important;
+}
+
+@media (min-width: 560px) {
+    .osrs-calculator-layout {
+        grid-template-columns: minmax(8rem, 14rem) minmax(0, 1fr);
+    }
+
+    .osrs-calculator-templates {
+        width: auto !important;
+    }
+}
+
+.osrs-calculator-panel,
+.osrs-mmg-rate-control,
+.osrs-calculator-result {
+    background: var(--wikitable-bg);
+    border: 1px solid var(--wikitable-border);
+    color: var(--text-color);
+}
+
+.osrs-calculator-panel {
+    margin: 0;
+    padding: 0.75em;
+}
+
+.osrs-calculator-panel h2 {
+    border: 0;
+    font-family: sans-serif;
+    font-size: 1.1em;
+    margin: 0 0 0.75em;
+    padding: 0;
+}
+
+.osrs-calculator-row,
+.osrs-mmg-rate-control {
+    align-items: center;
+    display: grid;
+    gap: 0.5em;
+    grid-template-columns: minmax(7em, 1fr) auto;
+    margin: 0.45em 0;
+}
+
+.osrs-calculator-row input,
+.osrs-mmg-rate-control input {
+    background: var(--ooui-input);
+    border: 1px solid var(--ooui-input-border);
+    border-radius: 4px;
+    box-sizing: border-box;
+    color: var(--text-color);
+    font: inherit;
+    min-height: 40px;
+    min-width: 0;
+    padding: 0.25em 0.5em;
+}
+
+.osrs-stepper {
+    align-items: stretch;
+    display: grid;
+    grid-template-columns: 40px minmax(4em, 1fr) 40px;
+}
+
+.osrs-stepper button,
+.osrs-calculator-lookup,
+.osrs-mmg-rate-control button {
+    background: var(--ooui-normal);
+    border: 1px solid var(--ooui-normal-border);
+    border-radius: 4px;
+    box-sizing: border-box;
+    color: var(--ooui-text);
+    font: inherit;
+    font-size: 1.125rem;
+    font-weight: 700;
+    min-height: 40px;
+    min-width: 40px;
+    padding: 0.25em 0.5em;
+}
+
+.osrs-stepper button:active,
+.osrs-calculator-lookup:active,
+.osrs-mmg-rate-control button:active {
+    background: var(--ooui-normal--hover, var(--ooui-normal));
+}
+
+.osrs-calculator-result {
+    margin: 0.75em 0;
+    padding: 0.6em 0.75em;
+}
+
+.osrs-mmg-rate-control {
+    gap: 0.4em;
+    grid-template-columns: 40px minmax(4.25em, 1fr) 40px 40px 40px;
+    margin: 0.75em 0;
+    padding: 0.5em;
+}
+
+.osrs-mmg-rate-control label {
+    align-items: center;
+    display: contents;
+}
+
+.osrs-mmg-label-text {
+    font-weight: 600;
+    grid-column: 1 / -1;
+    grid-row: 1;
+    min-width: 0;
+}
+
+.osrs-mmg-rate-control input {
+    grid-column: 2;
+    grid-row: 2;
+    width: 100%;
+}
+
+.osrs-mmg-rate-control button {
+    min-width: 40px;
+}
+
+.osrs-icon-button {
+    align-items: center;
+    display: inline-flex;
+    justify-content: center;
+}
+
+.osrs-mmg-info {
+    border-radius: 50% !important;
+    font-family: Georgia, serif !important;
+    font-style: italic;
+    grid-column: 1;
+    grid-row: 2;
+}
+
+.osrs-mmg-rate-control [data-osrs-mmg-action="decrement"] {
+    grid-column: 3;
+    grid-row: 2;
+}
+
+.osrs-mmg-rate-control [data-osrs-mmg-action="increment"] {
+    grid-column: 4;
+    grid-row: 2;
+}
+
+.osrs-mmg-rate-control [data-osrs-mmg-action="reset"] {
+    grid-column: 5;
+    grid-row: 2;
+}
+
+.osrs-mmg-reset svg {
+    display: block;
+    fill: none;
+    height: 20px;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 2;
+    width: 20px;
+}
+
+@media (max-width: 420px) {
+    .osrs-calculator-row {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (min-width: 560px) {
+    .osrs-mmg-rate-control {
+        grid-template-columns: 40px max-content minmax(4.25em, 6em) 40px 40px 40px;
+    }
+
+    .osrs-mmg-label-text {
+        align-self: center;
+        grid-column: 2;
+        grid-row: 1;
+        white-space: nowrap;
+    }
+
+    .osrs-mmg-rate-control input {
+        grid-column: 3;
+        grid-row: 1;
+    }
+
+    .osrs-mmg-info {
+        grid-column: 1;
+        grid-row: 1;
+    }
+
+    .osrs-mmg-rate-control [data-osrs-mmg-action="decrement"] {
+        grid-column: 4;
+        grid-row: 1;
+    }
+
+    .osrs-mmg-rate-control [data-osrs-mmg-action="increment"] {
+        grid-column: 5;
+        grid-row: 1;
+    }
+
+    .osrs-mmg-rate-control [data-osrs-mmg-action="reset"] {
+        grid-column: 6;
+        grid-row: 1;
+    }
 }
 
 .osrs-balanced-vignette {
@@ -390,13 +689,19 @@ img.osrs-inline-icon {
 }
 
 .osrs-local-scroll-surface > table,
+.osrs-local-scroll-surface > table.infobox-bonuses,
+.osrs-local-scroll-surface > table.infobox-bonuses:not(.main-infobox),
 .osrs-local-scroll-surface > .osrs-disclosure-body > table,
+.osrs-local-scroll-surface > .osrs-disclosure-body > table.infobox-bonuses,
 .collapsible-content.osrs-local-scroll-surface > table,
+.collapsible-content.osrs-local-scroll-surface > table.infobox-bonuses,
+.collapsible-content.osrs-local-scroll-surface > table.infobox-bonuses:not(.main-infobox),
 .collapsible-content.osrs-local-scroll-surface > .osrs-disclosure-body > table {
     clear: none !important;
     float: none !important;
     margin-inline: 0 !important;
     max-width: none !important;
+    table-layout: auto !important;
     width: max-content !important;
 }
 
@@ -606,12 +911,12 @@ body.osrs-accessibility-reflow .messagebox {
 
 .collapsible-header .title-wrapper,
 .collapsible-close-button .title-wrapper {
-    align-items: baseline;
+    align-items: center;
     column-gap: var(--osrs-disclosure-label-gap);
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     min-width: 0;
-    row-gap: 0.1em;
+    overflow: hidden;
 }
 
 .collapsible-header .collapsible-label,
@@ -619,11 +924,34 @@ body.osrs-accessibility-reflow .messagebox {
     margin: 0 !important;
 }
 
+.collapsible-label {
+    display: block;
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.collapsible-header {
+    color: var(--wikitable-color, var(--text-color));
+}
+
 .collapsible-header .icon,
 .collapsible-close-button .icon {
+    background-color: var(--wikitable-color, var(--text-color)) !important;
+    background-image: none !important;
     flex: 0 0 18px;
     height: 18px;
     margin-inline-start: var(--osrs-disclosure-label-gap);
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20'%3E%3Cpath d='M17.5 4.75l-7.5 7.5-7.5-7.5L1 6.25l9 9 9-9z' fill='%23000'/%3E%3C/svg%3E");
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20'%3E%3Cpath d='M17.5 4.75l-7.5 7.5-7.5-7.5L1 6.25l9 9 9-9z' fill='%23000'/%3E%3C/svg%3E");
+    -webkit-mask-position: center;
+    mask-position: center;
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    -webkit-mask-size: 18px 18px;
+    mask-size: 18px 18px;
     width: 18px;
 }
 
@@ -679,7 +1007,7 @@ table.infobox :is(th, td).infobox-padding:empty {
    constants. The primary article infobox is excluded and retains its viewport-fit contract. */
 table.infobox-bonuses:not(.main-infobox) {
     max-width: 100% !important;
-    min-width: 0 !important;
+    min-width: 0;
     table-layout: fixed !important;
     width: 100% !important;
 }
@@ -1014,7 +1342,7 @@ table.osrs-map-table > :is(thead, tbody, tfoot) > tr > :is(th, td):has(.mw-karto
 
 .osrs-local-scroll-surface.osrs-scroll-affordance,
 .collapsible-container:not(.collapsed) > .collapsible-content.osrs-scroll-affordance {
-    overflow-x: scroll !important;
+    overflow-x: auto !important;
 }
 
 .osrs-local-scroll-surface::-webkit-scrollbar,
@@ -1233,5 +1561,70 @@ ul.gallery > li,
 li.gallerybox {
     list-style: none !important;
     list-style-image: none !important;
+}
+
+/* wiki-integration.css reserves 15px for an external-link icon that this app
+   never paints. ResourceLoader later zeros that padding, which is the
+   "official news post" layout shift on first paint. Lock it in the first
+   stylesheet with enough specificity that later RL sheets cannot reopen the gap. */
+html body .mw-parser-output a.external,
+html body .mw-parser-output a.external.text,
+html body .mw-body-content a.external,
+html body .mw-body-content a.external.text,
+html body span.plainlinks a.external,
+html body span.plainlinks a.external.text,
+html body a.external,
+html body a.external.text {
+    background-image: none !important;
+    margin-right: 0 !important;
+    padding-inline-end: 0 !important;
+    padding-right: 0 !important;
+}
+
+/* In-article Contents stays visible even without a .mw-body-content wrapper.
+   The native sidebar TOC is additional navigation, not a replacement. */
+#toc,
+.toc,
+.mw-parser-output #toc,
+.mw-parser-output .toc {
+    background: var(--body-light, var(--wikitable-bg, transparent));
+    border: 1px solid var(--body-border, var(--wikitable-border, currentColor));
+    display: table !important;
+    margin: 1em 0;
+    padding: 1em;
+}
+
+#toc .toctitle,
+.toc .toctitle {
+    display: flex;
+    align-items: center;
+    gap: 0.5em;
+}
+
+#toc h2,
+.toc h2,
+#mw-toc-heading {
+    border: none;
+    color: var(--text-color, inherit);
+    font-size: 1.2em;
+    margin: 0 0 0.5em;
+}
+
+#toc ul,
+.toc ul {
+    display: block !important;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+#toc li,
+.toc li {
+    margin: 0.2em 0;
+}
+
+#toc a,
+.toc a {
+    color: var(--link-color, inherit);
 }
 

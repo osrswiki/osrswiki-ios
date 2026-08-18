@@ -40,17 +40,9 @@
       image.classList.add('osrs-inline-icon');
       image.removeAttribute('width');
       image.removeAttribute('height');
-      image.style.setProperty('vertical-align', 'middle', 'important');
-      image.style.setProperty('width', 'auto', 'important');
-      image.style.setProperty('height', 'auto', 'important');
       let wrapper = image.parentElement;
       while (wrapper && wrapper !== phrasing && /^(A|SPAN)$/i.test(wrapper.tagName)) {
         wrapper.classList.add('osrs-inline-icon-wrapper');
-        wrapper.style.setProperty('width', 'auto', 'important');
-        wrapper.style.setProperty('height', 'auto', 'important');
-        wrapper.style.setProperty('min-width', '0', 'important');
-        wrapper.style.setProperty('vertical-align', 'middle', 'important');
-        wrapper.style.setProperty('line-height', '0', 'important');
         wrapper = wrapper.parentElement;
       }
       diagnostics.inlineIcons += 1;
@@ -210,14 +202,56 @@
     return !!(surface && surface.clientWidth > 0 && surface.scrollWidth > surface.clientWidth + 2);
   }
 
+  // Tables with width:100% / table-layout:fixed report scrollWidth == the parent,
+  // so they never get a local viewport. Measure the intrinsic max-content width
+  // without leaving those squeeze rules in place.
+  function restoreInlineStyle(style, name, previousValue, previousPriority) {
+    if (previousValue) style.setProperty(name, previousValue, previousPriority || '');
+    else style.removeProperty(name);
+  }
+
+  function tableIntrinsicScrollWidth(table) {
+    if (!table) return 0;
+    const style = table.style;
+    const previous = {
+      width: style.getPropertyValue('width'),
+      widthPriority: style.getPropertyPriority('width'),
+      maxWidth: style.getPropertyValue('max-width'),
+      maxWidthPriority: style.getPropertyPriority('max-width'),
+      tableLayout: style.getPropertyValue('table-layout'),
+      tableLayoutPriority: style.getPropertyPriority('table-layout')
+    };
+    // Authored min-width (Combat stats 720px fixtures, wiki inline mins) must stay.
+    // Stylesheet width:100% !important beats a non-important inline max-content,
+    // so measurement has to use the important flag too.
+    style.setProperty('width', 'max-content', 'important');
+    style.setProperty('max-width', 'none', 'important');
+    style.setProperty('table-layout', 'auto', 'important');
+    const width = Math.max(table.scrollWidth, table.offsetWidth);
+    restoreInlineStyle(style, 'width', previous.width, previous.widthPriority);
+    restoreInlineStyle(style, 'max-width', previous.maxWidth, previous.maxWidthPriority);
+    restoreInlineStyle(style, 'table-layout', previous.tableLayout, previous.tableLayoutPriority);
+    return width;
+  }
+
+  function overflowingLocalSurface(root) {
+    if (!root) return null;
+    if (hasRealHorizontalOverflow(root)) return root;
+    if (!root.querySelectorAll) return null;
+    const nested = root.querySelectorAll('.osrs-local-scroll-surface, .osrs-disclosure-body');
+    for (let i = 0; i < nested.length; i++) {
+      if (hasRealHorizontalOverflow(nested[i])) return nested[i];
+    }
+    return null;
+  }
+
   function localScrollOwnerForTarget(target) {
     if (!target || !target.closest) return null;
     if (target.closest('.collapsible-primary-infobox, .collapsible-map-table, .osrs-recipe-unit')) return null;
-    const directSurface = target.closest('.osrs-local-scroll-surface');
-    if (hasRealHorizontalOverflow(directSurface)) return directSurface;
+    const directSurface = overflowingLocalSurface(target.closest('.osrs-local-scroll-surface'));
+    if (directSurface) return directSurface;
     const disclosure = target.closest('.collapsible-container');
-    const disclosureSurface = disclosure && disclosure.querySelector('.osrs-local-scroll-surface');
-    return hasRealHorizontalOverflow(disclosureSurface) ? disclosureSurface : null;
+    return overflowingLocalSurface(disclosure);
   }
 
   function markScrollableTables(root) {
@@ -227,9 +261,11 @@
       const existingLocalSurface = table.closest('.osrs-local-scroll-surface');
       const collapsibleContent = table.closest('.collapsible-content');
       if (collapsibleContent) {
-        const availableWidth = collapsibleContent.clientWidth || document.documentElement.clientWidth;
+        const viewportWidth = document.documentElement.clientWidth || window.innerWidth || 0;
+        const parentWidth = collapsibleContent.clientWidth || viewportWidth;
+        const availableWidth = Math.min(parentWidth || viewportWidth, viewportWidth);
         const isIrreduciblyWide = table.matches('.infobox-bonuses') ||
-          table.scrollWidth > Math.ceil(availableWidth + 2);
+          tableIntrinsicScrollWidth(table) > Math.ceil(availableWidth + 2);
         if (isIrreduciblyWide) {
           // A generic interceptor may have wrapped this table before the disclosure transformer
           // ran. In that ordering the old scroll surface sits *outside* collapsibleContent, while
@@ -249,8 +285,12 @@
             // content that directly owns the intrinsic table geometry.
             demoteRedundantOuterSurface(outerExistingSurface);
           }
+          // The wide table lives in .osrs-disclosure-body, which is the physical
+          // overflow:auto scroller. Marking only .collapsible-content leaves a
+          // non-overflowing ancestor; header/padding pans then become chrome swipes.
+          const disclosureBody = collapsibleContent.querySelector(':scope > .osrs-disclosure-body');
           makeLocalScrollSurface(
-            nestedExistingSurface || collapsibleContent,
+            nestedExistingSurface || disclosureBody || collapsibleContent,
             localScrollSurfaceLabel(table)
           );
         }
@@ -263,7 +303,8 @@
       const parent = table.parentElement;
       if (!parent) return;
       const isWideInfobox = table.matches('.infobox-bonuses');
-      if (!isWideInfobox && table.scrollWidth <= Math.ceil(document.documentElement.clientWidth - 24)) return;
+      if (!isWideInfobox &&
+          tableIntrinsicScrollWidth(table) <= Math.ceil(document.documentElement.clientWidth - 24)) return;
 
       // Ordinary compact infoboxes keep their native layout. Wide switch/bonuses infoboxes
       // are the exception: their many columns and portrait states otherwise push the article
@@ -308,11 +349,16 @@
   function schedule() {
     if (scheduled) return;
     scheduled = true;
-    requestAnimationFrame(applyPolish);
+    const run = function() {
+      applyPolish();
+    };
+    if (typeof queueMicrotask === 'function') queueMicrotask(run);
+    else Promise.resolve().then(run);
   }
 
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', schedule, { once: true });
-  else schedule();
+  if (document.body) applyPolish();
+  else if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', applyPolish, { once: true });
+  else applyPolish();
   new MutationObserver(schedule).observe(document.documentElement, { childList: true, subtree: true });
 
   document.addEventListener('click', function (event) {

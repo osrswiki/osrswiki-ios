@@ -1680,6 +1680,9 @@ struct ArticleWebView: UIViewRepresentable {
                 return true
             }
             let velocity = pan.velocity(in: view)
+            if osrsGestureState.shared.shouldBlockGestures {
+                return false
+            }
             if velocity == .zero {
                 return true
             }
@@ -1723,12 +1726,16 @@ struct ArticleWebView: UIViewRepresentable {
                 }
             case .changed:
                 guard let webView else { return }
-                // A late DOM owner (page JS becoming ready, infobox/map attach)
-                // must not abort an already-locked back or TOC swipe. Android
-                // keeps in-flight chrome swipes alive during load for the same reason.
-                if osrsGestureState.shared.shouldBlockGestures && !interactiveSwipe.isTracking {
-                    cancelInteractiveSwipe(restoreScroll: true)
-                    return
+                // A late map overlay attaching during an already-committed chrome swipe
+                // must not abort it. A local table/chart that claims before chrome is
+                // locked still wins so the table can scroll.
+                if osrsGestureState.shared.shouldBlockGestures {
+                    let chromeLocked = interactiveSwipe.isTracking &&
+                        max(interactiveSwipe.contentsProgress, interactiveSwipe.backProgress) > 0.25
+                    if !chromeLocked {
+                        cancelInteractiveSwipe(restoreScroll: true)
+                        return
+                    }
                 }
                 interactiveSwipe.update(
                     translation: recognizer.translation(in: view.window ?? view),

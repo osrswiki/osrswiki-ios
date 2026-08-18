@@ -46,8 +46,10 @@ final class IOS08SearchHomeDiagnosticsTests: XCTestCase {
         XCTAssertTrue(
             searchBody.contains("fetchOpenSearchPagesIfNeeded") &&
             searchBody.contains("includeExtracts: true") &&
-            searchBody.contains("includeExtracts: false"),
-            "Paint website OpenSearch first; TextExtracts belongs only on the small prefix request."
+            searchBody.contains("withPreviewFallback") &&
+            searchBody.contains("fillOpenSearchPreviews") &&
+            !searchBody.contains("onPartialResults("),
+            "Publish one merged search page with extract fallbacks instead of painting title-only rows first."
         )
         XCTAssertTrue(
             source.contains("NetworkManager.shared.performDataRequest"),

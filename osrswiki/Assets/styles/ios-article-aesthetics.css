@@ -26,9 +26,9 @@ html {
 .league-badge .mw-default-size,
 .league-region .mw-default-size,
 .mmg-itemline .mw-default-size,
-span.mw-default-size[typeof^="mw:File"],
-span.mw-default-size[typeof^="mw:File"] > a,
-span.mw-default-size[typeof^="mw:File"] img.mw-file-element {
+:is(td, th) span.mw-default-size[typeof^="mw:File"],
+:is(td, th) span.mw-default-size[typeof^="mw:File"] > a,
+:is(td, th) span.mw-default-size[typeof^="mw:File"] img.mw-file-element {
     display: inline-block !important;
     height: auto !important;
     line-height: 0 !important;
@@ -46,7 +46,7 @@ span.mw-default-size[typeof^="mw:File"] img.mw-file-element {
 .league-badge img.mw-file-element,
 .league-region img.mw-file-element,
 .mmg-itemline img.mw-file-element,
-span.mw-default-size[typeof^="mw:File"] img.mw-file-element {
+:is(td, th) span.mw-default-size[typeof^="mw:File"] img.mw-file-element {
     display: inline-block !important;
     height: auto !important;
     margin: 0 0.12em 0 0 !important;
@@ -318,4 +318,64 @@ table.osrs-map-table > :is(thead, tbody, tfoot) > tr > :is(th, td):has(.mw-karto
     width: 99% !important;
     min-width: 0 !important;
     white-space: normal !important;
+}
+
+/* WebKit adds a descender gap under replaced images when they stay `inline`
+   or `inline-flex`. Clip each prose file span to a 1em inline-block so the
+   glyph sits on the x-height without growing the line below the text. */
+.mw-parser-output :is(p, li, dd, figcaption) :is(.osrs-inline-icon-wrapper, span.mw-default-size),
+.mw-body-content :is(p, li, dd, figcaption) :is(.osrs-inline-icon-wrapper, span.mw-default-size),
+:is(p, li, dd, figcaption) :is(.osrs-inline-icon-wrapper, span.mw-default-size),
+.mw-parser-output :is(p, li, dd, figcaption) :is(.osrs-inline-icon-wrapper, span.mw-default-size) > a,
+.mw-body-content :is(p, li, dd, figcaption) :is(.osrs-inline-icon-wrapper, span.mw-default-size) > a,
+:is(p, li, dd, figcaption) :is(.osrs-inline-icon-wrapper, span.mw-default-size) > a {
+    display: inline-block !important;
+    align-items: unset !important;
+    font-size: inherit !important;
+    height: 1em !important;
+    line-height: 1 !important;
+    max-height: 1em !important;
+    min-height: 0 !important;
+    margin: 0 0.08em 0 0 !important;
+    overflow: hidden !important;
+    padding: 0 !important;
+    vertical-align: -0.2em !important;
+}
+
+:is(p, li, dd, figcaption) img.osrs-inline-icon,
+:is(p, li, dd, figcaption) span.mw-default-size img.mw-file-element,
+:is(p, li, dd, figcaption) img.mw-file-element {
+    display: block !important;
+    height: 1em !important;
+    max-height: 1em !important;
+    max-width: 1.25em !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    object-fit: contain !important;
+    padding: 0 !important;
+    border: 0 !important;
+    vertical-align: top !important;
+    width: auto !important;
+}
+
+td :is(p, li, dd, figcaption) :is(.osrs-inline-icon-wrapper, span.mw-default-size),
+th :is(p, li, dd, figcaption) :is(.osrs-inline-icon-wrapper, span.mw-default-size),
+td :is(p, li, dd, figcaption) :is(.osrs-inline-icon-wrapper, span.mw-default-size) > a,
+th :is(p, li, dd, figcaption) :is(.osrs-inline-icon-wrapper, span.mw-default-size) > a {
+    display: inline-block !important;
+    height: auto !important;
+    max-height: none !important;
+    line-height: 0 !important;
+    vertical-align: middle !important;
+}
+
+td :is(p, li, dd, figcaption) img.mw-file-element,
+th :is(p, li, dd, figcaption) img.mw-file-element,
+td :is(p, li, dd, figcaption) img.osrs-inline-icon,
+th :is(p, li, dd, figcaption) img.osrs-inline-icon {
+    display: inline-block !important;
+    height: auto !important;
+    max-height: 2em !important;
+    max-width: 2em !important;
+    vertical-align: middle !important;
 }

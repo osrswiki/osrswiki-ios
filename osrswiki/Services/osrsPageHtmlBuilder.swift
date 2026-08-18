@@ -32,19 +32,22 @@ class osrsPageHtmlBuilder {
         "startup.js"
     ]
 
+    private let articleTransformJsAssetPaths = [
+        "web/infobox_switcher_bootstrap.js",
+        "web/switch_infobox.js",
+        "web/collapsible_content.js",
+        "web/mobile_article_polish.js",
+        "web/horizontal_scroll_interceptor.js"
+    ]
+
     // Base JavaScript assets
     private let jsAssetPaths = [
         "web/map_bridge.js",  // CRITICAL: Load bridge first before other scripts need it
         "js/tablesort.min.js",
         "js/tablesort_init.js",
         "web/article_tools.js",
-        "web/collapsible_content.js",
-        "web/infobox_switcher_bootstrap.js",
-        "web/switch_infobox.js",
-        "web/horizontal_scroll_interceptor.js",
         "web/tabber_init.js",
         "web/responsive_videos.js",
-        "web/mobile_article_polish.js",
         "web/clipboard_bridge.js",
         "web/table_column_normalize.js"
     ]
@@ -362,7 +365,8 @@ class osrsPageHtmlBuilder {
         // Clean any existing page-header titles from bodyContent to prevent duplication
         let cleanedBodyContent = removeDuplicatePageHeaders(bodyContent)
         let normalizedBodyContent = normalizeInternalArticleLinks(in: cleanedBodyContent, customScheme: customScheme)
-        let finalBodyContent = titleHeaderHtml + normalizedBodyContent
+        let articleBodyContent = wrapArticleBodyContent(normalizedBodyContent)
+        let finalBodyContent = titleHeaderHtml + articleBodyContent
 
         let themeClass = (theme is osrsDarkTheme) ? "theme-osrs-dark" : ""
         let clampedArticleTextScale = min(max(articleTextScale, 0.85), 1.40)
@@ -447,6 +451,15 @@ class osrsPageHtmlBuilder {
             jsScripts = "<!-- JS assets injected via WKUserScript -->"
         }
 
+        let transformScripts: String
+        if includeAssetLinks {
+            transformScripts = articleTransformJsAssetPaths.map { assetPath in
+                "<script src=\"\(customScheme)://localhost/\(assetPath)\"></script>"
+            }.joined(separator: "\n")
+        } else {
+            transformScripts = "<!-- Transform scripts injected via WKUserScript -->"
+        }
+
         // Generate smart MediaWiki variables
         let smartMediawikiVariables = generateMediaWikiVariables(title: cleanedTitle, bodyContent: cleanedBodyContent)
 
@@ -478,6 +491,7 @@ class osrsPageHtmlBuilder {
         <body class="\(themeClass) \(floorConvention.bodyClass)">
             \(finalBodyContent)
             \(createInternalArticleLinkNormalizationScript(customScheme: customScheme))
+            \(transformScripts)
             \(mediawikiScripts)
             \(jsScripts)
         </body>
@@ -536,6 +550,13 @@ class osrsPageHtmlBuilder {
             print("\(logTag): Error removing duplicate page headers: \(error)")
             return htmlContent
         }
+    }
+
+    private func wrapArticleBodyContent(_ htmlContent: String) -> String {
+        if htmlContent.contains("mw-body-content") {
+            return htmlContent
+        }
+        return "<div class=\"mw-body-content\">\(htmlContent)</div>"
     }
 
     private func normalizeInternalArticleLinks(in htmlContent: String, customScheme: String) -> String {

@@ -56,9 +56,11 @@ enum osrsHomeFeedArticleLinkExtractor {
 }
 
 /// Avoids attributed hyperlinks inside feed rows. On iOS 26 those links can form a
-/// cyclic accessibility layout graph when a horizontal card is snapshotted. The
-/// visible prose stays plain, while every authored link remains a native button.
+/// cyclic accessibility layout graph when a horizontal card is snapshotted. Link
+/// ranges still use the wiki link color and underline so they read as links.
 private struct osrsHomeFeedLinkedText: View {
+    @Environment(\.osrsTheme) private var osrsTheme
+
     let html: String
     let prefix: String
     let onLinkTap: (URL) -> Void
@@ -77,12 +79,23 @@ private struct osrsHomeFeedLinkedText: View {
         prefix + osrsStringUtils.plainText(fromHTML: html)
     }
 
+    private var visuallyLinkedText: AttributedString {
+        var attributed = AttributedString(text)
+        for link in links where !link.label.isEmpty {
+            if let range = attributed.range(of: link.label) {
+                attributed[range].foregroundColor = osrsTheme.link
+                attributed[range].underlineStyle = .single
+            }
+        }
+        return attributed
+    }
+
     var body: some View {
         if links.isEmpty {
             Text(text)
         } else if links.count == 1, let link = links.first {
             Button(action: { onLinkTap(link.url) }) {
-                Text(text)
+                Text(visuallyLinkedText)
                     .multilineTextAlignment(.leading)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -90,7 +103,7 @@ private struct osrsHomeFeedLinkedText: View {
             .accessibilityHint("Opens \(link.label)")
         } else {
             VStack(alignment: .leading, spacing: 8) {
-                Text(text)
+                Text(visuallyLinkedText)
                 ForEach(links) { link in
                     Button(action: { onLinkTap(link.url) }) {
                         Label(link.label, systemImage: "arrow.up.right")
