@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import Combine
 
 struct SavedPagesView: View {
     @Environment(\.osrsTheme) var osrsTheme
@@ -13,32 +14,25 @@ struct SavedPagesView: View {
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     @EnvironmentObject var appState: AppState
     @StateObject private var viewModel = SavedPagesViewModel()
+    @State private var repositoryRefreshTask: Task<Void, Never>?
+
+    static func shouldRefreshRepository(
+        after oldPath: [SavedNavigationDestination],
+        before newPath: [SavedNavigationDestination]
+    ) -> Bool {
+        guard newPath.count < oldPath.count,
+              let oldTop = oldPath.last,
+              case .article = oldTop else {
+            return false
+        }
+        return true
+    }
     
     var body: some View {
         return NavigationStack(path: $appState.savedNavigationStack) {
             VStack(spacing: 0) {
                 osrsAccessibilityMarker(identifier: "saved_pages_screen", label: "Saved pages screen")
 
-                // Custom header matching Home and History layout
-                SavedPagesHeaderView(
-                    hasSavedPages: !viewModel.savedPages.isEmpty,
-                    usesCompactLayout: usesCompactAccessibilityLayout,
-                    onSortByDate: { viewModel.sortBy(.date) },
-                    onSortByTitle: { viewModel.sortBy(.title) },
-                    onClearAllSavedPages: { viewModel.clearAllSavedPages() },
-                    onExportReadingList: { viewModel.exportReadingList() }
-                )
-                
-                // Search bar at top (matches NewsView and HistoryView layout)
-                SearchBarView(placeholder: "Search saved pages") {
-                    // Navigate to search using NavigationStack
-                    appState.navigateToSearchFromSaved()
-                }
-                .accessibilityIdentifier("saved_search")
-                .padding(.horizontal)
-                .padding(.top, usesCompactAccessibilityLayout ? 4 : 8)
-                .padding(.bottom, usesCompactAccessibilityLayout ? 6 : 12)
-                
                 if viewModel.savedPages.isEmpty {
                     emptyStateView
                 } else {
@@ -49,6 +43,38 @@ struct SavedPagesView: View {
             .navigationTitle("")
             .navigationBarHidden(true)
             .background(.osrsBackground)
+            .osrsTabGlassAccessoryBar {
+                osrsTabSearchWithTrailingControl(
+                    search: osrsSearchLauncher(
+                        placeholder: "Search saved pages",
+                        accessibilityIdentifier: "saved_search",
+                        voiceAccessibilityIdentifier: "saved_voice_search",
+                        speechState: appState.speechManager.currentState,
+                        onSearchTap: { appState.navigateToSearchFromSaved() },
+                        onVoiceTap: {
+                            appState.navigateToActiveSearch(startsVoiceRecognition: true)
+                        }
+                    )
+                ) {
+                    osrsGlassOverflowMenu(accessibilityIdentifier: "saved_header_menu") {
+                        Button("Sort by Date") {
+                            viewModel.sortBy(.date)
+                        }
+                        Button("Sort by Title") {
+                            viewModel.sortBy(.title)
+                        }
+                        Divider()
+                        Button("Clear All Saved Pages", role: .destructive) {
+                            viewModel.clearAllSavedPages()
+                        }
+                        .disabled(viewModel.savedPages.isEmpty)
+                        Button("Export Reading List") {
+                            viewModel.exportReadingList()
+                        }
+                        .disabled(viewModel.savedPages.isEmpty)
+                    }
+                }
+            }
             .onReceive(appState.$savedNavigationStack) { stack in
                 print("🔍 SAVEDPAGES: NavigationStack path changed - new count: \(stack.count)")
                 if stack.isEmpty {
@@ -57,6 +83,24 @@ struct SavedPagesView: View {
                     print("🔍 SAVEDPAGES: savedNavigationStack contents: \(stack)")
                     print("🔍 SAVEDPAGES: Latest navigation destination: \(stack.last!)")
                 }
+            }
+            .onChange(of: appState.savedNavigationStack) { oldPath, newPath in
+                guard Self.shouldRefreshRepository(after: oldPath, before: newPath) else {
+                    return
+                }
+                // ArticleView owns a separate repository-backed model. Refresh the shared Saved
+                // root/search model after any article pop so Retry→Saved and unsave are visible
+                // immediately, including [.search, .article] → [.search].
+                scheduleRepositoryRefresh()
+            }
+            .onReceive(
+                NotificationCenter.default.publisher(for: .osrsSavedPagesRepositoryDidChange)
+                    .receive(on: DispatchQueue.main)
+            ) { _ in
+                // ArticleView uses another repository-backed model and its explicit save may
+                // finish after the user pops. Coalesce cross-instance terminal mutations so the
+                // retained Saved root/search never remains UPDATING, RETRY, or removed-stale.
+                scheduleRepositoryRefresh()
             }
             .onAppear {
                 print("🔍 SAVEDPAGES: SavedPagesView.onAppear - Initial NavigationStack count: \(appState.savedNavigationStack.count)")
@@ -93,15 +137,9 @@ struct SavedPagesView: View {
                         print("✅ SAVEDPAGES: ArticleView.onAppear - ArticleView successfully created and appeared!")
                     }
                     .onDisappear {
+                        // ArticleView owns and tears down its exact proxy session token. A
+                        // retained Saved destination must never disable a newer article owner.
                         print("❌ SAVEDPAGES: ArticleView.onDisappear - ArticleView disappeared")
-                        
-                        // Clean up proxy configuration when leaving saved page
-                        if let savedPageId = articleDestination.savedPageId {
-                            print("🧹 SAVEDPAGES: Cleaning up proxy configuration for: \(savedPageId)")
-                            if #available(iOS 17.0, *) {
-                                ProxyInterceptorService.shared.disableOfflineSaveMode()
-                            }
-                        }
                     }
                 }
             }
@@ -132,6 +170,21 @@ struct SavedPagesView: View {
 
     private var usesCompactAccessibilityLayout: Bool {
         verticalSizeClass == .compact && dynamicTypeSize.isAccessibilitySize
+    }
+
+    private func scheduleRepositoryRefresh() {
+        repositoryRefreshTask?.cancel()
+        repositoryRefreshTask = Task { @MainActor in
+            do {
+                try await Task.sleep(nanoseconds: 20_000_000)
+            } catch {
+                return
+            }
+            guard !Task.isCancelled else { return }
+            await viewModel.loadSavedPages()
+            guard !Task.isCancelled else { return }
+            repositoryRefreshTask = nil
+        }
     }
     
     private var emptyStateView: some View {
@@ -166,28 +219,23 @@ struct SavedPagesView: View {
     }
     
     private var savedPagesListView: some View {
-        List {
-            ForEach(viewModel.savedPages) { savedPage in
-                SavedPageRowView(savedPage: savedPage) {
-                    viewModel.navigateToPage(savedPage, appState: appState)
-                }
-                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                    Button("Delete", role: .destructive) {
-                        viewModel.removeSavedPage(savedPage)
+        ScrollView {
+            LazyVStack(spacing: 0) {
+                ForEach(viewModel.savedPages) { savedPage in
+                    SavedPageRowView(savedPage: savedPage) {
+                        viewModel.navigateToPage(savedPage, appState: appState)
+                    }
+                    .background(Color(osrsTheme.surface))
+                    .contextMenu {
+                        Button("Share") { viewModel.sharePage(savedPage) }
+                        Button("Delete", role: .destructive) {
+                            viewModel.removeSavedPage(savedPage)
+                        }
                     }
                 }
-                .swipeActions(edge: .leading) {
-                    Button("Share") {
-                        viewModel.sharePage(savedPage)
-                    }
-                    .tint(.blue)
-                }
-            }
-            .onMove { from, to in
-                viewModel.moveSavedPages(from: from, to: to)
             }
         }
-        .listStyle(PlainListStyle())
+        .scrollPosition($appState.savedPagesScrollPosition)
         .scrollContentBackground(.hidden)
         .background(.osrsBackground)
         .refreshable {
@@ -205,175 +253,170 @@ struct SavedPageRowView: View {
     var body: some View {
         Button(action: onTap) {
             HStack(alignment: .top, spacing: dynamicTypeSize.isAccessibilitySize ? 8 : 12) {
-                // Main content section (title and description) - matches search results
+                // Match Android's information hierarchy: title, one concise preview, then
+                // durable save metadata. Accessibility sizes may give the preview a second line.
                 VStack(alignment: .leading, spacing: 4) {
                     Text(osrsStringUtils.extractMainTitle(savedPage.title))
                         .font(.osrsListTitle)  // Use same font as search results
-                        .lineLimit(dynamicTypeSize.isAccessibilitySize ? 3 : 2)
+                        .lineLimit(dynamicTypeSize.isAccessibilitySize ? 3 : 1)
                         .fixedSize(horizontal: false, vertical: true)
                         .foregroundStyle(.osrsPrimaryTextColor)
                         .multilineTextAlignment(.leading)
-                    
-                    if let description = savedPage.description {
+                        .accessibilityIdentifier("saved_row_title")
+
+                    if let description = savedPage.description, !description.isEmpty {
                         Text(description)
                             .font(.subheadline)
-                            .lineLimit(dynamicTypeSize.isAccessibilitySize ? 4 : 3)
+                            .foregroundStyle(.osrsSecondaryTextColor)
+                            .lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
                             .fixedSize(horizontal: false, vertical: true)
-                            .foregroundStyle(.osrsPrimaryTextColor) // Use primary color to match title
                             .multilineTextAlignment(.leading)
+                            .accessibilityIdentifier("saved_row_preview")
                     }
                     
-                    HStack {
-                        Text(savedPage.savedDate, style: .date)
+                    HStack(spacing: 4) {
+                        Text(savedMetadata)
                             .font(.caption)
                             .foregroundStyle(.osrsPrimaryTextColor)
-                        
-                        if savedPage.isOfflineAvailable {
-                            Spacer()
-                            Image(systemName: "arrow.down.circle.fill")
-                                .foregroundColor(.green)
-                                .font(.caption)
-                        }
+                            .lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .accessibilityIdentifier("saved_row_metadata")
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 
                 // Thumbnail positioned on the right (matching search results layout)
-                if !dynamicTypeSize.isAccessibilitySize {
-                    AsyncImage(url: savedPage.thumbnailUrl) { image in
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                            .clipped()
-                    } placeholder: {
-                        Image(systemName: "doc.text.fill")
-                            .foregroundStyle(.osrsPlaceholderColor)
-                            .font(.title2)
-                    }
+                if let thumbnailUrl = savedPage.thumbnailUrl, !dynamicTypeSize.isAccessibilitySize {
+                    osrsAnimatedThumbnailView(url: thumbnailUrl)
                     .frame(width: 60, height: 60)  // Match search results size
                     .background(.clear)  // Transparent background
                     .cornerRadius(8)
                 }
             }
             .padding(.vertical, 8)
-            .padding(.horizontal, 8)
+            .padding(.horizontal, 16)
+            .frame(minHeight: 80)
             .contentShape(Rectangle())
         }
         .buttonStyle(PlainButtonStyle())
+        .accessibilityIdentifier("saved_page_row")
+        .accessibilityValue(savedAccessibilityMetadata)
+        .accessibilityHint(savedPage.description ?? "")
         .listRowBackground(osrsTheme.surface)  // Proper theme background
-        .listRowSeparator(.visible, edges: .bottom)
-        .listRowSeparatorTint(osrsTheme.divider)
+        .listRowSeparator(.hidden, edges: .all)
+        .overlay(alignment: .bottom) {
+            Color(osrsTheme.surface).frame(height: 3)
+        }
+        .osrsPrewarmArticleWhenVisible(
+            pageURL: savedPage.url,
+            pageTitle: savedPage.title,
+            isOfflineContentAvailable: savedPage.isOfflineAvailable
+        )
+    }
+
+    private var savedMetadata: String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        let size = savedPage.offlineFileSize.map { ByteCountFormatter.string(fromByteCount: $0, countStyle: .file) }
+        return [savedPage.savedLibraryStatusLabel, size, formatter.string(from: savedPage.savedDate)]
+            .compactMap { $0 }
+            .joined(separator: " • ")
+    }
+
+    private var savedAccessibilityMetadata: String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        let size = savedPage.offlineFileSize.map {
+            ByteCountFormatter.string(fromByteCount: $0, countStyle: .file)
+        }
+        return [
+            savedPage.savedLibraryStatusLabel,
+            size,
+            "Last updated \(formatter.string(from: savedPage.savedDate))"
+        ]
+        .compactMap { $0 }
+        .joined(separator: ", ")
     }
 }
 
 struct SavedPagesSearchView: View {
     @ObservedObject var viewModel: SavedPagesViewModel
     @EnvironmentObject var appState: AppState
+    @Environment(\.osrsTheme) private var osrsTheme
     @Environment(\.dismiss) private var dismiss
     @State private var searchText = ""
-    @FocusState private var isSearchFieldFocused: Bool
+    @State private var isSearchFieldFocused = false
     
     var body: some View {
-        VStack {
-            // Search bar
-            HStack {
-                Image(systemName: "magnifyingglass")
-                    .foregroundStyle(.osrsPlaceholderColor)
-                
-                TextField("Search saved pages", text: $searchText)
-                    .textFieldStyle(PlainTextFieldStyle())
-                    .focused($isSearchFieldFocused)
-            }
-            .padding()
-            .background(.osrsSearchBoxBackgroundColor)
-            .cornerRadius(10)
-            .padding()
-            
-            // Filtered results
-            List(viewModel.filteredSavedPages(searchText: searchText)) { savedPage in
-                SavedPageRowView(savedPage: savedPage) {
-                    viewModel.navigateToPage(savedPage, appState: appState)
-                    dismiss()
+        ZStack {
+            Color(osrsTheme.background)
+                .ignoresSafeArea()
+
+            VStack(spacing: 0) {
+                osrsAccessibilityMarker(identifier: "saved_search_screen", label: "Saved pages search screen")
+
+                osrsActiveSearchToolbar(
+                    text: $searchText,
+                    isFocused: $isSearchFieldFocused,
+                    placeholder: "Search saved pages",
+                    backAccessibilityLabel: "Back to saved pages",
+                    backAccessibilityIdentifier: "saved_search_back_button",
+                    inputAccessibilityIdentifier: "saved_search_input",
+                    clearAccessibilityIdentifier: "saved_search_clear_button",
+                    voiceAccessibilityIdentifier: "saved_search_voice_search",
+                    speechState: appState.speechManager.currentState,
+                    onBack: {
+                        isSearchFieldFocused = false
+                        dismiss()
+                    },
+                    onClear: { searchText = "" },
+                    onVoiceTap: { appState.speechManager.startVoiceRecognition() },
+                    onSubmit: {}
+                )
+
+                List(viewModel.filteredSavedPages(searchText: searchText)) { savedPage in
+                    SavedPageRowView(savedPage: savedPage) {
+                        isSearchFieldFocused = false
+                        viewModel.navigateToPage(savedPage, appState: appState)
+                        dismiss()
+                    }
+                    .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
+                    .listRowBackground(Color(osrsTheme.surface))
                 }
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
+                .background(Color(osrsTheme.background))
+                .scrollDismissesKeyboard(.interactively)
             }
-            .listStyle(PlainListStyle())
         }
-        .navigationTitle("Search Saved Pages")
-        .navigationBarTitleDisplayMode(.inline)
+        .navigationTitle("")
+        .navigationBarHidden(true)
         .onAppear {
+            configureVoiceSearch()
             isSearchFieldFocused = true
         }
-        .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
-                Button("Done") {
-                    dismiss()
-                }
-            }
+        .onDisappear {
+            appState.speechManager.cleanup()
+        }
+        .alert(
+            "Voice Search Error",
+            isPresented: Binding(
+                get: { appState.speechManager.errorMessage != nil },
+                set: { if !$0 { appState.speechManager.clearError() } }
+            )
+        ) {
+            Button("OK") { appState.speechManager.clearError() }
+        } message: {
+            Text(appState.speechManager.errorMessage ?? "")
         }
     }
-}
 
-struct SavedPagesHeaderView: View {
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    let hasSavedPages: Bool
-    let usesCompactLayout: Bool
-    let onSortByDate: () -> Void
-    let onSortByTitle: () -> Void
-    let onClearAllSavedPages: () -> Void
-    let onExportReadingList: () -> Void
-    
-    var body: some View {
-        HStack {
-            // Left-aligned "Saved Pages" title matching Home and History
-            Text("Saved")
-                .font(headerTitleFont)
-                .dynamicTypeSize(headerTitleDynamicTypeSize)
-                .foregroundStyle(.osrsPrimaryTextColor)
-                .lineLimit(1)
-                .minimumScaleFactor(0.85)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            
-            // Right-aligned menu button (matches History and Home ellipsis menu)
-            Menu {
-                Button("Sort by Date") {
-                    onSortByDate()
-                }
-                
-                Button("Sort by Title") {
-                    onSortByTitle()
-                }
-                
-                Divider()
-                
-                Button("Clear All Saved Pages", role: .destructive) {
-                    onClearAllSavedPages()
-                }
-                .disabled(!hasSavedPages)
-                
-                Button("Export Reading List") {
-                    onExportReadingList()
-                }
-                .disabled(!hasSavedPages)
-            } label: {
-                Image(systemName: "ellipsis.circle")
-                    .font(.system(size: 24))
-                    .foregroundStyle(.osrsPlaceholderColor)
-                    .frame(width: 48, height: 48)
-            }
-            .accessibilityIdentifier("saved_header_menu")
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, usesCompactLayout || dynamicTypeSize.isAccessibilitySize ? 4 : 8)
-        .frame(minHeight: usesCompactLayout ? 40 : 48)
-        .background(.osrsBackground)
-    }
-
-    private var headerTitleFont: Font {
-        usesCompactLayout || dynamicTypeSize.isAccessibilitySize ? .osrsTitleBold : .osrsDisplay
-    }
-
-    private var headerTitleDynamicTypeSize: DynamicTypeSize {
-        dynamicTypeSize.isAccessibilitySize ? .large : dynamicTypeSize
+    private func configureVoiceSearch() {
+        appState.speechManager.configure(
+            onResult: { result in searchText = result },
+            onPartialResult: { partialResult in searchText = partialResult },
+            onError: { _ in }
+        )
     }
 }
 

@@ -50,6 +50,18 @@
                 console.error('🚨 [BRIDGE] webkit.messageHandlers.mapBridge not available');
             }
         },
+
+        setHorizontalScrollGesture: function(phase, gestureId, ownerId, isLocalOwner) {
+            if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.mapBridge) {
+                window.webkit.messageHandlers.mapBridge.postMessage({
+                    action: 'setHorizontalScrollGesture',
+                    phase: phase,
+                    gestureId: gestureId,
+                    ownerId: ownerId || '',
+                    isLocalOwner: !!isLocalOwner
+                });
+            }
+        },
         
         log: function(message) {
             console.log('🚨 [BRIDGE] log called:', message);
@@ -60,6 +72,14 @@
                 });
             } else {
                 console.error('🚨 [BRIDGE] webkit.messageHandlers.mapBridge not available');
+            }
+        },
+
+        openFloorNumberingSettings: function() {
+            if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.mapBridge) {
+                window.webkit.messageHandlers.mapBridge.postMessage({
+                    action: 'openFloorNumberingSettings'
+                });
             }
         }
     };

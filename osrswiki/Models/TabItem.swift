@@ -62,4 +62,20 @@ enum TabItem: String, CaseIterable {
     var accessibilityLabel: String {
         return "\(title) tab"
     }
+
+    /// Stable across the iOS 26 system TabView and the iOS 18-25 custom fallback.
+    var accessibilityIdentifier: String {
+        switch self {
+        case .news:
+            return "home_tab"
+        case .map:
+            return "map_tab"
+        case .search:
+            return "search_tab"
+        case .saved:
+            return "saved_tab"
+        case .more:
+            return "more_tab"
+        }
+    }
 }

@@ -159,7 +159,8 @@ final class osrsWebKitBridgeHardeningTests: XCTestCase {
         XCTAssertTrue(webViewSource.contains("name: .osrsInternalArticleLinkRequested"))
         XCTAssertTrue(webViewSource.contains("code: NSURLErrorCancelled"))
         XCTAssertFalse(articleViewSource.contains(".onReceive(NotificationCenter.default.publisher(for: .osrsInternalArticleLinkRequested))"))
-        XCTAssertTrue(webViewSource.contains("self.parent.appState.routeInternalArticleLink(articleURL)"))
+        XCTAssertTrue(webViewSource.contains("self.parent.appState.routeInternalArticleLink("))
+        XCTAssertTrue(webViewSource.contains("sourceArticleURL: self.parent.viewModel.pageUrl"))
     }
 
     func testGeneratedArticleHtmlNormalizesInternalArticleAnchorsToAppOwnedDataHandoffURLs() {
@@ -228,9 +229,48 @@ final class osrsWebKitBridgeHardeningTests: XCTestCase {
 
         XCTAssertTrue(appStateSource.contains("observeInternalArticleLinkRequests()"))
         XCTAssertTrue(appStateSource.contains("forName: .osrsInternalArticleLinkRequested"))
-        XCTAssertTrue(appStateSource.contains("self?.routeInternalArticleLink(url)"))
+        XCTAssertTrue(appStateSource.contains("self?.routeInternalArticleLink(url, sourceArticleURL: sourceArticleURL)"))
 
         XCTAssertFalse(customRootSource.contains(".onReceive(NotificationCenter.default.publisher(for: .osrsInternalArticleLinkRequested))"))
+    }
+
+    func testAssetHandlerCancellationOwnsEveryTransportAndHasNoDirectCacheWritePath() throws {
+        let root = try repositoryRoot()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("platforms/ios/osrswiki/Views/ArticleWebView.swift"),
+            encoding: .utf8
+        )
+
+        XCTAssertEqual(
+            source.components(separatedBy: "launchTransport(for: urlSchemeTask)").count - 1,
+            3,
+            "Every external/image/MediaWiki transport must be tied to its WKURLSchemeTask lifecycle."
+        )
+        XCTAssertTrue(source.contains("transportHandle?.cancel()"))
+        XCTAssertTrue(source.contains("transportHandles.forEach { $0.cancel() }"))
+        XCTAssertFalse(source.contains("private func saveHttpResponse("))
+        XCTAssertFalse(source.contains("ProxyInterceptorService.shared.cacheResponseForAsset("))
+    }
+
+    func testAssetTransportHandleCancelsAGatedLateResponse() async {
+        let gate = osrsAssetTransportTestGate()
+        let probe = osrsAssetTransportCancellationProbe()
+        let started = expectation(description: "transport started")
+        let handle = osrsAssetTransportCancellationHandle()
+        let task = Task {
+            started.fulfill()
+            await gate.wait()
+            await probe.record(Task.isCancelled)
+        }
+        handle.install(task)
+        await fulfillment(of: [started], timeout: 1)
+
+        handle.cancel()
+        await gate.open()
+        await task.value
+        let observedCancellation = await probe.value
+
+        XCTAssertTrue(observedCancellation, "Stopping the WK task must cancel a transport even when its upstream response arrives later.")
     }
 
     func testTrustedWikiArticleURLRoutesToAppArticleURL() throws {
@@ -247,6 +287,22 @@ final class osrsWebKitBridgeHardeningTests: XCTestCase {
 
         XCTAssertNil(osrsArticleLinkRouter.appArticleURL(for: fileURL))
         XCTAssertNil(osrsArticleLinkRouter.appArticleURL(for: specialURL))
+    }
+
+    @MainActor
+    func testFloorNumberingPreferenceLinksOpenTheAppearanceSetting() throws {
+        let httpsURL = try XCTUnwrap(URL(string: "https://oldschool.runescape.wiki/w/Special:Preferences"))
+        let appAssetURL = try XCTUnwrap(URL(string: "app-assets://localhost/w/Special:Preferences#mw-prefsection-rendering"))
+        XCTAssertTrue(osrsArticleLinkRouter.isFloorNumberingSettingsURL(httpsURL))
+        XCTAssertTrue(osrsArticleLinkRouter.isFloorNumberingSettingsURL(appAssetURL))
+        XCTAssertEqual(
+            ArticleViewModel.articleNavigationDecision(for: httpsURL),
+            .floorNumberingSettings
+        )
+        XCTAssertEqual(
+            ArticleViewModel.articleNavigationDecision(for: appAssetURL),
+            .floorNumberingSettings
+        )
     }
 
     func testAppAssetsNonArticleWikiNamespacesConvertToTrustedWikiURLForExternalHandling() throws {
@@ -534,5 +590,31 @@ final class osrsWebKitBridgeHardeningTests: XCTestCase {
             url.deleteLastPathComponent()
         }
         throw XCTSkip("Could not locate repository root from \(#filePath)")
+    }
+}
+
+private actor osrsAssetTransportTestGate {
+    private var continuation: CheckedContinuation<Void, Never>?
+    private var isOpen = false
+
+    func wait() async {
+        guard !isOpen else { return }
+        await withCheckedContinuation { continuation in
+            self.continuation = continuation
+        }
+    }
+
+    func open() {
+        isOpen = true
+        continuation?.resume()
+        continuation = nil
+    }
+}
+
+private actor osrsAssetTransportCancellationProbe {
+    private(set) var value = false
+
+    func record(_ value: Bool) {
+        self.value = value
     }
 }

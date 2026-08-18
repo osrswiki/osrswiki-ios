@@ -13,16 +13,17 @@ struct SearchView: View {
     @EnvironmentObject var themeManager: osrsThemeManager
     @Environment(\.osrsTheme) var osrsTheme
     @StateObject private var viewModel = SearchViewModel()
+    @StateObject private var historyViewModel = HistoryViewModel()
     // Use shared speech manager from AppState to prevent resource conflicts
     @State private var searchText = ""
-    @FocusState private var isSearchFocused: Bool
+    @State private var isSearchMode = false
+    @State private var isSearchFocused = false
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    @ScaledMetric(relativeTo: .body) private var searchInputMinHeight: CGFloat = 48
-    @ScaledMetric(relativeTo: .body) private var searchTextFieldMinHeight: CGFloat = 32
-    @ScaledMetric(relativeTo: .subheadline) private var recentChipMinHeight: CGFloat = 44
+    @ScaledMetric(relativeTo: .subheadline) private var recentRowMinHeight: CGFloat = 44
     
     // Unified alert system to handle both search and voice search errors  
     @State private var showingAlert = false
+    @State private var showingClearConfirmation = false
     @State private var currentAlertType: AlertType = .search
     
     enum AlertType {
@@ -40,16 +41,34 @@ struct SearchView: View {
                 VStack(spacing: 0) {
                     osrsAccessibilityMarker(identifier: "search_screen", label: "Search screen")
 
-                    // Search input section
-                    searchInputSection
-                    
-                    // Content section
-                    contentSection
+                    if isSearchMode {
+                        if searchText.isEmpty && !viewModel.recentSearches.isEmpty {
+                            recentSearchesSection
+                        }
+                        contentSection
+                    } else {
+                        historyContent
+                    }
                 }
 
             }
-            .navigationTitle("Search")
-            .navigationBarTitleDisplayMode(.inline)
+            .navigationTitle("")
+            .navigationBarHidden(true)
+            .osrsTabGlassAccessoryBar {
+                if isSearchMode {
+                    activeSearchToolbar
+                } else {
+                    searchLauncher
+                }
+            }
+            .alert("Clear History", isPresented: $showingClearConfirmation) {
+                Button("Cancel", role: .cancel) { }
+                Button("Clear All", role: .destructive) {
+                    historyViewModel.clearAllHistory()
+                }
+            } message: {
+                Text("This will permanently delete all your reading history. This action cannot be undone.")
+            }
             .onAppear {
                 // Set up navigation callback with weak references to prevent retain cycles
                 viewModel.navigateToArticle = { [weak appState] title, url, searchResult in
@@ -75,16 +94,19 @@ struct SearchView: View {
                 
                 // Set up voice search callbacks
                 setupVoiceSearch()
+
+                activatePendingSearchIntentIfNeeded()
                 
-                #if DEBUG
-                if !osrsTestEnvironment.disablesSearchAutofocusForUITests {
-                    isSearchFocused = true
-                }
-                #else
-                isSearchFocused = true
-                #endif
+                historyViewModel.loadHistory()
+            }
+            .onChange(of: appState.pendingSearchActivationIntent) { _, _ in
+                activatePendingSearchIntentIfNeeded()
             }
             .onDisappear {
+                appState.cancelSearchActivationIntent()
+                if appState.selectedTab != .search {
+                    appState.invalidateActiveSearchReturnContext()
+                }
                 // Dismiss keyboard to prevent blank area when navigating back
                 isSearchFocused = false
                 dismissKeyboardWithLayoutUpdate()
@@ -116,66 +138,112 @@ struct SearchView: View {
         }
     }
 
-    private var searchInputSection: some View {
-        VStack(spacing: 12) {
-            // Main search bar
-            HStack {
-                Image(systemName: "magnifyingglass")
-                    .foregroundStyle(.osrsPlaceholderColor)
-                
-                TextField("Search OSRS Wiki", text: $searchText, axis: .vertical)
-                    .focused($isSearchFocused)
-                    .textFieldStyle(PlainTextFieldStyle())
-                    .font(.body)
-                    .dynamicTypeSize(.xSmall ... .xLarge)
-                    .foregroundStyle(.osrsPrimaryTextColor)
-                    .lineLimit(1...2)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(minHeight: searchTextFieldMinHeight)
-                    .accessibilityIdentifier("search_input")
-                    .onChange(of: searchText) { _, newValue in
-                        viewModel.currentQuery = newValue
-                    }
-                    .onSubmit {
-                        performSearch()
-                    }
-                
-                if !searchText.isEmpty {
-                    Button(action: clearSearch) {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundStyle(.osrsSecondaryTextColor)
-                    }
-                    .frame(width: 44, height: 44)
-                    .contentShape(Rectangle())
-                    .accessibilityLabel("Clear search")
-                }
-                
-                osrsVoiceSearchButton(
-                    action: {
+    private var searchLauncher: some View {
+        osrsTabSearchWithTrailingControl(
+            search: osrsSearchLauncher(
+                placeholder: "Search OSRS Wiki",
+                accessibilityIdentifier: "search_history_launcher",
+                voiceAccessibilityIdentifier: "search_history_voice_search",
+                speechState: appState.speechManager.currentState,
+                onSearchTap: {
+                    isSearchMode = true
+                    DispatchQueue.main.async { isSearchFocused = true }
+                },
+                onVoiceTap: {
+                    isSearchMode = true
+                    DispatchQueue.main.async {
+                        isSearchFocused = true
                         appState.speechManager.startVoiceRecognition()
-                    },
-                    state: appState.speechManager.currentState
+                    }
+                }
+            )
+        ) {
+            osrsGlassIconButton(
+                systemImage: "trash",
+                accessibilityLabel: "Clear search history",
+                accessibilityIdentifier: "search_history_clear_button",
+                action: { showingClearConfirmation = true }
+            )
+            .disabled(historyViewModel.historyItems.isEmpty)
+            .opacity(historyViewModel.historyItems.isEmpty ? 0.4 : 1)
+        }
+    }
+
+    private var activeSearchToolbar: some View {
+        osrsActiveSearchToolbar(
+            text: $searchText,
+            isFocused: $isSearchFocused,
+            placeholder: "Search OSRS Wiki",
+            backAccessibilityLabel: "Back to search history",
+            backAccessibilityIdentifier: "search_back_button",
+            inputAccessibilityIdentifier: "search_input",
+            clearAccessibilityIdentifier: "search_clear_button",
+            voiceAccessibilityIdentifier: "search_voice_search",
+            speechState: appState.speechManager.currentState,
+            onBack: {
+                isSearchFocused = false
+                clearSearch()
+                isSearchMode = false
+                if appState.returnFromActiveSearchIfNeeded() {
+                    return
+                }
+                historyViewModel.loadHistory()
+            },
+            onClear: clearSearch,
+            onVoiceTap: { appState.speechManager.startVoiceRecognition() },
+            onSubmit: performSearch
+        )
+        .onChange(of: searchText) { _, value in viewModel.currentQuery = value }
+    }
+
+    private var historyContent: some View {
+        Group {
+            if historyViewModel.historyItems.isEmpty {
+                EmptyStateView(
+                    iconName: "clock",
+                    title: "No Search History",
+                    subtitle: "Articles you open will appear here."
                 )
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 2)
-            .frame(minHeight: searchInputMinHeight)
-            .background(.osrsSearchBoxBackgroundColor)
-            .cornerRadius(18)
-            .padding(.horizontal)
-            
-            // Recent searches or suggestions
-            if searchText.isEmpty && !viewModel.recentSearches.isEmpty {
-                recentSearchesSection
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 0) {
+                        ForEach(historyViewModel.historyItems) { item in
+                            switch item {
+                            case .dateHeader(let date):
+                                HistoryDateHeaderView(dateString: date)
+                                    .background(Color(osrsTheme.background))
+                            case .entryItem(let entry):
+                                HistoryEntryRowView(entry: entry, onTap: {
+                                    guard let url = URL(string: entry.wikiUrl) else { return }
+                                    appState.navigateToArticle(
+                                        title: entry.displayText,
+                                        url: url,
+                                        snippet: entry.snippet,
+                                        thumbnailUrl: entry.thumbnailUrl
+                                    )
+                                }, onDelete: {
+                                    historyViewModel.removeHistoryEntry(entry)
+                                })
+                                .background(Color(osrsTheme.surface))
+                            }
+                        }
+                    }
+                }
+                .scrollPosition($appState.searchHistoryScrollPosition)
+                .scrollContentBackground(.hidden)
+                .background(Color(osrsTheme.background))
             }
         }
-        .background(.osrsBackground)
+        .background(Color(osrsTheme.background))
     }
-    
+
     private var contentSection: some View {
         Group {
             if searchText.isEmpty {
-                if dynamicTypeSize.isAccessibilitySize && !viewModel.recentSearches.isEmpty {
+                if !viewModel.recentSearches.isEmpty {
+                    // Match Android: once real history rows are present, let those rows be the
+                    // content instead of repeating a large generic empty-state prompt below them.
                     Color(osrsTheme.background)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
@@ -185,13 +253,12 @@ struct SearchView: View {
                     }
                     .scrollDismissesKeyboard(.interactively)
                 }
-            } else if viewModel.isSearching && viewModel.searchResults.isEmpty {
-                // Show loading during initial search
-                ProgressView("Searching...")
-                    .progressViewStyle(CircularProgressViewStyle())
-                    .tint(.osrsPrimaryColor)
+            } else if viewModel.searchResults.isEmpty && !viewModel.hasCompletedCurrentQuery {
+                // Keep the canvas quiet during the very short live request instead of flashing a
+                // spinner between every keystroke.
+                Color(osrsTheme.background)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if viewModel.searchResults.isEmpty && !searchText.isEmpty && !viewModel.isSearching {
+            } else if viewModel.searchResults.isEmpty && !searchText.isEmpty {
                 // Show no results
                 EmptyStateView(
                     iconName: "magnifyingglass",
@@ -260,7 +327,7 @@ struct SearchView: View {
     private var recentSearchesSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text("Recent Searches")
+                Text("Recent")
                     .font(.subheadline)
                     .fontWeight(.medium)
                     .foregroundStyle(.osrsPrimaryTextColor)
@@ -278,27 +345,34 @@ struct SearchView: View {
             }
             .padding(.horizontal)
             
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(viewModel.recentSearches.prefix(5), id: \.self) { search in
-                        Button {
-                            searchText = search
-                            performSearch()
-                        } label: {
+            VStack(spacing: 0) {
+                ForEach(viewModel.recentSearches.prefix(5), id: \.self) { search in
+                    Button {
+                        searchText = search
+                        performSearch()
+                    } label: {
+                        HStack(spacing: 16) {
+                            Image(systemName: "clock.arrow.circlepath")
+                                .font(.body)
+                                .foregroundStyle(.osrsSecondaryTextColor)
+                                .frame(width: 24, height: 24)
                             Text(search)
-                                .font(.subheadline)
+                                .font(.body)
                                 .foregroundStyle(.osrsPrimaryTextColor)
-                                .padding(.horizontal, 14)
-                                .frame(minHeight: recentChipMinHeight)
-                                .background(.osrsSearchBoxBackgroundColor)
-                                .cornerRadius(16)
+                                .lineLimit(1)
+                            Spacer()
                         }
-                        .buttonStyle(PlainButtonStyle())
+                        .padding(.horizontal, 16)
+                        .frame(minHeight: recentRowMinHeight)
+                        .contentShape(Rectangle())
                     }
+                    .buttonStyle(PlainButtonStyle())
+                    .accessibilityLabel(search)
+
+                    // Android recent-query rows have no hairline. Do not add one here.
                 }
-                .padding(.horizontal)
             }
-            .frame(minHeight: recentChipMinHeight + 12)
+            .background(.osrsSurface)
         }
     }
     
@@ -334,69 +408,43 @@ struct SearchView: View {
     
     private var searchResultsSection: some View {
         VStack(spacing: 0) {
-            List {
-                // FREEZE FIX: Use pre-processed themed results to avoid expensive processing on main thread
-                ForEach(viewModel.themedSearchResults, id: \.id) { themedResult in
-                    SearchResultRowView(result: themedResult) {
-                        // FREEZE DEBUG: Add precise logging for tap flow tracing
-                        let timestamp = DateFormatter.timeFormatter.string(from: Date())
-                        print("🟡 [\(timestamp)] SEARCHVIEW TAP START: SearchView tap handler called for '\(themedResult.processedTitle)'")
-                        
-                        // Dismiss keyboard before selecting result
-                        isSearchFocused = false
-                        dismissKeyboard()
-                        
-                        print("🟡 [\(timestamp)] SEARCHVIEW: About to call selectThemedSearchResult")
-                        
-                        // FREEZE FIX: Use themedResult selection to avoid main thread processing
-                        viewModel.selectThemedSearchResult(themedResult)
-                        viewModel.addToRecentSearches(searchText)
-                        
-                        let completedTimestamp = DateFormatter.timeFormatter.string(from: Date())
-                        print("🟡 [\(completedTimestamp)] SEARCHVIEW TAP END: SearchView tap handler completed")
-                    }
-                    .id(themedResult.id) // CRASH FIX: Use ThemedSearchResult's stable ID
-                }
-                
-                // FIXED: Load more section with proper state management to prevent cell conflicts
-                if viewModel.hasMoreResults && !viewModel.isSearching {
-                    // Only show load more when not actively searching to prevent state conflicts
-                    HStack {
-                        Spacer()
-                        Button("Load More Results") {
-                            // Prevent multiple simultaneous load operations
-                            guard !viewModel.isSearching else { return }
-                            Task { @MainActor in
-                                await viewModel.loadMoreResults()
-                            }
+            ScrollView {
+                LazyVStack(spacing: 0) {
+                    ForEach(viewModel.themedSearchResults, id: \.id) { themedResult in
+                        SearchResultRowView(result: themedResult) {
+                            let timestamp = DateFormatter.timeFormatter.string(from: Date())
+                            print("🟡 [\(timestamp)] SEARCHVIEW TAP START: SearchView tap handler called for '\(themedResult.processedTitle)'")
+                            isSearchFocused = false
+                            dismissKeyboard()
+                            print("🟡 [\(timestamp)] SEARCHVIEW: About to call selectThemedSearchResult")
+                            viewModel.selectThemedSearchResult(themedResult)
+                            viewModel.addToRecentSearches(searchText)
+                            let completedTimestamp = DateFormatter.timeFormatter.string(from: Date())
+                            print("🟡 [\(completedTimestamp)] SEARCHVIEW TAP END: SearchView tap handler completed")
                         }
-                        .disabled(viewModel.isSearching) // Prevent conflicts during loading
-                        .foregroundStyle(viewModel.isSearching ? Color.gray : Color(osrsTheme.primary))
-                        Spacer()
+                        .id(themedResult.id)
                     }
-                    .padding()
-                    .listRowBackground(osrsTheme.surface)
-                    // FIXED: Use consistent ID that doesn't change during updates
-                    .id("load-more-section")
-                } else if viewModel.isSearching && viewModel.hasMoreResults {
-                    // Show loading indicator in separate section to prevent ID conflicts
-                    HStack {
-                        Spacer()
-                        ProgressView("Loading more results...")
-                            .scaleEffect(0.8)
-                            .tint(osrsTheme.primary)
-                        Spacer()
+
+                    if viewModel.hasMoreResults && !viewModel.isSearching {
+                        HStack {
+                            Spacer()
+                            Button("Load More Results") {
+                                guard !viewModel.isSearching else { return }
+                                Task { @MainActor in
+                                    await viewModel.loadMoreResults()
+                                }
+                            }
+                            .disabled(viewModel.isSearching)
+                            .foregroundStyle(viewModel.isSearching ? Color.gray : Color(osrsTheme.primary))
+                            Spacer()
+                        }
+                        .padding()
+                        .id("load-more-section")
                     }
-                    .padding()
-                    .listRowBackground(osrsTheme.surface)
-                    .id("loading-more-section")
                 }
             }
-            .listStyle(PlainListStyle())
             .scrollContentBackground(.hidden)
             .background(.osrsBackground)
-            // FIXED: Remove animation on count changes that can cause cell dequeue issues
-            // Animation during rapid updates can cause SwiftUI to lose track of cells
         }
         .accessibilityIdentifier("search_results")
     }
@@ -407,10 +455,7 @@ struct SearchView: View {
         // Add to recent searches when user explicitly submits
         viewModel.addToRecentSearches(searchText)
         
-        // FIXED: Add slight delay to ensure UI state is consistent before starting search
         Task {
-            // Brief delay to let any pending UI updates complete
-            try? await Task.sleep(nanoseconds: 50_000_000) // 50ms
             await viewModel.performSearch(query: searchText, isNewSearch: true)
         }
     }
@@ -422,27 +467,18 @@ struct SearchView: View {
     }
     
     private func setupVoiceSearch() {
-        // Use weak references to prevent retain cycles with shared speech manager
         appState.speechManager.configure(
-            onResult: { [weak viewModel] result in
-                guard let viewModel = viewModel else { return }
-                
-                // Set the search text and perform search
-                // Note: Cannot use weak reference to @State properties directly
-                // The view will update through the viewModel
-                Task { @MainActor in
-                    viewModel.currentQuery = result
-                    await viewModel.performSearch(query: result)
-                }
+            onResult: { result in
+                isSearchMode = true
+                searchText = result
+                viewModel.currentQuery = result
+                viewModel.addToRecentSearches(result)
             },
-            onPartialResult: { [weak viewModel] partialResult in
-                guard let viewModel = viewModel else { return }
-                
-                // Show real-time transcription in search field
+            onPartialResult: { partialResult in
                 if !partialResult.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    Task { @MainActor in
-                        viewModel.currentQuery = partialResult
-                    }
+                    isSearchMode = true
+                    searchText = partialResult
+                    viewModel.currentQuery = partialResult
                 }
             },
             onError: { errorMessage in
@@ -450,6 +486,36 @@ struct SearchView: View {
                 print("Voice search error: \(errorMessage)")
             }
         )
+    }
+
+    /// Consumes the article toolbar's one-shot search request only after this canonical Search
+    /// surface is mounted. The UI enters active-search mode before yielding a render turn; voice
+    /// recognition then starts against the callbacks installed above, without a guessed delay.
+    private func activatePendingSearchIntentIfNeeded() {
+        guard let intent = appState.pendingSearchActivationIntent,
+              appState.consumeSearchActivationIntent(generation: intent.generation) else {
+            return
+        }
+
+        isSearchMode = true
+        isSearchFocused = true
+        if let query = appState.pendingSearchQuery {
+            searchText = query
+            viewModel.currentQuery = query
+            appState.pendingSearchQuery = nil
+            Task { await viewModel.performSearch(query: query, isNewSearch: true) }
+        }
+
+        guard intent.startsVoiceRecognition else { return }
+        Task { @MainActor in
+            await Task.yield()
+            guard appState.selectedTab == .search,
+                  appState.searchNavigationStack.isEmpty,
+                  isSearchMode else {
+                return
+            }
+            appState.speechManager.startVoiceRecognition()
+        }
     }
 }
 

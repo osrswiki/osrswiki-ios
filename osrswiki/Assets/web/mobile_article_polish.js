@@ -1,0 +1,329 @@
+(function () {
+  'use strict';
+
+  const diagnostics = {
+    inlineIcons: 0,
+    portraitImages: 0,
+    vignettes: 0,
+    scrollRegions: 0,
+    primaryInfoboxes: 0,
+    intrinsicRecipes: 0,
+    mapTables: 0
+  };
+  window.__osrsArticlePolishDiagnostics = diagnostics;
+
+  function numericAttribute(image, name) {
+    const value = Number(image.getAttribute(name) || image.dataset['file' + name[0].toUpperCase() + name.slice(1)] || 0);
+    return Number.isFinite(value) ? value : 0;
+  }
+
+  function hasOnlyInlineIconContent(element) {
+    if (!element || normalizeText(element.textContent)) return false;
+    if (element.querySelectorAll('img.osrs-inline-icon').length !== 1) return false;
+    return Array.from(element.querySelectorAll('*')).every((child) =>
+      child.matches('a, span, img.osrs-inline-icon')
+    );
+  }
+
+  function normalizeText(text) {
+    return (text || '').replace(/\s+/g, ' ').trim();
+  }
+
+  function markInlineImages(root) {
+    root.querySelectorAll('img.mw-file-element:not(.osrs-inline-icon)').forEach((image) => {
+      const width = numericAttribute(image, 'width');
+      const height = numericAttribute(image, 'height');
+      const phrasing = image.closest('p, li, td, th, figcaption');
+      const excluded = image.closest('figure, .gallery, .infobox-image, .infobox-bonuses-image, .infobox-nested, .infobox-bonuses, .navbox');
+      if (!phrasing || excluded || width <= 0 || height <= 0 || width > 48 || height > 48) return;
+
+      image.classList.add('osrs-inline-icon');
+      image.removeAttribute('width');
+      image.removeAttribute('height');
+      image.style.setProperty('vertical-align', 'middle', 'important');
+      image.style.setProperty('width', 'auto', 'important');
+      image.style.setProperty('height', 'auto', 'important');
+      let wrapper = image.parentElement;
+      while (wrapper && wrapper !== phrasing && /^(A|SPAN)$/i.test(wrapper.tagName)) {
+        wrapper.classList.add('osrs-inline-icon-wrapper');
+        wrapper.style.setProperty('width', 'auto', 'important');
+        wrapper.style.setProperty('height', 'auto', 'important');
+        wrapper.style.setProperty('min-width', '0', 'important');
+        wrapper.style.setProperty('vertical-align', 'middle', 'important');
+        wrapper.style.setProperty('line-height', '0', 'important');
+        wrapper = wrapper.parentElement;
+      }
+      diagnostics.inlineIcons += 1;
+
+      // Some templates place a prose icon in its own otherwise-empty paragraph. Treat that
+      // paragraph as phrasing content so the icon does not manufacture a blank article row.
+      if (phrasing.tagName === 'P' && !phrasing.textContent.trim()) {
+        phrasing.classList.add('osrs-inline-icon-only-paragraph');
+      }
+    });
+
+    root.querySelectorAll('p > span:has(img.osrs-inline-icon)').forEach((wrapper) => {
+      if (hasOnlyInlineIconContent(wrapper)) {
+        wrapper.classList.add('osrs-inline-lore-note');
+      }
+    });
+
+    // Keep structurally isolated inline icons and following prose in one line box without
+    // depending on a template name, page title, or presentation-style substring.
+    root.querySelectorAll('p:has(> .osrs-inline-lore-note)').forEach((paragraph) => {
+      paragraph.classList.add('osrs-inline-lore-paragraph');
+    });
+  }
+
+  function markBalancedImages(root) {
+    root.querySelectorAll('.infobox-image img.mw-file-element, .infobox-full-width-content img.mw-file-element, .infobox-bonuses-image img.mw-file-element').forEach((image) => {
+      if (image.closest('.inventory-image, .GEChartBox')) return;
+      const width = numericAttribute(image, 'width');
+      const height = numericAttribute(image, 'height');
+      if (width >= 80 && height / Math.max(width, 1) >= 1.45) {
+        image.classList.add('osrs-balanced-portrait');
+        diagnostics.portraitImages += 1;
+      }
+    });
+
+    root.querySelectorAll('figure.mw-halign-left, figure.mw-halign-right, .thumb.tleft, .thumb.tright, .floatleft, .floatright').forEach((figure) => {
+      if (figure.classList.contains('osrs-balanced-vignette') ||
+          figure.closest('.infobox, .gallery, .navbox, .mw-kartographer-map, .GEChartBox')) return;
+      const images = figure.querySelectorAll('img.mw-file-element');
+      if (images.length !== 1) return;
+      const image = images[0];
+      const width = numericAttribute(image, 'width') || image.naturalWidth;
+      const height = numericAttribute(image, 'height') || image.naturalHeight;
+      if (width < 72 || height < 96 || height / Math.max(width, 1) < 1.25) return;
+      figure.classList.add('osrs-balanced-vignette');
+      figure.dataset.osrsAspect = String(height / width);
+      diagnostics.vignettes += 1;
+    });
+  }
+
+  function markSemanticTableRoles(root) {
+    root.querySelectorAll('.collapsible-primary-infobox, table.main-infobox').forEach((element) => {
+      demoteGenericScrollSurfacesWithin(element);
+      if (!element.dataset.osrsPrimaryMeasured) {
+        element.dataset.osrsPrimaryMeasured = 'true';
+        diagnostics.primaryInfoboxes += 1;
+      }
+    });
+
+    root.querySelectorAll('.recipe-table').forEach((wrapper) => {
+      wrapper.classList.add('osrs-intrinsic-table', 'osrs-recipe-unit');
+      demoteGenericScrollSurfacesWithin(wrapper);
+      wrapper.querySelectorAll('table.wikitable').forEach((table) => {
+        table.classList.add('osrs-intrinsic-recipe-table');
+      });
+      if (!wrapper.dataset.osrsRecipeMeasured) {
+        wrapper.dataset.osrsRecipeMeasured = 'true';
+        diagnostics.intrinsicRecipes += 1;
+      }
+    });
+
+    root.querySelectorAll('table:has(.mw-kartographer-map)').forEach((table) => {
+      table.classList.add('osrs-map-table');
+      const container = table.closest('.collapsible-container');
+      if (container) container.classList.add('collapsible-map-table');
+      const content = table.closest('.collapsible-content');
+      demoteGenericScrollSurfacesWithin(container || content || table);
+      if (!table.dataset.osrsMapTableMeasured) {
+        table.dataset.osrsMapTableMeasured = 'true';
+        diagnostics.mapTables += 1;
+      }
+    });
+  }
+
+  function isProtectedTableRole(table) {
+    return !!(table && (
+      table.matches('.main-infobox, .osrs-map-table') ||
+      table.closest('.collapsible-primary-infobox, .collapsible-map-table, .osrs-recipe-unit')
+    ));
+  }
+
+  function initializeLogicalScrollStart(surface) {
+    if (!surface || surface.dataset.osrsScrollStartInitialized === 'true') return;
+    // CSSOM uses zero for the inline-start edge in LTR and the start edge of RTL scrollports.
+    // Set it once only; later polish passes must never reset a reader's position.
+    surface.scrollLeft = 0;
+    surface.dataset.osrsScrollStartInitialized = 'true';
+  }
+
+  function makeLocalScrollSurface(surface, label) {
+    if (!surface || surface.closest('.collapsible-primary-infobox, .collapsible-map-table, .osrs-recipe-unit')) return;
+    surface.classList.add('osrs-article-scroll-region', 'osrs-local-scroll-surface');
+    surface.tabIndex = 0;
+    surface.setAttribute('role', 'region');
+    surface.setAttribute('aria-label', label || 'Scrollable table');
+    initializeLogicalScrollStart(surface);
+  }
+
+  function demoteGenericScrollSurface(surface) {
+    if (!surface?.classList) return;
+    surface.classList.remove(
+      'osrs-article-scroll-region',
+      'osrs-local-scroll-surface',
+      'osrs-scroll-affordance',
+      'osrs-scroll-can-left',
+      'osrs-scroll-can-right'
+    );
+    if (surface.getAttribute('role') === 'region') surface.removeAttribute('role');
+    if (/^Scrollable\b/i.test(surface.getAttribute('aria-label') || '')) {
+      surface.removeAttribute('aria-label');
+    }
+    if (surface.getAttribute('tabindex') === '0') surface.removeAttribute('tabindex');
+    surface.style.removeProperty('--osrs-local-scrollport-width');
+    delete surface.dataset.osrsScrollStartInitialized;
+    delete surface.dataset.osrsLocalOverflowX;
+    delete surface.dataset.osrsScrollAffordanceBound;
+  }
+
+  function demoteGenericScrollSurfacesWithin(root) {
+    if (!root) return;
+    if (root.matches?.('.osrs-local-scroll-surface, .osrs-article-scroll-region')) {
+      demoteGenericScrollSurface(root);
+    }
+    root.querySelectorAll?.('.osrs-local-scroll-surface, .osrs-article-scroll-region')
+      .forEach(demoteGenericScrollSurface);
+  }
+
+  function demoteRedundantOuterSurface(surface) {
+    if (!surface) return;
+    demoteGenericScrollSurface(surface);
+    surface.classList.add('osrs-demoted-scroll-surface');
+  }
+
+  function localScrollSurfaceLabel(table) {
+    const disclosure = table.closest('.collapsible-container')
+      ?.querySelector('.collapsible-header .collapsible-label')
+      ?.textContent?.trim();
+    const caption = table.querySelector('caption')?.textContent?.trim();
+    const semanticName = disclosure || caption || 'table';
+    if (semanticName.toLowerCase().startsWith('scrollable ')) return semanticName;
+    return semanticName.toLowerCase().endsWith(' table')
+      ? `Scrollable ${semanticName}`
+      : `Scrollable ${semanticName} table`;
+  }
+
+  function hasRealHorizontalOverflow(surface) {
+    return !!(surface && surface.clientWidth > 0 && surface.scrollWidth > surface.clientWidth + 2);
+  }
+
+  function localScrollOwnerForTarget(target) {
+    if (!target || !target.closest) return null;
+    if (target.closest('.collapsible-primary-infobox, .collapsible-map-table, .osrs-recipe-unit')) return null;
+    const directSurface = target.closest('.osrs-local-scroll-surface');
+    if (hasRealHorizontalOverflow(directSurface)) return directSurface;
+    const disclosure = target.closest('.collapsible-container');
+    const disclosureSurface = disclosure && disclosure.querySelector('.osrs-local-scroll-surface');
+    return hasRealHorizontalOverflow(disclosureSurface) ? disclosureSurface : null;
+  }
+
+  function markScrollableTables(root) {
+    root.querySelectorAll('table').forEach((table) => {
+      if (isProtectedTableRole(table) ||
+          table.closest('.navbox, .scrollable-table-wrapper')) return;
+      const existingLocalSurface = table.closest('.osrs-local-scroll-surface');
+      const collapsibleContent = table.closest('.collapsible-content');
+      if (collapsibleContent) {
+        const availableWidth = collapsibleContent.clientWidth || document.documentElement.clientWidth;
+        const isIrreduciblyWide = table.matches('.infobox-bonuses') ||
+          table.scrollWidth > Math.ceil(availableWidth + 2);
+        if (isIrreduciblyWide) {
+          // A generic interceptor may have wrapped this table before the disclosure transformer
+          // ran. In that ordering the old scroll surface sits *outside* collapsibleContent, while
+          // a right-floated intrinsic table can overflow toward negative X and contribute no
+          // scrollWidth to that ancestor. Make the disclosure content itself the local viewport;
+          // the canonical direct-child CSS then clears the float and anchors inline-start.
+          const nestedExistingSurface = existingLocalSurface &&
+            collapsibleContent.contains(existingLocalSurface)
+            ? existingLocalSurface
+            : null;
+          const outerExistingSurface = existingLocalSurface && !nestedExistingSurface
+            ? existingLocalSurface
+            : null;
+          if (outerExistingSurface) {
+            // A disclosure must have exactly one physical and semantic viewport. Retire any
+            // older outer owner—even one added by an earlier polish pass—and promote the
+            // content that directly owns the intrinsic table geometry.
+            demoteRedundantOuterSurface(outerExistingSurface);
+          }
+          makeLocalScrollSurface(
+            nestedExistingSurface || collapsibleContent,
+            localScrollSurfaceLabel(table)
+          );
+        }
+        return;
+      }
+      if (existingLocalSurface) {
+        makeLocalScrollSurface(existingLocalSurface, localScrollSurfaceLabel(table));
+        return;
+      }
+      const parent = table.parentElement;
+      if (!parent) return;
+      const isWideInfobox = table.matches('.infobox-bonuses');
+      if (!isWideInfobox && table.scrollWidth <= Math.ceil(document.documentElement.clientWidth - 24)) return;
+
+      // Ordinary compact infoboxes keep their native layout. Wide switch/bonuses infoboxes
+      // are the exception: their many columns and portrait states otherwise push the article
+      // itself off-screen, so give only that component a local horizontal viewport.
+      if (table.matches('.infobox') && !isWideInfobox) return;
+      const wrapper = document.createElement('div');
+      wrapper.className = 'osrs-article-scroll-region osrs-local-scroll-surface osrs-scroll-generated-surface';
+      makeLocalScrollSurface(
+        wrapper,
+        localScrollSurfaceLabel(table)
+      );
+      parent.insertBefore(wrapper, table);
+      wrapper.appendChild(table);
+      diagnostics.scrollRegions += 1;
+    });
+  }
+
+  let scheduled = false;
+  function applyPolish() {
+    scheduled = false;
+    markInlineImages(document);
+    markBalancedImages(document);
+    markSemanticTableRoles(document);
+    markScrollableTables(document);
+    document.documentElement.dataset.osrsArticlePolished = 'true';
+  }
+  window.OSRSApplyArticlePolish = applyPolish;
+  window.OSRSArticlePolish = {
+    apply: applyPolish,
+    localScrollOwnerForTarget: localScrollOwnerForTarget,
+    classifyTouchOwner: function(target) {
+      const owner = localScrollOwnerForTarget(target);
+      return {
+        isLocalOwner: !!owner,
+        owner: owner,
+        ownerId: owner
+          ? (owner.getAttribute('aria-label') || owner.id || 'local-scroll-surface')
+          : 'article-navigation'
+      };
+    }
+  };
+  function schedule() {
+    if (scheduled) return;
+    scheduled = true;
+    requestAnimationFrame(applyPolish);
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', schedule, { once: true });
+  else schedule();
+  new MutationObserver(schedule).observe(document.documentElement, { childList: true, subtree: true });
+
+  document.addEventListener('click', function (event) {
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+    const help = target.closest('.floornumber-help, .floor-convention, a[href*="Special:Preferences"]');
+    if (!help) return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (window.OsrsWikiBridge && typeof window.OsrsWikiBridge.openFloorNumberingSettings === 'function') {
+      window.OsrsWikiBridge.openFloorNumberingSettings();
+    }
+  }, true);
+})();

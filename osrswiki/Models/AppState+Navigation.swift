@@ -4,6 +4,8 @@
 //
 
 import Foundation
+import SwiftUI
+import UIKit
 
 extension AppState {
 #if DEBUG
@@ -13,10 +15,6 @@ extension AppState {
 #endif
 
     var activeArticleDestination: ArticleDestination? {
-        if case .article(let destination) = historyNavigationStack.last {
-            return destination
-        }
-
         switch selectedTab {
         case .news:
             if case .article(let destination) = newsNavigationStack.last {
@@ -44,10 +42,6 @@ extension AppState {
     }
 
     var canNavigateBackWithinActiveArticleStack: Bool {
-        if !historyNavigationStack.isEmpty {
-            return hasArticleBelowTop(historyNavigationStack)
-        }
-
         switch selectedTab {
         case .news:
             return hasArticleBelowTop(newsNavigationStack)
@@ -105,6 +99,7 @@ extension AppState {
     }
 
     private func appendArticleDestination(_ articleDestination: ArticleDestination, to tab: TabItem) {
+        osrsInteractiveArticleSwipe.captureVisibleBackPreview()
         switch tab {
         case .news:
             newsNavigationStack.append(.article(articleDestination))
@@ -179,48 +174,75 @@ extension AppState {
 
     // Navigate to search from current tab context
     func navigateToSearch() {
-        let timestamp = DateFormatter.timeFormatter.string(from: Date())
-        print("🔍 [\(timestamp)] APPSTATE: navigateToSearch called for selectedTab: \(selectedTab.rawValue)")
+        navigateToActiveSearch(startsVoiceRecognition: false)
+    }
 
-        DispatchQueue.main.async { [weak self] in
-            guard let self = self else { return }
+    /// Routes an article toolbar action to the one canonical, active Search surface regardless
+    /// of which tab owns the article. The SearchView acknowledges this generation exactly once;
+    /// voice recognition is deliberately not started here because its result callbacks are
+    /// installed by SearchView when that destination becomes active.
+    func navigateToActiveSearch(startsVoiceRecognition: Bool = false) {
+        nextSearchActivationGeneration &+= 1
+        let returnContext = osrsSearchReturnContext(
+            generation: nextSearchActivationGeneration,
+            originTab: selectedTab,
+            priorSearchNavigationStack: searchNavigationStack
+        )
+        let intent = osrsSearchActivationIntent(
+            generation: nextSearchActivationGeneration,
+            startsVoiceRecognition: startsVoiceRecognition,
+            returnContext: returnContext
+        )
 
-            // Priority 1: Check if we're in History context (historyNavigationStack has items)
-            // This handles the History → Search → Article → Search (top bar) flow where selectedTab is .search
-            // but navigation is managed by historyNavigationStack
-            if !self.historyNavigationStack.isEmpty {
-                print("🟢 [\(timestamp)] APPSTATE: ✅ Adding search to historyNavigationStack (History context)")
-                self.historyNavigationStack.append(.search)
-                return
-            }
-
-            // Priority 2: Fall back to selectedTab-based navigation for normal tab flows
-            switch self.selectedTab {
-            case .news:
-                print("🟢 [\(timestamp)] APPSTATE: Adding search to newsNavigationStack")
-                self.newsNavigationStack.append(.search)
-            case .search:
-                print("⚠️ [\(timestamp)] APPSTATE: Already in search tab - ignoring navigate to search")
-                return
-            default:
-                print("⚠️ [\(timestamp)] APPSTATE: Search navigation not supported from \(self.selectedTab.rawValue) tab")
-                return
-            }
+        // Remove any article destination before exposing the Search tab's root. Do this before
+        // publishing the intent so an already-mounted SearchView never handles it underneath an
+        // article that is still on screen.
+        searchNavigationStack.removeAll(keepingCapacity: true)
+        if selectedTab != .search {
+            setSelectedTab(.search)
         }
+        pendingSearchActivationIntent = intent
+    }
+
+    /// Atomically acknowledges one Search activation generation. Duplicate SwiftUI lifecycle
+    /// delivery (`onAppear` followed by `onChange`, or vice versa) cannot start voice twice.
+    @discardableResult
+    func consumeSearchActivationIntent(generation: UInt64) -> Bool {
+        guard let intent = pendingSearchActivationIntent,
+              intent.generation == generation else { return false }
+        activeSearchReturnContext = intent.returnContext
+        pendingSearchActivationIntent = nil
+        return true
+    }
+
+    func cancelSearchActivationIntent() {
+        pendingSearchActivationIntent = nil
+    }
+
+    /// Dismisses the canonical active Search surface back to exactly the source that launched
+    /// it. For a Search-owned article this restores the saved Search navigation stack; for any
+    /// other tab it restores that tab while preserving its untouched article stack.
+    @discardableResult
+    func returnFromActiveSearchIfNeeded() -> Bool {
+        guard let context = activeSearchReturnContext else { return false }
+        activeSearchReturnContext = nil
+        pendingSearchActivationIntent = nil
+        searchNavigationStack = context.priorSearchNavigationStack
+        if selectedTab != context.originTab {
+            setSelectedTab(context.originTab)
+        }
+        return true
+    }
+
+    func invalidateActiveSearchReturnContext() {
+        activeSearchReturnContext = nil
     }
 
     // MARK: - History-Specific Navigation Methods
 
     // Navigate to search from History tab using history navigation stack
     func navigateToSearchFromHistory() {
-        let timestamp = DateFormatter.timeFormatter.string(from: Date())
-        print("🔍 [\(timestamp)] APPSTATE: navigateToSearchFromHistory called")
-
-        DispatchQueue.main.async { [weak self] in
-            guard let self = self else { return }
-            print("🟢 [\(timestamp)] APPSTATE: Adding search to historyNavigationStack")
-            self.historyNavigationStack.append(.search)
-        }
+        navigateToActiveSearch(startsVoiceRecognition: false)
     }
 
     // Navigate to search from Saved tab using saved navigation stack
@@ -251,6 +273,7 @@ extension AppState {
         }
 
         print("🟢 [\(timestamp)] [FRAME:\(frameId)] APPSTATE: Adding to historyNavigationStack with unique destination type")
+        osrsInteractiveArticleSwipe.captureVisibleBackPreview()
         historyNavigationStack.append(.article(articleDestination))
         print("🟢 [\(timestamp)] [FRAME:\(frameId)] APPSTATE: History navigation completed - only HistoryView handler will respond")
     }
@@ -266,43 +289,21 @@ extension AppState {
         navigateToArticle(title: title, url: url, snippet: nil, thumbnailUrl: nil)
     }
 
-    func routeInternalArticleLink(_ url: URL) {
+    func routeInternalArticleLink(_ url: URL, sourceArticleURL: URL? = nil) {
         guard let articleURL = osrsArticleLinkRouter.appArticleURL(for: url) else {
             print("⚠️ APPSTATE: Ignoring non-article internal route request for \(url.absoluteString)")
             return
         }
 
-        guard !shouldSuppressInternalArticleRoute(articleURL) else {
-            print("⚠️ APPSTATE: Ignoring recently popped internal article route for \(articleURL.absoluteString)")
-            return
+        if let sourceArticleURL {
+            guard let activeSourceURL = activeArticleDestination?.url,
+                  osrsArticleLinkRouter.appArticleURL(for: activeSourceURL) == osrsArticleLinkRouter.appArticleURL(for: sourceArticleURL) else {
+                print("⚠️ APPSTATE: Ignoring internal route from an inactive article source")
+                return
+            }
         }
 
         navigateToArticle(url: articleURL)
-    }
-
-    private func suppressInternalArticleRoute(_ url: URL) {
-        suppressedInternalArticleRouteURL = url
-        suppressedInternalArticleRouteUntil = Date().addingTimeInterval(internalArticleRouteSuppressionInterval)
-    }
-
-    private func shouldSuppressInternalArticleRoute(_ url: URL) -> Bool {
-        guard let suppressedURL = suppressedInternalArticleRouteURL else {
-            return false
-        }
-
-        guard Date() < suppressedInternalArticleRouteUntil else {
-            suppressedInternalArticleRouteURL = nil
-            suppressedInternalArticleRouteUntil = .distantPast
-            return false
-        }
-
-        return suppressedURL == url
-    }
-
-    private func requestArticleBackStackRecoveryReload() {
-        guard let destination = activeArticleDestination else { return }
-        articleBackStackRecoveryDestination = destination
-        articleBackStackRecoveryRequestID += 1
     }
 
 #if DEBUG
@@ -397,42 +398,6 @@ extension AppState {
     }
 #endif
 
-    private func bumpTopArticleNavigationRevision(in stack: inout [NewsNavigationDestination]) {
-        guard let lastIndex = stack.indices.last,
-              case .article(let destination) = stack[lastIndex] else { return }
-        stack[lastIndex] = .article(destination.incrementingNavigationRevision())
-    }
-
-    private func bumpTopArticleNavigationRevision(in stack: inout [HistoryNavigationDestination]) {
-        guard let lastIndex = stack.indices.last,
-              case .article(let destination) = stack[lastIndex] else { return }
-        stack[lastIndex] = .article(destination.incrementingNavigationRevision())
-    }
-
-    private func bumpTopArticleNavigationRevision(in stack: inout [SavedNavigationDestination]) {
-        guard let lastIndex = stack.indices.last,
-              case .article(let destination) = stack[lastIndex] else { return }
-        stack[lastIndex] = .article(destination.incrementingNavigationRevision())
-    }
-
-    private func bumpTopArticleNavigationRevision(in stack: inout [SearchNavigationDestination]) {
-        guard let lastIndex = stack.indices.last,
-              case .article(let destination) = stack[lastIndex] else { return }
-        stack[lastIndex] = .article(destination.incrementingNavigationRevision())
-    }
-
-    private func bumpTopArticleNavigationRevision(in stack: inout [MapNavigationDestination]) {
-        guard let lastIndex = stack.indices.last,
-              case .article(let destination) = stack[lastIndex] else { return }
-        stack[lastIndex] = .article(destination.incrementingNavigationRevision())
-    }
-
-    private func bumpTopArticleNavigationRevision(in stack: inout [MoreNavigationDestination]) {
-        guard let lastIndex = stack.indices.last,
-              case .article(let destination) = stack[lastIndex] else { return }
-        stack[lastIndex] = .article(destination.incrementingNavigationRevision())
-    }
-
     static func articleTitle(from url: URL) -> String {
         let path = url.path
         let encodedTitle: String
@@ -460,77 +425,122 @@ extension AppState {
         print(message)
     }
 
-    func beginArticleBackAction() -> Bool {
-        let now = Date()
-        guard now.timeIntervalSince(lastArticleBackActionTime) >= articleBackActionDebounceInterval else {
-            logArticleNavigation("🔙 AppState: Suppressed duplicate article back action")
+    func beginArticleBackAction(
+        articleIdentity: String,
+        transitionIdentity: String
+    ) -> Bool {
+        guard activeArticleDestination?.navigationIdentity == articleIdentity else {
+            logArticleNavigation("🔙 AppState: Suppressed stale article back callback")
             return false
         }
-
-        lastArticleBackActionTime = now
+        guard lastAcceptedArticleBackTransitionIdentity != transitionIdentity else {
+            logArticleNavigation("🔙 AppState: Suppressed duplicate article back transition")
+            return false
+        }
         return true
     }
 
-    @discardableResult
-    func navigateBackWithinActiveArticleStack() -> Bool {
-        if !historyNavigationStack.isEmpty {
-            guard hasArticleBelowTop(historyNavigationStack),
-                  case .article(let poppedArticle) = historyNavigationStack.last else { return false }
-            suppressInternalArticleRoute(poppedArticle.url)
-            historyNavigationStack.removeLast()
-            bumpTopArticleNavigationRevision(in: &historyNavigationStack)
-            requestArticleBackStackRecoveryReload()
-            logArticleNavigation("🔙 AppState: ✅ Navigated back to previous history article")
-            return true
-        }
+    func completeArticleBackAction(transitionIdentity: String, accepted: Bool) {
+        guard accepted else { return }
+        lastAcceptedArticleBackTransitionIdentity = transitionIdentity
+    }
 
+    private func applyArticleNavigationChange(animated: Bool, _ body: () -> Void) {
+        if animated {
+            body()
+            return
+        }
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction, body)
+    }
+
+    @discardableResult
+    func navigateBackWithinActiveArticleStack(animated: Bool = true) -> Bool {
         switch selectedTab {
         case .news:
             guard hasArticleBelowTop(newsNavigationStack),
-                  case .article(let poppedArticle) = newsNavigationStack.last else { return false }
-            suppressInternalArticleRoute(poppedArticle.url)
-            newsNavigationStack.removeLast()
-            bumpTopArticleNavigationRevision(in: &newsNavigationStack)
-            requestArticleBackStackRecoveryReload()
+                  case .article = newsNavigationStack.last else { return false }
+            applyArticleNavigationChange(animated: animated) {
+                newsNavigationStack.removeLast()
+            }
+            osrsInteractiveArticleSwipe.popCapturedBackPreview()
             logArticleNavigation("🔙 AppState: ✅ Navigated back to previous news article")
         case .saved:
             guard hasArticleBelowTop(savedNavigationStack),
-                  case .article(let poppedArticle) = savedNavigationStack.last else { return false }
-            suppressInternalArticleRoute(poppedArticle.url)
-            savedNavigationStack.removeLast()
-            bumpTopArticleNavigationRevision(in: &savedNavigationStack)
-            requestArticleBackStackRecoveryReload()
+                  case .article = savedNavigationStack.last else { return false }
+            applyArticleNavigationChange(animated: animated) {
+                savedNavigationStack.removeLast()
+            }
+            osrsInteractiveArticleSwipe.popCapturedBackPreview()
             logArticleNavigation("🔙 AppState: ✅ Navigated back to previous saved article")
         case .search:
             guard searchNavigationStack.count > 1,
-                  case .article(let poppedArticle) = searchNavigationStack.last else { return false }
-            suppressInternalArticleRoute(poppedArticle.url)
-            searchNavigationStack.removeLast()
-            bumpTopArticleNavigationRevision(in: &searchNavigationStack)
-            requestArticleBackStackRecoveryReload()
+                  case .article = searchNavigationStack.last else { return false }
+            applyArticleNavigationChange(animated: animated) {
+                searchNavigationStack.removeLast()
+            }
+            osrsInteractiveArticleSwipe.popCapturedBackPreview()
             logArticleNavigation("🔙 AppState: ✅ Navigated back to previous search article")
         case .map:
             guard mapNavigationStack.count > 1,
-                  case .article(let poppedArticle) = mapNavigationStack.last else { return false }
-            suppressInternalArticleRoute(poppedArticle.url)
-            mapNavigationStack.removeLast()
-            bumpTopArticleNavigationRevision(in: &mapNavigationStack)
-            requestArticleBackStackRecoveryReload()
+                  case .article = mapNavigationStack.last else { return false }
+            applyArticleNavigationChange(animated: animated) {
+                mapNavigationStack.removeLast()
+            }
+            osrsInteractiveArticleSwipe.popCapturedBackPreview()
             logArticleNavigation("🔙 AppState: ✅ Navigated back to previous map article")
         case .more:
             guard hasArticleBelowTop(moreNavigationStack),
-                  case .article(let poppedArticle) = moreNavigationStack.last else { return false }
-            suppressInternalArticleRoute(poppedArticle.url)
-            moreNavigationStack.removeLast()
-            bumpTopArticleNavigationRevision(in: &moreNavigationStack)
-            requestArticleBackStackRecoveryReload()
+                  case .article = moreNavigationStack.last else { return false }
+            applyArticleNavigationChange(animated: animated) {
+                moreNavigationStack.removeLast()
+            }
+            osrsInteractiveArticleSwipe.popCapturedBackPreview()
             logArticleNavigation("🔙 AppState: ✅ Navigated back to previous more article")
         }
 
         return true
     }
 
-    func navigateBack() {
+    /// Pops the visible tab's root article before consulting WebView history. MediaWiki redirects
+    /// can add an implementation-only WebView entry; allowing that entry to win made Home's back
+    /// button appear inert while Search happened to work normally.
+    @discardableResult
+    func navigateBackFromActiveRootArticle(animated: Bool = true) -> Bool {
+        switch selectedTab {
+        case .news:
+            guard !hasArticleBelowTop(newsNavigationStack), case .article = newsNavigationStack.last else { return false }
+            applyArticleNavigationChange(animated: animated) {
+                newsNavigationStack.removeLast()
+            }
+        case .saved:
+            guard !hasArticleBelowTop(savedNavigationStack), case .article = savedNavigationStack.last else { return false }
+            applyArticleNavigationChange(animated: animated) {
+                savedNavigationStack.removeLast()
+            }
+        case .search:
+            guard searchNavigationStack.count == 1, case .article = searchNavigationStack.last else { return false }
+            applyArticleNavigationChange(animated: animated) {
+                searchNavigationStack.removeLast()
+            }
+        case .map:
+            guard mapNavigationStack.count == 1, case .article = mapNavigationStack.last else { return false }
+            applyArticleNavigationChange(animated: animated) {
+                mapNavigationStack.removeLast()
+            }
+        case .more:
+            guard !hasArticleBelowTop(moreNavigationStack), case .article = moreNavigationStack.last else { return false }
+            applyArticleNavigationChange(animated: animated) {
+                moreNavigationStack.removeLast()
+            }
+        }
+        osrsInteractiveArticleSwipe.popCapturedBackPreview()
+        logArticleNavigation("🔙 AppState: ✅ Popped visible root article for \(selectedTab.rawValue)")
+        return true
+    }
+
+    func navigateBack(animated: Bool = true) {
         let now = Date()
         guard now.timeIntervalSince(lastNavigationTime) >= navigationDebounceInterval else {
             print("🔙 AppState: Suppressed duplicate back navigation")
@@ -540,40 +550,41 @@ extension AppState {
 
         print("🔙 AppState: navigateBack called for \(selectedTab.rawValue)")
 
-        // Priority 1: Check if we're in History context (historyNavigationStack has items)
-        // This handles the History → Search → Article flow where selectedTab is .search
-        // but navigation is managed by historyNavigationStack
-        if !historyNavigationStack.isEmpty {
-            historyNavigationStack.removeLast()
-            print("🔙 AppState: ✅ Navigated back in historyNavigationStack (History context)")
-            return
-        }
-
-        // Priority 2: Fall back to selectedTab-based navigation for normal tab flows
+        // Back always belongs to the visible tab. A retained off-screen stack must never consume it.
         switch selectedTab {
         case .news:
             if !newsNavigationStack.isEmpty {
-                newsNavigationStack.removeLast()
+                applyArticleNavigationChange(animated: animated) {
+                    newsNavigationStack.removeLast()
+                }
                 print("🔙 AppState: ✅ Navigated back in newsNavigationStack")
             }
         case .saved:
             if !savedNavigationStack.isEmpty {
-                savedNavigationStack.removeLast()
+                applyArticleNavigationChange(animated: animated) {
+                    savedNavigationStack.removeLast()
+                }
                 print("🔙 AppState: ✅ Navigated back in savedNavigationStack")
             }
         case .search:
             if !searchNavigationStack.isEmpty {
-                searchNavigationStack.removeLast()
+                applyArticleNavigationChange(animated: animated) {
+                    searchNavigationStack.removeLast()
+                }
                 print("🔙 AppState: ✅ Navigated back in searchNavigationStack")
             }
         case .map:
             if !mapNavigationStack.isEmpty {
-                mapNavigationStack.removeLast()
+                applyArticleNavigationChange(animated: animated) {
+                    mapNavigationStack.removeLast()
+                }
                 print("🔙 AppState: ✅ Navigated back in mapNavigationStack")
             }
         case .more:
             if !moreNavigationStack.isEmpty {
-                moreNavigationStack.removeLast()
+                applyArticleNavigationChange(animated: animated) {
+                    moreNavigationStack.removeLast()
+                }
                 print("🔙 AppState: ✅ Navigated back in moreNavigationStack")
             }
         }

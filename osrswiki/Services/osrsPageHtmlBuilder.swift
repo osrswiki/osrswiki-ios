@@ -20,10 +20,11 @@ class osrsPageHtmlBuilder {
         "styles/components.css",
         "styles/wiki-integration.css",
         "styles/navbox_styles.css",
-        "styles/collapsible_tables.css",
+        "web/collapsible_tables.css",
         "web/collapsible_sections.css",
         "web/switch_infobox_styles.css",
-        "styles/fixes.css"
+        "styles/fixes.css",
+        "styles/ios-article-aesthetics.css"
     ]
 
     // MediaWiki ResourceLoader artifacts
@@ -41,8 +42,11 @@ class osrsPageHtmlBuilder {
         "web/infobox_switcher_bootstrap.js",
         "web/switch_infobox.js",
         "web/horizontal_scroll_interceptor.js",
+        "web/tabber_init.js",
         "web/responsive_videos.js",
-        "web/clipboard_bridge.js"
+        "web/mobile_article_polish.js",
+        "web/clipboard_bridge.js",
+        "web/table_column_normalize.js"
     ]
 
     private func createThemeUtilityScript() -> String {
@@ -300,6 +304,26 @@ class osrsPageHtmlBuilder {
                     } else {
                         console.error('🚨 [INLINE-BRIDGE] webkit.messageHandlers.mapBridge not available');
                     }
+                },
+
+                fetchText: function(url) {
+                    try {
+                        var xhr = new XMLHttpRequest();
+                        xhr.open('GET', url, false);
+                        xhr.setRequestHeader('Accept', 'application/json');
+                        xhr.send(null);
+                        return (xhr.status >= 200 && xhr.status < 300) ? (xhr.responseText || '') : '';
+                    } catch (e) {
+                        return '';
+                    }
+                },
+
+                openFloorNumberingSettings: function() {
+                    if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.mapBridge) {
+                        window.webkit.messageHandlers.mapBridge.postMessage({
+                            action: 'openFloorNumberingSettings'
+                        });
+                    }
                 }
             };
 
@@ -318,7 +342,15 @@ class osrsPageHtmlBuilder {
         """
     }
 
-    func buildFullHtmlDocument(title: String, bodyContent: String, theme: any osrsThemeProtocol, collapseTablesEnabled: Bool = true, includeAssetLinks: Bool = false) -> String {
+    func buildFullHtmlDocument(
+        title: String,
+        bodyContent: String,
+        theme: any osrsThemeProtocol,
+        collapseTablesEnabled: Bool = true,
+        includeAssetLinks: Bool = false,
+        articleTextScale: CGFloat = 1.0,
+        floorConvention: osrsArticleFloorConvention = .current()
+    ) -> String {
         let startTime = CFAbsoluteTimeGetCurrent()
 
         // Clean title and prepare header
@@ -333,6 +365,23 @@ class osrsPageHtmlBuilder {
         let finalBodyContent = titleHeaderHtml + normalizedBodyContent
 
         let themeClass = (theme is osrsDarkTheme) ? "theme-osrs-dark" : ""
+        let clampedArticleTextScale = min(max(articleTextScale, 0.85), 1.40)
+        let articleTextScaleLiteral = String(
+            format: "%.3f",
+            locale: Locale(identifier: "en_US_POSIX"),
+            Double(clampedArticleTextScale)
+        )
+        let chromeClearance = Int(
+            (osrsSearchControlGeometry.compactHeight + osrsOverlayChromeMetrics.pairedEdgeGap + 8).rounded()
+        )
+        let readerPreferenceStyle = """
+        <style id="osrs-article-reader-preferences">
+            html:root {
+                --osrs-article-user-text-scale: \(articleTextScaleLiteral);
+                --osrs-article-chrome-clearance: \(chromeClearance)px;
+            }
+        </style>
+        """
 
         // Detect presence of GE price charts in the content and include widget script when needed
         let needsGECharts = cleanedBodyContent.contains("GEChartBox") ||
@@ -384,8 +433,15 @@ class osrsPageHtmlBuilder {
         let jsScripts: String
         if includeAssetLinks {
             jsScripts = dynamicJsAssets.map { assetPath in
-                // Option B: Generate custom scheme URLs for WKURLSchemeHandler
-                return "<script src=\"\(customScheme)://localhost/\(assetPath)\"></script>"
+                let tag = "<script src=\"\(customScheme)://localhost/\(assetPath)\"></script>"
+                if assetPath.hasSuffix("highcharts-stock.js") {
+                    return """
+                    <script>window.__osrsAmdDefine=window.define;try{window.define=undefined;}catch(e){}</script>
+                    \(tag)
+                    <script>if(typeof window.__osrsAmdDefine!=='undefined'){window.define=window.__osrsAmdDefine;}</script>
+                    """
+                }
+                return tag
             }.joined(separator: "\n")
         } else {
             jsScripts = "<!-- JS assets injected via WKUserScript -->"
@@ -410,15 +466,16 @@ class osrsPageHtmlBuilder {
         <!DOCTYPE html>
         <html>
         <head>
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
             <title>\(documentTitle)</title>
             \(fontPreloadLink)
             \(cssLinks)
+            \(readerPreferenceStyle)
             \(createThemeUtilityScript())
             \(tableCollapseScript)
             \(smartMediawikiVariables)
         </head>
-        <body class="\(themeClass)" style="visibility: hidden;">
+        <body class="\(themeClass) \(floorConvention.bodyClass)">
             \(finalBodyContent)
             \(createInternalArticleLinkNormalizationScript(customScheme: customScheme))
             \(mediawikiScripts)

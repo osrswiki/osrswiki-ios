@@ -230,23 +230,26 @@ enum osrsFeedbackError: Error, LocalizedError {
     var errorDescription: String? {
         switch self {
         case .invalidURL:
-            return "Invalid feedback service URL"
+            return "Feedback could not be sent. Please try again."
         case .invalidRequest:
-            return "Invalid request. Please check your input."
+            return "Feedback could not be sent. Please check your input and try again."
         case .serverError:
             return "Server error. Please try again later."
         case .httpError(let code):
-            return "Failed to submit feedback: HTTP \(code)"
+            _ = code
+            return "Feedback could not be sent. Please try again."
         case .invalidResponse:
-            return "Invalid response from server"
+            return "Feedback could not be sent. Please try again."
         case .noInternetConnection:
             return "No internet connection. Please check your network."
         case .timeout:
             return "Request timed out. Please try again."
         case .networkError(let urlError):
-            return "Network error: \(urlError.localizedDescription)"
+            _ = urlError
+            return "Feedback could not be sent. Please check your connection and try again."
         case .unexpectedError(let error):
-            return "Unexpected error: \(error.localizedDescription)"
+            _ = error
+            return "Feedback could not be sent. Please try again."
         }
     }
 }

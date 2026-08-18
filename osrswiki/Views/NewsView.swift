@@ -8,11 +8,136 @@
 import SwiftUI
 import UIKit
 
+enum osrsHomeFeedArticleLinkExtractor {
+    struct Link: Identifiable, Hashable {
+        let url: URL
+        let label: String
+
+        var id: String { "\(url.absoluteString)|\(label)" }
+    }
+
+    nonisolated static func links(in html: String) -> [Link] {
+        let pattern = #"<a\b[^>]*href\s*=\s*[\"']([^\"']+)[\"'][^>]*>(.*?)</a>"#
+        guard let regex = try? NSRegularExpression(
+            pattern: pattern,
+            options: [.caseInsensitive, .dotMatchesLineSeparators]
+        ) else {
+            return []
+        }
+        let baseURL = URL(string: "https://oldschool.runescape.wiki/")!
+        var seen: Set<String> = []
+        var result: [Link] = []
+        for match in regex.matches(in: html, range: NSRange(html.startIndex..., in: html))
+            where match.numberOfRanges > 2 {
+            guard let hrefRange = Range(match.range(at: 1), in: html),
+                  let labelRange = Range(match.range(at: 2), in: html) else { continue }
+            let rawHref = String(html[hrefRange]).replacingOccurrences(of: "&amp;", with: "&")
+            guard let url = URL(string: rawHref, relativeTo: baseURL)?.absoluteURL else { continue }
+            let label = osrsStringUtils.plainText(fromHTML: String(html[labelRange]))
+            let key = "\(url.absoluteString)|\(label)"
+            guard seen.insert(key).inserted else { continue }
+            result.append(Link(url: url, label: label.isEmpty ? "Open article" : label))
+        }
+        return result
+    }
+
+    nonisolated static func internalArticleURLs(in html: String) -> [URL] {
+        var seen: Set<URL> = []
+        var result: [URL] = []
+        for link in links(in: html) {
+            guard let articleURL = osrsArticleLinkRouter.appArticleURL(for: link.url),
+                  seen.insert(articleURL).inserted else {
+                continue
+            }
+            result.append(articleURL)
+        }
+        return result
+    }
+}
+
+/// Avoids attributed hyperlinks inside feed rows. On iOS 26 those links can form a
+/// cyclic accessibility layout graph when a horizontal card is snapshotted. The
+/// visible prose stays plain, while every authored link remains a native button.
+private struct osrsHomeFeedLinkedText: View {
+    let html: String
+    let prefix: String
+    let onLinkTap: (URL) -> Void
+
+    init(_ html: String, prefix: String = "", onLinkTap: @escaping (URL) -> Void) {
+        self.html = html
+        self.prefix = prefix
+        self.onLinkTap = onLinkTap
+    }
+
+    private var links: [osrsHomeFeedArticleLinkExtractor.Link] {
+        osrsHomeFeedArticleLinkExtractor.links(in: html)
+    }
+
+    private var text: String {
+        prefix + osrsStringUtils.plainText(fromHTML: html)
+    }
+
+    var body: some View {
+        if links.isEmpty {
+            Text(text)
+        } else if links.count == 1, let link = links.first {
+            Button(action: { onLinkTap(link.url) }) {
+                Text(text)
+                    .multilineTextAlignment(.leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint("Opens \(link.label)")
+        } else {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(text)
+                ForEach(links) { link in
+                    Button(action: { onLinkTap(link.url) }) {
+                        Label(link.label, systemImage: "arrow.up.right")
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.osrsLink)
+                }
+            }
+        }
+    }
+}
+
 struct NewsView: View {
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var themeManager: osrsThemeManager
     @Environment(\.osrsTheme) var osrsTheme
     @StateObject private var viewModel = NewsViewModel()
+    @State private var randomPageUrl: URL?
+    @State private var randomPrewarmOwner = UUID()
+
+    private var homeGlassAccessory: some View {
+        osrsTabSearchWithTrailingControl(
+            search: osrsSearchLauncher(
+                placeholder: "Search OSRS Wiki",
+                accessibilityIdentifier: "home_search",
+                voiceAccessibilityIdentifier: "home_voice_search",
+                speechState: appState.speechManager.currentState,
+                onSearchTap: { appState.navigateToActiveSearch(startsVoiceRecognition: false) },
+                onVoiceTap: {
+                    appState.navigateToActiveSearch(startsVoiceRecognition: true)
+                }
+            )
+        ) {
+            osrsGlassIconButton(
+                systemImage: "shuffle",
+                accessibilityLabel: "Random page",
+                accessibilityIdentifier: "home_random_page",
+                action: handleRandomPageClick
+            )
+        }
+        .onAppear {
+            if randomPageUrl == nil {
+                preloadNextRandomPage()
+            }
+        }
+    }
     
     var body: some View {
         // DIAGNOSTIC: Log NavigationStack state for NewsView (WORKING REFERENCE)
@@ -20,72 +145,68 @@ struct NewsView: View {
         let _ = appState.newsNavigationStack.isEmpty ? print("🔍 NEWSVIEW: newsNavigationStack is EMPTY") : print("🔍 NEWSVIEW: newsNavigationStack contents: \(appState.newsNavigationStack)")
         
         return NavigationStack(path: $appState.newsNavigationStack) {
-            ScrollView {
-                LazyVStack(spacing: 0) {
+            VStack(spacing: 0) {
                     osrsAccessibilityMarker(identifier: "home_screen", label: "Home screen")
 
-                    // Custom header matching Android (now inside ScrollView)
-                    HeaderView()
-                    
-                    // Search bar at top (matches History page layout)
-                    SearchBarView(placeholder: "Search OSRS Wiki") {
-                        // Navigate to search using NavigationStack
-                        appState.navigateToSearch()
-                    }
-                    .accessibilityIdentifier("home_search")
-                    .padding(.horizontal)
-                    .padding(.top, 8)
-                    .padding(.bottom, 12)
-                    
-                    // Feed content
-                    LazyVStack(spacing: 12) {
-                        // Refresh indicator (shown above content during refresh)
-                        if viewModel.isRefreshing {
-                            HStack {
-                                ProgressView()
-                                    .scaleEffect(0.8)
-                                Text("Refreshing...")
-                                    .font(.osrsCaption)
-                                    .foregroundColor(.secondary)
+                    ScrollView {
+                        LazyVStack(spacing: 12) {
+                            // Refresh indicator (shown above content during refresh)
+                            if viewModel.isRefreshing {
+                                HStack {
+                                    ProgressView()
+                                        .scaleEffect(0.8)
+                                    Text("Refreshing...")
+                                        .font(.osrsCaption)
+                                        .foregroundColor(.secondary)
+                                }
+                                .padding(.vertical, 8)
+                                .frame(maxWidth: .infinity)
+                                .background(Color.osrsPrimaryColor.opacity(0.1))
+                                .cornerRadius(8)
+                                .padding(.horizontal, 16)
                             }
-                            .padding(.vertical, 8)
-                            .frame(maxWidth: .infinity)
-                            .background(Color.osrsPrimaryColor.opacity(0.1))
-                            .cornerRadius(8)
-                            .padding(.horizontal, 16)
+
+                            // Show content if available (prioritize cached content over loading states)
+                            if let wikiFeed = viewModel.wikiFeed {
+                                WikiFeedContentView(wikiFeed: wikiFeed, appState: appState, viewModel: viewModel)
+                            } else if let errorMessage = viewModel.errorMessage {
+                                ErrorStateView(errorMessage: errorMessage, viewModel: viewModel, appState: appState)
+                            } else if viewModel.isLoading {
+                                ProgressView("Loading news...")
+                                    .progressViewStyle(CircularProgressViewStyle())
+                                    .tint(.osrsPrimaryColor)
+                                    .frame(maxWidth: .infinity, minHeight: 200)
+                            } else {
+                                EmptyStateView(
+                                    iconName: "newspaper",
+                                    title: "No News Available",
+                                    subtitle: "Check back later for OSRS updates"
+                                )
+                            }
                         }
-                        
-                        // Show content if available (prioritize cached content over loading states)
-                        if let wikiFeed = viewModel.wikiFeed {
-                            WikiFeedContentView(wikiFeed: wikiFeed, appState: appState, viewModel: viewModel)
-                        } else if let errorMessage = viewModel.errorMessage {
-                            ErrorStateView(errorMessage: errorMessage, viewModel: viewModel, appState: appState)
-                        } else if viewModel.isLoading {
-                            ProgressView("Loading news...")
-                                .progressViewStyle(CircularProgressViewStyle())
-                                .tint(.osrsPrimaryColor)
-                                .frame(maxWidth: .infinity, minHeight: 200)
-                        } else {
-                            EmptyStateView(
-                                iconName: "newspaper",
-                                title: "No News Available",
-                                subtitle: "Check back later for OSRS updates"
-                            )
-                        }
+                        .padding(.vertical, 4)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                    .padding(.vertical)
-                }
+                    .frame(maxWidth: .infinity)
+                    .frame(maxHeight: .infinity, alignment: .topLeading)
+                    .layoutPriority(1)
+                    .refreshable {
+                        // Use Task wrapping to prevent SwiftUI cancellation when user releases gesture early
+                        // This follows community best practices for robust pull-to-refresh implementation
+                        await Task {
+                            await viewModel.refresh()
+                        }.value
+                    }
+                    .accessibilityIdentifier("home_feed_scroll")
+                    .scrollPosition($appState.newsFeedScrollPosition)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .navigationTitle("")
             .navigationBarHidden(true)
-            .refreshable {
-                // Use Task wrapping to prevent SwiftUI cancellation when user releases gesture early
-                // This follows community best practices for robust pull-to-refresh implementation
-                await Task {
-                    await viewModel.refresh()
-                }.value
-            }
             .background(.osrsBackground)
+            .osrsTabGlassAccessoryBar {
+                homeGlassAccessory
+            }
             .ignoresSafeArea(.keyboard) // Prevent layout adjustment during keyboard appearance in child views
             .onReceive(appState.$newsNavigationStack) { stack in
                 print("🔍 NEWSVIEW: NavigationStack path changed - new count: \(stack.count)")
@@ -132,6 +253,7 @@ struct NewsView: View {
                 }
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .task {
             // Only load if we don't have any cached data available
             // The synchronous cache loading in init() should have populated wikiFeed if cache exists
@@ -144,35 +266,47 @@ struct NewsView: View {
             }
         }
     }
-}
 
-struct SearchBarView: View {
-    let placeholder: String
-    let onTap: () -> Void
-    @ScaledMetric(relativeTo: .body) private var searchBarMinHeight: CGFloat = 44
-    
-    var body: some View {
-        Button(action: onTap) {
-            HStack {
-                Image(systemName: "magnifyingglass")
-                    .foregroundStyle(.osrsPlaceholderColor)
-                    .font(.body.weight(.medium))
-                
-                Text(placeholder)
-                    .font(.body)
-                    .foregroundStyle(.osrsPlaceholderColor)
-                    .multilineTextAlignment(.leading)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .frame(minHeight: searchBarMinHeight)
-            .background(.osrsSurfaceVariant)
-            .cornerRadius(18)
+    private func handleRandomPageClick() {
+        if let url = randomPageUrl {
+            appState.navigateToArticle(url: url)
+            preloadNextRandomPage()
+        } else {
+            preloadNextRandomPage()
         }
-        .buttonStyle(PlainButtonStyle())
+    }
+
+    private func preloadNextRandomPage() {
+        let retiringOwner = randomPrewarmOwner
+        randomPrewarmOwner = UUID()
+        let nextOwner = randomPrewarmOwner
+        Task {
+            await osrsArticleDocumentCoordinator.shared.cancelPrewarm(owner: retiringOwner)
+            let result = await osrsRandomPageRepository.shared.getRandomPage()
+            await MainActor.run {
+                switch result {
+                case .success(let pageTitle):
+                    let pageUrlString = "https://oldschool.runescape.wiki/w/\(pageTitle.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? pageTitle)"
+                    randomPageUrl = URL(string: pageUrlString)
+                case .failure:
+                    randomPageUrl = nil
+                }
+            }
+            guard let url = await MainActor.run(body: { randomPageUrl }) else { return }
+            let renderOptions = await MainActor.run {
+                osrsArticleRenderOptions(
+                    usesDarkTheme: themeManager.currentTheme is osrsDarkTheme,
+                    collapseTablesEnabled: themeManager.collapseTables,
+                    articleTextScale: Double(themeManager.articleTextScale)
+                )
+            }
+            _ = await osrsArticleDocumentCoordinator.shared.startPrewarm(
+                owner: nextOwner,
+                request: osrsArticleDocumentRequest(pageURL: url, pageTitle: nil),
+                renderOptions: renderOptions,
+                conditions: osrsArticlePrewarmConditions.current(isOfflineContentAvailable: false)
+            )
+        }
     }
 }
 
@@ -203,90 +337,6 @@ struct EmptyStateView: View {
     }
 }
 
-struct HeaderView: View {
-    @EnvironmentObject var appState: AppState
-    @State private var randomPageUrl: URL?  // Pre-fetched random page URL
-    
-    var body: some View {
-        HStack {
-            // Left-aligned "Home" title matching Android
-            Text("Home")
-                .font(.osrsDisplay)
-                .foregroundStyle(.osrsPrimaryTextColor)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .accessibilityIdentifier("home_header")
-            
-            // Random page button (matching Android)
-            Button(action: {
-                handleRandomPageClick()
-            }) {
-                Image(systemName: "shuffle")
-                    .font(.system(size: 20))
-                    .foregroundStyle(.osrsSecondaryTextColor)
-                    .frame(width: 44, height: 44)
-            }
-            .accessibilityLabel("Random page")
-            .accessibilityIdentifier("home_random_page")
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
-        .background(.osrsBackground)
-        .onAppear {
-            // Pre-load first random page when Home tab appears
-            if randomPageUrl == nil {
-                preloadNextRandomPage()
-            }
-        }
-    }
-    
-    private func handleRandomPageClick() {
-        print("📱 NewsView: Random page button clicked")
-        
-        // Navigate INSTANTLY with pre-fetched URL
-        if let url = randomPageUrl {
-            print("📱 NewsView: Using pre-fetched random page - \(url)")
-            appState.navigateToArticle(url: url)
-            
-            // Pre-load next random page for future taps
-            preloadNextRandomPage()
-        } else {
-            print("⚠️ NewsView: No pre-fetched random page available - loading one now")
-            // Fallback: fetch immediately if none cached
-            preloadNextRandomPage()
-        }
-    }
-    
-    private func preloadNextRandomPage() {
-        print("🎲 NewsView: Pre-loading next random page...")
-        
-        Task {
-            let result = await osrsRandomPageRepository.shared.getRandomPage()
-            
-            await MainActor.run {
-                switch result {
-                case .success(let pageTitle):
-                    print("🎲 NewsView: Pre-loaded random page: \(pageTitle)")
-                    
-                    // Create the random page URL
-                    let pageUrlString = "https://oldschool.runescape.wiki/w/\(pageTitle.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? pageTitle)"
-                    
-                    if let url = URL(string: pageUrlString) {
-                        randomPageUrl = url
-                        print("✅ NewsView: Random page ready for instant navigation")
-                    } else {
-                        print("❌ NewsView: Failed to create valid URL for page: \(pageTitle)")
-                        randomPageUrl = nil
-                    }
-                    
-                case .failure(let error):
-                    print("❌ NewsView: Failed to pre-load random page: \(error.localizedDescription)")
-                    randomPageUrl = nil
-                }
-            }
-        }
-    }
-}
-
 // MARK: - Content Section Views
 
 struct WikiFeedContentView: View {
@@ -303,7 +353,7 @@ struct WikiFeedContentView: View {
             if !wikiFeed.recentUpdates.isEmpty {
                 VStack(alignment: .leading, spacing: 12) {
                     // Header with last updated timestamp
-                    VStack(alignment: .leading, spacing: dynamicTypeSize.isAccessibilitySize ? 4 : 0) {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
                         Text("Updates")
                             .font(.osrsSectionHeaderSmallCaps)
                             .dynamicTypeSize(.xSmall ... .xLarge)
@@ -319,6 +369,7 @@ struct WikiFeedContentView: View {
                             .dynamicTypeSize(.xSmall ... .accessibility2)
                             .foregroundStyle(.osrsPrimaryTextColor)
                             .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity, alignment: .trailing)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 16)
@@ -327,14 +378,17 @@ struct WikiFeedContentView: View {
                         LazyHStack(alignment: .top, spacing: 12) {
                             ForEach(wikiFeed.recentUpdates) { update in
                                 UpdateCardView(updateItem: update) {
-                                    // Navigate to article
-                                    if !update.articleUrl.isEmpty {
-                                        if let url = URL(string: update.articleUrl) {
-                                            appState.navigateToArticle(url: url)
-                                        }
+                                    if !update.articleUrl.isEmpty,
+                                       let url = URL(string: update.articleUrl) {
+                                        appState.navigateToArticle(
+                                            title: update.title,
+                                            url: url,
+                                            snippet: update.snippet,
+                                            thumbnailUrl: URL(string: update.imageUrl)
+                                        )
                                     }
                                 }
-                                .zIndex(1) // Ensure cards are above other content
+                                .zIndex(1)
                             }
                         }
                         .padding(.horizontal, 16)
@@ -455,15 +509,13 @@ struct UpdateCardView: View {
                             .resizable()
                             .aspectRatio(contentMode: .fill)
                     } else {
-                        // Normal mode or preview fallback: use AsyncImage
                         AsyncImage(url: URL(string: updateItem.imageUrl)) { phase in
                             switch phase {
                             case .success(let image):
                                 image
                                     .resizable()
                                     .aspectRatio(contentMode: .fill)
-                            case .failure(_):
-                                // Fallback with OSRS-style colors (browns/tans) instead of blue
+                            case .failure:
                                 RoundedRectangle(cornerRadius: 0)
                                     .fill(LinearGradient(
                                         colors: [Color(red: 0.7, green: 0.6, blue: 0.4), Color(red: 0.5, green: 0.4, blue: 0.3)],
@@ -481,7 +533,6 @@ struct UpdateCardView: View {
                                         }
                                     )
                             case .empty:
-                                // Loading state with OSRS theme colors
                                 Rectangle()
                                     .fill(.osrsSurfaceVariant)
                                     .overlay(
@@ -489,7 +540,6 @@ struct UpdateCardView: View {
                                             .tint(Color.osrsAccentColor)
                                     )
                             @unknown default:
-                                // Fallback
                                 Rectangle()
                                     .fill(.osrsSurfaceVariant)
                             }
@@ -508,14 +558,16 @@ struct UpdateCardView: View {
                         .truncationMode(.tail)
                         .fixedSize(horizontal: false, vertical: dynamicTypeSize.isAccessibilitySize)
                         .frame(maxWidth: .infinity, alignment: .leading)
+                        .accessibilityHidden(true)
                     
-                    HTMLTextView(updateItem.snippet)
+                    Text(osrsStringUtils.plainText(fromHTML: updateItem.snippet))
                         .font(snippetFont)
                         .foregroundStyle(.osrsOnSurface)
                         .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
                         .truncationMode(.tail)
                         .fixedSize(horizontal: false, vertical: dynamicTypeSize.isAccessibilitySize)
                         .frame(maxWidth: .infinity, alignment: .leading)
+                        .accessibilityHidden(true)
                 }
                 .padding(.horizontal, 12)
                 .padding(.top, 8)
@@ -532,6 +584,10 @@ struct UpdateCardView: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityLabel)
         .accessibilityAddTraits(.isButton)
+        .osrsPrewarmArticleWhenVisible(
+            pageURL: URL(string: updateItem.articleUrl),
+            pageTitle: updateItem.title
+        )
     }
 
     private var cardWidth: CGFloat {
@@ -564,7 +620,7 @@ struct UpdateCardView: View {
 
     private var accessibilityLabel: String {
         let title = osrsStringUtils.extractMainTitle(updateItem.title)
-        let snippet = updateItem.snippet.replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
+        let snippet = osrsStringUtils.plainText(fromHTML: updateItem.snippet)
         return "\(title), \(snippet)"
     }
 }
@@ -594,7 +650,10 @@ struct AnnouncementCardView: View {
             
             // Card content
             VStack(alignment: .leading, spacing: 16) {
-                HTMLTextView("\(announcementItem.date): \(announcementItem.content)") { url in
+                osrsHomeFeedLinkedText(
+                    announcementItem.content,
+                    prefix: "\(announcementItem.date): "
+                ) { url in
                     onLinkTap(url.absoluteString)
                 }
                 .font(.osrsBody)
@@ -607,6 +666,11 @@ struct AnnouncementCardView: View {
             .padding(.horizontal, 16)
         }
         .padding(.vertical, 8)
+        .osrsPrewarmArticlesWhenVisible(pageURLs: prewarmArticleURLs)
+    }
+
+    private var prewarmArticleURLs: [URL] {
+        osrsHomeFeedArticleLinkExtractor.internalArticleURLs(in: announcementItem.content)
     }
 }
 
@@ -617,7 +681,7 @@ struct OnThisDayCardView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             // Section header
-            Text(onThisDayItem.title)
+            Text(osrsStringUtils.extractMainTitle(onThisDayItem.title))
                 .font(.osrsSectionHeaderSmallCaps)
                 .foregroundStyle(.osrsOnSurface)
                 .kerning(0.5)
@@ -661,12 +725,16 @@ struct PopularPagesCardView: View {
             VStack(alignment: .leading, spacing: 8) {
                 ForEach(popularPages) { page in
                     Button(action: { onLinkTap(page.pageUrl) }) {
-                        Text(page.title)
+                        Text(osrsStringUtils.extractMainTitle(page.title))
                             .osrsLinkText(fontSize: 16) // Apply heavier font weight to popular page links
                             .foregroundStyle(.osrsLink)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
                     .buttonStyle(PlainButtonStyle())
+                    .osrsPrewarmArticleWhenVisible(
+                        pageURL: URL(string: page.pageUrl),
+                        pageTitle: page.title
+                    )
                 }
             }
             .padding(16)
@@ -688,13 +756,18 @@ struct OnThisDayEventView: View {
     let onLinkTap: (URL) -> Void
     
     var body: some View {
-        MonospaceYearHTMLTextView("• \(event)") { url in
+        osrsHomeFeedLinkedText(event, prefix: "• ") { url in
             onLinkTap(url)
         }
         .font(.osrsBody)
         .foregroundStyle(.osrsOnSurface)
-        .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
-        .fixedSize(horizontal: false, vertical: true)
+        .lineLimit(1)
+        .truncationMode(.tail)
+        .osrsPrewarmArticlesWhenVisible(pageURLs: prewarmArticleURLs)
+    }
+
+    private var prewarmArticleURLs: [URL] {
+        osrsHomeFeedArticleLinkExtractor.internalArticleURLs(in: event)
     }
 }
 
@@ -917,22 +990,21 @@ struct StaticNewsView: View {
     
     var body: some View {
         NavigationStack(path: $appState.newsNavigationStack) {
-            ScrollView {
-                LazyVStack(spacing: 0) {
-                    // Custom header matching Android (now inside ScrollView)
-                    HeaderView()
-                    
-                    // Search bar at top (matches History page layout)
-                    SearchBarView(placeholder: "Search OSRS Wiki") {
-                        // Navigate to search using NavigationStack
-                        appState.navigateToSearch()
-                    }
-                    .padding(.horizontal)
-                    .padding(.top, 8)
-                    .padding(.bottom, 12)
-                    
-                    // Feed content
-                    LazyVStack(spacing: 12) {
+            VStack(spacing: 0) {
+                    osrsSearchLauncher(
+                        placeholder: "Search OSRS Wiki",
+                        accessibilityIdentifier: "home_search",
+                        voiceAccessibilityIdentifier: "home_voice_search",
+                        speechState: appState.speechManager.currentState,
+                        onSearchTap: { appState.navigateToActiveSearch(startsVoiceRecognition: false) },
+                        onVoiceTap: {
+                            appState.navigateToActiveSearch(startsVoiceRecognition: true)
+                        }
+                    )
+                    .osrsTabSearchLauncherLayout()
+
+                    ScrollView {
+                        LazyVStack(spacing: 12) {
                         
                         // Feed content matching Android structure - using STATIC data (no @Published dependencies)
                         let _ = print("🔍 StaticNewsView rendering with \(wikiFeed.recentUpdates.count) updates, \(wikiFeed.announcements.count) announcements")
@@ -953,7 +1025,12 @@ struct StaticNewsView: View {
                                             UpdateCardView(updateItem: update) {
                                                 // Navigate to article
                                                 if !update.articleUrl.isEmpty {
-                                                    appState.navigateToArticle(url: URL(string: update.articleUrl)!)
+                                                    appState.navigateToArticle(
+                                                        title: update.title,
+                                                        url: URL(string: update.articleUrl)!,
+                                                        snippet: update.snippet,
+                                                        thumbnailUrl: URL(string: update.imageUrl)
+                                                    )
                                                 }
                                             }
                                         }
@@ -991,12 +1068,20 @@ struct StaticNewsView: View {
                                 }
                             }
                         }
+                        }
+                        .padding(.vertical)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                    .padding(.vertical)
-                }
+                    .frame(maxWidth: .infinity)
+                    .frame(maxHeight: .infinity, alignment: .topLeading)
+                    .layoutPriority(1)
+                    .accessibilityIdentifier("home_feed_scroll")
+                    .scrollPosition($appState.newsFeedScrollPosition)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .background(.osrsBackground)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .navigationTitle("")
         .navigationBarHidden(true)
     }
@@ -1011,22 +1096,21 @@ struct NewsViewWithPreloadedData: View {
     
     var body: some View {
         NavigationStack(path: $appState.newsNavigationStack) {
-            ScrollView {
-                LazyVStack(spacing: 0) {
-                    // Custom header matching Android (now inside ScrollView)
-                    HeaderView()
-                    
-                    // Search bar at top (matches History page layout)
-                    SearchBarView(placeholder: "Search OSRS Wiki") {
-                        // Navigate to search using NavigationStack
-                        appState.navigateToSearch()
-                    }
-                    .padding(.horizontal)
-                    .padding(.top, 8)
-                    .padding(.bottom, 12)
-                    
-                    // Feed content
-                    LazyVStack(spacing: 12) {
+            VStack(spacing: 0) {
+                    osrsSearchLauncher(
+                        placeholder: "Search OSRS Wiki",
+                        accessibilityIdentifier: "home_search",
+                        voiceAccessibilityIdentifier: "home_voice_search",
+                        speechState: appState.speechManager.currentState,
+                        onSearchTap: { appState.navigateToActiveSearch(startsVoiceRecognition: false) },
+                        onVoiceTap: {
+                            appState.navigateToActiveSearch(startsVoiceRecognition: true)
+                        }
+                    )
+                    .osrsTabSearchLauncherLayout()
+
+                    ScrollView {
+                        LazyVStack(spacing: 12) {
                         
                         // Feed content matching Android structure - use pre-loaded data  
                         // DEBUG: Print state before rendering
@@ -1049,7 +1133,12 @@ struct NewsViewWithPreloadedData: View {
                                                     // Navigate to article
                                                     if !update.articleUrl.isEmpty {
                                                         if let url = URL(string: update.articleUrl) {
-                                                            appState.navigateToArticle(url: url)
+                                                            appState.navigateToArticle(
+                                                                title: update.title,
+                                                                url: url,
+                                                                snippet: update.snippet,
+                                                                thumbnailUrl: URL(string: update.imageUrl)
+                                                            )
                                                         }
                                                     }
                                                 }
@@ -1095,12 +1184,20 @@ struct NewsViewWithPreloadedData: View {
                                 subtitle: "Check back later for OSRS updates"
                             )
                         }
+                        }
+                        .padding(.vertical)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                    .padding(.vertical)
-                }
+                    .frame(maxWidth: .infinity)
+                    .frame(maxHeight: .infinity, alignment: .topLeading)
+                    .layoutPriority(1)
+                    .accessibilityIdentifier("home_feed_scroll")
+                    .scrollPosition($appState.newsFeedScrollPosition)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .background(.osrsBackground)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .navigationTitle("")
         .navigationBarHidden(true)
     }
@@ -1130,7 +1227,12 @@ struct CachedContentView: View {
                                     // Navigate to article
                                     if !update.articleUrl.isEmpty {
                                         if let url = URL(string: update.articleUrl) {
-                                            appState.navigateToArticle(url: url)
+                                            appState.navigateToArticle(
+                                                title: update.title,
+                                                url: url,
+                                                snippet: update.snippet,
+                                                thumbnailUrl: URL(string: update.imageUrl)
+                                            )
                                         }
                                     }
                                 }

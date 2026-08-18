@@ -43,9 +43,13 @@ struct ImmediateStyledTextField: UIViewRepresentable {
         textField.autocorrectionType = .no
         textField.autocapitalizationType = .none
         textField.returnKeyType = .search
-        textField.font = UIFont.systemFont(ofSize: 16)
+        textField.font = UIFont.preferredFont(forTextStyle: .body)
+        textField.adjustsFontForContentSizeCategory = true
         textField.textColor = UIColor(theme.primaryTextColor)
         textField.tintColor = UIColor(theme.primary)
+        textField.accessibilityIdentifier = "immediate_search_input"
+        textField.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        textField.setContentHuggingPriority(.defaultLow, for: .horizontal)
         textField.addTarget(context.coordinator, action: #selector(Coordinator.textChanged), for: .editingChanged)
         
         // FORCE IMMEDIATE FOCUS
@@ -58,6 +62,8 @@ struct ImmediateStyledTextField: UIViewRepresentable {
     
     func updateUIView(_ uiView: UITextField, context: Context) {
         uiView.text = text
+        uiView.textColor = UIColor(theme.primaryTextColor)
+        uiView.tintColor = UIColor(theme.primary)
         
         // Keep focus on first appearance
         if uiView.window != nil && !uiView.isFirstResponder && text.isEmpty {
@@ -67,11 +73,13 @@ struct ImmediateStyledTextField: UIViewRepresentable {
 }
 
 struct ImmediateStyledSearchView: View {
+    @Environment(\.dismiss) private var dismiss
     @State private var searchText = ""
+    @State private var isSearchFocused = true
     @State private var viewModel: SearchViewModel?
     @State private var hasInitialized = false
     
-    let appState: AppState
+    @ObservedObject var appState: AppState
     let themeManager: osrsThemeManager
     let theme: any osrsThemeProtocol
     let customNavigationClosure: ((String, URL, String?, URL?) -> Void)?
@@ -107,9 +115,7 @@ struct ImmediateStyledSearchView: View {
                         appState: appState
                     )
                 } else if !searchText.isEmpty {
-                    // Show loading while view model initializes
-                    ProgressView()
-                        .progressViewStyle(CircularProgressViewStyle(tint: Color(theme.primary)))
+                    Color(theme.background)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     emptySearchState
@@ -119,10 +125,12 @@ struct ImmediateStyledSearchView: View {
         }
         .background(Color(theme.background))
         .ignoresSafeArea(.keyboard)
-        .navigationTitle("Search")
-        .navigationBarTitleDisplayMode(.inline)
+        .safeAreaPadding(.top)
+        .navigationTitle("")
+        .navigationBarHidden(true)
         .tint(Color(theme.primary))
         .onAppear {
+            configureVoiceSearch()
             guard !hasInitialized else { return }
             hasInitialized = true
             
@@ -170,48 +178,46 @@ struct ImmediateStyledSearchView: View {
                     }
                 }
                 viewModel = vm
+                vm.currentQuery = searchText
             }
+        }
+        .onDisappear {
+            appState.speechManager.cleanup()
         }
         .onChange(of: searchText) { _, newValue in
             viewModel?.currentQuery = newValue
+        }
+        .alert(
+            "Voice Search Error",
+            isPresented: Binding(
+                get: { appState.speechManager.errorMessage != nil },
+                set: { if !$0 { appState.speechManager.clearError() } }
+            )
+        ) {
+            Button("OK") { appState.speechManager.clearError() }
+        } message: {
+            Text(appState.speechManager.errorMessage ?? "")
         }
     }
     
     private var searchInputSection: some View {
         VStack(spacing: 0) {
-            // Search bar container
-            VStack(spacing: 0) {
-                HStack {
-                    Image(systemName: "magnifyingglass")
-                        .foregroundStyle(Color(theme.placeholderColor))
-                    
-                    ImmediateStyledTextField(
-                        text: $searchText,
-                        placeholder: "Search OSRS Wiki",
-                        onSubmit: performSearch,
-                        theme: theme
-                    )
-                    
-                    if !searchText.isEmpty {
-                        Button(action: clearSearch) {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundStyle(Color(theme.secondaryTextColor))
-                        }
-                    }
-                    
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .frame(height: 44)
-                .background(Color(theme.surfaceVariant))
-                .cornerRadius(22)
-                .padding(.horizontal, 16)
-                .padding(.top, 8)
-                .padding(.bottom, 12)
-            }
-            .background(Color(theme.background))
-            
-            // Recent searches - only show when empty
+            osrsActiveSearchToolbar(
+                text: $searchText,
+                isFocused: $isSearchFocused,
+                placeholder: "Search OSRS Wiki",
+                backAccessibilityLabel: "Back",
+                backAccessibilityIdentifier: "immediate_search_back_button",
+                inputAccessibilityIdentifier: "immediate_search_input",
+                clearAccessibilityIdentifier: "immediate_search_clear_button",
+                voiceAccessibilityIdentifier: "immediate_search_voice_search",
+                speechState: appState.speechManager.currentState,
+                onBack: { dismiss() },
+                onClear: clearSearch,
+                onVoiceTap: { appState.speechManager.startVoiceRecognition() },
+                onSubmit: performSearch
+            )
+
             if searchText.isEmpty, let vm = viewModel, !vm.recentSearches.isEmpty {
                 recentSearchesSection(viewModel: vm)
                     .background(Color(theme.background))
@@ -222,7 +228,7 @@ struct ImmediateStyledSearchView: View {
     private func recentSearchesSection(viewModel: SearchViewModel) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text("Recent Searches")
+                Text("Recent")
                     .font(.subheadline)
                     .fontWeight(.medium)
                     .foregroundStyle(Color(theme.secondaryTextColor))
@@ -237,23 +243,27 @@ struct ImmediateStyledSearchView: View {
             }
             .padding(.horizontal)
             
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
+            VStack(spacing: 0) {
                     ForEach(viewModel.recentSearches.prefix(5), id: \.self) { search in
-                        Button(search) {
+                        Button {
                             searchText = search
                             performSearch()
+                        } label: {
+                            HStack(spacing: 16) {
+                                Image(systemName: "clock.arrow.circlepath")
+                                    .frame(width: 24, height: 24)
+                                Text(search).lineLimit(1)
+                                Spacer()
+                            }
+                            .padding(.horizontal, 16)
+                            .frame(minHeight: 44)
                         }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(Color(theme.surfaceVariant))
                         .foregroundStyle(Color(theme.secondaryTextColor))
-                        .cornerRadius(16)
                         .font(.subheadline)
+                        .buttonStyle(.plain)
                     }
-                }
-                .padding(.horizontal)
             }
+            .background(Color(theme.surface))
         }
     }
     
@@ -279,6 +289,22 @@ struct ImmediateStyledSearchView: View {
         viewModel?.currentQuery = ""
         viewModel?.clearSearchResults()
     }
+
+    private func configureVoiceSearch() {
+        appState.speechManager.configure(
+            onResult: { result in
+                searchText = result
+                viewModel?.currentQuery = result
+                viewModel?.addToRecentSearches(result)
+            },
+            onPartialResult: { partialResult in
+                guard !partialResult.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+                searchText = partialResult
+                viewModel?.currentQuery = partialResult
+            },
+            onError: { _ in }
+        )
+    }
 }
 
 // Separate content view for search results
@@ -295,12 +321,10 @@ private struct SearchContentSection: View {
                 Spacer()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(Color(theme.background))
-            } else if viewModel.isSearching && viewModel.searchResults.isEmpty {
-                ProgressView("Searching...")
-                    .progressViewStyle(CircularProgressViewStyle(tint: Color(theme.primary)))
-                    .foregroundStyle(Color(theme.secondaryTextColor))
+            } else if viewModel.searchResults.isEmpty && !viewModel.hasCompletedCurrentQuery {
+                Color(theme.background)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if viewModel.searchResults.isEmpty && !viewModel.isSearching {
+            } else if viewModel.searchResults.isEmpty {
                 EmptyStateView(
                     iconName: "magnifyingglass",
                     title: "No Results",
@@ -330,7 +354,8 @@ private struct SearchContentSection: View {
                     description: result.namespace,
                     url: result.url.absoluteString,
                     thumbnailUrl: result.thumbnailUrl,
-                    pageId: nil
+                    pageId: nil,
+                    searchQuery: searchText
                 )) {
                     // Dismiss keyboard before navigation
                     UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
@@ -339,17 +364,15 @@ private struct SearchContentSection: View {
                     viewModel.addToRecentSearches(searchText)
                 }
                 .listRowBackground(Color(theme.surface))
+                .listRowInsets(EdgeInsets())
+                .listRowSeparator(.hidden, edges: .all)
             }
             
             // Load more section
             if viewModel.hasMoreResults {
                 HStack {
                     Spacer()
-                    if viewModel.isSearching {
-                        ProgressView()
-                            .scaleEffect(0.8)
-                            .tint(Color(theme.primary))
-                    } else {
+                    if !viewModel.isSearching {
                         Button("Load More Results") {
                             Task {
                                 await viewModel.loadMoreResults()
@@ -369,6 +392,7 @@ private struct SearchContentSection: View {
             }
         }
         .listStyle(PlainListStyle())
+        .osrsHidesListSeparators()
         .scrollContentBackground(.hidden)
         .background(Color(theme.background))
     }

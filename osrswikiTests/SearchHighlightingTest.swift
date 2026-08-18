@@ -7,6 +7,7 @@
 
 import XCTest
 import SwiftUI
+import UIKit
 @testable import osrswiki
 
 class SearchHighlightingTest: XCTestCase {
@@ -62,6 +63,89 @@ class SearchHighlightingTest: XCTestCase {
         
         XCTAssertEqual(decoded, "Zezima's profile & achievements <guide>",
                       "HTML entities should be decoded correctly")
+    }
+
+    func testNestedHTMLEntitiesDecodeToFixedPoint() {
+        XCTAssertEqual(
+            "Wyrmscraig &amp;amp; Sailing Changes".decodingHTMLEntities(),
+            "Wyrmscraig & Sailing Changes"
+        )
+        XCTAssertEqual(
+            osrsStringUtils.extractMainTitle("Update:Wyrmscraig &amp;amp; Sailing Changes"),
+            "Wyrmscraig & Sailing Changes"
+        )
+    }
+
+    func testTitleHighlightStylesTheTrailingPrefixCharacter() throws {
+        let result = ThemedSearchResult(
+            title: "Barbarian Village",
+            url: "https://oldschool.runescape.wiki/w/Barbarian_Village",
+            searchQuery: "barbarian v"
+        )
+        let highlighted = try XCTUnwrap(result.highlightedTitle)
+        let highlightRun = try XCTUnwrap(highlighted.runs.first(where: {
+            String(highlighted.characters[$0.range]).contains("Barbarian V")
+        }))
+        XCTAssertTrue(
+            highlightRun.inlinePresentationIntent?.contains(.stronglyEmphasized) == true,
+            "The trailing title-prefix character must remain semantically emphasized."
+        )
+    }
+
+    func testThemedBaseColorPreservesExplicitSearchHighlight() throws {
+        let model = ThemedSearchResult(
+            title: "Barbarian Village",
+            url: "https://oldschool.runescape.wiki/w/Barbarian_Village",
+            searchQuery: "barbarian v"
+        )
+        let prepared = try XCTUnwrap(model.highlightedTitle)
+        let themeColor = Color(red: 58 / 255, green: 46 / 255, blue: 28 / 255)
+        let rendered = SearchResultRowView.applyingBaseColor(to: prepared, color: themeColor)
+        let highlightRun = try XCTUnwrap(rendered.runs.first(where: {
+            String(rendered.characters[$0.range]).contains("Barbarian V")
+        }))
+        let baseRun = try XCTUnwrap(rendered.runs.first(where: {
+            String(rendered.characters[$0.range]).contains("illage")
+        }))
+        let highlightColor = try XCTUnwrap(highlightRun.foregroundColor)
+        let baseColor = try XCTUnwrap(baseRun.foregroundColor)
+
+        XCTAssertEqual(baseColor, themeColor)
+        XCTAssertNotEqual(highlightColor, baseColor, "The brown match color must survive theme application")
+    }
+
+    func testServerSnippetHighlightIgnoresOneCharacterQueryTokens() throws {
+        let result = ThemedSearchResult(
+            title: "Barbarian Village",
+            snippet: #"<span class="searchmatch">Barbarian</span> <span class="searchmatch">v</span> history"#,
+            url: "https://oldschool.runescape.wiki/w/Barbarian_Village",
+            searchQuery: "barbarian v"
+        )
+        let snippet = try XCTUnwrap(result.processedSnippet)
+        let native = NSAttributedString(snippet)
+        let barbarianRange = (native.string as NSString).range(of: "Barbarian")
+        let trailingVRange = (native.string as NSString).range(of: "v")
+
+        let policyRanges = SearchQueryPolicy.snippetHighlightRanges(native.string, query: "barbarian v")
+        XCTAssertTrue(
+            policyRanges.contains {
+                $0.startInclusive == barbarianRange.location &&
+                    $0.endExclusive == NSMaxRange(barbarianRange)
+            },
+            "The meaningful server match must remain in the snippet highlight policy."
+        )
+        XCTAssertFalse(
+            policyRanges.contains {
+                $0.startInclusive <= trailingVRange.location &&
+                    $0.endExclusive > trailingVRange.location
+            },
+            "The one-character token must not become a noisy snippet highlight."
+        )
+        let trailingFont = native.attribute(.font, at: trailingVRange.location, effectiveRange: nil) as? UIFont
+        XCTAssertFalse(
+            trailingFont?.fontDescriptor.symbolicTraits.contains(.traitBold) ?? false,
+            "A one-character trailing query token should remain unhighlighted in snippets."
+        )
     }
     
     func testNoExpensiveNSAttributedStringOperations() {

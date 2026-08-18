@@ -56,7 +56,9 @@ class NewsRepository: ObservableObject {
                 throw NetworkError.invalidData
             }
             
-            return parseWikiFeed(from: html)
+            return await Task.detached(priority: .userInitiated) {
+                Self.parseWikiFeed(from: html)
+            }.value
         } catch let networkError as NetworkError {
             print("❌ NewsRepository: Network error fetching wiki feed: \(networkError.localizedDescription)")
             throw networkError
@@ -218,7 +220,7 @@ class NewsRepository: ObservableObject {
         print("🔄 NewsRepository: Marked refresh attempt at \(Date())")
     }
 
-    private func parseWikiFeed(from html: String) -> WikiFeed {
+    nonisolated private static func parseWikiFeed(from html: String) -> WikiFeed {
         return WikiFeed(
             recentUpdates: parseRecentUpdates(html),
             announcements: parseAnnouncements(html),
@@ -229,11 +231,11 @@ class NewsRepository: ObservableObject {
 
 #if DEBUG
     func parseWikiFeedForTesting(_ html: String) -> WikiFeed {
-        return parseWikiFeed(from: html)
+        return Self.parseWikiFeed(from: html)
     }
 #endif
     
-    private func parseRecentUpdates(_ html: String) -> [UpdateItem] {
+    nonisolated private static func parseRecentUpdates(_ html: String) -> [UpdateItem] {
         var updates: [UpdateItem] = []
         
         // Find the start of mainpage-recent-updates section
@@ -286,12 +288,12 @@ class NewsRepository: ObservableObject {
                 // Extract href from tile-bottom a tag
                 let hrefPattern = #"<div[^>]*class="[^"]*tile-bottom[^"]*"[^>]*>.*?<a[^>]*href="([^"]+)""#
                 let href = extractFirst(pattern: hrefPattern, from: tileContent) ?? ""
-                let articleUrl = href.starts(with: "/") ? "\(baseURL)\(href)" : href
+                let articleUrl = href.starts(with: "/") ? "https://oldschool.runescape.wiki\(href)" : href
                 
                 // Extract image from tile-top
                 let imgSrcPattern = #"<div[^>]*class="[^"]*tile-top[^"]*"[^>]*>.*?<img[^>]*src="([^"]+)""#
                 let imgSrc = extractFirst(pattern: imgSrcPattern, from: tileContent) ?? ""
-                let imageUrl = imgSrc.starts(with: "/") ? "\(baseURL)\(imgSrc)" : imgSrc
+                let imageUrl = imgSrc.starts(with: "/") ? "https://oldschool.runescape.wiki\(imgSrc)" : imgSrc
                 
                 let cleanTitle = cleanHTML(title)
                 let cleanSnippet = snippet // Already cleaned above
@@ -318,7 +320,7 @@ class NewsRepository: ObservableObject {
         return updates
     }
     
-    private func parseAnnouncements(_ html: String) -> [AnnouncementItem] {
+    nonisolated private static func parseAnnouncements(_ html: String) -> [AnnouncementItem] {
         var announcements: [AnnouncementItem] = []
         
         let dtPattern = #"<dt[^>]*>(.*?)</dt>"#
@@ -339,7 +341,7 @@ class NewsRepository: ObservableObject {
         return announcements
     }
     
-    private func parseOnThisDay(_ html: String) -> OnThisDayItem? {
+    nonisolated private static func parseOnThisDay(_ html: String) -> OnThisDayItem? {
         let h2Pattern = #"<h2[^>]*>(.*?)</h2>"#
         let liPattern = #"<li[^>]*>(.*?)</li>"#
         
@@ -355,7 +357,7 @@ class NewsRepository: ObservableObject {
         return nil
     }
     
-    private func parsePopularPages(_ html: String) -> [PopularPageItem] {
+    nonisolated private static func parsePopularPages(_ html: String) -> [PopularPageItem] {
         var popularPages: [PopularPageItem] = []
         
         let linkPattern = #"<li[^>]*>\s*<a[^>]*href="([^"]+)"[^>]*>(.*?)</a>"#
@@ -371,7 +373,7 @@ class NewsRepository: ObservableObject {
                     
                     let href = String(popularContent[hrefRange])
                     let title = String(popularContent[titleRange])
-                    let pageUrl = href.starts(with: "/") ? "\(baseURL)\(href)" : href
+                    let pageUrl = href.starts(with: "/") ? "https://oldschool.runescape.wiki\(href)" : href
                     
                     popularPages.append(PopularPageItem(
                         title: cleanHTML(title),
@@ -422,7 +424,7 @@ class NewsRepository: ObservableObject {
     
     // MARK: - Helper Methods
     
-    private func extractFirst(pattern: String, from text: String) -> String? {
+    nonisolated private static func extractFirst(pattern: String, from text: String) -> String? {
         do {
             let regex = try NSRegularExpression(pattern: pattern, options: [.caseInsensitive])
             let matches = regex.matches(in: text, options: [], range: NSRange(text.startIndex..., in: text))
@@ -438,7 +440,7 @@ class NewsRepository: ObservableObject {
         return nil
     }
     
-    private func extractLast(pattern: String, from text: String) -> String? {
+    nonisolated private static func extractLast(pattern: String, from text: String) -> String? {
         do {
             let regex = try NSRegularExpression(pattern: pattern, options: [.caseInsensitive])
             let matches = regex.matches(in: text, options: [], range: NSRange(text.startIndex..., in: text))
@@ -454,7 +456,7 @@ class NewsRepository: ObservableObject {
         return nil
     }
     
-    private func extractAll(pattern: String, from text: String) -> [String] {
+    nonisolated private static func extractAll(pattern: String, from text: String) -> [String] {
         var results: [String] = []
         
         do {
@@ -473,7 +475,7 @@ class NewsRepository: ObservableObject {
         return results
     }
 
-    private func extractDivElementHTML(containingClass className: String, from html: String) -> String? {
+    nonisolated private static func extractDivElementHTML(containingClass className: String, from html: String) -> String? {
         let escapedClassName = NSRegularExpression.escapedPattern(for: className)
         let startPattern = #"<div\b[^>]*class\s*=\s*"[^"]*\#(escapedClassName)[^"]*"[^>]*>"#
 
@@ -508,7 +510,7 @@ class NewsRepository: ObservableObject {
         return nil
     }
     
-    private func cleanHTML(_ html: String) -> String {
+    nonisolated private static func cleanHTML(_ html: String) -> String {
         return html
             .replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
             .replacingOccurrences(of: "&amp;", with: "&")

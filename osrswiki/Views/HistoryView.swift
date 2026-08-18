@@ -7,6 +7,7 @@
 
 import SwiftUI
 import Foundation
+import UIKit
 
 // MARK: - Data Models (Matching Android Structure)
 
@@ -40,13 +41,17 @@ struct HistoryView: View {
                     onClearHistory: { showingClearConfirmation = true }
                 )
                 
-                // Search bar at top (matches Android and home page)
-                SearchBarView(placeholder: "Search OSRS Wiki") {
-                    // Navigate to search using dedicated HistoryView navigation stack
-                    appState.navigateToSearchFromHistory()
-                }
-                .padding(.horizontal)
-                .padding(.top, 8)
+                osrsSearchLauncher(
+                    placeholder: "Search OSRS Wiki",
+                    accessibilityIdentifier: "history_search",
+                    voiceAccessibilityIdentifier: "history_voice_search",
+                    speechState: appState.speechManager.currentState,
+                    onSearchTap: { appState.navigateToActiveSearch(startsVoiceRecognition: false) },
+                    onVoiceTap: {
+                        appState.navigateToActiveSearch(startsVoiceRecognition: true)
+                    }
+                )
+                .osrsTabSearchLauncherLayout()
                 
                 if viewModel.historyItems.isEmpty {
                     emptyStateView
@@ -124,28 +129,32 @@ struct HistoryView: View {
     }
     
     private var historyList: some View {
-        List {
-            ForEach(viewModel.historyItems) { item in
-                switch item {
-                case .dateHeader(let dateString):
-                    // Date header section (matches Android DateHeaderViewHolder)
-                    HistoryDateHeaderView(dateString: dateString)
-                        .listRowBackground(osrsTheme.surface)
-                        .listRowSeparator(.hidden)
-                        .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
-                        
-                case .entryItem(let entry):
-                    // History entry (matches Android EntryViewHolder) 
-                    HistoryEntryRowView(entry: entry, onTap: {
-                        navigateToHistoryEntry(entry)
-                    }) {
-                        viewModel.removeHistoryEntry(entry)
+        ScrollView {
+            LazyVStack(spacing: 0) {
+                ForEach(viewModel.historyItems) { item in
+                    switch item {
+                    case .dateHeader(let dateString):
+                        HistoryDateHeaderView(dateString: dateString)
+                            .background(osrsTheme.background)
+                    case .entryItem(let entry):
+                        HistoryEntryRowView(entry: entry, onTap: {
+                            navigateToHistoryEntry(entry)
+                        }) {
+                            viewModel.removeHistoryEntry(entry)
+                        }
+                        .background(osrsTheme.surface)
+                        .contextMenu {
+                            Button("Delete", role: .destructive) {
+                                viewModel.removeHistoryEntry(entry)
+                            }
+                        }
                     }
-                    .listRowBackground(osrsTheme.surface)
                 }
             }
         }
-        .listStyle(PlainListStyle())
+        .scrollPosition($appState.historyListScrollPosition)
+        .scrollContentBackground(.hidden)
+        .background(osrsTheme.background)
         .refreshable {
             viewModel.loadHistory()
         }
@@ -163,46 +172,39 @@ struct HistoryHeaderView: View {
     let onClearHistory: () -> Void
     
     var body: some View {
-        HStack {
-            // Left-aligned "History" title matching NewsView HeaderView
-            Text("History")
-                .font(.osrsDisplay)
-                .foregroundStyle(.osrsPrimaryTextColor)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            
-            // Right-aligned clear all button (matches Android design)
+        osrsThemedTabHeader("History", accessibilityIdentifier: "history_header") {
             Button(action: onClearHistory) {
                 Image(systemName: "trash")
                     .font(.system(size: 20))
                     .foregroundStyle(.osrsSecondaryTextColor)
                     .frame(width: 44, height: 44)
             }
+            .accessibilityLabel("Clear history")
+            .accessibilityIdentifier("history_clear_button")
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
-        .background(.osrsBackground)
     }
 }
 
 struct HistoryEntryRowView: View {
     @Environment(\.osrsTheme) var osrsTheme
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let entry: ReadingHistoryEntry
     let onTap: () -> Void
     let onDelete: () -> Void
     
     var body: some View {
         Button(action: onTap) {
-            HStack(spacing: 12) {
+            HStack(alignment: .top, spacing: 12) {
                 // Main content section (title and description) - matches saved pages
                 VStack(alignment: .leading, spacing: 4) {
                     Text(osrsStringUtils.extractMainTitle(entry.displayText))
-                        .font(.osrsListTitle)  // Use same font as saved pages
+                        .font(.osrsListTitle)
                         .lineLimit(1)
                         .foregroundStyle(.osrsPrimaryTextColor)
                         .multilineTextAlignment(.leading)
                     
                     if let snippet = entry.snippet, !snippet.isEmpty {
-                        Text(snippet)
+                        Text(osrsStringUtils.decodeHTMLEntitiesFixedPoint(snippet))
                             .font(.subheadline)
                             .lineLimit(2)
                             .foregroundStyle(.osrsPrimaryTextColor) // Use primary color to match title
@@ -212,29 +214,33 @@ struct HistoryEntryRowView: View {
                 
                 Spacer()
                 
-                // Thumbnail positioned on the right (matching saved pages layout)
-                AsyncImage(url: entry.thumbnailUrl) { image in
-                    image
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                        .clipped()
-                } placeholder: {
-                    Image(systemName: "doc.text.fill")
-                        .foregroundStyle(.osrsPlaceholderColor)
-                        .font(.title2)
+                // Match search rows: entries without media use the full text width instead of
+                // reserving a decorative placeholder block.
+                if let thumbnailUrl = entry.thumbnailUrl, !dynamicTypeSize.isAccessibilitySize {
+                    osrsAnimatedThumbnailView(
+                        url: thumbnailUrl,
+                        refreshToken: entry.metadataUpdatedAt.map { String($0.timeIntervalSince1970) }
+                    )
+                    .frame(width: 60, height: 60)
+                    .background(.osrsSearchBoxBackgroundColor)
+                    .cornerRadius(8)
                 }
-                .frame(width: 60, height: 60)  // Match saved pages size
-                .background(.osrsSearchBoxBackgroundColor)  // Match saved pages background
-                .cornerRadius(8)
             }
             .padding(.vertical, 8)
-            .padding(.horizontal, 24)
+            .padding(.horizontal, 16)
+            .frame(minHeight: 76)
             .contentShape(Rectangle())
         }
         .buttonStyle(PlainButtonStyle())
-        .listRowBackground(osrsTheme.surface)  // Proper theme background
-        .listRowSeparator(.visible, edges: .bottom)
-        .listRowSeparatorTint(osrsTheme.divider)
+        .listRowBackground(osrsTheme.surface)
+        .listRowSeparator(.hidden, edges: .all)
+        .overlay(alignment: .bottom) {
+            Color(osrsTheme.surface).frame(height: 3)
+        }
+        .osrsPrewarmArticleWhenVisible(
+            pageURL: URL(string: entry.wikiUrl),
+            pageTitle: entry.displayText
+        )
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
             Button("Delete", role: .destructive) {
                 onDelete()
@@ -245,7 +251,7 @@ struct HistoryEntryRowView: View {
 
 // MARK: - ReadingHistoryEntry Model
 struct ReadingHistoryEntry: Identifiable, Hashable {
-    let id = UUID()
+    let id: String
     let wikiUrl: String
     let displayText: String
     let pageId: Int?
@@ -254,6 +260,7 @@ struct ReadingHistoryEntry: Identifiable, Hashable {
     let source: Int
     let snippet: String?
     let thumbnailUrl: URL?
+    let metadataUpdatedAt: Date?
     
     var sourceDescription: String {
         switch source {
@@ -274,30 +281,51 @@ struct ReadingHistoryEntry: Identifiable, Hashable {
 
 struct HistoryDateHeaderView: View {
     @Environment(\.osrsTheme) var osrsTheme
+    @ScaledMetric(relativeTo: .title3) private var dateFontSize: CGFloat = 24
     let dateString: String
     
     var body: some View {
         HStack {
             Text(dateString)
-                .font(.headline)
-                .fontWeight(.semibold)
-                .foregroundStyle(.osrsPrimaryTextColor)
-                .padding(.top, 8)
-                .padding(.bottom, 0)
+                .font(dateFont)
+                .textCase(.uppercase)
+                .kerning(0.5)
+                .foregroundStyle(.osrsSecondaryTextColor)
+                .padding(.vertical, 8)
             
             Spacer()
         }
         .padding(.horizontal, 16)
-        .background(.osrsBackground)
+        .background(osrsTheme.background)
+    }
+
+    private var dateFont: Font {
+        for name in ["AlegreyaSC-Bold", "alegreya_sc_bold", "Alegreya SC Bold", "alegreya_sc_medium", "AlegreyaSC-Medium"] where UIFont(name: name, size: dateFontSize) != nil {
+            return .custom(name, size: dateFontSize)
+        }
+        return .system(size: dateFontSize, weight: .bold, design: .serif)
     }
 }
 
 // MARK: - HistoryViewModel
+@MainActor
 class HistoryViewModel: ObservableObject {
+    private static var activeMetadataRefreshURLs = Set<URL>()
     @Published var historyItems: [HistoryListItem] = []  // Changed to grouped items
     @Published var isLoading = false
     
-    private let historyRepository = HistoryRepository()
+    private let historyRepository: HistoryRepository
+    private let historyEnricher: osrsHistoryEnricher
+    private var metadataRefreshTask: Task<Void, Never>?
+    private let metadataFreshnessInterval: TimeInterval = 7 * 24 * 60 * 60
+
+    init(
+        historyRepository: HistoryRepository = HistoryRepository(),
+        historyEnricher: osrsHistoryEnricher = osrsHistoryEnricher()
+    ) {
+        self.historyRepository = historyRepository
+        self.historyEnricher = historyEnricher
+    }
     
     func loadHistory() {
         isLoading = true
@@ -305,25 +333,91 @@ class HistoryViewModel: ObservableObject {
         // Load real history data from HistoryRepository
         let rawHistoryItems = historyRepository.getHistory()
         
-        // Convert to ReadingHistoryEntry and group by date (like Android)
-        var entries = rawHistoryItems.map { item in
+        publishHistory(rawHistoryItems)
+        isLoading = false
+        scheduleMetadataRefresh(for: rawHistoryItems)
+    }
+
+    private func publishHistory(_ rawHistoryItems: [HistoryItem]) {
+        let entries = rawHistoryItems.map { item in
             ReadingHistoryEntry(
+                id: item.id,
                 wikiUrl: item.pageUrl.absoluteString,
                 displayText: osrsStringUtils.extractMainTitle(item.displayTitle),
                 pageId: nil,
                 apiPath: item.pageTitle,
                 timestamp: item.visitedDate,
                 source: 1,
-                snippet: item.description,
-                thumbnailUrl: item.thumbnailUrl
+                snippet: item.description.map(osrsStringUtils.decodeHTMLEntitiesFixedPoint),
+                thumbnailUrl: item.thumbnailUrl,
+                metadataUpdatedAt: item.metadataUpdatedAt
             )
         }
-        
-        
-        // Group by date (matching Android's groupByDate function)
-        self.historyItems = groupByDate(entries)
-        
-        isLoading = false
+        historyItems = groupByDate(entries)
+    }
+
+    private func scheduleMetadataRefresh(for rawHistoryItems: [HistoryItem]) {
+        guard metadataRefreshTask == nil else { return }
+        let cutoff = Date().addingTimeInterval(-metadataFreshnessInterval)
+        let candidates = rawHistoryItems.filter { item in
+            guard let updatedAt = item.metadataUpdatedAt else { return true }
+            return updatedAt < cutoff
+        }
+        .filter { !Self.activeMetadataRefreshURLs.contains($0.pageUrl) }
+        .prefix(24)
+        guard !candidates.isEmpty else { return }
+        let claimedURLs = Set(candidates.map(\.pageUrl))
+        Self.activeMetadataRefreshURLs.formUnion(claimedURLs)
+        let repository = historyRepository
+        let enricher = historyEnricher
+        let cachedFeed = NewsRepository.shared.getCachedFeedSynchronously()
+        let refreshCandidates = candidates.map { item in
+            (item, osrsHistoryUpdateMetadataResolver.cachedMetadata(for: item, in: cachedFeed))
+        }
+
+        metadataRefreshTask = Task { [weak self] in
+            defer {
+                Self.activeMetadataRefreshURLs.subtract(claimedURLs)
+                self?.metadataRefreshTask = nil
+            }
+            for batchStart in stride(from: 0, to: refreshCandidates.count, by: 4) {
+                guard !Task.isCancelled else { return }
+                let batchEnd = min(batchStart + 4, refreshCandidates.count)
+                let batch = Array(refreshCandidates[batchStart..<batchEnd])
+                let refreshResults = await withTaskGroup(
+                    of: (URL, URL?, String?).self,
+                    returning: [(URL, URL?, String?)].self
+                ) { group in
+                    for (item, cachedMetadata) in batch {
+                        group.addTask { [enricher] in
+                            let metadata = await enricher.enrichHistoryEntry(
+                                pageTitle: item.displayTitle,
+                                pageUrl: item.pageUrl
+                            )
+                            return (
+                                item.pageUrl,
+                                metadata.thumbnailUrl ?? cachedMetadata?.thumbnailUrl,
+                                metadata.snippet ?? cachedMetadata?.description
+                            )
+                        }
+                    }
+                    var results: [(URL, URL?, String?)] = []
+                    for await result in group {
+                        results.append(result)
+                    }
+                    return results
+                }
+                guard !Task.isCancelled else { return }
+                for (pageURL, thumbnailURL, snippet) in refreshResults {
+                    repository.updateMetadata(
+                        for: pageURL,
+                        thumbnailUrl: thumbnailURL,
+                        description: snippet
+                    )
+                }
+                self?.publishHistory(repository.getHistory())
+            }
+        }
     }
     
     /// Groups history entries by date, inserting date headers (matches Android implementation)
@@ -367,6 +461,7 @@ class HistoryViewModel: ObservableObject {
     }
     
     func clearAllHistory() {
+        metadataRefreshTask?.cancel()
         historyRepository.clearHistory()
         historyItems.removeAll()
     }

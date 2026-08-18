@@ -45,9 +45,9 @@
     font-size: 0.75rem;
     font-weight: normal;
     line-height: 1.2;
-    /* Flexible dimensions - let content and container determine size */
-    min-width: 4rem; /* Minimum width to prevent squishing */
-    height: auto; /* Allow natural height */
+    /* Size to the label so a short "1" chip is not as wide as "Uncharged". */
+    min-width: 0;
+    height: auto;
     margin: 0.25em;
     padding: 0.25em 0.625em;
     box-sizing: border-box;
@@ -82,8 +82,9 @@
     display: none;
 }
 
-/* Show only the active/selected legacy item */
-.switch-infobox .item.showing {
+/* Show the active item, and the first item before JS marks a selection. */
+.switch-infobox .item.showing,
+.switch-infobox:not([data-osrs-switcher-ready]) .item:first-of-type {
     display: block;
 }
 
@@ -92,8 +93,9 @@
     display: none;
 }
 
-/* Show the active synced switch item */
-.rsw-synced-switch-item.showing {
+/* Show the active synced switch item, and the first item before JS marks a selection. */
+.rsw-synced-switch-item.showing,
+.rsw-synced-switch:not([data-osrs-switcher-ready]) .rsw-synced-switch-item:first-of-type {
     display: block;
 }
 

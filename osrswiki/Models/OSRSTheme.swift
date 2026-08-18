@@ -390,11 +390,11 @@ struct osrsLightTheme: osrsThemeProtocol {
     /// Equivalent to Android: ?attr/search_box_background_color → #1A000000
     var searchBoxBackgroundColor: Color { Color.black.opacity(0.1) } // #1A000000
     
-    /// Equivalent to Android: ?attr/map_control_text → @color/gray_very_light (#fbfbfb)
-    var mapControlTextColor: Color { Color(hex: "#fbfbfb") } // gray_very_light
-    
-    /// Equivalent to Android: ?attr/map_control_background → @color/black (#000000)
-    var mapControlBackgroundColor: Color { Color.black } // black
+    /// Map controls use the same guaranteed-contrast text as other themed surfaces.
+    var mapControlTextColor: Color { onSurface }
+
+    /// Map controls use the light parchment surface rather than an unthemed black card.
+    var mapControlBackgroundColor: Color { surface }
     
     /// Equivalent to Android: @color/bottom_nav_inactive → #663A2E1C (40% opacity of #3A2E1C)
     var bottomNavInactiveColor: Color { Color(hex: "#9e9583") } // bottom_nav_inactive - pre-calculated 40% alpha blend
@@ -462,11 +462,11 @@ struct osrsDarkTheme: osrsThemeProtocol {
     /// Equivalent to Android: ?attr/search_box_background_color → #1A000000
     var searchBoxBackgroundColor: Color { Color.white.opacity(0.1) } // light overlay on dark background
     
-    /// Equivalent to Android: ?attr/map_control_text → @color/gray_very_light (#fbfbfb)
-    var mapControlTextColor: Color { Color(hex: "#fbfbfb") } // gray_very_light
-    
-    /// Equivalent to Android: ?attr/map_control_background → @color/black (#000000)
-    var mapControlBackgroundColor: Color { Color.black } // black
+    /// Map controls use the same guaranteed-contrast text as other themed surfaces.
+    var mapControlTextColor: Color { onSurface }
+
+    /// Map controls use the dark parchment surface rather than a separate pure-black card.
+    var mapControlBackgroundColor: Color { surface }
     
     /// Equivalent to Android: @color/bottom_nav_inactive → #663A2E1C (40% opacity of #3A2E1C)
     var bottomNavInactiveColor: Color { Color(hex: "#9e9583") } // bottom_nav_inactive - pre-calculated 40% alpha blend - same for dark theme

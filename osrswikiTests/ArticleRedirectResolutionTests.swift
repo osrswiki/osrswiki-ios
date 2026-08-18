@@ -18,6 +18,9 @@ final class ArticleRedirectResolutionTests: XCTestCase {
         XCTAssertEqual(queryItems.first(named: "action")?.value, "parse")
         XCTAssertEqual(queryItems.first(named: "page")?.value, "List of quests")
         XCTAssertEqual(queryItems.first(named: "redirects")?.value, "1")
+        XCTAssertEqual(queryItems.first(named: "formatversion")?.value, "2")
+        XCTAssertEqual(queryItems.first(named: "disableeditsection")?.value, "1")
+        XCTAssertEqual(queryItems.first(named: "disablelimitreport")?.value, "1")
     }
 
     func testRedirectedParsePayloadUsesResolvedTitleAndRealContent() throws {
@@ -40,6 +43,24 @@ final class ArticleRedirectResolutionTests: XCTestCase {
         XCTAssertEqual(payload.resolvedTitle, "Quests/List")
         XCTAssertTrue(payload.htmlContent.contains("Cook's Assistant"))
         XCTAssertFalse(payload.htmlContent.contains("Redirect to:"))
+    }
+
+    func testFormatVersion2StringTextDecodesWithoutNestedWrapper() throws {
+        let json = """
+        {
+          "parse": {
+            "title": "Varrock",
+            "pageid": 42,
+            "displaytitle": "Varrock",
+            "revid": 9,
+            "text": "<p>The capital of Misthalin.</p>"
+          }
+        }
+        """
+
+        let payload = try ArticleViewModel.decodeParsePayload(Data(json.utf8))
+        XCTAssertEqual(payload.title, "Varrock")
+        XCTAssertEqual(payload.htmlContent, "<p>The capital of Misthalin.</p>")
     }
 
     func testMissingTitleErrorStaysDistinctFromRedirectResolution() throws {

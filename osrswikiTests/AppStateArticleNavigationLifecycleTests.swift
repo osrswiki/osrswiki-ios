@@ -31,6 +31,16 @@ final class AppStateArticleNavigationLifecycleTests: XCTestCase {
         XCTAssertEqual(appState.newsNavigationStack.articleTitles, ["Abyssal whip"])
         XCTAssertEqual(appState.searchNavigationStack.articleTitles, ["Varrock"])
     }
+
+    func testWikiArticleURLsWithApostrophesParse() {
+        XCTAssertNotNil(osrsWikiURL.parse("https://oldschool.runescape.wiki/w/Heroes'_Guild"))
+        XCTAssertEqual(
+            osrsWikiURL.parse("https://oldschool.runescape.wiki/w/Heroes'_Guild")?.lastPathComponent.removingPercentEncoding,
+            "Heroes'_Guild"
+        )
+        XCTAssertNotNil(osrsWikiURL.parse("https://oldschool.runescape.wiki/w/Heroes%27_Guild"))
+        XCTAssertNotNil(osrsWikiURL.parse("https://oldschool.runescape.wiki/w/Varrock"))
+    }
 }
 
 private extension Array where Element == NewsNavigationDestination {

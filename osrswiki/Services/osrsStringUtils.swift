@@ -12,6 +12,7 @@ class osrsStringUtils {
     
     // CRASH FIX: Cache processed titles to avoid expensive HTML processing on main thread
     private static var titleCache = NSCache<NSString, NSString>()
+    private static var plainHTMLCache = NSCache<NSString, NSString>()
     private static let cacheQueue = DispatchQueue(label: "osrsStringUtils.cache", attributes: .concurrent)
     
     /// Extracts the main title from a MediaWiki displayTitle, removing namespace prefixes.
@@ -40,6 +41,8 @@ class osrsStringUtils {
     
     /// Internal uncached version of extractMainTitle for actual processing
     private static func extractMainTitleUncached(_ displayTitle: String) -> String {
+        var extractedTitle: String?
+
         // Check if it contains MediaWiki title HTML structure
         if displayTitle.contains("mw-page-title-main") {
             // Extract content between <span class="mw-page-title-main"> and </span>
@@ -51,7 +54,7 @@ class osrsStringUtils {
                 
                 if let match = regex.firstMatch(in: displayTitle, options: [], range: range) {
                     if let swiftRange = Range(match.range(at: 1), in: displayTitle) {
-                        return String(displayTitle[swiftRange])
+                        extractedTitle = String(displayTitle[swiftRange])
                     }
                 }
             } catch {
@@ -59,8 +62,10 @@ class osrsStringUtils {
             }
         }
         
-        // Fallback to regular HTML cleaning and Update: prefix removal
-        let cleanTitle = stripHTML(displayTitle).trimmingCharacters(in: .whitespacesAndNewlines)
+        // Normalize at the presentation boundary as well as at persistence. MediaWiki feed
+        // records can be entity encoded more than once (for example `&amp;amp;`).
+        let cleanTitle = decodeHTMLEntitiesFixedPoint(stripHTML(extractedTitle ?? displayTitle))
+            .trimmingCharacters(in: .whitespacesAndNewlines)
         
         // Remove "Update:" prefixes (with and without space)
         if cleanTitle.hasPrefix("Update: ") {
@@ -77,42 +82,92 @@ class osrsStringUtils {
     /// - Parameter htmlString: The HTML string to clean
     /// - Returns: Plain text without HTML tags
     private static func stripHTML(_ htmlString: String) -> String {
-        // CRASH FIX: If string doesn't contain HTML tags, return as-is to avoid processing
-        guard htmlString.contains("<") && htmlString.contains(">") else {
-            return htmlString
+        htmlString.replacingOccurrences(
+            of: "<[^>]+>",
+            with: "",
+            options: .regularExpression,
+            range: nil
+        )
+    }
+
+    /// Produces non-interactive list-row copy from HTML without creating attributed links.
+    /// Rows whose whole surface is already a button must not embed a second interactive
+    /// attributed-text graph; that combination can form an accessibility layout cycle.
+    static func plainText(fromHTML htmlString: String) -> String {
+        let cacheKey = htmlString as NSString
+        if let cached = plainHTMLCache.object(forKey: cacheKey) {
+            return cached as String
         }
-        
-        // CRASH FIX: For simple HTML, use regex instead of expensive NSAttributedString
-        // Only use NSAttributedString for complex HTML with entities
-        if !htmlString.contains("&") && !htmlString.contains("style=") && !htmlString.contains("class=") {
-            return htmlString.replacingOccurrences(
-                of: "<[^>]+>", 
-                with: "", 
-                options: .regularExpression, 
-                range: nil
-            )
+
+        let separated = htmlString.replacingOccurrences(
+            of: #"</?(?:p|div|li|br|h[1-6]|tr|td|th|ul|ol|blockquote)\b[^>]*>"#,
+            with: " ",
+            options: [.regularExpression, .caseInsensitive]
+        )
+        let value = decodeHTMLEntitiesFixedPoint(stripHTML(separated))
+            .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        plainHTMLCache.setObject(value as NSString, forKey: cacheKey)
+        return value
+    }
+
+    /// Bounded fixed-point decoding keeps entity text out of every list surface without
+    /// invoking the expensive HTML attributed-string parser during row rendering.
+    static func decodeHTMLEntitiesFixedPoint(_ value: String) -> String {
+        var decoded = value
+        for _ in 0..<8 {
+            let next = decodeHTMLEntitiesSinglePass(decoded)
+            if next == decoded { break }
+            decoded = next
         }
-        
-        // Only use expensive NSAttributedString for complex HTML
-        guard let data = htmlString.data(using: .utf8) else { return htmlString }
-        
-        let options: [NSAttributedString.DocumentReadingOptionKey: Any] = [
-            .documentType: NSAttributedString.DocumentType.html,
-            .characterEncoding: String.Encoding.utf8.rawValue
+        return decoded
+    }
+
+    private static func decodeHTMLEntitiesSinglePass(_ value: String) -> String {
+        let namedEntities = [
+            ("&amp;", "&"),
+            ("&lt;", "<"),
+            ("&gt;", ">"),
+            ("&quot;", "\""),
+            ("&#039;", "'"),
+            ("&#39;", "'"),
+            ("&apos;", "'"),
+            ("&nbsp;", " "),
+            ("&ndash;", "–"),
+            ("&mdash;", "—"),
+            ("&lsquo;", "'"),
+            ("&rsquo;", "'"),
+            ("&ldquo;", "\""),
+            ("&rdquo;", "\""),
+            ("&hellip;", "…"),
+            ("&copy;", "©"),
+            ("&reg;", "®"),
+            ("&trade;", "™")
         ]
-        
-        do {
-            // CRASH FIX: This is the expensive operation that was causing the crash
-            let attributedString = try NSAttributedString(data: data, options: options, documentAttributes: nil)
-            return attributedString.string
-        } catch {
-            // Fallback: use regex to remove HTML tags
-            return htmlString.replacingOccurrences(
-                of: "<[^>]+>", 
-                with: "", 
-                options: .regularExpression, 
-                range: nil
-            )
+
+        var result = value
+        for (entity, replacement) in namedEntities {
+            result = result.replacingOccurrences(of: entity, with: replacement, options: .caseInsensitive)
         }
+
+        result = replacingNumericEntities(in: result, pattern: #"&#(\d+);"#, radix: 10)
+        return replacingNumericEntities(in: result, pattern: #"&#x([0-9a-fA-F]+);"#, radix: 16)
+    }
+
+    private static func replacingNumericEntities(in value: String, pattern: String, radix: Int) -> String {
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return value }
+        var result = value
+        let matches = regex.matches(
+            in: result,
+            range: NSRange(location: 0, length: (result as NSString).length)
+        )
+        for match in matches.reversed() {
+            guard let numberRange = Range(match.range(at: 1), in: result),
+                  let codePoint = UInt32(result[numberRange], radix: radix),
+                  let scalar = UnicodeScalar(codePoint),
+                  let fullRange = Range(match.range, in: result) else { continue }
+            result.replaceSubrange(fullRange, with: String(Character(scalar)))
+        }
+        return result
     }
 }

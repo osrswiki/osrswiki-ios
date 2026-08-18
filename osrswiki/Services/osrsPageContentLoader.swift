@@ -15,6 +15,14 @@ struct osrsParseResult: Codable {
     let displaytitle: String?
     let revid: Int?
     let text: String
+
+    init(pageid: Int, title: String?, displaytitle: String?, revid: Int?, text: String) {
+        self.pageid = pageid
+        self.title = title
+        self.displaytitle = displaytitle
+        self.revid = revid
+        self.text = text
+    }
     
     // Helper struct to decode the nested text structure from MediaWiki API
     private struct TextWrapper: Codable {
@@ -37,9 +45,13 @@ struct osrsParseResult: Codable {
         displaytitle = try container.decodeIfPresent(String.self, forKey: .displaytitle)
         revid = try container.decodeIfPresent(Int.self, forKey: .revid)
         
-        // Decode the nested text.* structure
-        let textWrapper = try container.decode(TextWrapper.self, forKey: .textWrapper)
-        text = textWrapper.content
+        // Decode formatversion=2 string text, falling back to the nested text.* wrapper.
+        if let html = try? container.decode(String.self, forKey: .textWrapper) {
+            text = html
+        } else {
+            let textWrapper = try container.decode(TextWrapper.self, forKey: .textWrapper)
+            text = textWrapper.content
+        }
     }
     
     func encode(to encoder: Encoder) throws {
@@ -98,24 +110,7 @@ class osrsPageContentLoader {
     private func fetchPageContent(title: String? = nil, pageId: Int? = nil, promise: @escaping (Result<osrsDownloadProgress, Never>) -> Void) async {
         do {
             // Build API URL
-            var urlComponents = URLComponents(string: "https://oldschool.runescape.wiki/api.php")!
-            var queryItems = [
-                URLQueryItem(name: "action", value: "parse"),
-                URLQueryItem(name: "format", value: "json"),
-                URLQueryItem(name: "prop", value: "text|displaytitle|revid"),
-                URLQueryItem(name: "disablelimitreport", value: "1"),
-                URLQueryItem(name: "wrapoutputclass", value: "mw-parser-output")
-            ]
-            
-            if let title = title {
-                queryItems.append(URLQueryItem(name: "page", value: title))
-            } else if let pageId = pageId {
-                queryItems.append(URLQueryItem(name: "pageid", value: String(pageId)))
-            }
-            
-            urlComponents.queryItems = queryItems
-            
-            guard let url = urlComponents.url else {
+            guard let url = osrsWikiParseRequest.url(page: title, pageId: pageId) else {
                 promise(.success(.failure(NSError(domain: "osrsPageContentLoader", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid URL"]))))
                 return
             }
@@ -276,13 +271,19 @@ class osrsPageContentLoader {
         return processedHtml
     }
     
-    func buildFullHtmlDocument(pageContent: osrsPageContent, theme: any osrsThemeProtocol, collapseTablesEnabled: Bool = true) -> String {
+    func buildFullHtmlDocument(
+        pageContent: osrsPageContent,
+        theme: any osrsThemeProtocol,
+        collapseTablesEnabled: Bool = true,
+        articleTextScale: CGFloat = 1.0
+    ) -> String {
         let title = pageContent.parseResult.displaytitle ?? pageContent.parseResult.title ?? "OSRS Wiki"
         return htmlBuilder.buildFullHtmlDocument(
             title: title,
             bodyContent: pageContent.processedHtml,
             theme: theme,
-            collapseTablesEnabled: collapseTablesEnabled
+            collapseTablesEnabled: collapseTablesEnabled,
+            articleTextScale: articleTextScale
         )
     }
 }

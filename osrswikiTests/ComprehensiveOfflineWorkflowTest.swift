@@ -168,7 +168,7 @@ class ComprehensiveOfflineWorkflowTest: XCTestCase {
         
         // Enable offline mode for testing
         print("🔄 Enabling cache-only mode...")
-        ProxyInterceptorService.shared.enableCacheOnlyMode(pageId: pageId)
+        _ = await ProxyInterceptorService.shared.enableCacheOnlyMode(pageId: pageId)
         
         // Test main HTML content loading
         await testMainContentLoading(pageId: pageId)

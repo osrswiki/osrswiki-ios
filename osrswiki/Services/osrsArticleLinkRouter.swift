@@ -28,6 +28,13 @@ enum osrsArticleLinkRouter {
         return nil
     }
 
+    static func isFloorNumberingSettingsURL(_ url: URL) -> Bool {
+        let decodedPath = (url.path.removingPercentEncoding ?? url.path).lowercased()
+        let query = (url.query?.removingPercentEncoding ?? url.query ?? "").lowercased()
+        return decodedPath.contains("special:preferences") ||
+            query.contains("title=special:preferences")
+    }
+
     static func externalWikiURLForNonArticleAppAssetURL(_ url: URL) -> URL? {
         guard isAppAssetURL(url),
               isExcludedWikiNamespacePath(url.path) else {

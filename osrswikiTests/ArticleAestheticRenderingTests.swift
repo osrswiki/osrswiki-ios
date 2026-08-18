@@ -1,4 +1,5 @@
 import XCTest
+import UIKit
 import WebKit
 @testable import osrswiki
 
@@ -33,6 +34,43 @@ final class ArticleAestheticRenderingTests: XCTestCase {
         navigationDelegate = nil
         webView = nil
         super.tearDown()
+    }
+
+    func testFloorNumberFixesKeepOneDialectAndInfoboxesPaintImmediately() throws {
+        let fixes = try readAsset("Assets/styles/fixes.css")
+        let other = try readAsset("Assets/styles/modules/other.css")
+        let tables = try readAsset("Assets/web/collapsible_tables.css")
+        let collapsible = try readAsset("Assets/web/collapsible_content.js")
+
+        XCTAssertTrue(fixes.contains(".floornumber-help"))
+        XCTAssertTrue(fixes.contains(".floornumber-us"))
+        XCTAssertTrue(fixes.contains("display: none !important"))
+        XCTAssertTrue(fixes.contains("cursor: pointer"))
+        XCTAssertFalse(fixes.contains(".mw-halign-left > figcaption"))
+        XCTAssertTrue(fixes.contains("ul.gallery"))
+        let inlineRule = other.substring(
+            from: other.range(of: "#toc li a span.toctext span span:nth-child(2)")!.lowerBound
+        )
+        let ruleBody = String(inlineRule.prefix(while: { $0 != "}" }))
+        XCTAssertTrue(ruleBody.contains("display: none"))
+        XCTAssertFalse(ruleBody.contains("display: inline"))
+        XCTAssertFalse(tables.contains("body:not(.js-transforms-complete) .infobox"))
+        XCTAssertTrue(tables.contains(".mw-parser-output > table.infobox"))
+        XCTAssertTrue(collapsible.contains("authoredMapId"))
+        let afterTransforms = String(collapsible[collapsible.range(of: "js-transforms-complete")!.upperBound...])
+        let stylingCompleteRange = try XCTUnwrap(afterTransforms.range(of: "Event: StylingScriptsComplete"))
+        let mapMeasureRange = try XCTUnwrap(afterTransforms.range(of: "measureAndPreloadMaps();"))
+        XCTAssertLessThan(
+            stylingCompleteRange.lowerBound,
+            mapMeasureRange.lowerBound,
+            "Map measurement must not block the first-paint styling-complete event."
+        )
+        let components = try readAsset("Assets/styles/components.css")
+        let infoboxRule = String(components.substring(
+            from: components.range(of: ".infobox {")!.upperBound
+        ).prefix(while: { $0 != "}" }))
+        XCTAssertTrue(infoboxRule.contains("float: none"))
+        XCTAssertFalse(infoboxRule.contains("float: right"))
     }
 
     func testJcConfigCombatCalculatorRendersUsableControls() async throws {
@@ -304,7 +342,7 @@ final class ArticleAestheticRenderingTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(state["incrementFontSize"] as? Double ?? 0, 18)
     }
 
-    func testPrimaryInfoboxAndFirstContentTableStartExpanded() async throws {
+    func testPrimaryInfoboxStaysExpandedAndContentTablesHonorCollapsePreference() async throws {
         let collapsibleContent = try readAsset("Assets/web/collapsible_content.js")
         let html = """
         <!doctype html>
@@ -338,7 +376,7 @@ final class ArticleAestheticRenderingTests: XCTestCase {
 
         XCTAssertEqual(state["firstInfoboxCollapsed"] as? Bool, false)
         XCTAssertTrue((state["firstInfoboxHeader"] as? String ?? "").contains("Dragon scimitar"))
-        XCTAssertEqual(state["firstTableCollapsed"] as? Bool, false)
+        XCTAssertEqual(state["firstTableCollapsed"] as? Bool, true)
         XCTAssertTrue((state["firstTableHeader"] as? String ?? "").contains("Level / New abilities"))
         XCTAssertEqual(state["secondTableCollapsed"] as? Bool, true)
         XCTAssertEqual(state["navCollapsed"] as? Bool, true)
@@ -586,7 +624,7 @@ final class ArticleAestheticRenderingTests: XCTestCase {
         XCTAssertEqual(state["expandedWikitablesBeforeSummary"] as? Int, 0)
     }
 
-    func testStandaloneLevelUpTableKeepsPrimaryTableExpanded() async throws {
+    func testStandaloneLevelUpTableHonorsCollapsePreference() async throws {
         let collapsibleContent = try readAsset("Assets/web/collapsible_content.js")
         let html = """
         <!doctype html>
@@ -618,7 +656,7 @@ final class ArticleAestheticRenderingTests: XCTestCase {
         })()
         """)
 
-        XCTAssertEqual(state["collapsed"] as? Bool, false)
+        XCTAssertEqual(state["collapsed"] as? Bool, true)
         XCTAssertTrue((state["header"] as? String ?? "").contains("Construction level up table"))
     }
 
@@ -872,12 +910,607 @@ final class ArticleAestheticRenderingTests: XCTestCase {
         XCTAssertGreaterThan(state["bodyFontSize"] as? Double ?? 0, 20)
     }
 
+    func testMobileArticlePolishUsesSemanticTableRolesWithoutVisualScrollCues() async throws {
+        let polish = try readAsset("Assets/web/mobile_article_polish.js")
+        let horizontalScroll = try readAsset("Assets/web/horizontal_scroll_interceptor.js")
+        let fixes = try readAsset("Assets/styles/fixes.css")
+        let switchInfoboxStyles = try readAsset("Assets/web/switch_infobox_styles.css")
+        let pixel = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=="
+        let html = """
+        <!doctype html>
+        <html>
+        <head><meta name="viewport" content="width=device-width, initial-scale=1"><style>\(switchInfoboxStyles)\n\(fixes)</style></head>
+        <body>
+          <p id="transport">Walk <span style="padding:25.6px"><span><img id="inline" class="mw-file-element" width="18" height="17" src="\(pixel)"></span></span> north.</p>
+          <table class="infobox"><tbody><tr><td class="infobox-image"><img id="portrait" class="mw-file-element" width="130" height="367" src="\(pixel)"></td></tr></tbody></table>
+          <figure id="vignette" class="mw-halign-left"><img class="mw-file-element" width="140" height="251" src="\(pixel)"></figure>
+          <div class="collapsible-content" id="collapse"><table class="wikitable" style="min-width:720px"><tbody><tr><td>Combat stats</td></tr></tbody></table></div>
+          <div class="collapsible-primary-infobox"><div id="primary" class="collapsible-content"><table id="switch" class="main-infobox infobox infobox-switch" style="min-width:620px;float:right"><caption>Item states</caption><tbody><tr><td>Responsive switch infobox content that wraps</td></tr><tr><td><div id="stateControls" class="infobox-buttons"><span id="stateOne" class="button">State A</span><span id="stateTwo" class="button">State B</span></div></td></tr></tbody></table></div></div>
+          <table id="bonuses" class="infobox infobox-switch infobox-bonuses" style="min-width:720px;float:right"><caption>Combat stats</caption><tbody><tr><td>Wide bonuses</td></tr></tbody></table>
+          <div class="recipe-table" id="recipe"><table class="wikitable"><tbody><tr><td>Requirements</td></tr></tbody></table></div>
+          <div class="collapsible-container"><div id="mapContent" class="collapsible-content"><table id="mapTable" class="wikitable"><tbody><tr><th>Destination</th><th>Map</th></tr><tr><td>Edgeville</td><td><span class="mw-kartographer-map" style="display:block;width:200px;height:200px"></span></td></tr></tbody></table></div></div>
+          <script>\(polish)</script>
+          <script>\(horizontalScroll)</script>
+        </body>
+        </html>
+        """
+
+        try await load(html)
+        let state = try await evaluate("""
+        (() => {
+          window.OSRSApplyArticlePolish();
+          window.OSRSArticleMetrics.refreshHorizontalScrollAffordances();
+          const inline = document.getElementById('inline');
+          const portrait = document.getElementById('portrait');
+          const collapse = document.getElementById('collapse');
+          const recipe = document.getElementById('recipe');
+          const switchTable = document.getElementById('switch');
+          const primary = document.getElementById('primary');
+          const stateControls = document.getElementById('stateControls');
+          const stateOne = document.getElementById('stateOne');
+          const stateTwo = document.getElementById('stateTwo');
+          const bonusesSurface = document.getElementById('bonuses').parentElement;
+          const bonusesMaxScroll = bonusesSurface.scrollWidth - bonusesSurface.clientWidth;
+          bonusesSurface.scrollLeft = bonusesMaxScroll / 2;
+          bonusesSurface.dispatchEvent(new Event('scroll'));
+          const mapTable = document.getElementById('mapTable');
+          const mapContent = document.getElementById('mapContent');
+          return {
+            inlineClass: inline.classList.contains('osrs-inline-icon'),
+            inlineDisplay: getComputedStyle(inline).display,
+            inlineWidth: inline.getBoundingClientRect().width,
+            notePaddingLeft: parseFloat(getComputedStyle(inline.closest('[style]')).paddingLeft),
+            portraitClass: portrait.classList.contains('osrs-balanced-portrait'),
+            portraitWidth: portrait.getBoundingClientRect().width,
+            portraitHeight: portrait.getBoundingClientRect().height,
+            vignetteClass: document.getElementById('vignette').classList.contains('osrs-balanced-vignette'),
+            vignetteWidth: document.getElementById('vignette').getBoundingClientRect().width,
+            vignetteHeight: document.getElementById('vignette').getBoundingClientRect().height,
+            scrollClass: collapse.classList.contains('osrs-article-scroll-region'),
+            scrollOverflow: getComputedStyle(collapse).overflowX,
+            scrollAffordance: collapse.classList.contains('osrs-scroll-affordance'),
+            scrollCanRight: collapse.classList.contains('osrs-scroll-can-right'),
+            scrollMetricsCount: window.OSRSArticleMetrics.collect().tableAffordanceCanRightCount,
+            cueCount: document.querySelectorAll('.osrs-scroll-cue-layer').length,
+            primaryScrollable: primary.classList.contains('osrs-local-scroll-surface') || primary.classList.contains('osrs-article-scroll-region'),
+            primaryOverflow: getComputedStyle(primary).overflowX,
+            switchFloat: getComputedStyle(switchTable).float,
+            switchWidth: switchTable.getBoundingClientRect().width,
+            primaryWidth: primary.clientWidth,
+            stateControlGap: stateTwo.getBoundingClientRect().left - stateOne.getBoundingClientRect().right,
+            stateControlCssGap: parseFloat(getComputedStyle(stateControls).columnGap),
+            stateControlMargin: parseFloat(getComputedStyle(stateOne).marginLeft),
+            stateControlPadding: parseFloat(getComputedStyle(stateOne).paddingLeft),
+            bonusesWrapped: document.getElementById('bonuses').parentElement.classList.contains('osrs-article-scroll-region'),
+            bonusesFloat: getComputedStyle(document.getElementById('bonuses')).float,
+            bonusesOverflow: bonusesMaxScroll,
+            bonusesWidth: document.getElementById('bonuses').getBoundingClientRect().width,
+            recipeClass: recipe.classList.contains('osrs-intrinsic-table'),
+            recipeWidth: recipe.getBoundingClientRect().width,
+            mapClass: mapTable.classList.contains('osrs-map-table'),
+            mapScrollable: mapContent.classList.contains('osrs-local-scroll-surface') || mapContent.classList.contains('osrs-article-scroll-region'),
+            mapWidth: mapTable.getBoundingClientRect().width,
+            documentOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth
+          };
+        })()
+        """)
+
+        XCTAssertEqual(state["inlineClass"] as? Bool, true)
+        XCTAssertEqual(state["inlineDisplay"] as? String, "inline-block")
+        XCTAssertLessThanOrEqual(state["inlineWidth"] as? Double ?? 100, 24)
+        XCTAssertEqual(state["notePaddingLeft"] as? Double ?? -1, 0, accuracy: 0.5)
+        XCTAssertEqual(state["portraitClass"] as? Bool, true)
+        XCTAssertLessThanOrEqual(state["portraitWidth"] as? Double ?? 999, 220)
+        XCTAssertLessThanOrEqual(state["portraitHeight"] as? Double ?? 999, 280)
+        XCTAssertEqual(state["vignetteClass"] as? Bool, true)
+        XCTAssertLessThanOrEqual(state["vignetteWidth"] as? Double ?? 999, 112.5)
+        XCTAssertLessThanOrEqual(state["vignetteHeight"] as? Double ?? 999, 196.5)
+        XCTAssertEqual(state["scrollClass"] as? Bool, true)
+        XCTAssertEqual(state["scrollOverflow"] as? String, "auto")
+        XCTAssertEqual(state["scrollAffordance"] as? Bool, true)
+        XCTAssertEqual(state["scrollCanRight"] as? Bool, true)
+        XCTAssertGreaterThanOrEqual(state["scrollMetricsCount"] as? Int ?? 0, 1)
+        XCTAssertEqual(state["cueCount"] as? Int, 0)
+        XCTAssertEqual(state["primaryScrollable"] as? Bool, false)
+        XCTAssertEqual(state["primaryOverflow"] as? String, "hidden")
+        XCTAssertEqual(state["switchFloat"] as? String, "none")
+        XCTAssertLessThanOrEqual(state["switchWidth"] as? Double ?? 999, (state["primaryWidth"] as? Double ?? 0) + 0.5)
+        XCTAssertGreaterThan(state["stateControlGap"] as? Double ?? 0, 0)
+        XCTAssertLessThanOrEqual(state["stateControlGap"] as? Double ?? 999, 4.1)
+        XCTAssertLessThanOrEqual(state["stateControlCssGap"] as? Double ?? 999, 4.1)
+        XCTAssertEqual(state["stateControlMargin"] as? Double ?? -1, 0, accuracy: 0.1)
+        XCTAssertLessThanOrEqual(state["stateControlPadding"] as? Double ?? 999, 8.1)
+        XCTAssertEqual(state["bonusesWrapped"] as? Bool, true)
+        XCTAssertEqual(state["bonusesFloat"] as? String, "none")
+        XCTAssertGreaterThan(state["bonusesOverflow"] as? Double ?? 0, 20)
+        XCTAssertLessThan(state["bonusesWidth"] as? Double ?? 999, 550)
+        XCTAssertEqual(state["recipeClass"] as? Bool, true)
+        XCTAssertLessThan(state["recipeWidth"] as? Double ?? 999, 360)
+        XCTAssertEqual(state["mapClass"] as? Bool, true)
+        XCTAssertEqual(state["mapScrollable"] as? Bool, false)
+        XCTAssertLessThanOrEqual(state["mapWidth"] as? Double ?? 999, 360.5)
+        XCTAssertLessThanOrEqual(state["documentOverflow"] as? Double ?? 1, 0.5)
+    }
+
+    func testWideDisclosureOwnsHorizontalGesturesAcrossHeaderAndContent() async throws {
+        let polish = try readAsset("Assets/web/mobile_article_polish.js")
+        let horizontalScroll = try readAsset("Assets/web/horizontal_scroll_interceptor.js")
+        let fixes = try readAsset("Assets/styles/fixes.css")
+        let html = """
+        <!doctype html>
+        <html>
+        <head>
+          <meta name="viewport" content="width=device-width, initial-scale=1">
+          <style>\(fixes)</style>
+        </head>
+        <body>
+          <div class="collapsible-container" style="width:320px">
+            <div id="combatHeader" class="collapsible-header">
+              <span class="collapsible-label">Combat stats</span>
+            </div>
+            <div id="combatContent" class="collapsible-content" style="width:320px">
+              <table id="combatTable" class="wikitable infobox-bonuses" style="min-width:720px">
+                <tbody><tr><td>Attack bonus</td><td>Defence bonus</td><td>Other bonuses</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+          <p id="ordinaryArticleText">Ordinary article navigation content.</p>
+          <script>\(polish)</script>
+          <script>\(horizontalScroll)</script>
+        </body>
+        </html>
+        """
+
+        try await load(html)
+        let state = try await evaluate("""
+        (() => {
+          window.OSRSApplyArticlePolish();
+          window.OSRSArticleMetrics.refreshHorizontalScrollAffordances();
+          const surface = document.getElementById('combatContent');
+          const header = document.getElementById('combatHeader');
+          const tableCell = document.querySelector('#combatTable td');
+          const ordinary = document.getElementById('ordinaryArticleText');
+          const classify = (element) => {
+            const rect = element.getBoundingClientRect();
+            return window.OSRSArticleGestureOwnership.classifyPoint(
+              rect.left + Math.min(24, rect.width / 2),
+              rect.top + Math.min(10, rect.height / 2)
+            );
+          };
+          return {
+            isLocalSurface: surface.classList.contains('osrs-local-scroll-surface'),
+            overflow: surface.scrollWidth - surface.clientWidth,
+            label: surface.getAttribute('aria-label') || '',
+            headerOwnership: classify(header),
+            contentOwnership: classify(tableCell),
+            ordinaryOwnership: classify(ordinary),
+            cueCount: document.querySelectorAll('.osrs-scroll-cue-layer').length
+          };
+        })()
+        """)
+
+        XCTAssertEqual(state["isLocalSurface"] as? Bool, true)
+        XCTAssertGreaterThan(state["overflow"] as? Double ?? 0, 20)
+        XCTAssertEqual(state["label"] as? String, "Scrollable Combat stats table")
+        let headerOwnership = state["headerOwnership"] as? [String: Any]
+        let contentOwnership = state["contentOwnership"] as? [String: Any]
+        let ordinaryOwnership = state["ordinaryOwnership"] as? [String: Any]
+        XCTAssertEqual(headerOwnership?["isLocalOwner"] as? Bool, true)
+        XCTAssertEqual(headerOwnership?["ownerId"] as? String, "Scrollable Combat stats table")
+        XCTAssertEqual(contentOwnership?["isLocalOwner"] as? Bool, true)
+        XCTAssertEqual(ordinaryOwnership?["isLocalOwner"] as? Bool, false)
+        XCTAssertEqual(state["cueCount"] as? Int, 0)
+    }
+
+    func testRecipeTablesBecomeOrderedAccessibleSemanticDisclosures() async throws {
+        let collapsibleContent = try readAsset("Assets/web/collapsible_content.js")
+        let fixes = try readAsset("Assets/styles/fixes.css")
+        let collapsibleTables = try readAsset("Assets/web/collapsible_tables.css")
+        let html = """
+        <!doctype html>
+        <html>
+        <head><meta name="viewport" content="width=device-width, initial-scale=1"><style>\(fixes)\n\(collapsibleTables)</style></head>
+        <body>
+          <script>window.OSRS_TABLE_COLLAPSED = false;</script>
+          <div class="recipe-table" id="creationRecipe">
+            <table class="wikitable"><caption>Materials</caption><tbody><tr><th>Item</th><th>Quantity</th></tr><tr><td>Metal bar</td><td>1</td></tr></tbody></table>
+            <table class="wikitable"><tbody><tr><th>Skill</th><th>Level required</th></tr><tr><td>Crafting</td><td>80</td></tr></tbody></table>
+            <table class="wikitable"><caption>By-products</caption><tbody><tr><th>Result</th><th>Chance</th></tr><tr><td>Dust</td><td>1/10</td></tr></tbody></table>
+            <table class="wikitable"><tbody><tr><th>Method</th><th>Notes</th></tr><tr><td>Alternative</td><td>Optional</td></tr></tbody></table>
+            <table class="wikitable"><tbody><tr><th>Ingredients</th><th>Quantity</th></tr><tr><td>Gem</td><td>1</td></tr></tbody></table>
+          </div>
+          <div class="recipe-table" id="negativeRecipe">
+            <table role="presentation"><tbody><tr><td>Layout shell</td></tr></tbody></table>
+            <table class="navbox"><tbody><tr><td>Navigation</td></tr></tbody></table>
+            <aside><table class="wikitable"><caption>Nested reference</caption><tbody><tr><td>Not a direct child</td></tr></tbody></table></aside>
+          </div>
+          <script>\(collapsibleContent)</script>
+        </body>
+        </html>
+        """
+
+        try await load(html)
+        let state = try await evaluate("""
+        (() => {
+          const recipe = document.getElementById('creationRecipe');
+          const containers = Array.from(recipe.querySelectorAll(':scope > .collapsible-recipe-table'));
+          const captions = Array.from(recipe.querySelectorAll(':scope > .collapsible-recipe-table caption'));
+          const beforeSecondPass = document.querySelectorAll('.collapsible-recipe-table').length;
+          window.OSRSInitializeCollapsibleContent();
+          return {
+            containerCount: document.querySelectorAll('.collapsible-recipe-table').length,
+            tableCount: recipe.querySelectorAll('table.wikitable').length,
+            beforeSecondPass,
+            labels: containers.map(container => container.querySelector('.collapsible-label')?.textContent || ''),
+            roles: containers.map(container => container.dataset.osrsTableRole || ''),
+            captionsRepresented: captions.every(caption => caption.hidden && caption.dataset.osrsCaptionHiddenByDisclosure === 'true'),
+            accessibilityContracts: containers.every(container => {
+              const header = container.querySelector(':scope > .collapsible-header');
+              const content = container.querySelector(':scope > .collapsible-content');
+              return header?.getAttribute('role') === 'button' &&
+                header?.getAttribute('tabindex') === '0' &&
+                header?.getAttribute('aria-controls') === content?.id &&
+                content?.getAttribute('aria-labelledby') === header?.id;
+            }),
+            duplicateVisibleLabels: containers.filter(container => {
+              const label = (container.querySelector('.collapsible-label')?.textContent || '')
+                .replace(/\\s+\\(\\d+\\)$/, '').trim().toLowerCase();
+              return Array.from(container.querySelectorAll('caption, th')).some(element =>
+                !element.hidden && element.textContent.trim().toLowerCase() === label
+              );
+            }).length,
+            wrapperInsideDisclosure: !!recipe.parentElement.closest('.collapsible-container'),
+            negativeRecipeControls: document.getElementById('negativeRecipe').querySelectorAll('.collapsible-recipe-table').length,
+            containerWidths: containers.map(container => container.getBoundingClientRect().width),
+            viewportWidth: document.documentElement.clientWidth,
+            footerDisplays: containers.map(container => getComputedStyle(container.querySelector('.collapsible-close-footer')).display)
+          };
+        })()
+        """)
+
+        XCTAssertEqual(state["containerCount"] as? Int, 5)
+        XCTAssertEqual(state["tableCount"] as? Int, 5)
+        XCTAssertEqual(state["beforeSecondPass"] as? Int, 5)
+        XCTAssertEqual(
+            state["labels"] as? [String],
+            ["Materials", "Requirements", "By-products", "Method / Notes", "Materials (2)"]
+        )
+        XCTAssertEqual(
+            state["roles"] as? [String],
+            ["recipe-materials", "recipe-requirements", "recipe-other", "recipe-other", "recipe-materials"]
+        )
+        XCTAssertEqual(state["captionsRepresented"] as? Bool, true)
+        XCTAssertEqual(state["accessibilityContracts"] as? Bool, true)
+        XCTAssertEqual(state["duplicateVisibleLabels"] as? Int, 0)
+        XCTAssertEqual(state["wrapperInsideDisclosure"] as? Bool, false)
+        XCTAssertEqual(state["negativeRecipeControls"] as? Int, 0)
+        XCTAssertTrue((state["containerWidths"] as? [Double] ?? []).allSatisfy {
+            $0 < (state["viewportWidth"] as? Double ?? 0)
+        })
+        XCTAssertEqual(state["footerDisplays"] as? [String], Array(repeating: "none", count: 5))
+    }
+
+    func testTeleportationOptionsKeepsFourMapsInOneContainedDisclosureAcrossCollapseCycles() async throws {
+        let collapsibleContent = try readAsset("Assets/web/collapsible_content.js")
+        let fixes = try readAsset("Assets/styles/fixes.css")
+        let mapRows = (1...4).map { index in
+            "<tr><td>Destination \(index)</td><td><span class=\"mw-kartographer-map\" data-lat=\"320\(index)\" data-lon=\"321\(index)\" data-zoom=\"5\" data-plane=\"0\" style=\"display:block;width:200px;height:80px\"></span></td></tr>"
+        }.joined()
+        let html = """
+        <!doctype html>
+        <html>
+        <head><meta name="viewport" content="width=device-width, initial-scale=1"><style>\(fixes)</style></head>
+        <body>
+          <script>
+            window.OSRS_TABLE_COLLAPSED = true;
+            window.__mapMeasurements = [];
+            window.__mapToggles = [];
+            window.OsrsWikiBridge = {
+              onMapPlaceholderMeasured(id, rectJson, mapDataJson) { window.__mapMeasurements.push({ id, rectJson, mapDataJson }); },
+              onCollapsibleToggled(id, isOpening) { window.__mapToggles.push({ id, isOpening }); }
+            };
+          </script>
+          <table class="wikitable"><caption>Earlier table</caption><tbody><tr><td>Earlier content</td></tr></tbody></table>
+          <h2>Teleportation options</h2>
+          <table id="teleports" class="wikitable"><tbody><tr><th>Destination</th><th>Map</th></tr>\(mapRows)</tbody></table>
+          <script>\(collapsibleContent)</script>
+        </body>
+        </html>
+        """
+
+        try await load(html)
+        let initialAndRapidClose = try await evaluate("""
+        (() => {
+          const table = document.getElementById('teleports');
+          const container = table.closest('.collapsible-container');
+          const header = container.querySelector('.collapsible-header');
+          const ids = Array.from(table.querySelectorAll('.mw-kartographer-map')).map(map => map.id);
+          const measurementsBeforeOpen = window.__mapMeasurements.length;
+          header.click();
+          const firstOpenToggleCount = window.__mapToggles.filter(toggle => toggle.isOpening === true).length;
+          header.click();
+          return {
+            ids,
+            uniqueIds: new Set(ids.filter(Boolean)).size,
+            measurementsBeforeOpen,
+            firstOpenToggleCount,
+            closeToggleCount: window.__mapToggles.filter(toggle => toggle.isOpening === false).length,
+            terminalCollapsed: container.classList.contains('collapsed')
+          };
+        })()
+        """)
+        XCTAssertEqual(initialAndRapidClose["uniqueIds"] as? Int, 4)
+        XCTAssertEqual(initialAndRapidClose["measurementsBeforeOpen"] as? Int, 0)
+        XCTAssertEqual(initialAndRapidClose["firstOpenToggleCount"] as? Int, 4)
+        XCTAssertEqual(initialAndRapidClose["closeToggleCount"] as? Int, 4)
+        XCTAssertEqual(initialAndRapidClose["terminalCollapsed"] as? Bool, true)
+        try await Task.sleep(nanoseconds: 300_000_000)
+
+        let afterRapidClose = try await evaluate("""
+        (() => ({
+          measurementCount: window.__mapMeasurements.length,
+          collapsed: document.getElementById('teleports').closest('.collapsible-container').classList.contains('collapsed')
+        }))()
+        """)
+        XCTAssertEqual(afterRapidClose["measurementCount"] as? Int, 0)
+        XCTAssertEqual(afterRapidClose["collapsed"] as? Bool, true)
+
+        _ = try await evaluate("""
+        (() => {
+          const container = document.getElementById('teleports').closest('.collapsible-container');
+          container.querySelector('.collapsible-header').click();
+          return true;
+        })()
+        """)
+        try await Task.sleep(nanoseconds: 300_000_000)
+
+        let firstMeasurementState = try await evaluate("""
+        (() => {
+          const table = document.getElementById('teleports');
+          const container = table.closest('.collapsible-container');
+          const ids = Array.from(table.querySelectorAll('.mw-kartographer-map')).map(map => map.id);
+          return {
+            label: container.querySelector('.collapsible-label')?.textContent || '',
+            mapCount: ids.length,
+            uniqueIds: new Set(ids.filter(Boolean)).size,
+            measuredIds: Array.from(new Set(window.__mapMeasurements.map(item => item.id))).sort(),
+            measurementCount: window.__mapMeasurements.length,
+            closeToggleCount: window.__mapToggles.filter(toggle => toggle.isOpening === false).length,
+            openToggleCount: window.__mapToggles.filter(toggle => toggle.isOpening === true).length,
+            tableWidth: table.getBoundingClientRect().width,
+            destWidth: table.querySelector('td')?.getBoundingClientRect().width || 0,
+            mapWidth: table.querySelector('td:has(.mw-kartographer-map)')?.getBoundingClientRect().width || 0,
+            viewportWidth: document.documentElement.clientWidth,
+            zeroSizedMapCount: Array.from(table.querySelectorAll('.mw-kartographer-map')).filter(map => {
+              const rect = map.getBoundingClientRect();
+              return rect.width <= 0 || rect.height <= 0;
+            }).length,
+            contentHeight: container.querySelector('.collapsible-content').getBoundingClientRect().height,
+            bridgeAvailable: !!window.OsrsWikiBridge,
+            measureFunctionAvailable: typeof window.measureAndPreloadMaps === 'function',
+            locallyScrollable: container.querySelector('.collapsible-content').classList.contains('osrs-local-scroll-surface'),
+            expanded: !container.classList.contains('collapsed')
+          };
+        })()
+        """)
+
+        XCTAssertEqual(firstMeasurementState["label"] as? String, "Teleportation options")
+        XCTAssertEqual(firstMeasurementState["mapCount"] as? Int, 4)
+        XCTAssertEqual(firstMeasurementState["uniqueIds"] as? Int, 4)
+        XCTAssertEqual(firstMeasurementState["zeroSizedMapCount"] as? Int, 0, "\(firstMeasurementState)")
+        XCTAssertEqual((firstMeasurementState["measuredIds"] as? [String])?.count, 4, "\(firstMeasurementState)")
+        XCTAssertGreaterThanOrEqual(firstMeasurementState["measurementCount"] as? Int ?? 0, 4, "\(firstMeasurementState)")
+        XCTAssertEqual(firstMeasurementState["closeToggleCount"] as? Int, 4)
+        XCTAssertEqual(firstMeasurementState["openToggleCount"] as? Int, 8)
+        XCTAssertLessThanOrEqual(firstMeasurementState["tableWidth"] as? Double ?? 999, firstMeasurementState["viewportWidth"] as? Double ?? 0)
+        XCTAssertGreaterThan(firstMeasurementState["mapWidth"] as? Double ?? 0, firstMeasurementState["destWidth"] as? Double ?? 999)
+        XCTAssertGreaterThan(
+            (firstMeasurementState["mapWidth"] as? Double ?? 0) /
+                max(firstMeasurementState["tableWidth"] as? Double ?? 1, 1),
+            0.4
+        )
+        XCTAssertEqual(firstMeasurementState["locallyScrollable"] as? Bool, false)
+        XCTAssertEqual(firstMeasurementState["expanded"] as? Bool, true)
+
+        let measurementCountBeforeRemeasure = firstMeasurementState["measurementCount"] as? Int ?? 0
+        _ = try await evaluate("window.scheduleMapRemeasure(); true")
+        try await Task.sleep(nanoseconds: 300_000_000)
+        let remeasurement = try await evaluate("""
+        (() => {
+          const perId = {};
+          window.__mapMeasurements.forEach(item => { perId[item.id] = (perId[item.id] || 0) + 1; });
+          return { count: window.__mapMeasurements.length, perId };
+        })()
+        """)
+        XCTAssertGreaterThanOrEqual(remeasurement["count"] as? Int ?? 0, measurementCountBeforeRemeasure + 4)
+        let rawPerId = remeasurement["perId"] as? [String: Any] ?? [:]
+        let perId = rawPerId.compactMapValues { value -> Int? in
+            if let integer = value as? Int { return integer }
+            if let number = value as? NSNumber { return number.intValue }
+            return nil
+        }
+        XCTAssertEqual(perId.count, 4)
+        XCTAssertTrue(perId.values.allSatisfy { $0 >= 2 })
+    }
+
+    func testMapTablesGiveKartographerColumnsLeftoverWidthForTwoAndThreeColumnShapes() async throws {
+        let collapsibleContent = try readAsset("Assets/web/collapsible_content.js")
+        let polish = try readAsset("Assets/web/mobile_article_polish.js")
+        let fixes = try readAsset("Assets/styles/fixes.css")
+        let html = """
+        <!doctype html>
+        <html>
+        <head><meta name="viewport" content="width=device-width, initial-scale=1"><style>\(fixes)</style></head>
+        <body>
+          <script>window.OSRS_TABLE_COLLAPSED = false;</script>
+          <h2>Two column maps</h2>
+          <table id="twoCol" class="wikitable">
+            <tbody>
+              <tr><th>Destination</th><th>Map</th></tr>
+              <tr><td>Edgeville</td><td><span class="mw-kartographer-map" data-width="300" data-height="300" style="display:block;width:200px;height:200px"></span></td></tr>
+            </tbody>
+          </table>
+          <h2>Three column maps</h2>
+          <table id="threeCol" class="wikitable">
+            <tbody>
+              <tr><th>Destination</th><th>Requirements</th><th>Map</th></tr>
+              <tr>
+                <td>Edgeville</td>
+                <td>None</td>
+                <td><span class="mw-kartographer-map" data-width="300" data-height="300" style="display:block;width:200px;height:200px"></span></td>
+              </tr>
+            </tbody>
+          </table>
+          <script>\(collapsibleContent)</script>
+          <script>\(polish)</script>
+        </body>
+        </html>
+        """
+
+        try await load(html)
+        _ = try await evaluate("window.OSRSApplyArticlePolish && window.OSRSApplyArticlePolish(); true")
+        let state = try await evaluate("""
+        (() => {
+          const measure = (id) => {
+            const table = document.getElementById(id);
+            const mapCell = table.querySelector('td:has(.mw-kartographer-map)');
+            const otherWidths = Array.from(table.querySelectorAll('tbody tr:last-child > :is(th, td)'))
+              .filter((cell) => cell !== mapCell)
+              .map((cell) => cell.getBoundingClientRect().width);
+            return {
+              tableWidth: table.getBoundingClientRect().width,
+              mapWidth: mapCell.getBoundingClientRect().width,
+              otherMax: Math.max(0, ...otherWidths),
+              mapClass: table.classList.contains('osrs-map-table'),
+              layout: getComputedStyle(table).tableLayout,
+              width: getComputedStyle(table).width
+            };
+          };
+          return {
+            viewportWidth: document.documentElement.clientWidth,
+            two: measure('twoCol'),
+            three: measure('threeCol')
+          };
+        })()
+        """)
+
+        func assertMapColumn(_ key: String) throws {
+            let table = try XCTUnwrap(state[key] as? [String: Any])
+            XCTAssertEqual(table["mapClass"] as? Bool, true, key)
+            let mapWidth = table["mapWidth"] as? Double ?? 0
+            let otherMax = table["otherMax"] as? Double ?? 999
+            let tableWidth = table["tableWidth"] as? Double ?? 1
+            XCTAssertGreaterThan(mapWidth, otherMax, "\(key) \(table)")
+            XCTAssertGreaterThan(mapWidth / max(tableWidth, 1), 0.4, "\(key) \(table)")
+            XCTAssertLessThanOrEqual(tableWidth, (state["viewportWidth"] as? Double ?? 0) + 1, key)
+        }
+        try assertMapColumn("two")
+        try assertMapColumn("three")
+    }
+
+    func testHorizontalContentGestureOwnershipUsesSequenceLatchWithoutNativeWebKitBackGesture() throws {
+        let interceptor = try readAsset("Assets/web/horizontal_scroll_interceptor.js")
+        let articleWebView = try readSource("Views/ArticleWebView.swift")
+        let articleView = try readSource("Views/ArticleView.swift")
+        let articleViewModel = try readSource("ViewModels/ArticleViewModel.swift")
+        let gestureModifier = try readSource("Views/Components/osrsHorizontalGestureModifier.swift")
+        let mapBridge = try readAsset("Assets/web/map_bridge.js")
+
+        XCTAssertTrue(interceptor.contains("setHorizontalScrollGesture"))
+        XCTAssertTrue(interceptor.contains("activeGestureId"))
+        XCTAssertTrue(interceptor.contains("notifyGesturePhase('begin'"))
+        XCTAssertTrue(interceptor.contains("resetScrollState('end')"))
+        XCTAssertTrue(interceptor.contains("'article-navigation'"))
+        XCTAssertTrue(interceptor.contains("isHorizontallyScrollable"))
+        XCTAssertFalse(interceptor.contains("createElement('span')"))
+        XCTAssertTrue(mapBridge.contains("isLocalOwner: !!isLocalOwner"))
+        XCTAssertTrue(articleWebView.contains("allowsBackForwardNavigationGestures = false"))
+        XCTAssertTrue(articleWebView.contains("case \"setHorizontalScrollGesture\""))
+        XCTAssertTrue(articleWebView.contains("installArticleNavigationGesture(on: webView)"))
+        XCTAssertTrue(articleWebView.contains("recognizer.cancelsTouchesInView = false"))
+        XCTAssertTrue(articleWebView.contains("shouldRecognizeSimultaneouslyWith"))
+        XCTAssertTrue(gestureModifier.contains("activeJavaScriptGestureId"))
+        XCTAssertTrue(gestureModifier.contains("JavaScriptGestureSequence"))
+        XCTAssertTrue(gestureModifier.contains("performNavigationAfterClassification"))
+        XCTAssertFalse(gestureModifier.contains("navigationArbitrationDelay"))
+        XCTAssertTrue(gestureModifier.contains("guard isEnabled && !gestureState.shouldBlockGestures"))
+        XCTAssertFalse(gestureModifier.contains("gestureState.resetState()"))
+        XCTAssertEqual(articleViewModel.components(separatedBy: "\"map_bridge.js\"").count - 1, 1)
+        XCTAssertEqual(articleViewModel.components(separatedBy: "\"web/map_bridge.js\"").count - 1, 1)
+        XCTAssertFalse(articleViewModel.contains("table_wrapper.js"))
+    }
+
+    func testInfoboxChromeKeepsHairlineBorderWithoutInlineOutlineOverride() throws {
+        let articleViewModel = try readSource("ViewModels/ArticleViewModel.swift")
+        let iosAesthetics = try readAsset("Assets/styles/ios-article-aesthetics.css")
+        XCTAssertFalse(articleViewModel.contains("infobox.style.border"))
+        XCTAssertFalse(articleViewModel.contains("2px solid var(--coloroutline)"))
+        XCTAssertFalse(articleViewModel.contains("applyFinalStylingFixes"))
+        XCTAssertTrue(iosAesthetics.contains("border: 1px solid var(--wikitable-border) !important"))
+    }
+
+    func testInteractivePriceChartAndHiddenStatePrewarmContracts() throws {
+        let chart = try readAsset("Assets/web/ge_charts_init.js")
+        let switcher = try readAsset("Assets/web/switch_infobox.js")
+
+        XCTAssertTrue(chart.contains("overflow:hidden !important"))
+        XCTAssertTrue(chart.contains("zoomType: 'x'"))
+        XCTAssertTrue(chart.contains("pinchType: 'x'"))
+        XCTAssertTrue(chart.contains("panning: { enabled: true, type: 'x' }"))
+        XCTAssertTrue(chart.contains("followTouchMove: true"))
+        XCTAssertTrue(chart.contains("ResizeObserver"))
+        XCTAssertTrue(chart.contains("resolveHighcharts"))
+        XCTAssertTrue(chart.contains("AbortController"))
+        XCTAssertTrue(chart.contains("Highcharts never became available"))
+        XCTAssertTrue(switcher.contains("data-default-version"))
+        XCTAssertTrue(switcher.contains("preloader.decode()"))
+        XCTAssertFalse(switcher.contains("\n            stabilizeInfoboxWidth(mainInfobox"))
+    }
+
+    func testBuilderAppliesUserArticleTextScaleExactlyOnce() async throws {
+        let fixesCss = try readAsset("Assets/styles/fixes.css")
+        var html = osrsPageHtmlBuilder().buildFullHtmlDocument(
+            title: "Text scale fixture",
+            bodyContent: "<main><p id=\"scaledText\">Readable article text</p></main>",
+            theme: osrsLightTheme(),
+            collapseTablesEnabled: true,
+            includeAssetLinks: false,
+            articleTextScale: 1.40
+        )
+        let preferenceStart = try XCTUnwrap(html.range(of: "<style id=\"osrs-article-reader-preferences\">"))
+        let preferenceEnd = try XCTUnwrap(html.range(of: "</style>", range: preferenceStart.upperBound..<html.endIndex))
+        let preferenceBlock = String(html[preferenceStart.lowerBound..<preferenceEnd.upperBound])
+
+        XCTAssertTrue(preferenceBlock.contains("--osrs-article-user-text-scale: 1.400"))
+        XCTAssertFalse(
+            preferenceBlock.contains("font-size"),
+            "The builder owns only the user-scale variable; shared article CSS owns the single font-size application"
+        )
+
+        html = html.replacingOccurrences(
+            of: "</head>",
+            with: "<style>html { font-size: 16px; }\n\(fixesCss)</style></head>"
+        )
+        try await load(html)
+        let state = try await evaluate("""
+        (() => ({
+            rootFontSize: parseFloat(getComputedStyle(document.documentElement).fontSize),
+            bodyFontSize: parseFloat(getComputedStyle(document.body).fontSize),
+            textFontSize: parseFloat(getComputedStyle(document.getElementById('scaledText')).fontSize)
+        }))()
+        """)
+
+        XCTAssertEqual(state["rootFontSize"] as? Double ?? 0, 16.0, accuracy: 0.1)
+        XCTAssertEqual(state["bodyFontSize"] as? Double ?? 0, 22.4, accuracy: 0.2)
+        XCTAssertEqual(state["textFontSize"] as? Double ?? 0, 22.4, accuracy: 0.2)
+    }
+
     func testAccessibilityReflowScalesTextInsideCollapsibleContent() async throws {
         let collapsibleContent = try readAsset("Assets/web/collapsible_content.js")
         let fixesCss = try readAsset("Assets/styles/fixes.css")
         let html = """
         <!doctype html>
-        <html class="osrs-accessibility-reflow" style="--osrs-article-text-scale: 1.6;">
+        <html class="osrs-accessibility-reflow" style="--osrs-article-text-scale: 1.5; --osrs-article-user-text-scale: 1.15;">
         <head>
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <style>
@@ -892,6 +1525,9 @@ final class ArticleAestheticRenderingTests: XCTestCase {
         </head>
         <body class="osrs-accessibility-reflow">
         <script>window.OSRS_TABLE_COLLAPSED = false;</script>
+        <figure id="vignette" class="mw-halign-right osrs-balanced-vignette" style="width: 360px;">
+            <img alt="" width="140" height="251" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==">
+        </figure>
         <table class="wikitable">
             <tbody>
                 <tr><th>Dragon scimitar</th></tr>
@@ -911,15 +1547,19 @@ final class ArticleAestheticRenderingTests: XCTestCase {
             return {
                 bodyFontSize,
                 cellFontSize: parseFloat(getComputedStyle(cell).fontSize),
-                contentFontSize: parseFloat(getComputedStyle(cell.closest('.collapsible-content')).fontSize)
+                contentFontSize: parseFloat(getComputedStyle(cell.closest('.collapsible-content')).fontSize),
+                vignetteWidth: document.getElementById('vignette').getBoundingClientRect().width,
+                vignetteFloat: getComputedStyle(document.getElementById('vignette')).float
             };
         })()
         """)
 
         let bodyFontSize = state["bodyFontSize"] as? Double ?? 0
-        XCTAssertGreaterThan(bodyFontSize, 24)
+        XCTAssertEqual(bodyFontSize, 27.6, accuracy: 0.1)
         XCTAssertEqual(state["contentFontSize"] as? Double ?? 0, bodyFontSize, accuracy: 0.5)
         XCTAssertEqual(state["cellFontSize"] as? Double ?? 0, bodyFontSize, accuracy: 0.5)
+        XCTAssertLessThanOrEqual(state["vignetteWidth"] as? Double ?? 999, 112.5)
+        XCTAssertEqual(state["vignetteFloat"] as? String, "none")
     }
 
     func testArticleWebViewTogglesAccessibilityReflowClass() throws {
@@ -964,6 +1604,35 @@ final class ArticleAestheticRenderingTests: XCTestCase {
                 } else {
                     continuation.resume(returning: [:])
                 }
+            }
+        }
+    }
+
+    private func snapshot() async throws -> UIImage {
+        try await withCheckedThrowingContinuation { continuation in
+            webView.takeSnapshot(with: nil) { image, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                } else if let image {
+                    continuation.resume(returning: image)
+                } else {
+                    continuation.resume(throwing: NSError(domain: "ArticleAestheticRenderingTests", code: 1))
+                }
+            }
+        }
+    }
+
+    private func imageChannelDifferenceCount(_ lhs: UIImage, _ rhs: UIImage) -> Int {
+        guard
+            let lhsData = lhs.cgImage?.dataProvider?.data as Data?,
+            let rhsData = rhs.cgImage?.dataProvider?.data as Data?,
+            lhsData.count == rhsData.count
+        else {
+            return 0
+        }
+        return zip(lhsData, rhsData).reduce(into: 0) { count, bytes in
+            if abs(Int(bytes.0) - Int(bytes.1)) > 4 {
+                count += 1
             }
         }
     }

@@ -23,48 +23,33 @@ class TitleAreaScrollingTest: XCTestCase {
         XCTAssertTrue(homeTab.exists, "Home tab should exist")
         homeTab.tap()
         
-        // Wait for content to load
-        let homeTitle = app.staticTexts["Home"]
-        XCTAssertTrue(homeTitle.waitForExistence(timeout: 5), "Home title should appear")
-        
-        // Find shuffle button
+        let updates = app.staticTexts["Updates"]
+        XCTAssertTrue(updates.waitForExistence(timeout: 8), "Home feed should appear")
+
         let shuffleButton = app.buttons["Random page"]
         XCTAssertTrue(shuffleButton.exists, "Shuffle button should exist")
-        
-        // Find search bar
+
         let searchBar = app.buttons.containing(NSPredicate(format: "label CONTAINS 'Search OSRS Wiki'")).element
         XCTAssertTrue(searchBar.exists, "Search bar should exist")
-        
-        // Get initial positions of title elements
-        let initialHomeTitleFrame = homeTitle.frame
+
+        let initialUpdatesFrame = updates.frame
         let initialShuffleFrame = shuffleButton.frame
         let initialSearchFrame = searchBar.frame
-        
-        // Find scrollable content (the main scroll view)
+
         let scrollView = app.scrollViews.firstMatch
         XCTAssertTrue(scrollView.exists, "Scrollable content should exist")
-        
-        // Scroll down significantly
+
         scrollView.swipeUp()
         scrollView.swipeUp()
         scrollView.swipeUp()
-        
-        // Wait for scroll animation to complete
         Thread.sleep(forTimeInterval: 0.5)
-        
-        // Check that title elements have moved (not anchored)
-        // Since they're now inside the scroll view, they should move up with the content
-        let finalHomeTitleFrame = homeTitle.frame
-        let finalShuffleFrame = shuffleButton.frame
-        let finalSearchFrame = searchBar.frame
-        
-        // Verify elements have moved upward (their Y position decreased)
-        XCTAssertLessThan(finalHomeTitleFrame.minY, initialHomeTitleFrame.minY, 
-                         "Home title should move up when scrolling (not be anchored)")
-        XCTAssertLessThan(finalShuffleFrame.minY, initialShuffleFrame.minY, 
-                         "Shuffle button should move up when scrolling (not be anchored)")
-        XCTAssertLessThan(finalSearchFrame.minY, initialSearchFrame.minY, 
-                         "Search bar should move up when scrolling (not be anchored)")
+
+        XCTAssertLessThan(updates.frame.minY, initialUpdatesFrame.minY,
+                         "Feed content should scroll with the page")
+        XCTAssertEqual(shuffleButton.frame.minY, initialShuffleFrame.minY, accuracy: 2,
+                       "Random page should stay pinned in the glass accessory")
+        XCTAssertEqual(searchBar.frame.minY, initialSearchFrame.minY, accuracy: 2,
+                       "Search should stay pinned in the glass accessory")
     }
     
     func testSearchTitleNotSticky() throws {

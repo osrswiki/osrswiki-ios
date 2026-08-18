@@ -111,10 +111,10 @@ th[aria-sort="descending"]::after {
     background: var(--ooui-interface);
     border: 1px solid var(--ooui-interface-border);
     font-size: 0.85em;
-    width: auto;
-    max-width: 450px;
-    float: right;
-    margin: 0.5em 0 1em 1em; /* Match web exactly */
+    width: 100%;
+    max-width: 100%;
+    float: none;
+    margin: 1em 0;
     clear: both;
     box-shadow: 0 0.25rem 0.35rem -0.25rem rgba(0,0,0,0.1);
 }

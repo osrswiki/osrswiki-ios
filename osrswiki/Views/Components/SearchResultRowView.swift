@@ -7,9 +7,11 @@
 
 import SwiftUI
 import Foundation
+import ImageIO
 
 struct SearchResultRowView: View {
     @Environment(\.osrsTheme) var osrsTheme
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let result: ThemedSearchResult
     let onTap: () -> Void
     
@@ -28,10 +30,10 @@ struct SearchResultRowView: View {
     private var displayTitle: AttributedString {
         // Use pre-processed highlighted title if available
         if let highlightedTitle = result.highlightedTitle {
-            // Apply primary text color to non-highlighted parts while preserving highlights
-            var attributed = highlightedTitle
-            // The highlights already have secondary color, just ensure base text uses primary
-            return attributed
+            return Self.applyingBaseColor(
+                to: highlightedTitle,
+                color: Color(osrsTheme.primaryTextColor)
+            )
         } else {
             // Fallback for no search query
             var attributed = AttributedString(result.processedTitle)
@@ -47,10 +49,23 @@ struct SearchResultRowView: View {
             return AttributedString("")
         }
         
-        // The snippet should have secondary text as base color
-        var attributed = processedSnippet
-        // Note: The highlighting already sets colors, we just return it
-        return attributed
+        return Self.applyingBaseColor(
+            to: processedSnippet,
+            color: Color(osrsTheme.primaryTextColor)
+        )
+    }
+
+    /// Highlight attributes are prepared without a platform label color so the rendered row can
+    /// supply the active OSRS light/dark theme. Explicit brown match runs remain untouched.
+    static func applyingBaseColor(to value: AttributedString, color: Color) -> AttributedString {
+        var result = value
+        let uncoloredRanges = result.runs.compactMap { run in
+            run.foregroundColor == nil ? run.range : nil
+        }
+        for range in uncoloredRanges {
+            result[range].foregroundColor = color
+        }
+        return result
     }
     
     var body: some View {
@@ -63,7 +78,7 @@ struct SearchResultRowView: View {
                     // CRASH FIX: Use pre-processed display properties - no expensive operations
                     Text(displayTitle)
                         .font(.osrsListTitle) // Ensure AttributedString font attributes are respected
-                        .lineLimit(2)
+                        .lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
                         .multilineTextAlignment(.leading)
                         // NO .foregroundStyle() - let AttributedString colors show through
                     
@@ -74,39 +89,167 @@ struct SearchResultRowView: View {
                             .multilineTextAlignment(.leading)
                     }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .clipped()
                 
                 Spacer()
                 
                 // Thumbnail positioned on the right (matching Android layout) - only show if URL exists
                 if let thumbnailUrl = result.thumbnailUrl {
-                    AsyncImage(url: thumbnailUrl) { image in
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                            .clipped()
-                    } placeholder: {
-                        ProgressView()
-                            .progressViewStyle(CircularProgressViewStyle())                            .tint(.osrsPrimaryColor)
-                            .frame(width: 60, height: 60)
-                    }
+                    osrsAnimatedThumbnailView(url: thumbnailUrl)
                     .frame(width: 60, height: 60)
-                    .background(.clear)
+                    .background(.osrsSearchBoxBackgroundColor)
                     .cornerRadius(8)
                 }
             }
-            .padding(.vertical, 8)
+            .padding(.vertical, dynamicTypeSize.isAccessibilitySize ? 8 : 4)
             .padding(.horizontal, 8)
+            .frame(maxWidth: .infinity)
+            .frame(
+                minHeight: 76,
+                maxHeight: dynamicTypeSize.isAccessibilitySize ? nil : 84
+            )
             .contentShape(Rectangle())
         }
         .buttonStyle(PlainButtonStyle())
+        .frame(height: dynamicTypeSize.isAccessibilitySize ? nil : 84)
+        .clipped()
+        .accessibilityIdentifier("search_result_row_\(result.id)")
         .listRowBackground(osrsTheme.surface)
-        .listRowSeparator(.visible, edges: .bottom)
-        .listRowSeparatorTint(osrsTheme.divider)
+        .listRowSeparator(.hidden)
+        .osrsPrewarmArticleWhenVisible(
+            pageURL: URL(string: result.url),
+            pageTitle: result.processedTitle
+        )
     }
+}
+
+/// A small UIKit-backed image view because SwiftUI's AsyncImage intentionally
+/// displays only the first frame of animated GIFs. Search, history, and saved
+/// lists share this component so their media behavior stays identical.
+struct osrsAnimatedThumbnailView: UIViewRepresentable {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    let url: URL?
+    let refreshToken: String?
+    private static let cache = NSCache<NSString, UIImage>()
+
+    init(url: URL?, refreshToken: String? = nil) {
+        self.url = url
+        self.refreshToken = refreshToken
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    func makeUIView(context: Context) -> UIImageView {
+        // UIImageView otherwise advertises the downloaded bitmap's pixel size as
+        // its intrinsic content size. That allowed a 240x160 Wiki thumbnail to
+        // expand a nominally 60x60 SwiftUI list cell.
+        let view = osrsThumbnailImageView()
+        view.contentMode = .scaleAspectFill
+        view.clipsToBounds = true
+        view.image = UIImage(systemName: "doc.text.fill")
+        view.tintColor = .secondaryLabel
+        view.isAccessibilityElement = true
+        view.accessibilityLabel = "Article thumbnail"
+        view.accessibilityValue = "loading"
+        return view
+    }
+
+    func updateUIView(_ imageView: UIImageView, context: Context) {
+        let identity = thumbnailIdentity
+        guard context.coordinator.loadedIdentity != identity ||
+                context.coordinator.loadedReduceMotion != reduceMotion else { return }
+        context.coordinator.task?.cancel()
+        context.coordinator.loadedIdentity = identity
+        context.coordinator.loadedReduceMotion = reduceMotion
+        imageView.stopAnimating()
+        imageView.image = UIImage(systemName: "doc.text.fill")
+        imageView.accessibilityValue = url == nil ? "unavailable" : "loading"
+        guard let url else { return }
+
+        let cacheKey = identity as NSString
+        if let cached = Self.cache.object(forKey: cacheKey) {
+            apply(cached, to: imageView)
+            return
+        }
+
+        let cachePolicy: URLRequest.CachePolicy = refreshToken == nil
+            ? .returnCacheDataElseLoad
+            : .reloadRevalidatingCacheData
+        let request = URLRequest(url: url, cachePolicy: cachePolicy, timeoutInterval: 20)
+        context.coordinator.task = URLSession.shared.dataTask(with: request) { data, _, _ in
+            guard let data, let image = Self.decodeImage(data: data) else { return }
+            Self.cache.setObject(image, forKey: cacheKey)
+            DispatchQueue.main.async {
+                guard context.coordinator.loadedIdentity == identity else { return }
+                apply(image, to: imageView)
+            }
+        }
+        context.coordinator.task?.resume()
+    }
+
+    static func dismantleUIView(_ uiView: UIImageView, coordinator: Coordinator) {
+        coordinator.task?.cancel()
+        uiView.stopAnimating()
+    }
+
+    private func apply(_ image: UIImage, to imageView: UIImageView) {
+        let animated = image.images?.isEmpty == false
+        if reduceMotion, let firstFrame = image.images?.first {
+            imageView.image = firstFrame
+            imageView.accessibilityValue = "static"
+        } else {
+            imageView.image = image
+            imageView.startAnimating()
+            imageView.accessibilityValue = animated ? "animated" : "static"
+        }
+    }
+
+    private static func decodeImage(data: Data) -> UIImage? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else {
+            return UIImage(data: data)
+        }
+        let frameCount = CGImageSourceGetCount(source)
+        guard frameCount > 1 else { return UIImage(data: data) }
+
+        var frames: [UIImage] = []
+        var duration: TimeInterval = 0
+        for index in 0..<frameCount {
+            guard let cgImage = CGImageSourceCreateImageAtIndex(source, index, nil) else { continue }
+            frames.append(UIImage(cgImage: cgImage))
+            let properties = CGImageSourceCopyPropertiesAtIndex(source, index, nil) as? [CFString: Any]
+            let gif = properties?[kCGImagePropertyGIFDictionary] as? [CFString: Any]
+            duration += (gif?[kCGImagePropertyGIFUnclampedDelayTime] as? Double)
+                ?? (gif?[kCGImagePropertyGIFDelayTime] as? Double)
+                ?? 0.1
+        }
+        guard !frames.isEmpty else { return UIImage(data: data) }
+        return UIImage.animatedImage(with: frames, duration: max(duration, 0.1)) ?? frames[0]
+    }
+
+    final class Coordinator {
+        var loadedIdentity = ""
+        var loadedReduceMotion = false
+        var task: URLSessionDataTask?
+    }
+
+    private var thumbnailIdentity: String {
+        guard let url else { return "unavailable" }
+        return "\(url.absoluteString)#\(refreshToken ?? "cached")"
+    }
+}
+
+private final class osrsThumbnailImageView: UIImageView {
+    override var intrinsicContentSize: CGSize { .zero }
 }
 
 // MARK: - ThemedSearchResult Model
 struct ThemedSearchResult: Identifiable, Hashable {
+    private static let searchHighlightColor = Color(UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 0xFF/255.0, green: 0x8A/255.0, blue: 0x65/255.0, alpha: 1)
+            : UIColor(red: 0xB5/255.0, green: 0x36/255.0, blue: 0x16/255.0, alpha: 1)
+    })
     // CRASH FIX: Use consistent ID based on content hash instead of random UUID
     // This ensures stable identity for SwiftUI List cell dequeuing
     let id: String
@@ -138,11 +281,11 @@ struct ThemedSearchResult: Identifiable, Hashable {
         
         // CRASH FIX: Pre-process expensive operations ONCE during creation, not during rendering
         // Use the title directly for highlighting, not the extracted/processed version
-        let titleForHighlighting = title
-            .replacingOccurrences(of: "_", with: " ")
-            .decodingHTMLEntities()
+        let titleForHighlighting = osrsStringUtils.extractMainTitle(
+            title.replacingOccurrences(of: "_", with: " ")
+        )
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        self.processedTitle = titleForHighlighting // Don't use extractMainTitle as it may remove search terms
+        self.processedTitle = titleForHighlighting
         
         // FUNCTIONALITY RESTORE: Pre-process title highlighting during creation
         if let searchQuery = searchQuery, !searchQuery.isEmpty {
@@ -159,10 +302,10 @@ struct ThemedSearchResult: Identifiable, Hashable {
             // Use the existing highlightMatches extension that works properly
             // Match Android: use brown (#8B7355) for ALL highlights
             // Note: Using hardcoded brown since we don't have theme context here
-            let brownHighlightColor = Color(red: 0x8B/255.0, green: 0x73/255.0, blue: 0x55/255.0) // #8B7355
+            let brownHighlightColor = Self.searchHighlightColor
             self.highlightedTitle = titleForHighlighting.highlightMatches(
-                query: searchQuery,
-                baseColor: Color.primary,      // Title base text (will be overridden by Text modifier)
+                ranges: SearchQueryPolicy.titleHighlightRanges(titleForHighlighting, query: searchQuery),
+                baseColor: nil,
                 highlightColor: brownHighlightColor, // Brown highlight to match Android
                 baseFont: alegreyaFont
             )
@@ -203,6 +346,9 @@ struct ThemedSearchResult: Identifiable, Hashable {
                         break
                     }
                 }
+                if let searchQuery {
+                    highlightTerms.append(contentsOf: SearchQueryPolicy.highlightTerms(searchQuery))
+                }
                 
                 // Now clean the snippet
                 let cleanedSnippet = snippet
@@ -216,16 +362,25 @@ struct ThemedSearchResult: Identifiable, Hashable {
                 var attributed = AttributedString(cleanedSnippet)
                 
                 // Highlight each term that was marked by the server
-                for term in highlightTerms {
-                    if let range = cleanedSnippet.range(of: term, options: .caseInsensitive) {
+                let meaningfulHighlightTerms = Set(
+                    highlightTerms
+                        .map(osrsStringUtils.decodeHTMLEntitiesFixedPoint)
+                        .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                        .filter { $0.count >= 2 }
+                )
+                for term in meaningfulHighlightTerms {
+                    var searchStart = cleanedSnippet.startIndex
+                    while searchStart < cleanedSnippet.endIndex,
+                          let range = cleanedSnippet.range(of: term, options: .caseInsensitive, range: searchStart..<cleanedSnippet.endIndex) {
                         if let attrStart = AttributedString.Index(range.lowerBound, within: attributed),
                            let attrEnd = AttributedString.Index(range.upperBound, within: attributed) {
                             // Match Android: use brown (#8B7355) for server-provided highlights
-                            let brownHighlightColor = Color(red: 0x8B/255.0, green: 0x73/255.0, blue: 0x55/255.0)
+                            let brownHighlightColor = Self.searchHighlightColor
                             attributed[attrStart..<attrEnd].foregroundColor = brownHighlightColor
                             // Just make it bold without changing the base font size
                             attributed[attrStart..<attrEnd].font = .subheadline.bold()
                         }
+                        searchStart = range.upperBound
                     }
                 }
                 
@@ -240,16 +395,14 @@ struct ThemedSearchResult: Identifiable, Hashable {
                 // Apply manual highlighting to snippet if we have a search query
                 if let searchQuery = searchQuery, !searchQuery.isEmpty {
                     // Match Android: use brown (#8B7355) for highlights, primary for base text
-                    let brownHighlightColor = Color(red: 0x8B/255.0, green: 0x73/255.0, blue: 0x55/255.0) // #8B7355
+                    let brownHighlightColor = Self.searchHighlightColor
                     self.processedSnippet = cleaned.highlightMatches(
-                        query: searchQuery,
-                        baseColor: Color.primary,  // Snippet base text should match title (primary color)
+                        ranges: SearchQueryPolicy.snippetHighlightRanges(cleaned, query: searchQuery),
+                        baseColor: nil,
                         highlightColor: brownHighlightColor // Brown for highlights
                     )
                 } else {
-                    var attributed = AttributedString(cleaned)
-                    attributed.foregroundColor = Color.primary // Use primary color for non-highlighted snippets too
-                    self.processedSnippet = attributed
+                    self.processedSnippet = AttributedString(cleaned)
                 }
             }
         } else {
@@ -356,48 +509,56 @@ extension String {
 
 // MARK: - Manual Text Highlighting Extension
 extension String {
-    func highlightMatches(query: String, baseColor: Color, highlightColor: Color, baseFont: UIFont? = nil) -> AttributedString {
-        let attributedString = NSMutableAttributedString(string: self)
-        let fullRange = NSRange(location: 0, length: attributedString.length)
-        
-        // Set base color and font
+    func highlightMatches(
+        ranges: [SearchQueryPolicy.HighlightRange],
+        baseColor: Color?,
+        highlightColor: Color,
+        baseFont: UIFont? = nil
+    ) -> AttributedString {
+        var attributedString = AttributedString(self)
+
+        // Build the presentation with native AttributedString attributes. Bridging a
+        // dynamic UIColor through NSMutableAttributedString can lose the SwiftUI
+        // foreground-color scope, allowing a later theme pass to overwrite matches.
         let font = baseFont ?? UIFont.preferredFont(forTextStyle: .subheadline)
         let boldFont = baseFont?.withTraits(.traitBold) ?? UIFont.boldSystemFont(ofSize: font.pointSize)
-        attributedString.addAttribute(.font, value: font, range: fullRange)
-        attributedString.addAttribute(.foregroundColor, value: UIColor(baseColor), range: fullRange)
-        
-        // Find and highlight matches (case insensitive) - INFINITE LOOP FIX
-        let searchString = self.lowercased()
-        let queryLowercased = query.lowercased()
-        
-        var searchIndex = 0
-        var safetyCounter = 0
-        let maxHighlights = 50 // Safety limit to prevent infinite loops
-        
-        while searchIndex < searchString.count && safetyCounter < maxHighlights {
-            safetyCounter += 1
-            let startIndex = searchString.index(searchString.startIndex, offsetBy: searchIndex)
-            if let range = searchString.range(of: queryLowercased, range: startIndex..<searchString.endIndex) {
-                let nsRange = NSRange(range, in: self)
-                
-                // Apply highlight color and bold
-                attributedString.addAttribute(.foregroundColor, value: UIColor(highlightColor), range: nsRange)
-                attributedString.addAttribute(.font, value: boldFont, range: nsRange)
-                
-                let newSearchIndex = self.distance(from: self.startIndex, to: range.upperBound)
-                
-                // INFINITE LOOP PROTECTION: Ensure we're making progress
-                if newSearchIndex <= searchIndex {
-                    break
-                }
-                
-                searchIndex = newSearchIndex
-            } else {
-                break
-            }
+        attributedString.font = Font(font)
+        if let baseColor {
+            attributedString.foregroundColor = baseColor
         }
 
-        return AttributedString(attributedString)
+        for range in ranges {
+            let nsRange = NSRange(
+                location: range.startInclusive,
+                length: range.endExclusive - range.startInclusive
+            )
+            guard nsRange.location >= 0,
+                  nsRange.length > 0,
+                  let stringRange = Range(nsRange, in: self),
+                  let start = AttributedString.Index(stringRange.lowerBound, within: attributedString),
+                  let end = AttributedString.Index(stringRange.upperBound, within: attributedString) else {
+                continue
+            }
+            attributedString[start..<end].foregroundColor = highlightColor
+            attributedString[start..<end].font = Font(boldFont)
+            attributedString[start..<end].inlinePresentationIntent = .stronglyEmphasized
+        }
+
+        return attributedString
+    }
+
+    func highlightMatches(
+        query: String,
+        baseColor: Color?,
+        highlightColor: Color,
+        baseFont: UIFont? = nil
+    ) -> AttributedString {
+        highlightMatches(
+            ranges: SearchQueryPolicy.snippetHighlightRanges(self, query: query),
+            baseColor: baseColor,
+            highlightColor: highlightColor,
+            baseFont: baseFont
+        )
     }
 }
 
@@ -412,65 +573,6 @@ extension UIFont {
 // MARK: - HTML Entity Decoding Extension
 extension String {
     func decodingHTMLEntities() -> String {
-        // Common HTML entities that appear in search results
-        let entities = [
-            ("&amp;", "&"),
-            ("&lt;", "<"),
-            ("&gt;", ">"),
-            ("&quot;", "\""),
-            ("&#039;", "'"),
-            ("&#39;", "'"),
-            ("&apos;", "'"),
-            ("&nbsp;", " "),
-            ("&ndash;", "–"),
-            ("&mdash;", "—"),
-            ("&lsquo;", "'"),
-            ("&rsquo;", "'"),
-            ("&ldquo;", "\""),
-            ("&rdquo;", "\""),
-            ("&hellip;", "…"),
-            ("&copy;", "©"),
-            ("&reg;", "®"),
-            ("&trade;", "™")
-        ]
-        
-        var result = self
-        for (entity, replacement) in entities {
-            result = result.replacingOccurrences(of: entity, with: replacement)
-        }
-        
-        // Handle numeric character references (e.g., &#8217; for right single quote)
-        let pattern = "&#(\\d+);"
-        let regex = try? NSRegularExpression(pattern: pattern, options: [])
-        let nsString = result as NSString
-        let matches = regex?.matches(in: result, options: [], range: NSRange(location: 0, length: nsString.length)) ?? []
-        
-        // Process matches in reverse order to maintain string indices
-        for match in matches.reversed() {
-            if let codeRange = Range(match.range(at: 1), in: result),
-               let code = Int(result[codeRange]),
-               let scalar = UnicodeScalar(code) {
-                let character = String(Character(scalar))
-                let fullRange = Range(match.range, in: result)!
-                result.replaceSubrange(fullRange, with: character)
-            }
-        }
-        
-        // Handle hexadecimal character references (e.g., &#x27; for apostrophe)
-        let hexPattern = "&#x([0-9a-fA-F]+);"
-        let hexRegex = try? NSRegularExpression(pattern: hexPattern, options: [])
-        let hexMatches = hexRegex?.matches(in: result, options: [], range: NSRange(location: 0, length: (result as NSString).length)) ?? []
-        
-        for match in hexMatches.reversed() {
-            if let codeRange = Range(match.range(at: 1), in: result),
-               let code = Int(result[codeRange], radix: 16),
-               let scalar = UnicodeScalar(code) {
-                let character = String(Character(scalar))
-                let fullRange = Range(match.range, in: result)!
-                result.replaceSubrange(fullRange, with: character)
-            }
-        }
-        
-        return result
+        osrsStringUtils.decodeHTMLEntitiesFixedPoint(self)
     }
 }

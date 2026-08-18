@@ -70,7 +70,7 @@ class NewsViewModel: ObservableObject {
                 wikiFeed = nil
             }
         } catch {
-            errorMessage = "Failed to load news: \(error.localizedDescription)"
+            errorMessage = UserFacingError.message(for: error, fallback: "Home could not be loaded. Please try again.")
             
             // Only clear data if we have no cached data to fall back on
             if !newsRepository.isCacheValid {
@@ -240,14 +240,14 @@ struct NewsCardView: View {
 
 // MARK: - Wiki Feed Data Models (matching Android structure)
 
-struct WikiFeed {
+struct WikiFeed: Sendable {
     let recentUpdates: [UpdateItem]
     let announcements: [AnnouncementItem]
     let onThisDay: OnThisDayItem?
     let popularPages: [PopularPageItem]
 }
 
-struct UpdateItem: Identifiable {
+struct UpdateItem: Identifiable, Sendable {
     let id = UUID()
     let title: String
     let snippet: String
@@ -255,19 +255,19 @@ struct UpdateItem: Identifiable {
     let articleUrl: String
 }
 
-struct AnnouncementItem: Identifiable {
+struct AnnouncementItem: Identifiable, Sendable {
     let id = UUID()
     let date: String
     let content: String
 }
 
-struct OnThisDayItem: Identifiable {
+struct OnThisDayItem: Identifiable, Sendable {
     let id = UUID()
     let title: String
     let events: [String]
 }
 
-struct PopularPageItem: Identifiable {
+struct PopularPageItem: Identifiable, Sendable {
     let id = UUID()
     let title: String
     let pageUrl: String

@@ -33,11 +33,11 @@ extension ArticleViewModel {
     
     /// Enable caching mode for offline page saving (replaces web archive creation)
     @discardableResult
-    func enableOfflineCachingMode(pageId: String) -> ProxyCacheSessionToken? {
+    func enableOfflineCachingMode(pageId: String) async -> ProxyCacheSessionToken? {
         print("💾 ArticleViewModel: Enabling offline caching for page: \(pageId)")
         
         if #available(iOS 17.0, *) {
-            return ProxyInterceptorService.shared.enableOfflineSaveMode(pageId: pageId)
+            return await ProxyInterceptorService.shared.enableOfflineSaveMode(pageId: pageId)
         } else {
             print("⚠️ ArticleViewModel: Proxy caching requires iOS 17+, falling back to web archive")
             // Could fall back to web archive approach for older iOS versions
@@ -46,12 +46,9 @@ extension ArticleViewModel {
     }
     
     /// Disable caching mode and return to normal operation
-    func disableOfflineCachingMode() {
-        print("🔄 ArticleViewModel: Disabling offline caching mode")
-        
-        if #available(iOS 17.0, *) {
-            ProxyInterceptorService.shared.disableOfflineSaveMode()
-        }
+    func disableOfflineCachingMode(owner token: ProxyCacheSessionToken) {
+        print("🔄 ArticleViewModel: Disabling owned offline caching mode")
+        ProxyInterceptorService.shared.disableMode(owner: token)
     }
     
     /// Check if a page has complete offline cache available
@@ -81,11 +78,11 @@ extension ArticleViewModel {
             if isOffline && hasCache {
                 // CACHE-ONLY MODE: Complete offline with cached content
                 print("📦 ArticleViewModel: Offline + cached content = CACHE-ONLY mode for: \(pageId)")
-                ownerToken = ProxyInterceptorService.shared.enableCacheOnlyMode(pageId: pageId)
+                ownerToken = await ProxyInterceptorService.shared.enableCacheOnlyMode(pageId: pageId)
             } else if !hasCache && !isOffline {
                 // SAVE-WHILE-SERVING MODE: Online but no cache = save content while serving
                 print("📡 ArticleViewModel: Online + no cache = SAVE-WHILE-SERVING mode for: \(pageId)")
-                ownerToken = enableOfflineCachingMode(pageId: pageId)
+                ownerToken = await enableOfflineCachingMode(pageId: pageId)
             } else if hasCache && !isOffline {
                 // NORMAL SERVING MODE: Online with cache = serve normally, no saving needed
                 print("🌐 ArticleViewModel: Online + cached content = NORMAL mode for: \(pageId)")
@@ -95,7 +92,7 @@ extension ArticleViewModel {
                 // OFFLINE WITHOUT CACHE: Should show error, but try cache-only mode anyway
                 print("⚠️ ArticleViewModel: Offline + no cache = ERROR scenario for: \(pageId)")
                 print("🔄 ArticleViewModel: Attempting cache-only mode as fallback")
-                ownerToken = ProxyInterceptorService.shared.enableCacheOnlyMode(pageId: pageId)
+                ownerToken = await ProxyInterceptorService.shared.enableCacheOnlyMode(pageId: pageId)
             }
             
             // Load the original HTTPS URL - proxy will handle caching/serving automatically

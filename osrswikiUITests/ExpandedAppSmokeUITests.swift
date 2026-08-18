@@ -69,7 +69,7 @@ final class ExpandedAppSmokeUITests: XCTestCase {
     }
 
     private func assertTabBarExists(in app: XCUIApplication) {
-        for identifier in ["news_tab", "map_tab", "search_tab", "saved_tab", "more_tab"] {
+        for identifier in ["home_tab", "map_tab", "search_tab", "saved_tab", "more_tab"] {
             XCTAssertTrue(app.buttons[identifier].waitForExistence(timeout: 5), "Expected tab button \(identifier)")
         }
     }

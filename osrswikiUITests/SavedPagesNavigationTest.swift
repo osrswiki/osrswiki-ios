@@ -74,7 +74,7 @@ class SavedPagesNavigationTest: XCTestCase {
         XCTAssertTrue(app.staticTexts["Saved"].waitForExistence(timeout: 5), "Saved tab content should be visible")
 
         // Verify other tabs are accessible (indicating navigation is not broken)
-        let homeTab = tabButton(identifier: "news_tab", label: "Home tab")
+        let homeTab = tabButton(identifier: "home_tab", label: "Home tab")
         let mapTab = tabButton(identifier: "map_tab", label: "Map tab")
 
         XCTAssertTrue(homeTab.exists, "Home tab should be accessible")

@@ -27,57 +27,50 @@ struct osrsArticleBottomBar: View {
     var body: some View {
         let barHeight = osrsArticleDynamicTypeScaling.toolbarHeight(for: dynamicTypeSize)
 
-        VStack(spacing: 0) {
-            // Top separator line
-            Rectangle()
-                .frame(height: 0.33)
-                .foregroundColor(Color(UIColor.separator))
-            
-            // Button content area
-            HStack(spacing: 0) {
-                // Save Button - replicates Android page_action_save
-                osrsBottomBarButton(
-                    iconName: saveButtonIconName,
-                    text: saveButtonText,
-                    action: onSaveAction,
-                    isEnabled: saveState != .downloading,
-                    tintColor: saveButtonTintColor,
-                    dynamicTypeSize: dynamicTypeSize,
-                    barHeight: barHeight
-                )
-                
-                // Find in Article Button - replicates Android page_action_find_in_article
-                osrsBottomBarButton(
-                    iconName: "doc.text.magnifyingglass",
-                    text: "Find",
-                    action: onFindInPageAction,
-                    dynamicTypeSize: dynamicTypeSize,
-                    barHeight: barHeight
-                )
-                
-                // Appearance Button - replicates Android page_action_theme
-                osrsBottomBarButton(
-                    iconName: "paintbrush",
-                    text: "Appearance",
-                    action: onAppearanceAction,
-                    dynamicTypeSize: dynamicTypeSize,
-                    barHeight: barHeight
-                )
-                
-                // Contents Button - replicates Android page_action_contents
-                osrsBottomBarButton(
-                    iconName: "list.bullet",
-                    text: "Contents",
-                    action: onContentsAction,
-                    isEnabled: hasTableOfContents,
-                    dynamicTypeSize: dynamicTypeSize,
-                    barHeight: barHeight
-                )
-            }
-            .frame(height: barHeight)
-            .background(osrsTheme.surface)
+        HStack(spacing: 0) {
+            osrsBottomBarButton(
+                iconName: saveButtonIconName,
+                text: saveButtonText,
+                action: onSaveAction,
+                isEnabled: saveState != .downloading,
+                tintColor: saveButtonTintColor,
+                dynamicTypeSize: dynamicTypeSize,
+                barHeight: barHeight
+            )
+
+            osrsBottomBarButton(
+                iconName: "doc.text.magnifyingglass",
+                text: "Find",
+                action: onFindInPageAction,
+                dynamicTypeSize: dynamicTypeSize,
+                barHeight: barHeight
+            )
+
+            osrsBottomBarButton(
+                iconName: "paintbrush",
+                text: "Appearance",
+                action: onAppearanceAction,
+                dynamicTypeSize: dynamicTypeSize,
+                barHeight: barHeight
+            )
+
+            osrsBottomBarButton(
+                iconName: "list.bullet",
+                text: "Contents",
+                action: onContentsAction,
+                isEnabled: true,
+                dynamicTypeSize: dynamicTypeSize,
+                barHeight: barHeight
+            )
+            .accessibilityValue(hasTableOfContents ? "Ready" : "Loading")
         }
-        .background(osrsTheme.surface)
+        .frame(height: osrsOverlayChromeMetrics.floatingBarHeight)
+        .osrsFloatingGlass(
+            in: Capsule(),
+            fallback: Color(osrsTheme.surface)
+        )
+        .padding(.horizontal, 16)
+        .accessibilityIdentifier("article_bottom_bar")
     }
     
     // MARK: - Save Button State Management
@@ -157,7 +150,7 @@ struct osrsBottomBarButton: View {
         let toolbarScale = osrsArticleDynamicTypeScaling.toolbarScale(for: dynamicTypeSize)
         let iconSize = min(20 * toolbarScale, 30)
         let labelSize = min(10 * toolbarScale, 16)
-        let iconHeight = min(max(iconSize + 8, 28), 38)
+        let iconHeight = min(max(iconSize + 2, 22), 32)
 
         Button(action: action) {
             VStack(spacing: 1) { // Tighter spacing for smaller height
@@ -178,8 +171,10 @@ struct osrsBottomBarButton: View {
             .contentShape(Rectangle()) // Ensure entire button area is tappable
         }
         .disabled(!isEnabled)
-        .buttonStyle(PlainButtonStyle()) // Prevent default button styling
+        .buttonStyle(PlainButtonStyle())
+        .accessibilityElement(children: .ignore)
         .accessibilityLabel(text)
+        .accessibilityAddTraits(.isButton)
     }
     
     private var effectiveTintColor: Color {

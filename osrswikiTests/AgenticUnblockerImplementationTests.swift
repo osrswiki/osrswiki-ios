@@ -58,6 +58,38 @@ final class AgenticUnblockerImplementationTests: XCTestCase {
         }
     }
 
+    func testReachabilitySnapshotIsAdvisoryForARequestThatCanSucceed() async throws {
+        let fileURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("osrs-advisory-reachability-\(UUID().uuidString).txt")
+        try Data("reachable-despite-stale-monitor".utf8).write(to: fileURL)
+        defer { try? FileManager.default.removeItem(at: fileURL) }
+
+        NetworkManager.shared.isConnected = false
+
+        let (data, _) = try await NetworkManager.shared.performDataRequest(
+            url: fileURL,
+            retryCount: 0
+        )
+
+        XCTAssertEqual(String(data: data, encoding: .utf8), "reachable-despite-stale-monitor")
+    }
+
+    func testDeadPassiveProxyFallsBackToDirectRequest() async throws {
+        let fileURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("osrs-dead-proxy-fallback-\(UUID().uuidString).txt")
+        try Data("direct-fallback-ok".utf8).write(to: fileURL)
+        defer { try? FileManager.default.removeItem(at: fileURL) }
+
+        NetworkManager.shared.configureProxyRouting(enabled: true, port: 1)
+
+        let (data, _) = try await NetworkManager.shared.performDataRequest(
+            url: fileURL,
+            retryCount: 0
+        )
+
+        XCTAssertEqual(String(data: data, encoding: .utf8), "direct-fallback-ok")
+    }
+
     func testDegradedNetworkConditionCanDelaySuccessfulRawRequest() async throws {
         let fileURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("osrs-network-condition-\(UUID().uuidString).txt")
@@ -121,11 +153,12 @@ final class AgenticUnblockerImplementationTests: XCTestCase {
             url: URL(string: "https://oldschool.runescape.wiki/w/Varrock")!,
             thumbnailUrl: nil,
             savedDate: Date(timeIntervalSince1970: 1_735_732_800),
-            isOfflineAvailable: false,
-            offlineDownloadDate: nil,
-            offlineStatus: .notDownloaded,
-            offlineFileSize: nil,
-            offlineLocalPath: nil
+            isOfflineAvailable: true,
+            offlineDownloadDate: Date(timeIntervalSince1970: 1_735_732_800),
+            offlineStatus: .available,
+            offlineFileSize: 2_048,
+            offlineLocalPath: "ui-test-varrock-snapshot",
+            durableSettlementVersion: SavedPage.currentDurableSettlementVersion
         )
 
         let exportText = SavedPagesViewModel.exportReadingListText(from: [savedPage])

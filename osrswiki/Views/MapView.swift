@@ -13,6 +13,7 @@ struct MapView: View {
     var body: some View {
         NavigationStack(path: $appState.mapNavigationStack) {
             osrsMapLibreView()
+                .accessibilityElement(children: .contain)
                 .accessibilityIdentifier("map_screen")
         }
     }

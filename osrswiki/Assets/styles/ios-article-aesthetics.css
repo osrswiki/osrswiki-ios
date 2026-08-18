@@ -1,0 +1,321 @@
+/*
+ * iOS-only article rendering overrides.
+ *
+ * Shared tokens stay the Android density reference. WebKit's UA stylesheet and
+ * text-size adjustment make the same tokens render looser than Chromium, so
+ * these rules neutralize that platform gap without changing Android.
+ */
+
+html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+}
+
+:is(td, th) .scp,
+:is(td, th) .scp[style] {
+    display: inline-flex !important;
+    align-items: center !important;
+    height: auto !important;
+    min-height: 0 !important;
+    vertical-align: middle !important;
+}
+
+.scp .mw-default-size,
+.coins .mw-default-size,
+.plinkp-template .mw-default-size,
+.league-badge .mw-default-size,
+.league-region .mw-default-size,
+.mmg-itemline .mw-default-size,
+span.mw-default-size[typeof^="mw:File"],
+span.mw-default-size[typeof^="mw:File"] > a,
+span.mw-default-size[typeof^="mw:File"] img.mw-file-element {
+    display: inline-block !important;
+    height: auto !important;
+    line-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    vertical-align: middle !important;
+    width: auto !important;
+    max-width: none !important;
+    min-width: 0 !important;
+}
+
+.scp img.mw-file-element,
+.coins img.mw-file-element,
+.plinkp-template img.mw-file-element,
+.league-badge img.mw-file-element,
+.league-region img.mw-file-element,
+.mmg-itemline img.mw-file-element,
+span.mw-default-size[typeof^="mw:File"] img.mw-file-element {
+    display: inline-block !important;
+    height: auto !important;
+    margin: 0 0.12em 0 0 !important;
+    max-height: 2em !important;
+    max-width: 2em !important;
+    vertical-align: middle !important;
+    width: auto !important;
+}
+
+/* Recipe/skill/rune icons only — do not enlarge combat nested/subheader icons. */
+:is(td, th):not(.infobox-bonuses-image):not(.infobox-image):not(.infobox-full-width-content):not(.infobox-nested):not(.infobox-subheader)
+    :is(.scp, .inventory-image, .mw-default-size, .plinkp-template) img.mw-file-element {
+    height: 2em !important;
+    min-height: 2em !important;
+    max-height: 2em !important;
+    max-width: 2em !important;
+    width: auto !important;
+    vertical-align: middle !important;
+}
+
+.plinkp-template img.mw-file-element,
+.league-badge img.mw-file-element,
+.league-region img.mw-file-element {
+    max-height: 30px !important;
+    max-width: 30px !important;
+    vertical-align: middle !important;
+}
+
+/* One clearance: remaining env() (0 when the web view is already inset) plus
+   the compact bar and the paired gap. Do not also pad body — that doubled
+   the title offset and left a hole under the overlay chrome. */
+html {
+    padding-top: calc(env(safe-area-inset-top, 0px) + var(--osrs-article-chrome-clearance, 56px)) !important;
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + var(--osrs-article-chrome-clearance, 56px)) !important;
+}
+
+body {
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+}
+
+h1.page-header,
+h1.firstHeading {
+    margin-top: 0 !important;
+}
+
+/* WebKit inflates <button> / .button *and* <a> tap targets to ~44px.
+   Infobox chips, combat labels, and recipe skill/material links must not
+   inherit that min box — it makes cells ~50px with the icon stuck at the top. */
+.switch-infobox .switch-infobox-triggers .button,
+.infobox-switch .infobox-buttons .button,
+.infobox-wrapper .infobox-buttons .button,
+.infobox .button,
+table.infobox-bonuses .button,
+table :is(th, td) a,
+.infobox a,
+.scp a {
+    -webkit-appearance: none !important;
+    appearance: none !important;
+    min-height: 0 !important;
+    min-width: 0 !important;
+    line-height: 1.2 !important;
+}
+
+/* Beat `.infobox > tbody > tr > th { vertical-align: top }` (0,1,4). */
+table.infobox.infobox-bonuses > tbody > tr > :is(th, td),
+table.infobox-bonuses :is(th, td) {
+    -webkit-text-size-adjust: 100%;
+    min-height: 0 !important;
+    height: auto !important;
+    text-align: center !important;
+    vertical-align: middle !important;
+}
+
+table.infobox-bonuses :is(th, td).infobox-nested {
+    line-height: 1.05 !important;
+    padding: 1px 0.08em !important;
+    vertical-align: middle !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+}
+
+/* line-height:0 belongs on icon wrappers only. Applying it to every nested
+   <a> crushed "List" under Slot (td computed as a ~3px block). */
+table.infobox-bonuses :is(th, td).infobox-nested .mw-default-size,
+table.infobox-bonuses :is(th, td).infobox-nested > a:has(img),
+table.infobox-bonuses :is(th, td).infobox-nested > span:has(img) {
+    display: inline-block !important;
+    width: auto !important;
+    max-width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    line-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    vertical-align: middle !important;
+}
+
+table.infobox-bonuses :is(th, td).infobox-nested img {
+    display: inline-block !important;
+    margin: 0 auto !important;
+    max-height: 2em !important;
+    max-width: 2em !important;
+    min-height: 0 !important;
+    width: auto !important;
+    height: auto !important;
+    vertical-align: middle !important;
+}
+
+table.infobox-bonuses [data-attr-param="slot_link"] {
+    display: table-cell !important;
+    text-align: center !important;
+    vertical-align: middle !important;
+    height: auto !important;
+    line-height: 1.2 !important;
+}
+
+table.infobox-bonuses [data-attr-param="slot_link"] a {
+    display: inline !important;
+    width: auto !important;
+    max-width: none !important;
+    height: auto !important;
+    min-height: 0 !important;
+    line-height: 1.2 !important;
+    text-align: center !important;
+    vertical-align: middle !important;
+}
+
+table.infobox-bonuses .infobox-subheader {
+    line-height: 1.1 !important;
+    padding-block: 1px !important;
+    white-space: nowrap !important;
+    overflow-wrap: normal !important;
+    vertical-align: middle !important;
+}
+
+table.infobox-bonuses img {
+    max-height: none;
+}
+
+.collapsible-container.collapsed > .collapsible-content {
+    box-sizing: border-box !important;
+    height: 0 !important;
+    max-height: 0 !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+}
+
+/* 12px collapsible-content padding + scrollbar-gutter:stable reads as a thick
+   outer infobox frame on WebKit. Keep the collapse header chrome and the
+   shared content inset; drop only the reserved scrollbar gutter. */
+.collapsible-container:has(table.infobox) > .collapsible-content,
+.collapsible-primary-infobox > .collapsible-content,
+.collapsible-bonuses-infobox > .collapsible-content {
+    scrollbar-gutter: auto !important;
+    background: transparent !important;
+}
+
+table.infobox {
+    box-shadow: none !important;
+    border: 1px solid var(--wikitable-border) !important;
+}
+
+table.infobox:not(.skill-info):not(.infobox-skill):not(.infobox-bonuses),
+.infobox-switch,
+.multi-infobox,
+.switch-infobox {
+    float: none !important;
+    clear: both !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 1em 0 !important;
+}
+
+/* Recipe/skill rows: keep icon+label in the middle of the cell. */
+table.wikitable > tbody > tr > :is(th, td) {
+    vertical-align: middle !important;
+}
+
+/* Last-wins lock: inset the inner disclosure column, not the overflow
+   scrollport or the card itself. width:auto + inline margins leave the
+   header full-bleed while tables size to the narrower column. Paint the
+   card with table-header fill so the gutter is visible against the page
+   and against infobox body fill. */
+.collapsible-container:not(.collapsed) {
+    padding-inline: 0 !important;
+    background-color: var(--wikitable-header-bg) !important;
+}
+
+.collapsible-container:not(.collapsed) > .collapsible-header {
+    margin-inline: 0 !important;
+    width: auto !important;
+    max-width: none !important;
+    background-color: var(--wikitable-header-bg) !important;
+}
+
+.collapsible-container:not(.collapsed) > .collapsible-content {
+    box-sizing: border-box !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    padding-inline: 0 !important;
+    padding-block: 0 !important;
+    border-inline-width: 0 !important;
+    background-color: transparent !important;
+}
+
+.collapsible-container:not(.collapsed) > .collapsible-content > .osrs-disclosure-body,
+.recipe-table.osrs-recipe-unit > .collapsible-recipe-table:not(.collapsed) > .collapsible-content > .osrs-disclosure-body,
+.collapsible-content > .osrs-disclosure-body {
+    box-sizing: border-box !important;
+    display: flow-root !important;
+    width: auto !important;
+    max-width: none !important;
+    min-width: 0 !important;
+    margin-block: 0 !important;
+    margin-inline: var(--osrs-disclosure-content-inline-inset, 12px) !important;
+    padding-inline: 0 !important;
+    padding-block: var(--osrs-disclosure-content-block-inset, 8px) !important;
+    overflow-x: auto !important;
+}
+
+.collapsible-container .infobox,
+.collapsible-container table.infobox,
+.osrs-disclosure-body table,
+.osrs-disclosure-body .infobox-switch {
+    float: none !important;
+    clear: none !important;
+}
+
+.osrs-local-scroll-surface > .osrs-disclosure-body,
+.collapsible-content.osrs-local-scroll-surface > .osrs-disclosure-body {
+    overflow-x: auto !important;
+}
+
+.collapsible-container.collapsible-primary-infobox:not(.collapsed) > .collapsible-content > .osrs-disclosure-body,
+.collapsible-container:not(.collapsed) > .collapsible-content > .osrs-disclosure-body:has(> table.infobox),
+.collapsible-container:not(.collapsed) > .collapsible-content > .osrs-disclosure-body:has(> .infobox-switch) {
+    overflow-x: hidden !important;
+}
+
+body.osrs-accessibility-reflow .collapsible-content,
+body.osrs-accessibility-reflow .osrs-disclosure-body,
+body.osrs-accessibility-reflow .collapsible-content :is(th, td),
+body.osrs-accessibility-reflow .osrs-disclosure-body :is(th, td) {
+    font-size: inherit !important;
+}
+
+.collapsible-container:not(.collapsed) table.infobox-bonuses,
+.collapsible-container:not(.collapsed) table.osrs-map-table,
+.collapsible-container:not(.collapsed) .osrs-intrinsic-table {
+    margin-inline: 0 !important;
+}
+
+.collapsible-map-table:not(.collapsed) > .collapsible-content > .osrs-disclosure-body {
+    margin-inline: 0 !important;
+    width: 100% !important;
+    overflow-x: hidden !important;
+}
+
+.collapsible-map-table table.osrs-map-table > :is(thead, tbody, tfoot) > tr > :is(th, td):has(.mw-kartographer-map),
+.osrs-disclosure-body > table.osrs-map-table > :is(thead, tbody, tfoot) > tr > :is(th, td):has(.mw-kartographer-map),
+table.osrs-map-table > :is(thead, tbody, tfoot) > tr > :is(th, td):has(.mw-kartographer-map) {
+    width: 99% !important;
+    min-width: 0 !important;
+    white-space: normal !important;
+}

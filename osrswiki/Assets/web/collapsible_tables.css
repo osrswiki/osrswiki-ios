@@ -3,20 +3,10 @@
         These rules use the app's theme-aware variables.
 */
 
-/* FOUC Fix: Hide raw infoboxes until JavaScript transforms them */
-body:not(.js-transforms-complete) .infobox {
-    opacity: 0;
-}
-
-/* Show infoboxes after transformation or when wrapped in collapsible container */
-body.js-transforms-complete .infobox,
-.collapsible-container .infobox {
-    opacity: 1;
-}
-
-
-/* Base styling for all infobox containers. */
+/* Infoboxes paint immediately. Hiding them until js-transforms-complete
+   reserved an empty float and then popped the infobox in after first paint. */
 .infobox {
+
         background: var(--wikitable-bg);
         border: 1px solid var(--wikitable-border);
         font-size: 0.85em;
@@ -79,10 +69,10 @@ body.js-transforms-complete .infobox,
         padding: 0 !important;
         border: none !important;
         width: 100% !important;
-        min-height: 200px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
+        aspect-ratio: var(--osrs-map-aspect, 1 / 1);
+        min-height: 0 !important;
+        display: block;
+        margin-inline: auto;
 }
 
 /* General styling for header and data cells */
@@ -195,6 +185,20 @@ body.js-transforms-complete .infobox,
                 margin: 1em auto !important; /* Center on mobile like web */
                 width: fit-content;
         }
+
+        /* Unwrapped infoboxes must use the same stacked layout as the
+           post-JS collapsible wrap, otherwise first paint floats them and
+           the lead text reflows when wrapping runs. */
+        .mw-parser-output > table.infobox:not(.skill-info):not(.infobox-skill):not(.infobox-bonuses),
+        .mw-parser-output > .infobox-switch,
+        .mw-parser-output > .multi-infobox,
+        table.infobox:not(.skill-info):not(.infobox-skill):not(.infobox-bonuses) {
+                float: none !important;
+                clear: both !important;
+                width: 100% !important;
+                max-width: 100% !important;
+                margin: 1em 0 !important;
+        }
         
         /* Ensure all containers are properly centered on mobile */
         .collapsible-container {
@@ -238,16 +242,20 @@ body.js-transforms-complete .infobox,
         content (like a wide table) is wider than the container.
 */
 .collapsible-content {
-        padding: 12px 12px 0 12px; /* Remove bottom padding since footer handles it */
+        padding-inline: 0;
+        padding-block: 0;
         overflow-y: hidden;
         overflow-x: auto;
 }
 
 /* FOUC Fix: Ensure collapsed state is immediately applied via CSS */
 .collapsible-container.collapsed .collapsible-content {
+        box-sizing: border-box;
         height: 0 !important; /* Use !important to override inline style 'auto' */
-        padding-top: 0;
-        padding-bottom: 0;
+        max-height: 0 !important;
+        min-height: 0 !important;
+        padding: 0 !important;
+        margin: 0 !important;
         overflow: hidden; /* Prevent content from showing during transitions */
 }
 

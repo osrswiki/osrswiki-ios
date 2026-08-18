@@ -107,7 +107,9 @@
     
     /* Phase 4: Gaming & Community Features */
     --ajaxpoll-background: var(--wikitable-bg);
+    --coins-color: inherit;
     --coins-pos-color: #2f7b00;
+    --coins-neg-color: #c01212;
     --documentation-background: #f8f9fa;
     --documentation-border: #a2a9b1;
     --droptable-always-text-color: var(--droptable-text-color);
@@ -301,7 +303,9 @@ body.theme-osrs-dark {
     
     /* Phase 4: Gaming & Community Features adapted for dark theme */
     --ajaxpoll-background: var(--wikitable-bg);
+    --coins-color: inherit;
     --coins-pos-color: #7bb355;
+    --coins-neg-color: #f08a7d;
     --documentation-background: #312a25;
     --documentation-border: #736559;
     --droptable-always-text-color: var(--text-color);

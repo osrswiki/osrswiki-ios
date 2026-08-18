@@ -44,7 +44,7 @@ struct CustomTabBar: View {
     }
 
     private var tabBarHeight: CGFloat {
-        dynamicTypeSize.isAccessibilitySize ? 64 : 56
+        dynamicTypeSize.isAccessibilitySize ? 60 : 50
     }
 }
 
@@ -60,7 +60,7 @@ struct CustomTabItem: View {
     
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 4) {
+            VStack(spacing: 1) {
                 Image(systemName: isSelected ? item.selectedIconName : item.iconName)
                     .font(.system(size: iconSize, weight: .medium))
                     .foregroundColor(tabItemColor)
@@ -81,11 +81,11 @@ struct CustomTabItem: View {
         }
         .buttonStyle(PlainButtonStyle()) // Remove default button styling
         .accessibilityLabel(item.accessibilityLabel)
-        .accessibilityIdentifier("\(item.rawValue)_tab")
+        .accessibilityIdentifier(item.accessibilityIdentifier)
     }
 
     private var tabBarHeight: CGFloat {
-        dynamicTypeSize.isAccessibilitySize ? 64 : 56
+        dynamicTypeSize.isAccessibilitySize ? 60 : 50
     }
 
     private var iconSize: CGFloat {

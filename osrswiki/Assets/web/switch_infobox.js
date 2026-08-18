@@ -51,11 +51,19 @@ function initializePage() {
         configureLegacySwitchers(mainButtons);
 
         if (mainButtons.length > 0) {
-            const firstIndex = mainButtons[0].getAttribute('data-switch-index');
-            performSwitch(firstIndex);
-            
-            // Stabilize infobox width by measuring all states
-            stabilizeInfoboxWidth(mainInfobox, mainButtons);
+            // Select the authored default synchronously before RenderTimeline reveals the body.
+            // Images for all states decode concurrently above; never click through hidden states.
+            const buttonsContainer = mainInfobox.querySelector('.infobox-buttons');
+            const defaultIndex = buttonsContainer && buttonsContainer.getAttribute('data-default-version');
+            const selectedButton = mainInfobox.querySelector('.button-selected');
+            const initialIndex = defaultIndex ||
+                (selectedButton && selectedButton.getAttribute('data-switch-index')) ||
+                mainButtons[0].getAttribute('data-switch-index');
+            performSwitch(initialIndex);
+            mainInfobox.dataset.osrsSwitcherReady = 'true';
+            document.querySelectorAll('.switch-infobox, .rsw-synced-switch').forEach(function(box) {
+                box.dataset.osrsSwitcherReady = 'true';
+            });
         }
     } catch (e) {
         console.error(`Switcher CRITICAL ERROR in initializePage: ${e.message}`);
@@ -65,42 +73,17 @@ function initializePage() {
 function performSwitch(switchIndex) {
     if (typeof switchIndex === 'undefined' || switchIndex === null) return;
 
-    console.log(`[LAYOUT DEBUG] performSwitch called with index: ${switchIndex}`);
-
     // Update button states
     document.querySelectorAll('.infobox-buttons, .switch-infobox-triggers').forEach(container => {
-        // Log container info before changes
-        const computedStyle = window.getComputedStyle(container);
-        const rect = container.getBoundingClientRect();
-        console.log(`[LAYOUT DEBUG] Container before switch - display: ${computedStyle.display}, grid-template-columns: ${computedStyle.gridTemplateColumns}, width: ${rect.width}px, height: ${rect.height}px`);
-        
         const buttons = container.querySelectorAll('.button, .trigger');
-        console.log(`[LAYOUT DEBUG] Container has ${buttons.length} buttons`);
-        
-        buttons.forEach((btn, index) => {
-            const btnRect = btn.getBoundingClientRect();
-            const btnStyle = window.getComputedStyle(btn);
-            console.log(`[LAYOUT DEBUG] Button ${index}: width: ${btnRect.width}px, height: ${btnRect.height}px, text: "${btn.textContent.trim()}"`);
+        buttons.forEach((btn) => {
             btn.classList.remove('button-selected');
         });
         
         const btnToSelect = container.querySelector(`[data-switch-index="${switchIndex}"]`);
         if (btnToSelect) {
             btnToSelect.classList.add('button-selected');
-            console.log(`[LAYOUT DEBUG] Selected button: "${btnToSelect.textContent.trim()}"`);
         }
-        
-        // Log container info after changes
-        setTimeout(() => {
-            const newComputedStyle = window.getComputedStyle(container);
-            const newRect = container.getBoundingClientRect();
-            console.log(`[LAYOUT DEBUG] Container after switch - display: ${newComputedStyle.display}, grid-template-columns: ${newComputedStyle.gridTemplateColumns}, width: ${newRect.width}px, height: ${newRect.height}px`);
-            
-            // Check if layout changed
-            if (Math.abs(rect.width - newRect.width) > 1 || Math.abs(rect.height - newRect.height) > 1) {
-                console.warn(`[LAYOUT DEBUG] ⚠️ LAYOUT SHIFT DETECTED! Width: ${rect.width}px → ${newRect.width}px, Height: ${rect.height}px → ${newRect.height}px`);
-            }
-        }, 100);
     });
 
     // Update infobox content
@@ -179,119 +162,10 @@ function configureLegacySwitchers(mainButtons) {
         if (parentBox) {
             const loadingButton = parentBox.querySelector('.loading-button');
             if (loadingButton) loadingButton.style.display = 'none';
-            // Restore display flex - now that we have width stabilization, this is safe
-            console.log(`[LAYOUT DEBUG] configureLegacySwitchers: Setting display flex for container with ${triggerContainer.querySelectorAll('.button, .trigger').length} buttons`);
+            // Images have already been decoded without mutating the visible selection.
             triggerContainer.style.display = 'flex';
         }
     });
-}
-
-function stabilizeInfoboxWidth(mainInfobox, mainButtons) {
-    try {
-        console.log(`[LAYOUT DEBUG] === STARTING WIDTH STABILIZATION ===`);
-        console.log(`[LAYOUT DEBUG] Infobox element:`, mainInfobox);
-        console.log(`[LAYOUT DEBUG] Number of buttons: ${mainButtons.length}`);
-        
-        // Log initial state measurements
-        const buttonContainer = mainInfobox.querySelector('.infobox-buttons, .switch-infobox-triggers');
-        const table = mainInfobox.querySelector('table');
-        
-        console.log(`[LAYOUT DEBUG] INITIAL MEASUREMENTS:`);
-        console.log(`[LAYOUT DEBUG] - Infobox width: ${mainInfobox.offsetWidth}px`);
-        console.log(`[LAYOUT DEBUG] - Button container width: ${buttonContainer ? buttonContainer.offsetWidth : 'N/A'}px`);
-        console.log(`[LAYOUT DEBUG] - Table width: ${table ? table.offsetWidth : 'N/A'}px`);
-        
-        // Store original state
-        const originalSelectedButton = mainInfobox.querySelector('.button-selected');
-        const originalIndex = originalSelectedButton ? originalSelectedButton.getAttribute('data-switch-index') : '0';
-        console.log(`[LAYOUT DEBUG] Original selected index: ${originalIndex}`);
-        
-        let maxWidth = 0;
-        const measurements = [];
-        
-        // Sequential measurement function to avoid async timing issues
-        function measureNextState(buttonIndex) {
-            if (buttonIndex >= mainButtons.length) {
-                // All measurements complete
-                console.log(`[LAYOUT DEBUG] === ALL MEASUREMENTS COMPLETE ===`);
-                measurements.forEach(m => {
-                    console.log(`[LAYOUT DEBUG] State ${m.index}: infobox=${m.infoboxWidth}px, buttons=${m.buttonContainerWidth}px, table=${m.tableWidth}px`);
-                });
-                
-                const minWidth = Math.min(...measurements.map(m => m.infoboxWidth));
-                const maxButtonWidth = Math.max(...measurements.map(m => m.buttonContainerWidth));
-                const maxTableWidth = Math.max(...measurements.map(m => m.tableWidth));
-                
-                console.log(`[LAYOUT DEBUG] Width ranges:`);
-                console.log(`[LAYOUT DEBUG] - Infobox: ${minWidth}px - ${maxWidth}px (difference: ${maxWidth - minWidth}px)`);
-                console.log(`[LAYOUT DEBUG] - Button container: ${Math.min(...measurements.map(m => m.buttonContainerWidth))}px - ${maxButtonWidth}px`);
-                console.log(`[LAYOUT DEBUG] - Table: ${Math.min(...measurements.map(m => m.tableWidth))}px - ${maxTableWidth}px`);
-                
-                // Determine what element to stabilize based on which varies most
-                const infoboxVariance = maxWidth - minWidth;
-                const tableVariance = maxTableWidth - Math.min(...measurements.map(m => m.tableWidth));
-                
-                console.log(`[LAYOUT DEBUG] Variance analysis:`);
-                console.log(`[LAYOUT DEBUG] - Infobox variance: ${infoboxVariance}px`);
-                console.log(`[LAYOUT DEBUG] - Table variance: ${tableVariance}px`);
-                
-                // Apply stabilization to table if it has significant variance, otherwise to infobox
-                if (table && tableVariance > 5) {
-                    // Stabilize the table width (more targeted)
-                    const stabilizedTableWidth = maxTableWidth + 5; // Smaller buffer for table
-                    table.style.minWidth = stabilizedTableWidth + 'px';
-                    console.log(`[LAYOUT DEBUG] Applied table min-width: ${stabilizedTableWidth}px (table approach)`);
-                } else {
-                    // Fallback to infobox stabilization with reduced buffer
-                    const stabilizedWidth = maxWidth + 5; // Reduced buffer
-                    mainInfobox.style.minWidth = stabilizedWidth + 'px';
-                    console.log(`[LAYOUT DEBUG] Applied infobox min-width: ${stabilizedWidth}px (infobox approach)`);
-                }
-                
-                // Return to original state
-                performSwitch(originalIndex);
-                
-                console.log(`[LAYOUT DEBUG] === WIDTH STABILIZATION COMPLETE ===`);
-                return;
-            }
-            
-            const button = mainButtons[buttonIndex];
-            const switchIndex = button.getAttribute('data-switch-index');
-            console.log(`[LAYOUT DEBUG] Measuring state ${switchIndex} (button ${buttonIndex + 1}/${mainButtons.length})`);
-            
-            performSwitch(switchIndex);
-            
-            // Give DOM time to update before measuring
-            setTimeout(() => {
-                const infoboxWidth = mainInfobox.offsetWidth;
-                const buttonContainerWidth = buttonContainer ? buttonContainer.offsetWidth : 0;
-                const tableWidth = table ? table.offsetWidth : 0;
-                
-                measurements.push({ 
-                    index: switchIndex, 
-                    infoboxWidth: infoboxWidth,
-                    buttonContainerWidth: buttonContainerWidth,
-                    tableWidth: tableWidth
-                });
-                
-                console.log(`[LAYOUT DEBUG] State ${switchIndex} measurements:`);
-                console.log(`[LAYOUT DEBUG] - Infobox: ${infoboxWidth}px`);
-                console.log(`[LAYOUT DEBUG] - Button container: ${buttonContainerWidth}px`);
-                console.log(`[LAYOUT DEBUG] - Table: ${tableWidth}px`);
-                
-                maxWidth = Math.max(maxWidth, infoboxWidth);
-                
-                // Recursively measure next state
-                measureNextState(buttonIndex + 1);
-            }, 150); // Slightly longer delay to ensure DOM updates
-        }
-        
-        // Start measuring from the first button
-        measureNextState(0);
-        
-    } catch (e) {
-        console.error(`[LAYOUT DEBUG] Error in stabilizeInfoboxWidth: ${e.message}`);
-    }
 }
 
 const remoteWikiDomain = "https://oldschool.runescape.wiki";

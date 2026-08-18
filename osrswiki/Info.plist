@@ -2,6 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>CADisableMinimumFrameDurationOnPhone</key>
+	<true/>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>OSRS Wiki needs microphone access to provide voice search functionality.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>

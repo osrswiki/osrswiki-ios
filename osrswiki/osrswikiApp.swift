@@ -116,25 +116,35 @@ struct osrswikiApp: App {
         // COMPREHENSIVE UI COMPONENT THEMING
         // This ensures EVERY component uses our theme colors by default
         
-        // Navigation Bars
-        let navAppearance = UINavigationBarAppearance()
-        navAppearance.configureWithOpaqueBackground()
-        navAppearance.backgroundColor = UIColor(themeManager.currentTheme.surface)
-        navAppearance.titleTextAttributes = [.foregroundColor: UIColor(themeManager.currentTheme.onSurface)]
-        navAppearance.largeTitleTextAttributes = [.foregroundColor: UIColor(themeManager.currentTheme.onSurface)]
-        
-        UINavigationBar.appearance().standardAppearance = navAppearance
-        UINavigationBar.appearance().compactAppearance = navAppearance  
-        UINavigationBar.appearance().scrollEdgeAppearance = navAppearance
-        UINavigationBar.appearance().tintColor = primaryColor // This fixes back buttons globally
-        
-        // Tab Bars
-        let tabAppearance = UITabBarAppearance()
-        tabAppearance.configureWithOpaqueBackground()
-        tabAppearance.backgroundColor = UIColor(themeManager.currentTheme.surface)
-        UITabBar.appearance().standardAppearance = tabAppearance
-        UITabBar.appearance().scrollEdgeAppearance = tabAppearance
+        UINavigationBar.appearance().tintColor = primaryColor
         UITabBar.appearance().tintColor = primaryColor
+        UITableView.appearance().backgroundColor = UIColor(themeManager.currentTheme.background)
+        UITableViewCell.appearance().backgroundColor = UIColor(themeManager.currentTheme.surface)
+        UICollectionView.appearance().backgroundColor = UIColor(themeManager.currentTheme.background)
+
+        if #available(iOS 26.0, *) {
+            // Keep Liquid Glass, but pin scroll-edge and standard to the same
+            // clear material so Map's dark content cannot rematerialize the bar
+            // into a frosted capsule at the end of the adaptive tint.
+            UIApplication.applyStableTabBarAppearance()
+        } else {
+            // The compatibility path keeps the exact opaque surfaces used on iOS 18.5–25.
+            let navAppearance = UINavigationBarAppearance()
+            navAppearance.configureWithOpaqueBackground()
+            navAppearance.backgroundColor = UIColor(themeManager.currentTheme.surface)
+            navAppearance.titleTextAttributes = [.foregroundColor: UIColor(themeManager.currentTheme.onSurface)]
+            navAppearance.largeTitleTextAttributes = [.foregroundColor: UIColor(themeManager.currentTheme.onSurface)]
+
+            UINavigationBar.appearance().standardAppearance = navAppearance
+            UINavigationBar.appearance().compactAppearance = navAppearance
+            UINavigationBar.appearance().scrollEdgeAppearance = navAppearance
+
+            let tabAppearance = UITabBarAppearance()
+            tabAppearance.configureWithOpaqueBackground()
+            tabAppearance.backgroundColor = UIColor(themeManager.currentTheme.surface)
+            UITabBar.appearance().standardAppearance = tabAppearance
+            UITabBar.appearance().scrollEdgeAppearance = tabAppearance
+        }
         
         // Progress Views - Global styling
         UIProgressView.appearance().tintColor = primaryColor

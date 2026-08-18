@@ -29,20 +29,22 @@ enum NetworkError: LocalizedError {
         case .timeout:
             return "Request timed out"
         case .serverError(let code):
-            return "Server error (\(code))"
+            print("NetworkError: Server returned status \(code)")
+            return "The server is experiencing issues. Please try again later."
         case .pageNotFound(let title):
             if let title, !title.isEmpty {
                 return "Page not found: \(title)"
             }
             return "Page not found"
         case .invalidResponse:
-            return "Invalid server response"
+            return "Something went wrong. Please try again."
         case .invalidData:
-            return "Unable to process server data"
+            return "Something went wrong. Please try again."
         case .rateLimited:
             return "Too many requests. Please try again later."
         case .unknown(let error):
-            return error.localizedDescription
+            print("NetworkError: Unclassified internal error: \(error)")
+            return "Something went wrong. Please try again."
         }
     }
     

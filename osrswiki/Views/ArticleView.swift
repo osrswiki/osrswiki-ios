@@ -10,6 +10,25 @@ import UIKit
 import WebKit
 
 struct ArticleView: View {
+    enum SavedCacheRoutingMode: Equatable {
+        case cacheOnly
+        case cacheFirst
+        case saveWhileServing
+    }
+
+    /// The saved-page record's settlement status controls the save button, not readability.
+    /// Navigation probes the exact main response in the preserved page namespace so a legacy
+    /// record marked `.outdated` can still be read best-effort while its refresh remains honest.
+    static func savedCacheRoutingMode(
+        hasPersistedMainResponse: Bool,
+        isOffline: Bool
+    ) -> SavedCacheRoutingMode {
+        if isOffline {
+            return .cacheOnly
+        }
+        return hasPersistedMainResponse ? .cacheFirst : .saveWhileServing
+    }
+
     let pageTitle: String?
     let pageUrl: URL
     let navigationIdentity: String?
@@ -70,13 +89,18 @@ private struct ArticleViewContent: View {
     @StateObject private var viewModel: ArticleViewModel
     @State private var isShowingShareSheet = false
     @State private var isShowingTableOfContents = false
+    @State private var contentsRevealProgress: CGFloat = 0
     @State private var isShowingFindInPage = false
+    @State private var findSession = 0
     @State private var isShowingAppearanceSettings = false
-    @State private var isShowingPageMenu = false
+    @State private var highlightFloorNumberingOnAppearance = false
     @State private var isShowingFeedback = false
     @State private var isShowingOfflineCacheBanner = false
     @State private var hasLoadedBefore = false
     @State private var movedOffTopOfArticleStack = false
+    @State private var isArticleVisible = false
+    @State private var savedCacheSessionToken: ProxyCacheSessionToken?
+    @State private var savedCachePreparationTask: Task<Void, Never>?
 #if DEBUG
     @State private var hasStartedFindInPageForTests = false
 #endif
@@ -87,6 +111,7 @@ private struct ArticleViewContent: View {
     let snippet: String?
     let thumbnailUrl: URL?
     let savedPageId: String? // For proxy configuration when loading saved pages
+    let collapseTablesEnabled: Bool
     let navigationDelegate: WKNavigationDelegate?
     let onLoadingComplete: ((ArticleViewModel) -> Void)? // Optional callback for preview generation
     let showProgressBar: Bool
@@ -99,6 +124,7 @@ private struct ArticleViewContent: View {
         self.snippet = snippet
         self.thumbnailUrl = thumbnailUrl
         self.savedPageId = savedPageId
+        self.collapseTablesEnabled = collapseTablesEnabled
         self.navigationDelegate = navigationDelegate
         self.onLoadingComplete = onLoadingComplete
         self.showProgressBar = showProgressBar
@@ -108,128 +134,32 @@ private struct ArticleViewContent: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-#if DEBUG
-            osrsAccessibilityMarker(
-                identifier: "article_navigation_stack_state",
-                label: appState.osrsNavigationStackDebugLabel
-            )
-#endif
-
-            // Custom search bar instead of navigation bar
-            if !isShowingFindInPage {
-                osrsArticleSearchBar(
-                    onBackAction: {
-                        navigateBackFromArticle()
-                    },
-                    onMenuAction: {
-                        isShowingPageMenu = true
-                    },
-                    onVoiceSearchAction: {
-                        appState.speechManager.startVoiceRecognition()
-                    }
-                )
-            }
-
-            if isShowingOfflineCacheBanner {
-                offlineCacheBanner
-            }
-
-            // WebView content with overlaid progress bar - extends to bottom
-            ZStack {
-                contentView
-                progressOverlay
-                errorOverlay
-            }
+        articleLayout
+        .background {
+            osrsTheme.background.ignoresSafeArea()
         }
-        .background(Color.osrsBackgroundColor)
         .navigationBarHidden(true)
-        .toolbarVisibility(.hidden, for: .tabBar)
-        // Add horizontal gestures matching Android PageActivity functionality
-        .osrsHorizontalGestures(
-            onBackGesture: {
-                // Match Android's back gesture behavior
-                print("[ArticleView] Horizontal back gesture triggered")
-
-                navigateBackFromArticle()
-            },
-            onSidebarGesture: {
-                // Match Android's sidebar gesture behavior
-                print("[ArticleView] Horizontal sidebar gesture triggered")
-
-                // Only open if table of contents is available (matches Android logic)
-                if viewModel.hasTableOfContents {
-                    withAnimation(.easeInOut(duration: 0.25)) {
-                        isShowingTableOfContents = true
-                    }
-                } else {
-                    print("[ArticleView] Table of contents not available - gesture ignored")
-                }
-            }
-        )
         .onAppear {
-            let timestamp = DateFormatter.timeFormatter.string(from: Date())
-            print("🟢 [\(timestamp)] ARTICLEVIEW: onAppear called - hasLoadedBefore: \(hasLoadedBefore)")
-            hideMainTabBar()
-            isShowingOfflineCacheBanner = false
-
-            // CRITICAL: Configure proxy system BEFORE starting loading for saved pages
-            if let savedPageId = savedPageId {
-                print("🚀 [\(timestamp)] ARTICLEVIEW: Configuring proxy system for saved page: \(savedPageId)")
-
-                // Configure proxy immediately (without delay) before loading starts
-                if #available(iOS 17.0, *) {
-                    let hasCache = ProxyInterceptorService.shared.hasCompleteOfflineCache(pageId: savedPageId)
-                    let isOffline = !NetworkManager.shared.isConnected
-
-                    if isOffline && hasCache {
-                        print("📦 [\(timestamp)] ARTICLEVIEW: Offline + cached content = CACHE-ONLY mode for: \(savedPageId)")
-                        ProxyInterceptorService.shared.enableCacheOnlyMode(pageId: savedPageId)
-                        isShowingOfflineCacheBanner = true
-                    } else if !hasCache && !isOffline {
-                        print("📡 [\(timestamp)] ARTICLEVIEW: Online + no cache = SAVE-WHILE-SERVING mode for: \(savedPageId)")
-                        ProxyInterceptorService.shared.enableOfflineSaveMode(pageId: savedPageId)
-                    } else if hasCache && !isOffline {
-                        print("🌐 [\(timestamp)] ARTICLEVIEW: Online + cached content = NORMAL mode for: \(savedPageId)")
-                        // No special proxy mode needed - just load normally
-                    } else {
-                        print("⚠️ [\(timestamp)] ARTICLEVIEW: Offline + no cache = ERROR scenario for: \(savedPageId)")
-                        print("🔄 [\(timestamp)] ARTICLEVIEW: Attempting cache-only mode as fallback")
-                        ProxyInterceptorService.shared.enableCacheOnlyMode(pageId: savedPageId)
-                    }
-                }
-            }
-
-            // Android parity: Detect navigation returns and use blank overlay approach
-            let isReload = hasLoadedBefore
-            if isReload {
-                print("🔄 [\(timestamp)] ARTICLEVIEW: Detected return navigation - using reload with blank overlay")
-            } else {
-                print("🆕 [\(timestamp)] ARTICLEVIEW: First load - using normal loading")
-                hasLoadedBefore = true
-            }
-
-            // Start loading AFTER proxy configuration is complete
-            viewModel.loadArticle(theme: osrsTheme, isReload: isReload)
-            movedOffTopOfArticleStack = false
-            updateArticleBottomBar()
+            isArticleVisible = true
+            beginAppearanceLoad()
         }
         .onChange(of: appState.activeArticleDestination?.navigationIdentity) { _, activeIdentity in
+            if activeIdentity == articleIdentity {
+                updateArticleBottomBar()
+            } else if activeIdentity == nil {
+                overlayManager?.hideArticleBottomBar(owner: articleIdentity)
+            }
             guard hasLoadedBefore else { return }
 
             if activeIdentity == articleIdentity {
                 guard movedOffTopOfArticleStack else { return }
                 movedOffTopOfArticleStack = false
-                let timestamp = DateFormatter.timeFormatter.string(from: Date())
-                print("🔄 [\(timestamp)] ARTICLEVIEW: Returned to top article destination - reloading expected page: \(articleIdentity)")
-                viewModel.loadArticle(theme: osrsTheme, isReload: true)
+                restoreCapturedArticleScrollIfNeeded()
+                updateArticleBottomBar()
             } else {
+                captureCurrentArticleScroll()
                 movedOffTopOfArticleStack = true
             }
-        }
-        .onChange(of: appState.articleBackStackRecoveryRequestID) { _, _ in
-            guard let destination = appState.articleBackStackRecoveryDestination else { return }
-            viewModel.loadArticleDestination(destination, theme: osrsTheme)
         }
         .onChange(of: viewModel.hasTableOfContents) { _, _ in
             // Update article bottom bar overlay when table of contents availability changes
@@ -243,11 +173,31 @@ private struct ArticleViewContent: View {
             // Update article bottom bar overlay when save state changes
             updateArticleBottomBar()
         }
+        .onChange(of: themeManager.articleTextScale) { _, newScale in
+            viewModel.setArticleTextScale(CGFloat(newScale))
+        }
+        .onChange(of: themeManager.floorNumberingMode) { _, _ in
+            viewModel.applyFloorNumberingConvention(osrsArticleFloorConvention.current())
+        }
+        .onChange(of: themeManager.collapseTables) { _, shouldCollapse in
+            guard collapseTablesEnabled else { return }
+            viewModel.setCollapseTablesEnabled(shouldCollapse)
+            if hasLoadedBefore {
+                viewModel.loadArticle(theme: osrsTheme, isReload: true)
+            }
+        }
         .onChange(of: viewModel.isLoading) { _, isLoading in
             // Call loading complete callback for preview generation
             if !isLoading, let onLoadingComplete = onLoadingComplete {
                 print("📊 ArticleView: Loading completed - calling preview generation callback with viewModel")
                 onLoadingComplete(viewModel)
+            }
+            if !isLoading {
+                consumePendingArticleScrollIfNeeded()
+                restoreCapturedArticleScrollIfNeeded()
+#if DEBUG
+                dumpArticleTableMetricsIfRequested()
+#endif
             }
 #if DEBUG
             if !isLoading,
@@ -259,10 +209,22 @@ private struct ArticleViewContent: View {
 #endif
         }
         .onDisappear {
-            // Hide article bottom bar overlay when leaving article view
-            overlayManager?.hideArticleBottomBar()
+            savedCachePreparationTask?.cancel()
+            savedCachePreparationTask = nil
+            isArticleVisible = false
+            captureCurrentArticleScroll()
+            findSession += 1
             viewModel.hideFindInPageAction()
-            showMainTabBar()
+            viewModel.cancelActiveWorkForNavigation()
+            if #available(iOS 17.0, *), let savedCacheSessionToken {
+                ProxyInterceptorService.shared.disableMode(owner: savedCacheSessionToken)
+                self.savedCacheSessionToken = nil
+            }
+            let stillShowingArticle = appState.activeArticleDestination != nil
+            if !stillShowingArticle {
+                overlayManager?.hideArticleBottomBar(owner: articleIdentity)
+                showMainTabBar()
+            }
         }
             .sheet(isPresented: $isShowingShareSheet) {
                 ShareSheet(items: [pageUrl])
@@ -271,6 +233,7 @@ private struct ArticleViewContent: View {
                 // Enhanced contents drawer with Android-style functionality
                 osrsContentsDrawerSimple(
                     isPresented: $isShowingTableOfContents,
+                    interactiveProgress: $contentsRevealProgress,
                     sections: viewModel.tableOfContents,
                     onSectionSelected: { sectionId in
                         viewModel.scrollToSection(sectionId)
@@ -278,9 +241,11 @@ private struct ArticleViewContent: View {
                 )
                 .ignoresSafeArea()
             )
-            .sheet(isPresented: $isShowingAppearanceSettings) {
+            .sheet(isPresented: $isShowingAppearanceSettings, onDismiss: {
+                highlightFloorNumberingOnAppearance = false
+            }) {
                 NavigationStack {
-                    AppearanceSettingsView()
+                    AppearanceSettingsView(highlightFloorNumbering: highlightFloorNumberingOnAppearance)
                         .environmentObject(themeManager)
                         .toolbar {
                             ToolbarItem(placement: .navigationBarTrailing) {
@@ -304,30 +269,6 @@ private struct ArticleViewContent: View {
                         }
                 }
             }
-            .confirmationDialog("Page Options", isPresented: $isShowingPageMenu) {
-                Button("Share") {
-                    isShowingShareSheet = true
-                }
-                Button("Go to Top") {
-                    scrollToTop()
-                }
-                Button("Copy Link") {
-                    copyPageLink()
-                }
-                Button("Refresh Page") {
-                    refreshPage()
-                }
-                Button("Open in Browser") {
-                    openInBrowser()
-                }
-                Button("View Page History") {
-                    viewPageHistory()
-                }
-                Button("Report Issue") {
-                    reportIssue()
-                }
-                Button("Cancel", role: .cancel) { }
-            }
             .alert("Voice Search Error",
                    isPresented: Binding<Bool>(
                        get: { appState.speechManager.errorMessage != nil },
@@ -343,12 +284,14 @@ private struct ArticleViewContent: View {
             // Reload with new theme when theme changes - use blank overlay like other reloads
             viewModel.loadArticle(theme: osrsTheme, isReload: true)
         }
-        .onReceive(NotificationCenter.default.publisher(for: .showAppearanceSettings)) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: .showAppearanceSettings)) { notification in
+            highlightFloorNumberingOnAppearance =
+                (notification.userInfo?["highlightFloorNumbering"] as? Bool) == true
             isShowingAppearanceSettings = true
         }
         .onAppear {
             viewModel.navigateToInternalArticle = { url in
-                appState.routeInternalArticleLink(url)
+                appState.routeInternalArticleLink(url, sourceArticleURL: pageUrl)
             }
         }
         .onDisappear {
@@ -358,37 +301,295 @@ private struct ArticleViewContent: View {
         }
     }
 
+    /// Saved-page cache inspection and listener binding are disk/network preparation, so they
+    /// suspend without occupying MainActor. The article request starts only after its selected
+    /// routing mode is fully installed; a disappeared view cannot resume a stale load or owner.
+    private func beginAppearanceLoad() {
+        let timestamp = DateFormatter.timeFormatter.string(from: Date())
+        print("🟢 [\(timestamp)] ARTICLEVIEW: onAppear called - hasLoadedBefore: \(hasLoadedBefore)")
+        hideMainTabBar()
+        isArticleVisible = true
+        viewModel.setArticleVisibility(true, allowsPassiveCaching: savedPageId == nil)
+
+        if hasLoadedBefore {
+            restoreCapturedArticleScrollIfNeeded()
+            updateArticleBottomBar()
+            return
+        }
+
+        isShowingOfflineCacheBanner = false
+        savedCachePreparationTask?.cancel()
+        savedCachePreparationTask = nil
+
+        if #available(iOS 17.0, *), let savedCacheSessionToken {
+            ProxyInterceptorService.shared.disableMode(owner: savedCacheSessionToken)
+            self.savedCacheSessionToken = nil
+        }
+
+        let isReload = false
+        print("🆕 [\(timestamp)] ARTICLEVIEW: First load - using normal loading")
+        hasLoadedBefore = true
+
+        guard #available(iOS 17.0, *) else {
+            startPreparedArticleLoad(isReload: isReload)
+            return
+        }
+
+        guard let savedPageId else {
+            startPreparedArticleLoad(isReload: isReload)
+            return
+        }
+
+        print("🚀 [\(timestamp)] ARTICLEVIEW: Preparing proxy system for saved page: \(savedPageId)")
+        savedCachePreparationTask = Task { @MainActor in
+            let requestedTitle = osrsArticleDocumentIdentity.requestedTitle(
+                pageURL: pageUrl,
+                fallbackTitle: pageTitle
+            )
+            let parseURL = ArticleViewModel.makeParseRequestURL(pageTitle: requestedTitle)
+            let hasCache: Bool
+            if let parseURL {
+                hasCache = await ProxyInterceptorService.shared.hasPersistedMainResponseAsync(
+                    pageId: savedPageId,
+                    url: parseURL
+                )
+            } else {
+                hasCache = false
+            }
+            guard !Task.isCancelled else { return }
+
+            let isOffline: Bool
+#if DEBUG
+            // NWPath is advisory and may be stale during launch/handoff. Only the explicit UI
+            // test override selects cache-only; normal cache-first misses reach URLSession.
+            isOffline = NetworkManager.shared.isForcedOfflineForTests
+#else
+            isOffline = false
+#endif
+            let routingMode = ArticleView.savedCacheRoutingMode(
+                hasPersistedMainResponse: hasCache,
+                isOffline: isOffline
+            )
+            let preparedToken: ProxyCacheSessionToken?
+            switch routingMode {
+            case .cacheOnly:
+                if hasCache {
+                    print("📦 [\(timestamp)] ARTICLEVIEW: Offline + persisted main response = CACHE-ONLY mode")
+                    isShowingOfflineCacheBanner = true
+                } else {
+                    print("⚠️ [\(timestamp)] ARTICLEVIEW: Offline + no persisted main response; using cache-only failure path")
+                }
+                preparedToken = await ProxyInterceptorService.shared.enableCacheOnlyMode(pageId: savedPageId)
+            case .cacheFirst:
+                print("🌐 [\(timestamp)] ARTICLEVIEW: Online + persisted main response = CACHE-FIRST mode")
+                preparedToken = await ProxyInterceptorService.shared.enableCacheFirstMode(pageId: savedPageId)
+            case .saveWhileServing:
+                print("📡 [\(timestamp)] ARTICLEVIEW: Online + no persisted main response = SAVE-WHILE-SERVING mode")
+                preparedToken = await ProxyInterceptorService.shared.enableOfflineSaveMode(pageId: savedPageId)
+            }
+
+            guard !Task.isCancelled else {
+                if let preparedToken {
+                    ProxyInterceptorService.shared.disableMode(owner: preparedToken)
+                }
+                return
+            }
+
+            savedCacheSessionToken = preparedToken
+            savedCachePreparationTask = nil
+            startPreparedArticleLoad(isReload: isReload)
+        }
+    }
+
+    private func startPreparedArticleLoad(isReload: Bool) {
+        viewModel.setCollapseTablesEnabled(collapseTablesEnabled && themeManager.collapseTables)
+        viewModel.setArticleTextScale(CGFloat(themeManager.articleTextScale))
+        viewModel.loadArticle(theme: osrsTheme, isReload: isReload)
+        movedOffTopOfArticleStack = false
+        updateArticleBottomBar()
+    }
+
+    @ViewBuilder
+    private var articleLayout: some View {
+        if #available(iOS 26.0, *) {
+            articleCanvas
+                .ignoresSafeArea()
+                .osrsPairedEdgeChrome(edge: .top) {
+                    articleTopChrome
+                }
+        } else {
+            VStack(spacing: 0) {
+                articleDebugMarker
+                articleTopChrome
+                articleContentCanvas
+            }
+        }
+    }
+
+    private var articleCanvas: some View {
+        ZStack(alignment: .top) {
+            articleContentCanvas
+                .ignoresSafeArea()
+            articleDebugMarker
+        }
+    }
+
+    @ViewBuilder
+    private var articleDebugMarker: some View {
+#if DEBUG
+        osrsAccessibilityMarker(
+            identifier: "article_navigation_stack_state",
+            label: appState.osrsNavigationStackDebugLabel
+        )
+#else
+        EmptyView()
+#endif
+    }
+
+    private var articleTopChrome: some View {
+        VStack(spacing: 0) {
+            osrsArticleSearchBar(
+                onBackAction: { navigateBackFromArticle() },
+                onSearchAction: { appState.navigateToActiveSearch() },
+                onMenuAction: { action in
+                    switch action {
+                    case .share: isShowingShareSheet = true
+                    case .goToTop: scrollToTop()
+                    case .copyLink: copyPageLink()
+                    case .refresh: refreshPage()
+                    case .openInBrowser: openInBrowser()
+                    case .pageHistory: viewPageHistory()
+                    case .reportIssue: reportIssue()
+                    }
+                },
+                onVoiceSearchAction: {
+                    appState.navigateToActiveSearch(startsVoiceRecognition: true)
+                }
+            )
+
+            if isShowingOfflineCacheBanner {
+                offlineCacheBanner
+            }
+        }
+    }
+
+    private var articleContentCanvas: some View {
+        ZStack {
+            contentView
+            progressOverlay
+            errorOverlay
+        }
+    }
+
     // MARK: - Overlay Management
 
     private var articleIdentity: String {
         navigationIdentity ?? "\(pageUrl.absoluteString)|savedPageId=\(savedPageId ?? "")"
     }
 
-    private func navigateBackFromArticle() {
-        guard appState.beginArticleBackAction() else {
+    private func setContentsRevealProgress(_ progress: CGFloat, animated: Bool = false) {
+        if animated {
+            settleContents(to: progress, velocity: 0)
             return
+        }
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            contentsRevealProgress = progress
+        }
+    }
+
+    private func settleContents(to progress: CGFloat, velocity: CGFloat) {
+        let target = min(1, max(0, progress))
+        withAnimation(
+            osrsInteractiveArticleSwipe.settleAnimation(
+                from: contentsRevealProgress,
+                to: target,
+                velocity: velocity,
+                distance: osrsInteractiveArticleSwipe.contentsDrawerWidth
+            )
+        ) {
+            contentsRevealProgress = target
+            isShowingTableOfContents = target >= 1
+        }
+    }
+
+    private func captureCurrentArticleScroll() {
+        guard let offsetY = viewModel.webView?.scrollView.contentOffset.y else { return }
+        appState.captureArticleScrollOffset(articleIdentity, offsetY: offsetY)
+    }
+
+    private func restoreCapturedArticleScrollIfNeeded(attempt: Int = 0) {
+        guard let offsetY = appState.capturedArticleScrollOffset(articleIdentity),
+              let webView = viewModel.webView else { return }
+        let scrollView = webView.scrollView
+        scrollView.setContentOffset(CGPoint(x: 0, y: offsetY), animated: false)
+        let maxOffset = max(scrollView.contentSize.height - scrollView.bounds.height, 0)
+        if maxOffset + 24 >= offsetY || attempt >= 40 {
+            return
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.032) {
+            self.restoreCapturedArticleScrollIfNeeded(attempt: attempt + 1)
+        }
+    }
+
+    private func navigateBackFromArticle(animated: Bool = true) {
+        let transitionIdentity = "\(articleIdentity)|\(viewModel.articleBackTransitionIdentity)"
+        guard appState.beginArticleBackAction(
+            articleIdentity: articleIdentity,
+            transitionIdentity: transitionIdentity
+        ) else {
+            hideMainTabBar()
+            overlayManager?.setArticleBottomBarExitProgress(0)
+            return
+        }
+
+        var accepted = false
+        var leftArticleStack = false
+        defer {
+            appState.completeArticleBackAction(
+                transitionIdentity: transitionIdentity,
+                accepted: accepted
+            )
+            if accepted && leftArticleStack {
+                overlayManager?.hideArticleBottomBar(owner: articleIdentity)
+            }
+            if accepted {
+                overlayManager?.setArticleBottomBarExitProgress(0)
+            }
         }
 
 #if DEBUG
         appState.articleBackActionDebugCount += 1
 #endif
-        overlayManager?.hideArticleBottomBar()
 
-        if appState.navigateBackWithinActiveArticleStack() {
+        if appState.navigateBackWithinActiveArticleStack(animated: animated) {
+            accepted = true
+            return
+        }
+
+        showMainTabBar()
+        leftArticleStack = true
+
+        if appState.navigateBackFromActiveRootArticle(animated: animated) {
+            accepted = true
             return
         }
 
         if viewModel.goBackToPreviousWebViewArticleIfNeeded() {
+            accepted = true
             return
         }
 
         if viewModel.recoverRenderedArticleMismatchIfNeeded(theme: osrsTheme, fallbackToNativeBack: {
-            appState.navigateBack()
+            appState.navigateBack(animated: animated)
         }) {
+            accepted = true
             return
         }
 
-        appState.navigateBack()
+        appState.navigateBack(animated: animated)
+        accepted = true
     }
 
     private var offlineCacheBanner: some View {
@@ -411,16 +612,21 @@ private struct ArticleViewContent: View {
     private func updateArticleBottomBar() {
         // Only update overlay if manager is available (not in preview rendering)
         guard let overlayManager = overlayManager else { return }
+        guard isArticleVisible,
+              appState.activeArticleDestination?.navigationIdentity == articleIdentity else {
+            overlayManager.hideArticleBottomBar(owner: articleIdentity)
+            return
+        }
         guard !isShowingFindInPage else {
-            overlayManager.hideArticleBottomBar()
+            overlayManager.hideArticleBottomBar(owner: articleIdentity)
             return
         }
 
-        overlayManager.showArticleBottomBar {
+        overlayManager.showArticleBottomBar(owner: articleIdentity) {
             osrsArticleBottomBar(
                 onSaveAction: {
                     Task {
-                        await viewModel.performSaveAction()
+                        await performArticleSaveAction()
                     }
                 },
                 onFindInPageAction: {
@@ -434,7 +640,14 @@ private struct ArticleViewContent: View {
                     viewModel.performAppearanceAction()
                 },
                 onContentsAction: {
-                    isShowingTableOfContents.toggle()
+                    if osrsContentsReveal.isVisuallyOpen(
+                        isPresented: isShowingTableOfContents,
+                        interactiveProgress: contentsRevealProgress
+                    ) {
+                        settleContents(to: 0, velocity: 0)
+                    } else {
+                        settleContents(to: 1, velocity: 0)
+                    }
                 },
                 isBookmarked: viewModel.isBookmarked,
                 saveState: viewModel.saveState,
@@ -446,34 +659,152 @@ private struct ArticleViewContent: View {
 
     private func hideMainTabBar() {
         guard managesMainTabBarVisibility else { return }
-        NotificationCenter.default.post(name: Notification.Name("hideCustomTabBar"), object: nil)
+        overlayManager?.hideMainTabBar(owner: articleIdentity)
+    }
+
+    @MainActor
+    private func performArticleSaveAction() async {
+        guard savedPageId != nil, !viewModel.isBookmarked else {
+            await viewModel.performSaveAction()
+            return
+        }
+
+#if DEBUG
+        // Forced-offline is a deterministic test policy, not a production reachability guess.
+        // Preserve the readable cache owner and expose retry state instead of tearing it down for
+        // a refresh that the test transport is explicitly forbidden to perform.
+        if NetworkManager.shared.isForcedOfflineForTests {
+            viewModel.markOfflineSaveRetryUnavailable()
+            return
+        }
+#endif
+
+        savedCachePreparationTask?.cancel()
+        savedCachePreparationTask = nil
+
+        if #available(iOS 17.0, *), let savedCacheSessionToken {
+            guard let reservation = ProxyInterceptorService.shared.reserveExplicitSaveLease(
+                replacingPresentationOwner: savedCacheSessionToken
+            ) else {
+                viewModel.markOfflineSaveRetryUnavailable()
+                return
+            }
+            self.savedCacheSessionToken = nil
+            scheduleSavedCacheRoutingResumeAfterExplicitSave()
+            await viewModel.performSaveAction(explicitSaveReservation: reservation)
+            return
+        }
+
+        // A saved route with no installed owner (for example after an origin load) can use the
+        // view model's ordinary reservation path. Reinstall routing only if this exact article
+        // is still visible after the operation finishes.
+        await viewModel.performSaveAction()
+        scheduleSavedCacheRoutingResumeAfterExplicitSave()
+    }
+
+    @MainActor
+    private func scheduleSavedCacheRoutingResumeAfterExplicitSave() {
+        guard #available(iOS 17.0, *), let initialSavedPageId = savedPageId else { return }
+        savedCachePreparationTask?.cancel()
+        savedCachePreparationTask = Task { @MainActor in
+            do {
+                try await ProxyInterceptorService.shared.waitForExplicitSaveRelease()
+            } catch {
+                return
+            }
+            guard !Task.isCancelled,
+                  isArticleVisible,
+                  appState.activeArticleDestination?.navigationIdentity == articleIdentity else {
+                return
+            }
+
+            let pageId = viewModel.currentSavedCachePageIdForArticle() ?? initialSavedPageId
+            let requestedTitle = osrsArticleDocumentIdentity.requestedTitle(
+                pageURL: pageUrl,
+                fallbackTitle: pageTitle
+            )
+            let parseURL = ArticleViewModel.makeParseRequestURL(pageTitle: requestedTitle)
+            let hasCache: Bool
+            if let parseURL {
+                hasCache = await ProxyInterceptorService.shared.hasPersistedMainResponseAsync(
+                    pageId: pageId,
+                    url: parseURL
+                )
+            } else {
+                hasCache = false
+            }
+            guard !Task.isCancelled,
+                  isArticleVisible,
+                  appState.activeArticleDestination?.navigationIdentity == articleIdentity else {
+                return
+            }
+
+            let forceCacheOnly: Bool
+#if DEBUG
+            forceCacheOnly = NetworkManager.shared.isForcedOfflineForTests
+#else
+            forceCacheOnly = false
+#endif
+            let routingMode = ArticleView.savedCacheRoutingMode(
+                hasPersistedMainResponse: hasCache,
+                isOffline: forceCacheOnly
+            )
+            let preparedToken: ProxyCacheSessionToken?
+            switch routingMode {
+            case .cacheOnly:
+                preparedToken = await ProxyInterceptorService.shared.enableCacheOnlyMode(pageId: pageId)
+            case .cacheFirst:
+                preparedToken = await ProxyInterceptorService.shared.enableCacheFirstMode(pageId: pageId)
+            case .saveWhileServing:
+                preparedToken = await ProxyInterceptorService.shared.enableOfflineSaveMode(pageId: pageId)
+            }
+
+            guard !Task.isCancelled,
+                  isArticleVisible,
+                  appState.activeArticleDestination?.navigationIdentity == articleIdentity else {
+                if let preparedToken {
+                    ProxyInterceptorService.shared.disableMode(owner: preparedToken)
+                }
+                return
+            }
+            savedCacheSessionToken = preparedToken
+            savedCachePreparationTask = nil
+        }
     }
 
     private func showMainTabBar() {
         guard managesMainTabBarVisibility else { return }
-        NotificationCenter.default.post(name: Notification.Name("showCustomTabBar"), object: nil)
+        overlayManager?.showMainTabBar(owner: articleIdentity)
     }
 
     private func startFindInPage() {
+        findSession += 1
+        let session = findSession
         isShowingFindInPage = true
-        overlayManager?.hideArticleBottomBar()
+        overlayManager?.hideArticleBottomBar(owner: articleIdentity)
         viewModel.performFindInPageAction {
-            monitorFindNavigatorVisibility()
+            monitorFindNavigatorVisibility(session: session)
         }
     }
 
     private func stopFindInPage() {
+        findSession += 1
         viewModel.hideFindInPageAction()
         isShowingFindInPage = false
         updateArticleBottomBar()
     }
 
-    private func monitorFindNavigatorVisibility() {
+    private func monitorFindNavigatorVisibility(session: Int, hasAppeared: Bool = false, attempts: Int = 0) {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-            guard isShowingFindInPage else { return }
+            guard isShowingFindInPage, session == findSession else { return }
 
             if viewModel.isNativeFindNavigatorVisible() {
-                monitorFindNavigatorVisibility()
+                overlayManager?.hideArticleBottomBar(owner: articleIdentity)
+                monitorFindNavigatorVisibility(session: session, hasAppeared: true, attempts: attempts + 1)
+            } else if !hasAppeared && attempts < 20 {
+                // WKFindInteraction reports false while the navigator is still presenting. Do
+                // not resurrect the article bar into the keyboard during that launch window.
+                monitorFindNavigatorVisibility(session: session, hasAppeared: false, attempts: attempts + 1)
             } else {
                 isShowingFindInPage = false
                 updateArticleBottomBar()
@@ -482,6 +813,41 @@ private struct ArticleViewContent: View {
     }
 
     // MARK: - Menu Action Helpers
+
+#if DEBUG
+    private func dumpArticleTableMetricsIfRequested(attempt: Int = 0) {
+        guard ProcessInfo.processInfo.arguments.contains("-osrsDumpTableMetrics") else { return }
+        let delay = attempt == 0 ? 1.2 : 0.8
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [viewModel] in
+            viewModel.webView?.evaluateJavaScript(
+                "JSON.stringify(window.__osrsDumpArticleTableMetrics && window.__osrsDumpArticleTableMetrics())"
+            ) { result, _ in
+                guard let json = result as? String, json != "null" else {
+                    if attempt < 8 { self.dumpArticleTableMetricsIfRequested(attempt: attempt + 1) }
+                    return
+                }
+                let url = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+                    .appendingPathComponent("osrs-table-metrics.json")
+                try? json.write(to: url, atomically: true, encoding: .utf8)
+                print("📊 TABLE METRICS \(url.path)")
+                print("📊 TABLE METRICS \(json)")
+            }
+        }
+    }
+#endif
+
+    private func consumePendingArticleScrollIfNeeded(attempt: Int = 0) {
+        guard let section = appState.pendingArticleScrollSection, !section.isEmpty else { return }
+        let delay = attempt == 0 ? 0.6 : 0.5
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [viewModel, appState] in
+            viewModel.scrollToSection(section)
+            if attempt < 16 {
+                self.consumePendingArticleScrollIfNeeded(attempt: attempt + 1)
+            } else {
+                appState.pendingArticleScrollSection = nil
+            }
+        }
+    }
 
     private func scrollToTop() {
         viewModel.webView?.evaluateJavaScript("window.scrollTo(0, 0);") { _, _ in
@@ -520,36 +886,51 @@ private struct ArticleViewContent: View {
     @ViewBuilder
     private var contentView: some View {
         // WebView always present to allow loading completion
-        ArticleWebView(viewModel: viewModel, navigationDelegate: navigationDelegate)
+        ArticleWebView(
+            viewModel: viewModel,
+            navigationDelegate: navigationDelegate,
+            onBackGesture: themeManager.swipeRightToGoBackEnabled ? {
+                print("[ArticleView] Horizontal back gesture triggered")
+                setContentsRevealProgress(0)
+                navigateBackFromArticle(animated: false)
+            } : nil,
+            onSidebarGesture: themeManager.swipeLeftToShowContentsEnabled ? {
+                print("[ArticleView] Horizontal sidebar gesture triggered")
+                settleContents(to: 1, velocity: 0)
+            } : nil,
+            onSidebarProgress: { progress in
+                setContentsRevealProgress(progress)
+                if progress >= 1 {
+                    isShowingTableOfContents = true
+                } else if progress <= 0 {
+                    isShowingTableOfContents = false
+                }
+            },
+            onSidebarSettle: { target, velocity in
+                settleContents(to: target, velocity: velocity)
+            },
+            onBackProgress: { progress in
+                var transaction = Transaction()
+                transaction.disablesAnimations = true
+                withTransaction(transaction) {
+                    overlayManager?.setArticleBottomBarExitProgress(
+                        appState.canNavigateBackWithinActiveArticleStack ? 0 : progress
+                    )
+                }
+            },
+            isContentsOpen: {
+                osrsContentsReveal.isVisuallyOpen(
+                    isPresented: isShowingTableOfContents,
+                    interactiveProgress: contentsRevealProgress
+                )
+            }
+        )
             .background(Color.osrsBackground)
-
-        // Overlay blank view during refresh (Android parity)
-        if viewModel.isRefreshing {
-            Color(osrsTheme.background)
-                .frame(maxWidth: CGFloat.infinity, maxHeight: CGFloat.infinity)
-                .zIndex(1)  // Ensures blank overlay covers WebView
-        }
     }
 
     @ViewBuilder
     private var progressOverlay: some View {
-        if viewModel.isRefreshing && showProgressBar {
-            // Show progress bar over completely blank page during refresh
-            osrsProgressView(
-                progress: viewModel.loadingProgress,
-                progressText: viewModel.loadingProgressText ?? "Refreshing page..."
-            )
-            .transition(.opacity)
-            .zIndex(2)  // Higher than blank overlay's zIndex(1)
-        } else if viewModel.isLoading && showProgressBar {
-            // Show normal loading progress bar when not refreshing
-            osrsProgressView(
-                progress: viewModel.loadingProgress,
-                progressText: viewModel.loadingProgressText ?? "Loading page..."
-            )
-            .transition(.opacity)
-            .zIndex(2)  // Consistent z-index across all loading states
-        }
+        EmptyView()
     }
 
     @ViewBuilder

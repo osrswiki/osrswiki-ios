@@ -13,7 +13,7 @@ class osrsSimplePageLoader {
     static func testLoadPage(title: String) async {
         print("🧪 SimpleLoader: Testing page load for '\(title)'")
         
-        let urlString = "https://oldschool.runescape.wiki/api.php?action=parse&format=json&prop=text|displaytitle|revid&disablelimitreport=1&wrapoutputclass=mw-parser-output&page=\(title.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? title)"
+        let urlString = osrsWikiParseRequest.url(page: title)?.absoluteString ?? ""
         
         guard let url = URL(string: urlString) else {
             print("❌ SimpleLoader: Invalid URL")
@@ -44,7 +44,10 @@ class osrsSimplePageLoader {
                         print("📝 SimpleLoader: Title: \(title)")
                     }
                     
-                    if let text = parse["text"] as? [String: Any],
+                    if let content = parse["text"] as? String {
+                        print("📄 SimpleLoader: Content length: \(content.count) characters")
+                        print("📄 SimpleLoader: Content preview: \(String(content.prefix(100)))")
+                    } else if let text = parse["text"] as? [String: Any],
                        let content = text["*"] as? String {
                         print("📄 SimpleLoader: Content length: \(content.count) characters")
                         print("📄 SimpleLoader: Content preview: \(String(content.prefix(100)))")

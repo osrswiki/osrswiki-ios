@@ -99,6 +99,7 @@ class osrsBackgroundMapPreloader: NSObject, ObservableObject {
         sharedMapView = MLNMapView(frame: sharedMapContainer!.bounds)
 
         guard let mapView = sharedMapView else { return }
+        osrsMapPreferredFrameRate.apply(to: mapView)
 
         // Configure exactly like the main map
         mapView.delegate = self

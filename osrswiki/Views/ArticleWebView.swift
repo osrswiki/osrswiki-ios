@@ -45,7 +45,7 @@ enum osrsArticleDynamicTypeScaling {
     }
 
     static func toolbarHeight(for dynamicTypeSize: DynamicTypeSize) -> CGFloat {
-        min(max(49 * toolbarScale(for: dynamicTypeSize), 49), 72)
+        min(max(48 * toolbarScale(for: dynamicTypeSize), 48), 68)
     }
 
     static func requiresWebReflow(for dynamicTypeSize: DynamicTypeSize) -> Bool {
@@ -55,6 +55,26 @@ enum osrsArticleDynamicTypeScaling {
 
 // MARK: - iOS Asset Handler (matches Android's appassets.androidplatform.net)
 class IOSAssetHandler: NSObject, WKURLSchemeHandler {
+    private let sourceArticleURL: URL
+
+    init(sourceArticleURL: URL = URL(string: "https://oldschool.runescape.wiki/")!) {
+        self.sourceArticleURL = sourceArticleURL
+        super.init()
+    }
+
+    /// Historical HTML documents linked a few stylesheets from `styles/` after they
+    /// moved under `web/`. Resolve those aliases before the bundle walk so a
+    /// prepared article does not wait on 404 fallbacks.
+    static func canonicalAssetPath(_ path: String) -> String {
+        switch path {
+        case "styles/collapsible_tables.css":
+            return "web/collapsible_tables.css"
+        case "styles/infobox_switcher.css":
+            return "web/switch_infobox_styles.css"
+        default:
+            return path
+        }
+    }
     
     // MARK: - Task State Management (Enhanced to prevent WebKit NSException crashes)
     
@@ -66,6 +86,7 @@ class IOSAssetHandler: NSObject, WKURLSchemeHandler {
     }
     
     private var activeTasks: [ObjectIdentifier: TaskInfo] = [:]
+    private var transportHandles: [ObjectIdentifier: osrsAssetTransportCancellationHandle] = [:]
     private var globalGeneration = 0
     private let taskQueue = DispatchQueue(label: "IOSAssetHandler.TaskQueue", qos: .userInitiated)
     private let tasksLock = NSLock() // Thread safety for task tracking
@@ -123,13 +144,35 @@ class IOSAssetHandler: NSObject, WKURLSchemeHandler {
                 return
             }
 
+            if osrsArticleLinkRouter.isFloorNumberingSettingsURL(url) {
+                DispatchQueue.main.async {
+                    NotificationCenter.default.post(
+                        name: .showAppearanceSettings,
+                        object: nil,
+                        userInfo: ["highlightFloorNumbering": true]
+                    )
+                }
+                self.completeTask(
+                    urlSchemeTask,
+                    withError: NSError(
+                        domain: NSURLErrorDomain,
+                        code: NSURLErrorCancelled,
+                        userInfo: [NSURLErrorFailingURLErrorKey: url]
+                    )
+                )
+                return
+            }
+
             if let articleURL = osrsArticleLinkRouter.appArticleURL(for: url) {
                 print("🔄 IOSAssetHandler: Intercepted app-assets article navigation: \(articleURL.absoluteString)")
                 DispatchQueue.main.async {
                     NotificationCenter.default.post(
                         name: .osrsInternalArticleLinkRequested,
                         object: nil,
-                        userInfo: ["url": articleURL]
+                        userInfo: [
+                            "url": articleURL,
+                            "sourceArticleURL": self.sourceArticleURL
+                        ]
                     )
                 }
                 self.completeTask(
@@ -144,7 +187,9 @@ class IOSAssetHandler: NSObject, WKURLSchemeHandler {
             }
         
         // Extract asset path (e.g., app-assets://localhost/styles/themes.css -> styles/themes.css)
-        let rawPath = url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        let rawPath = Self.canonicalAssetPath(
+            url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        )
         
         // DEFENSIVE: Validate asset path for security and sanity
         guard !rawPath.isEmpty else {
@@ -397,6 +442,7 @@ class IOSAssetHandler: NSObject, WKURLSchemeHandler {
         completionSemaphore.wait()
         
         tasksLock.lock()
+        let transportHandle = transportHandles.removeValue(forKey: taskId)
         if let taskInfo = activeTasks[taskId] {
             activeTasks.removeValue(forKey: taskId)
             tasksLock.unlock()
@@ -408,6 +454,7 @@ class IOSAssetHandler: NSObject, WKURLSchemeHandler {
         }
         
         completionSemaphore.signal()
+        transportHandle?.cancel()
     }
     
     
@@ -461,6 +508,7 @@ class IOSAssetHandler: NSObject, WKURLSchemeHandler {
         
         // STEP 3: Task is verified active - remove it and execute WebKit calls
         activeTasks.removeValue(forKey: taskId)
+        transportHandles.removeValue(forKey: taskId)
         let capturedTaskInfo = taskInfo
         tasksLock.unlock()
         
@@ -482,10 +530,13 @@ class IOSAssetHandler: NSObject, WKURLSchemeHandler {
         tasksLock.lock()
         let taskCount = activeTasks.count
         let cancelledGenerations = activeTasks.values.map { $0.generation }
+        let transportHandles = Array(transportHandles.values)
         activeTasks.removeAll()
+        self.transportHandles.removeAll()
         tasksLock.unlock()
         
         completionSemaphore.signal()
+        transportHandles.forEach { $0.cancel() }
         
         print("🧹 IOSAssetHandler: Cancelled \(taskCount) active tasks (generations: \(cancelledGenerations)) during WebView cleanup")
     }
@@ -501,10 +552,13 @@ class IOSAssetHandler: NSObject, WKURLSchemeHandler {
         tasksLock.lock()
         let taskCount = activeTasks.count
         let cancelledGenerations = activeTasks.values.map { $0.generation }
+        let transportHandles = Array(transportHandles.values)
         activeTasks.removeAll()
+        self.transportHandles.removeAll()
         tasksLock.unlock()
         
         completionSemaphore.signal()
+        transportHandles.forEach { $0.cancel() }
         
         print("✅ IOSAssetHandler: Synchronously cancelled \(taskCount) tasks (generations: \(cancelledGenerations))")
     }
@@ -539,59 +593,6 @@ class IOSAssetHandler: NSObject, WKURLSchemeHandler {
             print("✅ IOSAssetHandler: Disabling offline save mode")
             self.isInOfflineSaveMode = false
             self.currentSavePageId = nil
-        }
-    }
-    
-    /// Save HTTP response to offline cache (Android OfflineCacheInterceptor equivalent)
-    private func saveHttpResponse(url: String, response: HTTPURLResponse, data: Data, pageId: String) {
-        interceptorQueue.async {
-            // CRITICAL FIX: Save to LocalHTTPServer cache for proper offline access
-            // This ensures images are found during offline page loading
-            if #available(iOS 17.0, *) {
-                // Use ProxyInterceptorService to save to LocalHTTPServer cache
-                Task { @MainActor in
-                    ProxyInterceptorService.shared.cacheResponseForAsset(
-                        pageId: pageId,
-                        url: url,
-                        data: data,
-                        response: response
-                    )
-                    print("✅ IOSAssetHandler: Saved HTTP response to LocalHTTPServer cache for \(url) (\(data.count) bytes)")
-                }
-            } else {
-                // Fallback to OfflineContentService for older iOS versions
-                guard let offlineService = try? OfflineContentService.shared else {
-                    print("❌ IOSAssetHandler: Cannot save response - OfflineContentService unavailable")
-                    return
-                }
-                
-                do {
-                    // Create hash of URL for filename (like Android's hashUrl method)
-                    let urlHash = self.hashUrl(url)
-                    let filename = "\(urlHash).cached"
-                    
-                    // Save response metadata (headers, status code)
-                    let metadata = [
-                        "url": url,
-                        "status": response.statusCode,
-                        "headers": response.allHeaderFields,
-                        "mimeType": response.mimeType ?? "application/octet-stream"
-                    ] as [String: Any]
-                    
-                    try offlineService.saveHttpResponse(
-                        pageId: pageId,
-                        url: url,
-                        filename: filename,
-                        data: data,
-                        metadata: metadata
-                    )
-                    
-                    print("✅ IOSAssetHandler: Saved HTTP response for \(url) (\(data.count) bytes)")
-                    
-                } catch {
-                    print("❌ IOSAssetHandler: Failed to save HTTP response for \(url): \(error)")
-                }
-            }
         }
     }
     
@@ -735,7 +736,7 @@ class IOSAssetHandler: NSObject, WKURLSchemeHandler {
         print("   - Fragment: \(url.fragment ?? "none")")
         
         // Use NetworkManager instead of URLSession.shared to route through proxy system
-        Task { [weak self] in
+        launchTransport(for: urlSchemeTask) { [weak self] in
             guard let self = self else { return }
             
             do {
@@ -767,13 +768,10 @@ class IOSAssetHandler: NSObject, WKURLSchemeHandler {
                     }
                 }
                 
-                // Save to cache if in save mode (Android-style)
-                if shouldSave, let pageId = pageId {
-                    print("💾 [ENHANCED_DIAGNOSTICS] Saving to cache: \(resourceType) for pageId \(pageId)")
-                    self.saveHttpResponse(url: originalURL, response: httpResponse, data: data, pageId: pageId)
-                } else {
-                    print("🔍 [ENHANCED_DIAGNOSTICS] NOT saving to cache - shouldSave: \(shouldSave), pageId: \(pageId ?? "none")")
-                }
+                // NetworkManager/LocalHTTPServer owns page-scoped persistence and validates its
+                // captured session token. A second handler-side write could outlive this WK task
+                // and resurrect a namespace after the article disappears.
+                print("🔍 [ENHANCED_DIAGNOSTICS] Persistence owned by request routing; handler direct write disabled (save=\(shouldSave), page=\(pageId ?? "none"))")
                 
                 // Serve to WebView
                 await MainActor.run {
@@ -872,7 +870,7 @@ class IOSAssetHandler: NSObject, WKURLSchemeHandler {
         print("🌐 IOSAssetHandler: Proxying image through proxy system: \(originalImageURL)")
         
         // Use NetworkManager instead of URLSession.shared to route through proxy system
-        Task { [weak self] in
+        launchTransport(for: urlSchemeTask) { [weak self] in
             guard let self = self else { return }
             
             do {
@@ -953,7 +951,7 @@ class IOSAssetHandler: NSObject, WKURLSchemeHandler {
         print("🌐 IOSAssetHandler: Proxying MediaWiki resource through proxy system: \(originalURL)")
         
         // Use NetworkManager instead of URLSession.shared to route through proxy system
-        Task { [weak self] in
+        launchTransport(for: urlSchemeTask) { [weak self] in
             guard let self = self else { return }
             
             do {
@@ -1004,6 +1002,90 @@ class IOSAssetHandler: NSObject, WKURLSchemeHandler {
             }
         }
     }
+
+    private func launchTransport(
+        for urlSchemeTask: WKURLSchemeTask,
+        operation: @escaping @Sendable () async -> Void
+    ) {
+        let taskId = ObjectIdentifier(urlSchemeTask)
+        let handle = osrsAssetTransportCancellationHandle()
+        tasksLock.lock()
+        guard activeTasks[taskId] != nil else {
+            tasksLock.unlock()
+            return
+        }
+        transportHandles[taskId] = handle
+        tasksLock.unlock()
+
+        let task = Task {
+            guard !Task.isCancelled else { return }
+            await operation()
+            self.tasksLock.lock()
+            if self.transportHandles[taskId] === handle {
+                self.transportHandles.removeValue(forKey: taskId)
+            }
+            self.tasksLock.unlock()
+        }
+        handle.install(task)
+    }
+}
+
+final class osrsAssetTransportCancellationHandle: @unchecked Sendable {
+    private let lock = NSLock()
+    private var task: Task<Void, Never>?
+    private var isCancelled = false
+
+    func install(_ task: Task<Void, Never>) {
+        lock.lock()
+        if isCancelled {
+            lock.unlock()
+            task.cancel()
+            return
+        }
+        self.task = task
+        lock.unlock()
+    }
+
+    func cancel() {
+        lock.lock()
+        isCancelled = true
+        let task = self.task
+        self.task = nil
+        lock.unlock()
+        task?.cancel()
+    }
+}
+
+enum osrsArticleWebPanPolicy {
+    static let backHorizontalThreshold: CGFloat = 36
+    static let sidebarHorizontalThreshold: CGFloat = 100
+    static let verticalThreshold: CGFloat = 32
+    static let velocityThreshold: CGFloat = 100
+
+    static func isPrimarilyHorizontal(velocity: CGPoint) -> Bool {
+        abs(velocity.x) >= abs(velocity.y) * osrsInteractiveArticleSwipe.horizontalDominance &&
+            abs(velocity.x) > 0
+    }
+
+    static func navigationDirection(
+        translation: CGPoint,
+        velocity: CGPoint
+    ) -> HorizontalGestureDirection? {
+        let dx = abs(translation.x)
+        let dy = abs(translation.y)
+        guard dx > dy,
+              dy <= verticalThreshold,
+              abs(velocity.x) > velocityThreshold else {
+            return nil
+        }
+        if translation.x > 0, dx > backHorizontalThreshold {
+            return .start
+        }
+        if translation.x < 0, dx > sidebarHorizontalThreshold {
+            return .end
+        }
+        return nil
+    }
 }
 
 struct ArticleWebView: UIViewRepresentable {
@@ -1014,14 +1096,52 @@ struct ArticleWebView: UIViewRepresentable {
     
     // Optional external navigation delegate for table preview generation
     let navigationDelegate: WKNavigationDelegate?
-    
-    init(viewModel: ArticleViewModel, navigationDelegate: WKNavigationDelegate? = nil) {
+    let onBackGesture: (() -> Void)?
+    let onSidebarGesture: (() -> Void)?
+    let onSidebarProgress: ((CGFloat) -> Void)?
+    let onSidebarSettle: ((CGFloat, CGFloat) -> Void)?
+    let onBackProgress: ((CGFloat) -> Void)?
+    let isContentsOpen: () -> Bool
+
+    init(
+        viewModel: ArticleViewModel,
+        navigationDelegate: WKNavigationDelegate? = nil,
+        onBackGesture: (() -> Void)? = nil,
+        onSidebarGesture: (() -> Void)? = nil,
+        onSidebarProgress: ((CGFloat) -> Void)? = nil,
+        onSidebarSettle: ((CGFloat, CGFloat) -> Void)? = nil,
+        onBackProgress: ((CGFloat) -> Void)? = nil,
+        isContentsOpen: @escaping () -> Bool = { false }
+    ) {
         self.viewModel = viewModel
         self.navigationDelegate = navigationDelegate
+        self.onBackGesture = onBackGesture
+        self.onSidebarGesture = onSidebarGesture
+        self.onSidebarProgress = onSidebarProgress
+        self.onSidebarSettle = onSidebarSettle
+        self.onBackProgress = onBackProgress
+        self.isContentsOpen = isContentsOpen
     }
     
     func makeUIView(context: Context) -> WKWebView {
-        let configuration = WKWebViewConfiguration()
+        let renderOptions = osrsArticleRenderOptions(
+            usesDarkTheme: themeManager.currentTheme is osrsDarkTheme,
+            collapseTablesEnabled: viewModel.collapseTablesEnabled,
+            articleTextScale: Double(themeManager.articleTextScale)
+        )
+        if let prepared = osrsPreparedArticleWebViewStore.shared.take(
+            pageURL: viewModel.pageUrl,
+            pageTitle: viewModel.pageTitle_,
+            options: renderOptions
+        ) {
+            return configureAdoptedWebView(prepared, context: context)
+        }
+
+        let configuration = osrsPreparedArticleWebViewStore.makeConfiguration(
+            sourceArticleURL: viewModel.pageUrl
+        )
+        configuration.processPool = osrsArticleWebKitRuntime.processPool
+        configuration.websiteDataStore = .default()
         
         // Configure user content controller for JavaScript bridge
         let userContentController = WKUserContentController()
@@ -1077,13 +1197,7 @@ struct ArticleWebView: UIViewRepresentable {
         configuration.userContentController = userContentController
         configuration.allowsInlineMediaPlayback = true
         configuration.mediaTypesRequiringUserActionForPlayback = []
-        
-        // Register custom scheme handler for app assets (fonts, CSS, icons)
-        let assetHandler = IOSAssetHandler()
-        let customScheme = "app-assets"
-        configuration.setURLSchemeHandler(assetHandler, forURLScheme: customScheme)
-        UserDefaults.standard.set(customScheme, forKey: "WKURLSchemeHandler_Scheme")
-        print("✅ Registered \(customScheme):// handler for app assets")
+        print("✅ Reusing shared app-assets:// handler for article WebView")
         
         let webView = WKWebView(frame: .zero, configuration: configuration)
         // Use external navigation delegate if provided, otherwise use viewModel
@@ -1105,10 +1219,18 @@ struct ArticleWebView: UIViewRepresentable {
         } else {
             print("❌ ArticleWebView: Navigation delegate is nil after assignment!")
         }
-        webView.allowsBackForwardNavigationGestures = true
+        // ArticleView owns the full-width back gesture. WebKit's edge-only navigation gesture
+        // competes with local tables/maps and leaves the system transition outline half-open.
+        webView.allowsBackForwardNavigationGestures = false
         webView.scrollView.bounces = true
-        webView.scrollView.contentInset.bottom = 64
-        webView.scrollView.verticalScrollIndicatorInsets.bottom = 64
+        if #available(iOS 26.0, *) {
+            // The system tab bar/article safe-area bar now owns its measured inset.
+            webView.scrollView.contentInset.bottom = 0
+            webView.scrollView.verticalScrollIndicatorInsets.bottom = 0
+        } else {
+            webView.scrollView.contentInset.bottom = 64
+            webView.scrollView.verticalScrollIndicatorInsets.bottom = 64
+        }
         webView.isOpaque = false
         webView.backgroundColor = UIColor.clear
         webView.accessibilityIdentifier = "article_web_view"
@@ -1117,11 +1239,13 @@ struct ArticleWebView: UIViewRepresentable {
             webView.isInspectable = osrsWebKitSecurityPolicy.isWebViewInspectionEnabled
         }
         
-        // Set up gesture recognizers for iOS-specific interactions
-        setupGestureRecognizers(webView: webView)
+        // UIKit owns this recognizer because SwiftUI gestures attached outside a WKWebView do
+        // not reliably observe its touch stream. It recognizes simultaneously and never
+        // cancels WebKit scrolling; DOM/native-map ownership still makes navigation fail closed.
+        context.coordinator.installArticleNavigationGesture(on: webView)
         
-        // Configure WebView for horizontal gesture support
-        osrsWebViewBridge.configureWebView(webView)
+        // map_bridge.js is the single article bridge and the HTML loads the shared interceptor
+        // once. Do not also install the legacy document-end interceptor here.
         
         // Enable find-in-page interaction (iOS 16+)
         if #available(iOS 16.0, *) {
@@ -1137,8 +1261,42 @@ struct ArticleWebView: UIViewRepresentable {
         
         return webView
     }
+
+    private func configureAdoptedWebView(_ webView: WKWebView, context: Context) -> WKWebView {
+        let userContentController = webView.configuration.userContentController
+        for handlerName in osrsWebKitSecurityPolicy.enabledHandlerNames {
+            userContentController.removeScriptMessageHandler(forName: handlerName, contentWorld: .page)
+            userContentController.add(context.coordinator, contentWorld: .page, name: handlerName)
+        }
+        let finalDelegate = navigationDelegate ?? viewModel
+        webView.navigationDelegate = finalDelegate
+        webView.allowsBackForwardNavigationGestures = false
+        webView.scrollView.bounces = true
+        if #available(iOS 26.0, *) {
+            webView.scrollView.contentInset.bottom = 0
+            webView.scrollView.verticalScrollIndicatorInsets.bottom = 0
+        } else {
+            webView.scrollView.contentInset.bottom = 64
+            webView.scrollView.verticalScrollIndicatorInsets.bottom = 64
+        }
+        webView.isOpaque = false
+        webView.backgroundColor = UIColor.clear
+        webView.accessibilityIdentifier = "article_web_view"
+        if #available(iOS 16.4, *) {
+            webView.isInspectable = osrsWebKitSecurityPolicy.isWebViewInspectionEnabled
+        }
+        context.coordinator.installArticleNavigationGesture(on: webView)
+        if #available(iOS 16.0, *) {
+            webView.isFindInteractionEnabled = true
+        }
+        viewModel.adoptPreRenderedWebView(webView)
+        applyDynamicTypeScale(to: webView)
+        context.coordinator.setupMapHandler(webView: webView)
+        return webView
+    }
     
     func updateUIView(_ webView: WKWebView, context: Context) {
+        context.coordinator.parent = self
         applyDynamicTypeScale(to: webView)
         // Apply modern OSRS theme changes
         viewModel.injectThemeColors(themeManager)
@@ -1150,7 +1308,22 @@ struct ArticleWebView: UIViewRepresentable {
         webView.pageZoom = requiresWebReflow ? 1.0 : scale
         viewModel.setAccessibilityReflowEnabled(requiresWebReflow, textScale: requiresWebReflow ? scale : 1.0)
 #if DEBUG
-        webView.accessibilityValue = String(format: "article_dynamic_type_scale=%.2f", Double(scale))
+        let existing = (webView.accessibilityValue as? String) ?? ""
+        let nativeMapTokens = existing
+            .split(separator: ";")
+            .map(String.init)
+            .filter {
+                $0.hasPrefix("native_article_maps=") ||
+                    $0.hasPrefix("native_map_frame=")
+            }
+        webView.accessibilityValue = ([
+            String(format: "article_dynamic_type_scale=%.2f", Double(scale)),
+            String(format: "article_user_text_scale=%.2f", themeManager.articleTextScale),
+            "article_collapse_tables=\(themeManager.collapseTables ? 1 : 0)",
+            "article_swipe_right_back=\(themeManager.swipeRightToGoBackEnabled ? 1 : 0)",
+            "article_swipe_left_contents=\(themeManager.swipeLeftToShowContentsEnabled ? 1 : 0)"
+        ] + nativeMapTokens)
+            .joined(separator: ";")
 #endif
     }
     
@@ -1173,11 +1346,6 @@ struct ArticleWebView: UIViewRepresentable {
         uiView.uiDelegate = nil
         
         print("✅ ArticleWebView: WebView dismantled successfully")
-    }
-    
-    private func setupGestureRecognizers(webView: WKWebView) {
-        // Add any iOS-specific gesture handling here
-        // For example, double-tap to zoom, long press for context menu, etc.
     }
     
     private func createClipboardBridgeScript() -> String {
@@ -1469,10 +1637,18 @@ struct ArticleWebView: UIViewRepresentable {
         """
     }
     
-    class Coordinator: NSObject, WKScriptMessageHandler {
-        let parent: ArticleWebView
+    class Coordinator: NSObject, WKScriptMessageHandler, UIGestureRecognizerDelegate {
+        var parent: ArticleWebView
         private var mapHandler: osrsNativeMapHandler?
         private weak var webView: WKWebView?
+        private weak var articleNavigationRecognizer: UIPanGestureRecognizer?
+        private var articleGestureGeneration: UInt64?
+        private var articleGestureStartPoint: CGPoint?
+        private let interactiveSwipe = osrsInteractiveArticleSwipe()
+        private var restoredWebScrollEnabled: Bool?
+        private var pendingBackCommitAuthorized: Bool?
+        private var pendingBackCommitAnimationDone = false
+        private var pendingBackCommitGeneration: UInt64?
         
         init(_ parent: ArticleWebView) {
             self.parent = parent
@@ -1483,9 +1659,355 @@ struct ArticleWebView: UIViewRepresentable {
             mapHandler = osrsNativeMapHandler(webView: webView)
             print("✅ iOS ArticleWebView: Map handler initialized")
         }
+
+        func installArticleNavigationGesture(on webView: WKWebView) {
+            let recognizer = UIPanGestureRecognizer(target: self, action: #selector(handleArticleNavigationPan(_:)))
+            recognizer.delegate = self
+            recognizer.cancelsTouchesInView = false
+            recognizer.delaysTouchesBegan = false
+            recognizer.delaysTouchesEnded = false
+            recognizer.maximumNumberOfTouches = 1
+            webView.addGestureRecognizer(recognizer)
+            articleNavigationRecognizer = recognizer
+            osrsInteractiveArticleSwipe.navigationController(from: webView)?
+                .interactivePopGestureRecognizer?.isEnabled = false
+        }
+
+        func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+            guard gestureRecognizer === articleNavigationRecognizer,
+                  let pan = gestureRecognizer as? UIPanGestureRecognizer,
+                  let view = pan.view else {
+                return true
+            }
+            let velocity = pan.velocity(in: view)
+            if velocity == .zero {
+                return true
+            }
+            guard osrsArticleWebPanPolicy.isPrimarilyHorizontal(velocity: velocity) else {
+                return false
+            }
+            return true
+        }
+
+        func gestureRecognizer(
+            _ gestureRecognizer: UIGestureRecognizer,
+            shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer
+        ) -> Bool {
+            if isSystemScreenEdgePan(otherGestureRecognizer) {
+                return false
+            }
+            return gestureRecognizer === articleNavigationRecognizer ||
+                otherGestureRecognizer === articleNavigationRecognizer
+        }
+
+        func gestureRecognizer(
+            _ gestureRecognizer: UIGestureRecognizer,
+            shouldBeRequiredToFailBy otherGestureRecognizer: UIGestureRecognizer
+        ) -> Bool {
+            gestureRecognizer === articleNavigationRecognizer && isSystemScreenEdgePan(otherGestureRecognizer)
+        }
+
+        private func isSystemScreenEdgePan(_ recognizer: UIGestureRecognizer) -> Bool {
+            recognizer is UIScreenEdgePanGestureRecognizer ||
+                String(describing: type(of: recognizer)).localizedCaseInsensitiveContains("ScreenEdge")
+        }
+
+        @objc private func handleArticleNavigationPan(_ recognizer: UIPanGestureRecognizer) {
+            guard let view = recognizer.view else { return }
+            switch recognizer.state {
+            case .began:
+                articleGestureGeneration = osrsGestureState.shared.beginArticleGesture()
+                articleGestureStartPoint = recognizer.location(in: view)
+                if let webView {
+                    interactiveSwipe.begin(from: webView, contentsOpen: parent.isContentsOpen())
+                }
+            case .changed:
+                guard let webView else { return }
+                // A late DOM owner (page JS becoming ready, infobox/map attach)
+                // must not abort an already-locked back or TOC swipe. Android
+                // keeps in-flight chrome swipes alive during load for the same reason.
+                if osrsGestureState.shared.shouldBlockGestures && !interactiveSwipe.isTracking {
+                    cancelInteractiveSwipe(restoreScroll: true)
+                    return
+                }
+                interactiveSwipe.update(
+                    translation: recognizer.translation(in: view.window ?? view),
+                    from: webView
+                )
+                if interactiveSwipe.isTracking {
+                    freezeWebScrollIfNeeded(webView)
+                    if interactiveSwipe.axis == .contents {
+                        parent.onSidebarProgress?(interactiveSwipe.contentsProgress)
+                    } else if interactiveSwipe.axis == .back {
+                        parent.onBackProgress?(interactiveSwipe.backProgress)
+                    }
+                }
+            case .ended:
+                defer {
+                    articleGestureGeneration = nil
+                    articleGestureStartPoint = nil
+                }
+                guard let generation = articleGestureGeneration else {
+                    osrsGestureState.shared.cancelArticleGesture()
+                    cancelInteractiveSwipe(restoreScroll: true)
+                    return
+                }
+                let translation = recognizer.translation(in: view.window ?? view)
+                let velocity = recognizer.velocity(in: view.window ?? view)
+                if let webView {
+                    interactiveSwipe.update(translation: translation, from: webView)
+                }
+                let finish = interactiveSwipe.finish(translation: translation, velocity: velocity)
+                restoreWebScroll()
+
+                switch finish {
+                case .cancel:
+                    if interactiveSwipe.lastAxis == .contents {
+                        settleSidebar(
+                            to: interactiveSwipe.contentsOpenAtStart ? 1 : 0,
+                            velocity: velocity.x
+                        )
+                    } else {
+                        restoreInteractiveOverlays()
+                    }
+                    osrsGestureState.shared.cancelArticleGesture(generation: generation)
+                    return
+                case .commitBack:
+                    guard parent.onBackGesture != nil else {
+                        interactiveSwipe.cancel(animated: true)
+                        restoreInteractiveOverlays()
+                        osrsGestureState.shared.cancelArticleGesture(generation: generation)
+                        return
+                    }
+                    beginPendingBackCommit(generation: generation, velocity: velocity)
+                    return
+                case .commitContents:
+                    guard parent.onSidebarGesture != nil || parent.onSidebarSettle != nil else {
+                        restoreInteractiveOverlays()
+                        osrsGestureState.shared.cancelArticleGesture(generation: generation)
+                        return
+                    }
+                    settleSidebar(to: 1, velocity: velocity.x)
+                    osrsGestureState.shared.cancelArticleGesture(generation: generation)
+                    interactiveSwipe.cleanup(resetTransform: false)
+                    return
+                case .commitContentsDismiss:
+                    settleSidebar(to: 0, velocity: velocity.x)
+                    osrsGestureState.shared.cancelArticleGesture(generation: generation)
+                    return
+                }
+
+                let direction: HorizontalGestureDirection = finish == .commitBack ? .start : .end
+                let action = articleNavigationAction(for: direction)
+                guard let webView,
+                      let startPoint = articleGestureStartPoint else {
+                    interactiveSwipe.cancel(animated: true)
+                    restoreInteractiveOverlays()
+                    osrsGestureState.shared.cancelArticleGesture(generation: generation)
+                    resetPendingBackCommit()
+                    return
+                }
+                if mapHandler?.ownsArticleGesture(at: startPoint, in: webView) == true {
+                    performArticleNavigationAfterOwnershipClassification(
+                        generation: generation,
+                        isLocalOwnerAtStartPoint: true,
+                        action
+                    )
+                    return
+                }
+                classifyArticleGestureStartPoint(
+                    startPoint,
+                    in: webView,
+                    generation: generation,
+                    action: action
+                )
+            case .cancelled, .failed:
+                osrsGestureState.shared.cancelArticleGesture(generation: articleGestureGeneration)
+                articleGestureGeneration = nil
+                articleGestureStartPoint = nil
+                cancelInteractiveSwipe(restoreScroll: true)
+            default:
+                break
+            }
+        }
+
+        private func freezeWebScrollIfNeeded(_ webView: WKWebView) {
+            guard restoredWebScrollEnabled == nil else { return }
+            restoredWebScrollEnabled = webView.scrollView.isScrollEnabled
+            webView.scrollView.isScrollEnabled = false
+        }
+
+        private func restoreWebScroll() {
+            if let restoredWebScrollEnabled, let webView {
+                webView.scrollView.isScrollEnabled = restoredWebScrollEnabled
+            }
+            restoredWebScrollEnabled = nil
+        }
+
+        private func cancelInteractiveSwipe(restoreScroll: Bool) {
+            resetPendingBackCommit()
+            let restoreContents: CGFloat = interactiveSwipe.contentsOpenAtStart ? 1 : 0
+            interactiveSwipe.cancel(animated: true)
+            parent.onSidebarProgress?(restoreContents)
+            parent.onBackProgress?(0)
+            if restoreScroll {
+                restoreWebScroll()
+            }
+        }
+
+        private func restoreInteractiveOverlays() {
+            parent.onSidebarProgress?(interactiveSwipe.contentsOpenAtStart ? 1.0 : 0.0)
+            parent.onBackProgress?(0)
+        }
+
+        private func settleSidebar(to progress: CGFloat, velocity: CGFloat) {
+            if let settle = parent.onSidebarSettle {
+                settle(progress, velocity)
+            } else {
+                parent.onSidebarProgress?(progress)
+                if progress >= 1 {
+                    parent.onSidebarGesture?()
+                }
+            }
+        }
+
+        private func articleNavigationAction(for direction: HorizontalGestureDirection) -> () -> Void {
+            { [weak self] in
+                guard let self else { return }
+                switch direction {
+                case .start:
+                    self.parent.onBackGesture?()
+                case .end:
+                    self.parent.onSidebarGesture?()
+                }
+            }
+        }
+
+        private func performArticleNavigationAfterOwnershipClassification(
+            generation: UInt64,
+            isLocalOwnerAtStartPoint: Bool,
+            _ action: @escaping () -> Void
+        ) {
+            var authorized = false
+            osrsGestureState.shared.performNavigationAfterPointClassification(
+                generation: generation,
+                isLocalOwnerAtStartPoint: isLocalOwnerAtStartPoint
+            ) { [weak self] in
+                authorized = true
+                guard let self else { return }
+                if self.pendingBackCommitGeneration == generation {
+                    self.pendingBackCommitAuthorized = true
+                    self.finishPendingBackCommitIfReady()
+                    return
+                }
+                action()
+                self.interactiveSwipe.cleanup(resetTransform: false)
+            }
+            if !authorized {
+                if pendingBackCommitGeneration == generation {
+                    return
+                }
+                interactiveSwipe.cancel(animated: true)
+                restoreInteractiveOverlays()
+            }
+        }
+
+        private func beginPendingBackCommit(generation: UInt64, velocity: CGPoint) {
+            pendingBackCommitGeneration = generation
+            pendingBackCommitAuthorized = true
+            pendingBackCommitAnimationDone = true
+            parent.onBackProgress?(1)
+            interactiveSwipe.commitBackImmediately(velocity: velocity) { [weak self] in
+                self?.parent.onBackGesture?()
+            }
+            osrsGestureState.shared.cancelArticleGesture(generation: generation)
+            resetPendingBackCommit()
+        }
+
+        private func finishPendingBackCommitIfReady() {
+            guard pendingBackCommitGeneration != nil,
+                  pendingBackCommitAnimationDone,
+                  pendingBackCommitAuthorized == true else { return }
+            parent.onBackGesture?()
+            resetPendingBackCommit()
+        }
+
+        private func resetPendingBackCommit() {
+            pendingBackCommitGeneration = nil
+            pendingBackCommitAuthorized = nil
+            pendingBackCommitAnimationDone = false
+        }
+
+#if DEBUG
+        func resolveArticleNavigationForTesting(
+            direction: HorizontalGestureDirection,
+            isLocalOwnerAtStartPoint: Bool
+        ) {
+            let generation = osrsGestureState.shared.beginArticleGesture()
+            performArticleNavigationAfterOwnershipClassification(
+                generation: generation,
+                isLocalOwnerAtStartPoint: isLocalOwnerAtStartPoint,
+                articleNavigationAction(for: direction)
+            )
+        }
+#endif
+
+        private func classifyArticleGestureStartPoint(
+            _ point: CGPoint,
+            in webView: WKWebView,
+            generation: UInt64,
+            action: @escaping () -> Void
+        ) {
+            let x = String(format: "%.3f", locale: Locale(identifier: "en_US_POSIX"), point.x)
+            let y = String(format: "%.3f", locale: Locale(identifier: "en_US_POSIX"), point.y)
+            let script = "window.OSRSArticleGestureOwnership && window.OSRSArticleGestureOwnership.classifyPoint(\(x), \(y))"
+            webView.evaluateJavaScript(script) { result, error in
+                DispatchQueue.main.async {
+                    guard error == nil,
+                          let classification = result as? [String: Any],
+                          let isLocalOwner = classification["isLocalOwner"] as? Bool else {
+                        if self.pendingBackCommitGeneration == generation {
+                            // The user already completed the back swipe. A missing
+                            // ownership bridge must not snap the article back.
+                            self.pendingBackCommitAuthorized = true
+                            self.finishPendingBackCommitIfReady()
+                            return
+                        }
+                        // The ownership bridge is not ready yet (page still loading).
+                        // Keep article chrome gestures usable the same way Android does.
+                        self.performArticleNavigationAfterOwnershipClassification(
+                            generation: generation,
+                            isLocalOwnerAtStartPoint: false,
+                            action
+                        )
+                        return
+                    }
+#if DEBUG
+                    let owner = classification["ownerId"] as? String ?? "unknown"
+                    let target = classification["targetTag"] as? String ?? "unknown"
+                    print("[ArticleWebGesture] generation=\(generation) start=(\(x),\(y)) owner=\(owner) target=\(target) local=\(isLocalOwner)")
+#endif
+                    self.performArticleNavigationAfterOwnershipClassification(
+                        generation: generation,
+                        isLocalOwnerAtStartPoint: isLocalOwner,
+                        action
+                    )
+                }
+            }
+        }
         
         func cleanup() {
             print("🧹 ArticleWebView.Coordinator: Starting cleanup")
+
+            osrsGestureState.shared.cancelArticleGesture(generation: articleGestureGeneration)
+            articleGestureGeneration = nil
+            articleGestureStartPoint = nil
+            interactiveSwipe.cleanup(resetTransform: true)
+            restoreWebScroll()
+            if let recognizer = articleNavigationRecognizer {
+                recognizer.view?.removeGestureRecognizer(recognizer)
+            }
+            articleNavigationRecognizer = nil
             
             // Clean up map handler resources
             mapHandler?.cleanup()
@@ -1603,7 +2125,10 @@ struct ArticleWebView: UIViewRepresentable {
             webView?.stopLoading()
 
             DispatchQueue.main.async {
-                self.parent.appState.routeInternalArticleLink(articleURL)
+                self.parent.appState.routeInternalArticleLink(
+                    articleURL,
+                    sourceArticleURL: self.parent.viewModel.pageUrl
+                )
             }
         }
         
@@ -1633,10 +2158,30 @@ struct ArticleWebView: UIViewRepresentable {
                 if let inProgress = body["inProgress"] as? Bool {
                     mapHandler?.setHorizontalScroll(inProgress: inProgress)
                 }
+
+            case "setHorizontalScrollGesture":
+                if let phase = body["phase"] as? String,
+                   let gestureId = body["gestureId"] as? String {
+                    mapHandler?.setHorizontalScrollGesture(
+                        phase: phase,
+                        gestureId: gestureId,
+                        ownerId: body["ownerId"] as? String ?? "article-navigation",
+                        isLocalOwner: body["isLocalOwner"] as? Bool ?? true
+                    )
+                }
                 
             case "log":
                 if let message = body["message"] as? String {
                     mapHandler?.log(message: message)
+                }
+
+            case "openFloorNumberingSettings":
+                DispatchQueue.main.async {
+                    NotificationCenter.default.post(
+                        name: .showAppearanceSettings,
+                        object: nil,
+                        userInfo: ["highlightFloorNumbering": true]
+                    )
                 }
                 
             default:

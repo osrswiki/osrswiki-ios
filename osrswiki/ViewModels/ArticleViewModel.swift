@@ -9,6 +9,7 @@
 import SwiftUI
 import WebKit
 import Combine
+import CryptoKit
 
 // TIMELINE LOGGING: Precise timestamp formatter for tracking loading phases
 extension DateFormatter {
@@ -47,14 +48,14 @@ extension Color {
 // MARK: - Supporting Types
 
 /// Save state enum matching Android PageActionBarManager.SaveState
-enum osrsArticleBottomBarSaveState {
+enum osrsArticleBottomBarSaveState: Equatable {
     case notSaved
     case downloading
     case saved
     case error
 }
 
-struct osrsArticleParsePayload {
+struct osrsArticleParsePayload: Sendable {
     let pageId: Int
     let title: String
     let displayTitle: String?
@@ -72,8 +73,345 @@ struct osrsArticleParsePayload {
 
 enum osrsArticleNavigationDecision: Equatable {
     case appArticle(URL)
+    case floorNumberingSettings
     case external(URL)
     case allow
+}
+
+enum osrsOfflineResourceSettlementError: LocalizedError, Equatable, Sendable {
+    case requiredResourcesFailed(count: Int)
+
+    var errorDescription: String? {
+        switch self {
+        case .requiredResourcesFailed:
+            return "Some article images could not be saved for offline use. Please try again."
+        }
+    }
+}
+
+enum osrsOfflineArticleResourceSettlement {
+    typealias Downloader = @Sendable (URL) async throws -> Data?
+
+    private struct PlannedResource: Hashable, Sendable {
+        let url: URL
+        let stylesheetDepth: Int?
+    }
+
+    private static let maximumStylesheetBytes = 512 * 1024
+    private static let maximumStylesheetDepth = 3
+
+    /// Enumerate rendered article artwork, not navigation or interactive media bodies. The
+    /// allowlist covers images (including deferred/responsive forms), picture sources, video
+    /// posters, SVG images, image-typed objects, and authored CSS artwork/imports.
+    nonisolated static func requiredImageURLs(from html: String) -> [URL] {
+        initialResourcePlan(from: html).map(\.url).sorted { $0.absoluteString < $1.absoluteString }
+    }
+
+    private nonisolated static func initialResourcePlan(from html: String) -> [PlannedResource] {
+        var rawValues: [String] = []
+        var stylesheetValues: [String] = []
+
+        func tagMatches(_ pattern: String, in source: String) -> [String] {
+            guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
+                return []
+            }
+            return regex.matches(in: source, range: NSRange(source.startIndex..., in: source)).compactMap {
+                guard let range = Range($0.range, in: source) else { return nil }
+                return String(source[range])
+            }
+        }
+
+        func attribute(_ name: String, in tag: String) -> String? {
+            let escapedName = NSRegularExpression.escapedPattern(for: name)
+            let pattern = #"(?:^|\s)"# + escapedName + #"\s*=\s*[\"']([^\"']+)[\"']"#
+            guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]),
+                  let match = regex.firstMatch(in: tag, range: NSRange(tag.startIndex..., in: tag)),
+                  match.numberOfRanges > 1,
+                  let range = Range(match.range(at: 1), in: tag) else { return nil }
+            return String(tag[range])
+        }
+
+        func appendImageAttributes(from tag: String) {
+            for name in ["src", "data-src", "data-original", "data-lazy-src"] {
+                if let value = attribute(name, in: tag) { rawValues.append(value) }
+            }
+            for name in ["srcset", "data-srcset", "data-lazy-srcset"] {
+                if let value = attribute(name, in: tag) {
+                    rawValues.append(contentsOf: srcsetURLs(from: value))
+                }
+            }
+        }
+
+        for tag in tagMatches(#"<img\b[^>]*>"#, in: html) {
+            appendImageAttributes(from: tag)
+        }
+        for picture in tagMatches(#"<picture\b[^>]*>[\s\S]*?</picture\s*>"#, in: html) {
+            for source in tagMatches(#"<source\b[^>]*>"#, in: picture) {
+                for name in ["srcset", "data-srcset", "data-lazy-srcset"] {
+                    if let value = attribute(name, in: source) {
+                        rawValues.append(contentsOf: srcsetURLs(from: value))
+                    }
+                }
+            }
+        }
+        for tag in tagMatches(#"<video\b[^>]*>"#, in: html) {
+            if let poster = attribute("poster", in: tag) { rawValues.append(poster) }
+        }
+        for tag in tagMatches(#"<(?:svg:)?image\b[^>]*>"#, in: html) {
+            for name in ["href", "xlink:href"] {
+                if let value = attribute(name, in: tag) { rawValues.append(value) }
+            }
+        }
+        for tag in tagMatches(#"<object\b[^>]*>"#, in: html) {
+            guard attribute("type", in: tag)?.lowercased().hasPrefix("image/") == true else {
+                continue
+            }
+            if let data = attribute("data", in: tag) { rawValues.append(data) }
+        }
+
+        for tag in tagMatches(#"<link\b[^>]*>"#, in: html) {
+            let relationship = attribute("rel", in: tag)?.lowercased() ?? ""
+            guard relationship.split(whereSeparator: \.isWhitespace).contains("stylesheet"),
+                  let href = attribute("href", in: tag) else { continue }
+            stylesheetValues.append(href)
+        }
+
+        // Restrict CSS parsing to authored style attributes and <style> blocks. Text such as
+        // `url(...)` inside scripts or article prose is not a rendered dependency.
+        var inlineCSSFragments: [String] = []
+        // Match the opening delimiter, rather than excluding both quote kinds. CSS commonly
+        // uses single-quoted url(...) inside a double-quoted style attribute (and vice versa).
+        let styleAttributePattern = #"\sstyle\s*=\s*(?:\"([^\"]*)\"|'([^']*)')"#
+        if let regex = try? NSRegularExpression(pattern: styleAttributePattern, options: [.caseInsensitive]) {
+            for match in regex.matches(in: html, range: NSRange(html.startIndex..., in: html)) {
+                guard match.numberOfRanges > 2 else { continue }
+                let capturedRange = [1, 2]
+                    .map { match.range(at: $0) }
+                    .first { $0.location != NSNotFound }
+                guard let capturedRange,
+                      let range = Range(capturedRange, in: html) else { continue }
+                inlineCSSFragments.append(String(html[range]))
+            }
+        }
+        let styleBlockPattern = #"<style\b[^>]*>([\s\S]*?)</style\s*>"#
+        if let regex = try? NSRegularExpression(pattern: styleBlockPattern, options: [.caseInsensitive]) {
+            for match in regex.matches(in: html, range: NSRange(html.startIndex..., in: html)) {
+                guard match.numberOfRanges > 1,
+                      let range = Range(match.range(at: 1), in: html) else { continue }
+                inlineCSSFragments.append(String(html[range]))
+            }
+        }
+
+        let baseURL = URL(string: "https://oldschool.runescape.wiki/")!
+        var plan = rawValues.compactMap { raw in
+            normalizedNetworkURL(raw, relativeTo: baseURL).map {
+                PlannedResource(url: $0, stylesheetDepth: nil)
+            }
+        }
+        for css in inlineCSSFragments {
+            plan.append(contentsOf: cssDependencies(from: css, baseURL: baseURL, importDepth: 0))
+        }
+        plan.append(contentsOf: stylesheetValues.compactMap { raw in
+            normalizedNetworkURL(raw, relativeTo: baseURL).map {
+                PlannedResource(url: $0, stylesheetDepth: 0)
+            }
+        })
+
+        var seen: Set<URL> = []
+        return plan.filter { seen.insert($0.url).inserted }
+    }
+
+    private nonisolated static func srcsetURLs(from value: String) -> [String] {
+        // A data URI contains a comma that is payload, not a candidate separator. Embedded data
+        // needs no download, so remove each complete data candidate before splitting the rest.
+        let withoutEmbeddedData = value.replacingOccurrences(
+            of: #"data:[^\s]+(?:\s+\d+(?:\.\d+)?[wx])?"#,
+            with: "",
+            options: [.regularExpression, .caseInsensitive]
+        )
+        return withoutEmbeddedData.split(separator: ",").compactMap { candidate in
+            candidate.split(whereSeparator: \.isWhitespace).first.map(String.init)
+        }
+    }
+
+    @discardableResult
+    static func settle(
+        html: String,
+        maximumConcurrency: Int = 6,
+        maximumRecursiveStylesheetResources: Int = 4_096,
+        downloader: @escaping Downloader
+    ) async throws -> [URL] {
+        precondition(maximumConcurrency > 0)
+        precondition(maximumRecursiveStylesheetResources > 0)
+        try Task.checkCancellation()
+        var pending = initialResourcePlan(from: html)
+        var seen = Set(pending.map(\.url))
+        var settled: [URL] = []
+        var failureCount = 0
+        var recursiveStylesheetResourceCount = 0
+        var cursor = 0
+
+        while cursor < pending.count {
+            try Task.checkCancellation()
+            let end = min(cursor + maximumConcurrency, pending.count)
+            let batch = Array(pending[cursor..<end])
+            cursor = end
+            try await withThrowingTaskGroup(of: (PlannedResource, Data?, Bool).self) { group in
+                for item in batch {
+                    group.addTask {
+                        do {
+                            try Task.checkCancellation()
+                            let data = try await downloader(item.url)
+                            try Task.checkCancellation()
+                            return (item, data, true)
+                        } catch is CancellationError {
+                            throw CancellationError()
+                        } catch {
+                            return (item, nil, false)
+                        }
+                    }
+                }
+                for try await (item, data, succeeded) in group {
+                    guard succeeded else {
+                        failureCount += 1
+                        continue
+                    }
+                    settled.append(item.url)
+                    guard let depth = item.stylesheetDepth, let data else { continue }
+                    guard data.count <= maximumStylesheetBytes,
+                          let css = String(data: data, encoding: .utf8) else {
+                        failureCount += 1
+                        continue
+                    }
+                    let dependencies = cssDependencies(
+                        from: css,
+                        baseURL: item.url,
+                        importDepth: depth + 1
+                    )
+                    if depth >= maximumStylesheetDepth, !dependencies.isEmpty {
+                        failureCount += 1
+                        continue
+                    }
+                    for dependency in dependencies where seen.insert(dependency.url).inserted {
+                        recursiveStylesheetResourceCount += 1
+                        guard recursiveStylesheetResourceCount <= maximumRecursiveStylesheetResources else {
+                            failureCount += 1
+                            continue
+                        }
+                        pending.append(dependency)
+                    }
+                }
+            }
+        }
+
+        try Task.checkCancellation()
+        guard failureCount == 0 else {
+            throw osrsOfflineResourceSettlementError.requiredResourcesFailed(count: failureCount)
+        }
+        return settled.sorted { $0.absoluteString < $1.absoluteString }
+    }
+
+    private nonisolated static func cssDependencies(
+        from css: String,
+        baseURL: URL,
+        importDepth: Int
+    ) -> [PlannedResource] {
+        let withoutComments = css.replacingOccurrences(
+            of: #"/\*[\s\S]*?\*/"#,
+            with: "",
+            options: .regularExpression
+        )
+        // Offline settlement intentionally owns article imagery/artwork, not fonts. Remove
+        // complete @font-face blocks before scanning url(...) so their src descriptors cannot
+        // pull WOFF/TTF assets into the required durable set. Imports and ordinary background
+        // declarations remain eligible below.
+        let artworkCSS = withoutComments.replacingOccurrences(
+            of: #"@font-face\s*\{[\s\S]*?\}"#,
+            with: "",
+            options: [.regularExpression, .caseInsensitive]
+        )
+        var imports: Set<URL> = []
+        let importPattern = #"@import\s+(?:url\(\s*)?[\"']?([^\"')\s;]+)"#
+        if let regex = try? NSRegularExpression(pattern: importPattern, options: [.caseInsensitive]) {
+            for match in regex.matches(
+                in: artworkCSS,
+                range: NSRange(artworkCSS.startIndex..., in: artworkCSS)
+            ) where match.numberOfRanges > 1 {
+                guard let range = Range(match.range(at: 1), in: artworkCSS),
+                      let url = normalizedNetworkURL(String(artworkCSS[range]), relativeTo: baseURL) else {
+                    continue
+                }
+                imports.insert(url)
+            }
+        }
+
+        var result = imports.map { PlannedResource(url: $0, stylesheetDepth: importDepth) }
+        let urlPattern = #"url\(\s*[\"']?([^\"')]+)[\"']?\s*\)"#
+        if let regex = try? NSRegularExpression(pattern: urlPattern, options: [.caseInsensitive]) {
+            for match in regex.matches(
+                in: artworkCSS,
+                range: NSRange(artworkCSS.startIndex..., in: artworkCSS)
+            ) where match.numberOfRanges > 1 {
+                guard let range = Range(match.range(at: 1), in: artworkCSS),
+                      let url = normalizedNetworkURL(String(artworkCSS[range]), relativeTo: baseURL),
+                      !imports.contains(url) else { continue }
+                result.append(PlannedResource(url: url, stylesheetDepth: nil))
+            }
+        }
+        return result
+    }
+
+    private nonisolated static func normalizedNetworkURL(
+        _ rawValue: String,
+        relativeTo baseURL: URL
+    ) -> URL? {
+        var value = rawValue
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "&amp;", with: "&")
+        // A bare fragment references an element/paint server in the current document and does
+        // not represent a network resource. Reject it before relative resolution; otherwise
+        // removing the fragment below would manufacture a bogus base-document download.
+        guard !value.isEmpty, !value.hasPrefix("#") else { return nil }
+        if value.hasPrefix("//") {
+            value = "https:" + value
+        } else if value.hasPrefix("/") {
+            value = "https://oldschool.runescape.wiki" + value
+        } else if URL(string: value)?.scheme == nil {
+            guard let relative = URL(string: value, relativeTo: baseURL)?.absoluteURL else { return nil }
+            value = relative.absoluteString
+        }
+        guard let url = URL(string: value),
+              let scheme = url.scheme?.lowercased(),
+              scheme == "https" || scheme == "http" else {
+            return nil
+        }
+        // URL fragments select a client-side view within one HTTP representation; they are
+        // never transmitted to the server. Canonicalize them out before resource deduplication,
+        // download, and exact-generation verification so sprite.svg#one and sprite.svg#two share
+        // the same durable cache identity.
+        guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
+            return url
+        }
+        components.fragment = nil
+        return components.url ?? url
+    }
+}
+
+struct osrsDeferredMapPreloadState {
+    private var htmlByGeneration: [Int: String] = [:]
+    var pendingGenerationCount: Int { htmlByGeneration.count }
+
+    mutating func stage(_ html: String, generation: Int) {
+        htmlByGeneration = [generation: html]
+    }
+
+    mutating func takeAfterWebKitReady(generation: Int) -> String? {
+        htmlByGeneration.removeValue(forKey: generation)
+    }
+
+    mutating func cancelAll() {
+        htmlByGeneration.removeAll()
+    }
 }
 
 @MainActor
@@ -95,12 +433,13 @@ class ArticleViewModel: NSObject, ObservableObject {
     private(set) var pageUrl: URL
     private(set) var pageTitle_: String?
     let pageId: Int?
-    let collapseTablesEnabled: Bool
+    private(set) var collapseTablesEnabled: Bool
     private(set) var snippet_: String?  // Metadata for rich history display
     private(set) var thumbnailUrl_: URL?  // Metadata for rich history display
     let excludeFromHistory: Bool  // Exclude from history tracking (for preview generation)
 
     weak var webView: WKWebView?
+    private var adoptedPreRenderedDocument = false
 #if DEBUG
     private var didForceArticleReloadNetworkFailureForUITests = false
 #endif
@@ -121,14 +460,25 @@ class ArticleViewModel: NSObject, ObservableObject {
     private let savedPagesRepository = SavedPagesRepository()
     private let historyRepository = HistoryRepository()
     private var proxyCacheSessionToken: ProxyCacheSessionToken?
+    private var passiveCachePageId: String?
+    private var passiveCachePreparationTask: Task<Void, Never>?
+    private var passiveCachePreparationGeneration: UInt64 = 0
+    private var articleIsVisible = false
+    private var passiveCachingAllowedWhileVisible = false
     private var accessibilityReflowEnabled = false
     private var accessibilityTextScale: CGFloat = 1.0
+    private var articleTextScale: CGFloat = 1.0
+    private var lastTableOfContentsHTML: String?
+    private var forceNextDocumentReload = false
+    private var articlePipelineLoads: [Int: (identity: osrsArticleDocumentIdentity, startedAt: Date)] = [:]
     private var resolvedPageTitleForHistory: String?
     private var resolvedPageUrlForHistory: URL?
     var navigateToInternalArticle: ((URL) -> Void)?
     private var routedObservedArticleNavigationURLs = Set<String>()
     private var renderedArticleIdentityProbe: Timer?
     private var renderedArticleIdentityProbeAttempts = 0
+    private var deferredMapPreloadState = osrsDeferredMapPreloadState()
+    private var deferredMapPreloadTask: Task<Void, Never>?
 
     // TIMING MEASUREMENT: Track progress completion vs page visibility delay
     var progressCompletionTime: Date?
@@ -158,22 +508,16 @@ class ArticleViewModel: NSObject, ObservableObject {
         tableOfContents = []
         isBookmarked = false
 
+        if articleIsVisible, passiveCachingAllowedWhileVisible {
+            beginPassiveCachingSessionIfNeeded(forceRefresh: true)
+        }
+
         print("🔄 ArticleViewModel: Rebinding visible article from \(previousURL.absoluteString) to active destination \(destination.url.absoluteString)")
         loadArticle(theme: theme, isReload: true)
     }
 
-    static func makeParseRequestURL(pageTitle: String) -> URL? {
-        var components = URLComponents(string: "https://oldschool.runescape.wiki/api.php")!
-        components.queryItems = [
-            URLQueryItem(name: "action", value: "parse"),
-            URLQueryItem(name: "format", value: "json"),
-            URLQueryItem(name: "prop", value: "text|displaytitle|revid"),
-            URLQueryItem(name: "disablelimitreport", value: "1"),
-            URLQueryItem(name: "wrapoutputclass", value: "mw-parser-output"),
-            URLQueryItem(name: "redirects", value: "1"),
-            URLQueryItem(name: "page", value: pageTitle)
-        ]
-        return components.url
+    nonisolated static func makeParseRequestURL(pageTitle: String) -> URL? {
+        osrsWikiParseRequest.url(page: pageTitle)
     }
 
     static func articleURL(forResolvedTitle title: String) -> URL? {
@@ -185,6 +529,10 @@ class ArticleViewModel: NSObject, ObservableObject {
     }
 
     static func articleNavigationDecision(for url: URL) -> osrsArticleNavigationDecision {
+        if osrsArticleLinkRouter.isFloorNumberingSettingsURL(url) {
+            return .floorNumberingSettings
+        }
+
         if let articleURL = osrsArticleLinkRouter.appArticleURL(for: url) {
             return .appArticle(articleURL)
         }
@@ -230,36 +578,8 @@ class ArticleViewModel: NSObject, ObservableObject {
         return "\(scheme)://\(host)\(decodedPath)?\(decodedQuery)"
     }
 
-    static func decodeParsePayload(_ data: Data, requestedTitle: String? = nil) throws -> osrsArticleParsePayload {
-        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            throw NetworkError.invalidData
-        }
-
-        if let error = json["error"] as? [String: Any] {
-            let code = error["code"] as? String ?? "unknown"
-            let info = error["info"] as? String ?? "Unknown error"
-            print("❌ ArticleViewModel: API Error: \(code) - \(info)")
-            if code == "missingtitle" {
-                throw NetworkError.pageNotFound(requestedTitle)
-            }
-            throw NetworkError.serverError(404)
-        }
-
-        guard let parse = json["parse"] as? [String: Any],
-              let title = parse["title"] as? String,
-              let pageid = parse["pageid"] as? Int,
-              let textObj = parse["text"] as? [String: Any],
-              let htmlContent = textObj["*"] as? String else {
-            throw NetworkError.invalidData
-        }
-
-        return osrsArticleParsePayload(
-            pageId: pageid,
-            title: title,
-            displayTitle: parse["displaytitle"] as? String,
-            revisionId: parse["revid"] as? Int,
-            htmlContent: htmlContent
-        )
+    nonisolated static func decodeParsePayload(_ data: Data, requestedTitle: String? = nil) throws -> osrsArticleParsePayload {
+        try osrsArticlePayloadPreparer.decode(data, requestedTitle: requestedTitle)
     }
 
     // FREEZE FIX: Async content loader initialization - following Android's coroutineScope.launch pattern
@@ -294,10 +614,59 @@ class ArticleViewModel: NSObject, ObservableObject {
         applyAccessibilityReflow(to: webView)
     }
 
+    func setArticleTextScale(_ scale: CGFloat) {
+        articleTextScale = min(max(scale, 0.85), 1.40)
+        applyArticleTextScale(to: webView)
+    }
+
+    func applyFloorNumberingConvention(_ convention: osrsArticleFloorConvention) {
+        applyFloorNumberingConvention(convention, to: webView)
+        if let html = lastTableOfContentsHTML {
+            applyTableOfContents(from: html, convention: convention)
+        }
+    }
+
+    func setCollapseTablesEnabled(_ enabled: Bool) {
+        collapseTablesEnabled = enabled
+    }
+
+    private func applyArticleTextScale(to webView: WKWebView?) {
+        guard let webView else { return }
+        let scaleLiteral = String(
+            format: "%.3f",
+            locale: Locale(identifier: "en_US_POSIX"),
+            Double(articleTextScale)
+        )
+        webView.evaluateJavaScript("""
+            (function() {
+                document.documentElement.style.setProperty(
+                    '--osrs-article-user-text-scale',
+                    '\(scaleLiteral)'
+                );
+            })();
+        """)
+    }
+
+    private func applyFloorNumberingConvention(
+        _ convention: osrsArticleFloorConvention,
+        to webView: WKWebView?
+    ) {
+        guard let webView else { return }
+        let bodyClass = convention.bodyClass
+        webView.evaluateJavaScript("""
+            (function() {
+                var body = document.body;
+                if (!body) return;
+                body.classList.remove('floornumber-setting-gb', 'floornumber-setting-us');
+                body.classList.add('\(bodyClass)');
+            })();
+        """)
+    }
+
     private func applyAccessibilityReflow(to webView: WKWebView?) {
         guard let webView else { return }
         let enabledLiteral = accessibilityReflowEnabled ? "true" : "false"
-        let scaleLiteral = String(format: "%.3f", Double(accessibilityTextScale))
+        let scaleLiteral = Self.accessibilityScaleLiteral(accessibilityTextScale)
         webView.evaluateJavaScript("""
             (function() {
                 var enabled = \(enabledLiteral);
@@ -312,51 +681,129 @@ class ArticleViewModel: NSObject, ObservableObject {
         """)
     }
 
+    nonisolated static func accessibilityScaleLiteral(_ scale: CGFloat) -> String {
+        String(
+            format: "%.3f",
+            locale: Locale(identifier: "en_US_POSIX"),
+            Double(scale)
+        )
+    }
+
     func setWebView(_ webView: WKWebView) {
         self.webView = webView
         setupWebViewObservers()
 
-        // CRITICAL: Enable always-on lazy caching for ALL pages (not just saved pages)
-        // This implements Android's OfflineCacheInterceptor pattern for iOS
+        // Configure the WebView once. Cache ownership is activated separately by visibility so
+        // an iOS 26 TabView retaining an offscreen article cannot own later speculative traffic.
         if #available(iOS 17.0, *) {
-            print("🚀 ArticleViewModel: Enabling always-on lazy caching for automatic resource collection")
-
-            // Configure proxy for this WebView
             let configured = ProxyInterceptorService.shared.configureWebViewForProxyInterception(webView)
             if configured {
-                // Generate a temporary page ID based on the URL for cache key management
-                let tempPageId = generatePageIdFromURL(pageUrl)
-
-                // Enable passive caching mode - cache everything but don't mark as saved
-                proxyCacheSessionToken = ProxyInterceptorService.shared.enablePassiveCachingMode(pageId: tempPageId)
-
-                // CRITICAL FIX: Also enable save mode on IOSAssetHandler for images
-                // This ensures images loaded through the custom URL scheme are cached
                 if let assetHandler = webView.configuration.urlSchemeHandler(forURLScheme: "app-assets") as? IOSAssetHandler {
-                    // Register with ProxyInterceptorService for coordinated management
                     ProxyInterceptorService.shared.registerAssetHandler(assetHandler)
-
-                    // Enable save mode for lazy caching of images
-                    assetHandler.enableOfflineSaveMode(pageId: tempPageId)
-                    print("✅ ArticleViewModel: IOSAssetHandler save mode enabled for image caching")
                 }
-
-                print("✅ ArticleViewModel: Lazy caching enabled - resources will be cached automatically during browsing")
             } else {
                 print("⚠️ ArticleViewModel: Failed to enable lazy caching - falling back to traditional approach")
             }
         }
 
+        beginPassiveCachingSessionIfNeeded()
+
         checkIfPageIsSaved()
     }
 
+    func adoptPreRenderedWebView(_ webView: WKWebView) {
+        adoptedPreRenderedDocument = true
+        setWebView(webView)
+    }
+
+    /// SwiftUI may retain an ArticleView and its WebView while another root tab is selected.
+    /// Tie the singleton proxy/save owner to geometric screen visibility instead of object life.
+    func setArticleVisibility(_ isVisible: Bool, allowsPassiveCaching: Bool) {
+        articleIsVisible = isVisible
+        passiveCachingAllowedWhileVisible = allowsPassiveCaching
+        if isVisible, allowsPassiveCaching {
+            beginPassiveCachingSessionIfNeeded()
+        } else {
+            suspendPassiveCachingSession()
+        }
+    }
+
+    private func beginPassiveCachingSessionIfNeeded(forceRefresh: Bool = false) {
+        guard articleIsVisible, passiveCachingAllowedWhileVisible else { return }
+        guard #available(iOS 17.0, *), let webView else { return }
+        if (proxyCacheSessionToken != nil || passiveCachePreparationTask != nil), !forceRefresh {
+            return
+        }
+
+        let pageId = Self.generatePageIdFromURL(pageUrl)
+        suspendPassiveCachingSession(removingPassiveCache: passiveCachePageId != pageId)
+        passiveCachePageId = pageId
+        passiveCachePreparationGeneration &+= 1
+        let preparationGeneration = passiveCachePreparationGeneration
+        passiveCachePreparationTask = Task { @MainActor [weak self, weak webView] in
+            guard let self else { return }
+            let token = await ProxyInterceptorService.shared.enablePassiveCachingMode(pageId: pageId)
+            if self.passiveCachePreparationGeneration == preparationGeneration {
+                self.passiveCachePreparationTask = nil
+            }
+            guard let token,
+                  !Task.isCancelled,
+                  self.passiveCachePreparationGeneration == preparationGeneration,
+                  self.articleIsVisible,
+                  self.passiveCachingAllowedWhileVisible,
+                  self.passiveCachePageId == pageId else {
+                if let token {
+                    ProxyInterceptorService.shared.disableMode(owner: token)
+                }
+                return
+            }
+
+            self.proxyCacheSessionToken = token
+            if let assetHandler = webView?.configuration.urlSchemeHandler(forURLScheme: "app-assets") as? IOSAssetHandler {
+                assetHandler.enableOfflineSaveMode(pageId: pageId)
+            }
+            print("✅ ArticleViewModel: Visible-article passive cache session enabled for \(pageId)")
+        }
+    }
+
+    private func suspendPassiveCachingSession(removingPassiveCache: Bool = true) {
+        passiveCachePreparationGeneration &+= 1
+        passiveCachePreparationTask?.cancel()
+        passiveCachePreparationTask = nil
+        if #available(iOS 17.0, *), let token = proxyCacheSessionToken {
+            ProxyInterceptorService.shared.disableMode(owner: token)
+            proxyCacheSessionToken = nil
+        }
+        if removingPassiveCache, #available(iOS 17.0, *), let passiveCachePageId {
+            // Passive browsing data is speculative and visibility-owned. Explicit saved
+            // namespaces use repository UUIDs and are never removed by this lifecycle cleanup.
+            self.passiveCachePageId = nil
+            Task {
+                await ProxyInterceptorService.shared.removeCachedResponses(pageId: passiveCachePageId)
+            }
+        }
+        if let assetHandler = webView?.configuration.urlSchemeHandler(forURLScheme: "app-assets") as? IOSAssetHandler {
+            assetHandler.disableOfflineSaveMode()
+        }
+    }
+
     /// Generate a consistent page ID from URL for cache key management
-    private func generatePageIdFromURL(_ url: URL) -> String {
-        // Use URL path as a stable identifier, removing special characters
-        let path = url.path.replacingOccurrences(of: "/", with: "_")
-            .replacingOccurrences(of: ":", with: "_")
-            .replacingOccurrences(of: " ", with: "_")
-        return "page_\(path)"
+    nonisolated static func generatePageIdFromURL(_ url: URL) -> String {
+        var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        components?.fragment = nil
+        if let scheme = components?.scheme { components?.scheme = scheme.lowercased() }
+        if let host = components?.host { components?.host = host.lowercased() }
+        if let queryItems = components?.queryItems {
+            components?.queryItems = queryItems.sorted {
+                if $0.name == $1.name { return ($0.value ?? "") < ($1.value ?? "") }
+                return $0.name < $1.name
+            }
+        }
+        let canonical = components?.string ?? url.absoluteString
+        let digest = SHA256.hash(data: Data(canonical.utf8))
+            .map { String(format: "%02x", $0) }
+            .joined()
+        return "browsing_\(digest)"
     }
 
     private func setupWebViewObservers() {
@@ -422,12 +869,22 @@ class ArticleViewModel: NSObject, ObservableObject {
     }
 
     private func beginArticleLoad() -> Int {
+        if let activePipeline = articlePipelineLoads.removeValue(forKey: currentLoadGeneration) {
+            Task {
+                await osrsArticleDocumentCoordinator.shared.recordNavigationCancellation(
+                    identity: activePipeline.identity
+                )
+            }
+        }
         currentLoadTask?.cancel()
         currentLoadTask = nil
         readinessTimeoutWorkItem?.cancel()
         reloadTimeoutWorkItem?.cancel()
         refreshTimeoutWorkItem?.cancel()
         deferredRefreshWorkItem?.cancel()
+        deferredMapPreloadTask?.cancel()
+        deferredMapPreloadTask = nil
+        deferredMapPreloadState.cancelAll()
         renderedArticleIdentityProbe?.invalidate()
         renderedArticleIdentityProbe = nil
         renderedArticleIdentityProbeAttempts = 0
@@ -441,12 +898,42 @@ class ArticleViewModel: NSObject, ObservableObject {
 
         let generation = currentLoadGeneration
         print("🧭 ArticleViewModel: Starting load generation \(generation)")
-        webView?.stopLoading()
+        if !adoptedPreRenderedDocument {
+            webView?.stopLoading()
+        }
         return generation
     }
 
     private func isCurrentLoad(_ generation: Int) -> Bool {
         generation == currentLoadGeneration
+    }
+
+    /// Navigation-away must not leave parsing, WebKit, or readiness callbacks competing with Home.
+    func cancelActiveWorkForNavigation() {
+        articleIsVisible = false
+        suspendPassiveCachingSession()
+        if let activePipeline = articlePipelineLoads.removeValue(forKey: currentLoadGeneration) {
+            Task {
+                await osrsArticleDocumentCoordinator.shared.recordNavigationCancellation(
+                    identity: activePipeline.identity
+                )
+            }
+        }
+        currentLoadTask?.cancel()
+        currentLoadTask = nil
+        currentLoadGeneration += 1
+        readinessTimeoutWorkItem?.cancel()
+        reloadTimeoutWorkItem?.cancel()
+        refreshTimeoutWorkItem?.cancel()
+        deferredRefreshWorkItem?.cancel()
+        deferredMapPreloadTask?.cancel()
+        deferredMapPreloadTask = nil
+        deferredMapPreloadState.cancelAll()
+        renderedArticleIdentityProbe?.invalidate()
+        renderedArticleIdentityProbe = nil
+        webView?.stopLoading()
+        isLoading = false
+        isRefreshing = false
     }
 
     private func bindWebKitNavigation(_ navigation: WKNavigation?, to generation: Int) {
@@ -594,42 +1081,21 @@ class ArticleViewModel: NSObject, ObservableObject {
         }
 #endif
 
-        // NOTE: Using direct loading approach instead of publisher pattern
+        let documentRequest = osrsArticleDocumentRequest(pageURL: pageUrl, pageTitle: titleToLoad)
+        let renderOptions = osrsArticleRenderOptions(
+            usesDarkTheme: theme is osrsDarkTheme,
+            collapseTablesEnabled: collapseTablesEnabled,
+            articleTextScale: Double(articleTextScale)
+        )
+        let shouldForceDocumentReload = forceNextDocumentReload
+        forceNextDocumentReload = false
+        articlePipelineLoads[loadGeneration] = (documentRequest.identity, Date())
 
-        // Simplified direct loading approach
+        // Foreground opens join any matching visible-row preparation instead of repeating
+        // fetch/decode/build work. The coordinator keeps every non-WebKit phase cancellable.
         currentLoadTask = Task { [weak self] in
             guard let self = self else { return }
             do {
-                print("🔄 ArticleViewModel: Starting direct content loading...")
-
-                // Progress will be updated automatically by WebKit observer
-
-                // CRITICAL FIX: Extract page name from URL, convert underscores to spaces
-                // MediaWiki API expects display title (spaces), not URL path (underscores)
-                let originalUrlString = pageUrl.absoluteString
-                let pageTitle: String
-                if let range = originalUrlString.range(of: "/w/") {
-                    let urlPageName = String(originalUrlString[range.upperBound...])
-                    // Convert URL encoding back to display title: %26 -> &, _ -> space
-                    pageTitle = urlPageName.removingPercentEncoding?.replacingOccurrences(of: "_", with: " ") ?? titleToLoad
-                } else {
-                    // Fallback to extracted title
-                    pageTitle = titleToLoad
-                }
-
-                guard let url = Self.makeParseRequestURL(pageTitle: pageTitle) else {
-                    await MainActor.run {
-                        self.errorMessage = "Invalid URL"
-                        self.isLoading = false
-                    }
-                    return
-                }
-
-                print("🌐 ArticleViewModel: Extracted page title: '\(pageTitle)'")
-                print("🌐 ArticleViewModel: URLComponents URL: '\(url.absoluteString)'")
-
-                // Progress updated automatically by WebKit observer
-
 #if DEBUG
                 if osrsTestEnvironment.forcesArticleReloadNetworkFailureAfterFirstSuccessForUITests,
                    self.isRefreshing,
@@ -639,88 +1105,23 @@ class ArticleViewModel: NSObject, ObservableObject {
                     throw NetworkError.noConnection
                 }
 #endif
-
-                let (data, _) = try await NetworkManager.shared.performDataRequest(url: url, retryCount: 2)
-                try Task.checkCancellation()
-                guard await MainActor.run(body: { self.isCurrentLoad(loadGeneration) }) else {
-                    print("🚫 ArticleViewModel: Ignoring stale network response for generation \(loadGeneration)")
-                    return
+                if shouldForceDocumentReload {
+                    await osrsArticleDocumentCoordinator.shared.invalidate(documentRequest.identity)
                 }
-
-                // Progress updated automatically by WebKit observer
-
-                // Parse JSON manually to handle the nested structure
-                print("📊 ArticleViewModel: Received data: \(data.count) bytes")
-
-                // First, let's see what we actually received
-                if let jsonString = String(data: data, encoding: .utf8) {
-                    print("📄 ArticleViewModel: Raw JSON (first 500 chars): \(String(jsonString.prefix(500)))")
-                }
-
-                let payload = try Self.decodeParsePayload(data, requestedTitle: pageTitle)
-                let title = payload.title
-                let htmlContent = payload.htmlContent
-                let displaytitle = payload.displayTitle
-
-                print("✅ ArticleViewModel: Got content - Title: '\(title)', Length: \(htmlContent.count)")
-
-                // Cache images opportunistically after the article starts rendering. Blocking
-                // here makes text-only content wait for every image request.
-                let tempPageId = generatePageIdFromURL(pageUrl)
-                Task.detached(priority: .utility) { [weak self, tempPageId, htmlContent] in
-                    await self?.proactivelyDownloadAllResources(pageId: tempPageId, htmlContent: htmlContent)
-                }
-
-                // Progress updated automatically by WebKit observer
-
-                // Process the HTML to remove unwanted sections (matching Android behavior)
-                let processedHtml = removeUnwantedInfoboxSections(from: htmlContent)
-                print("📄 ArticleViewModel: Processed HTML - removed unwanted sections")
-
-                // Build HTML using the HTML builder directly (without asset links for WKUserScript injection)
-                let htmlBuilder = osrsPageHtmlBuilder()
-                let finalHtml = htmlBuilder.buildFullHtmlDocument(
-                    title: displaytitle ?? title,
-                    bodyContent: processedHtml,
-                    theme: theme,
-                    collapseTablesEnabled: collapseTablesEnabled,
-                    includeAssetLinks: true   // Option B: Generate <link> and <script> tags for ios-assets:// URLs
+                let document = try await osrsArticleDocumentCoordinator.shared.preparedDocument(
+                    for: documentRequest,
+                    renderOptions: renderOptions,
+                    purpose: .foreground
                 )
-
-                print("🏗️ ArticleViewModel: Built HTML document (\(finalHtml.count) characters)")
-
-                // DEBUG: Check if the correct custom scheme URLs are in the HTML
-                let expectedScheme = UserDefaults.standard.string(forKey: "WKURLSchemeHandler_Scheme") ?? "app-assets"
-                print("🔍 Checking HTML for scheme: \(expectedScheme)://")
-
-                if finalHtml.contains("\(expectedScheme)://") {
-                    print("✅ HTML contains \(expectedScheme):// URLs")
-                    let customLinks = finalHtml.components(separatedBy: "\n").filter { $0.contains("\(expectedScheme)://") }
-                    print("📋 Found \(customLinks.count) \(expectedScheme):// links in HTML")
-                    if customLinks.count > 0 {
-                        print("📋 First few links: \(customLinks.prefix(3))")
-                    }
-                } else {
-                    print("❌ HTML does NOT contain \(expectedScheme):// URLs - Option B not working!")
-                    // Check what schemes are actually in the HTML
-                    if finalHtml.contains("://") {
-                        let allSchemes = finalHtml.components(separatedBy: "\n")
-                            .filter { $0.contains("://") }
-                            .compactMap { line in
-                                let components = line.components(separatedBy: "://")
-                                return components.count > 1 ? components[0].components(separatedBy: "\"").last : nil
-                            }
-                            .prefix(5)
-                        print("🔍 Found these schemes in HTML instead: \(Array(Set(allSchemes)))")
-                    }
-                }
+                let payload = document.payload
+                print("✅ ArticleViewModel: Prepared shared document - Title: '\(payload.title)', HTML: \(document.html.count) characters")
 
                 // Load in WebView on main thread
                 await MainActor.run {
                     if self.isCurrentLoad(loadGeneration) {
                         self.pageTitle = payload.resolvedTitle
                         self.resolvedPageTitleForHistory = payload.resolvedTitle
-                        self.resolvedPageUrlForHistory = Self.articleURL(forResolvedTitle: title)
+                        self.resolvedPageUrlForHistory = Self.articleURL(forResolvedTitle: payload.title)
                     }
                 }
                 try Task.checkCancellation()
@@ -728,7 +1129,7 @@ class ArticleViewModel: NSObject, ObservableObject {
                     print("🚫 ArticleViewModel: Ignoring stale HTML load for generation \(loadGeneration)")
                     return
                 }
-                await self.loadCustomHtml(finalHtml, theme: theme, generation: loadGeneration)
+                await self.loadCustomHtml(document.html, theme: theme, generation: loadGeneration)
 
                 // Check if this page is already saved
                 await MainActor.run {
@@ -776,7 +1177,7 @@ class ArticleViewModel: NSObject, ObservableObject {
                         print("🚫 ArticleViewModel: Ignoring stale load error for generation \(loadGeneration)")
                         return
                     }
-                    self.errorMessage = "Failed to load content: \(error.localizedDescription)"
+                    self.errorMessage = UserFacingError.message(for: error, fallback: "This page could not be loaded. Please try again.")
                     self.isLoading = false
                 }
             }
@@ -799,7 +1200,8 @@ class ArticleViewModel: NSObject, ObservableObject {
             bodyContent: fixturePage.bodyHTML,
             theme: theme,
             collapseTablesEnabled: false,
-            includeAssetLinks: false
+            includeAssetLinks: false,
+            articleTextScale: articleTextScale
         )
 
         currentLoadTask = Task { [weak self] in
@@ -823,6 +1225,7 @@ class ArticleViewModel: NSObject, ObservableObject {
     func refreshPage(theme: any osrsThemeProtocol = osrsLightTheme()) {
         let timeString = DateFormatter.timeFormatter.string(from: Date())
         print("🔄 [\(timeString)] REFRESH: Starting SwiftUI overlay-based page refresh with blank page")
+        forceNextDocumentReload = true
 
         // Step 1: Set refresh state - this will overlay blank view on top of WebView
         isRefreshing = true
@@ -941,7 +1344,8 @@ class ArticleViewModel: NSObject, ObservableObject {
             let finalHtml = loader.buildFullHtmlDocument(
                 pageContent: pageContent,
                 theme: theme,
-                collapseTablesEnabled: collapseTablesEnabled
+                collapseTablesEnabled: collapseTablesEnabled,
+                articleTextScale: articleTextScale
             )
 
             print("🏗️ ArticleViewModel: Built custom HTML document (\(finalHtml.count) characters)")
@@ -949,6 +1353,7 @@ class ArticleViewModel: NSObject, ObservableObject {
             await MainActor.run {
                 // Update page title
                 pageTitle = pageContent.parseResult.displaytitle ?? pageContent.parseResult.title ?? "OSRS Wiki"
+                applyTableOfContents(from: pageContent.processedHtml)
             }
 
             // Load the custom HTML in WebView
@@ -958,7 +1363,7 @@ class ArticleViewModel: NSObject, ObservableObject {
             print("❌ ArticleViewModel: Failed to load content: \(error.localizedDescription)")
             await MainActor.run {
                 isLoading = false
-                errorMessage = "Failed to load page: \(error.localizedDescription)"
+                errorMessage = UserFacingError.message(for: error, fallback: "This page could not be loaded. Please try again.")
             }
         }
     }
@@ -973,18 +1378,24 @@ class ArticleViewModel: NSObject, ObservableObject {
         print("🌐 ArticleViewModel: Loading custom HTML in WebView")
         print("🌐 ArticleViewModel: HTML content length: \(html.count) characters")
 
-        // PRELOADING INTEGRATION: Trigger map preloading before WebView loads HTML
-        // This mirrors Android's proactive preloading approach
-        Task { @MainActor in
-            // Set parent view for map preloading containers
-            if let parentView = webView.superview {
-                osrsMapPreloadService.shared.setParentView(parentView)
-            }
-
-            // Parse HTML for maps and start preloading
-            print("🗺️ ArticleViewModel: Starting map preloading from HTML")
-            osrsMapPreloadService.shared.preloadMapsFromHTML(html)
+        if adoptedPreRenderedDocument, webView.osrsPreparedDocumentKey != nil {
+            adoptedPreRenderedDocument = false
+            print("⚡ ArticleViewModel: Using pre-rendered WKWebView; skipping loadHTMLString")
+            deferredMapPreloadState.stage(html, generation: generation)
+            await osrsArticleDocumentCoordinator.shared.recordWebKitReady(
+                identity: osrsArticleDocumentIdentity(pageURL: pageUrl, pageTitle: pageTitle_),
+                elapsed: 0
+            )
+            markWebKitReady(for: generation)
+            markJavaScriptReady(for: generation)
+            startDeferredMapPreloadAfterWebKitReady(generation: generation, webView: webView)
+            return
         }
+        adoptedPreRenderedDocument = false
+
+        // Native map discovery is staged but deliberately cannot parse or instantiate MapLibre
+        // before WebKit commits the text document for this generation.
+        deferredMapPreloadState.stage(html, generation: generation)
 
         // Keep wiki base URL for content
         // CRITICAL FIX: Use custom scheme baseURL to avoid mixed content security blocking
@@ -1002,6 +1413,35 @@ class ArticleViewModel: NSObject, ObservableObject {
         scheduleReadinessTimeout(for: generation)
     }
 
+    private func startDeferredMapPreloadAfterWebKitReady(
+        generation: Int,
+        webView: WKWebView
+    ) {
+        guard let html = deferredMapPreloadState.takeAfterWebKitReady(generation: generation),
+              let parentView = webView.superview else { return }
+        deferredMapPreloadTask?.cancel()
+        deferredMapPreloadTask = Task { @MainActor [weak self] in
+            let parsingTask = Task.detached(priority: .utility) {
+                try Task.checkCancellation()
+                let maps = osrsMapPreloadService.parseMapDataFromHTML(html)
+                try Task.checkCancellation()
+                return maps
+            }
+            do {
+                let maps = try await withTaskCancellationHandler {
+                    try await parsingTask.value
+                } onCancel: {
+                    parsingTask.cancel()
+                }
+                guard let self, self.isCurrentLoad(generation), !Task.isCancelled else { return }
+                osrsMapPreloadService.shared.setParentView(parentView)
+                osrsMapPreloadService.shared.preloadMaps(maps)
+            } catch {
+                // Navigation cancellation is the expected way deferred native-map work ends.
+            }
+        }
+    }
+
     // MARK: - Direct WebView Loading for Custom Schemes
 
     /// Load URLs directly in WebView - now handles web archives via loadFileURL
@@ -1009,7 +1449,7 @@ class ArticleViewModel: NSObject, ObservableObject {
     private func loadUrlDirectlyInWebView(theme: any osrsThemeProtocol, generation: Int) {
         guard let webView = webView else {
             print("❌ ArticleViewModel: WebView not set for direct loading")
-            errorMessage = "WebView not available"
+            errorMessage = "This page could not be displayed. Please try again."
             isLoading = false
             isRefreshing = false
             return
@@ -1047,7 +1487,7 @@ class ArticleViewModel: NSObject, ObservableObject {
     private func loadWebArchiveFile(generation: Int) {
         guard let webView = webView else {
             print("❌ ArticleViewModel: WebView not available for web archive loading")
-            errorMessage = "WebView not available"
+            errorMessage = "This saved page could not be displayed. Please try again."
             isLoading = false
             return
         }
@@ -1056,7 +1496,7 @@ class ArticleViewModel: NSObject, ObservableObject {
         let pathComponents = pageUrl.path.components(separatedBy: "/").filter { !$0.isEmpty }
         guard let pageId = pathComponents.first else {
             print("❌ ArticleViewModel: Could not extract page ID from URL: \(pageUrl.absoluteString)")
-            errorMessage = "Invalid offline page URL"
+            errorMessage = "This saved page could not be opened."
             isLoading = false
             return
         }
@@ -1694,7 +2134,8 @@ class ArticleViewModel: NSObject, ObservableObject {
                     pageUrl: historyPageUrl,
                     visitedDate: Date(),
                     thumbnailUrl: thumbnailUrl_,
-                    description: snippet_
+                    description: snippet_,
+                    metadataUpdatedAt: Date()
                 )
 
                 await MainActor.run {
@@ -1742,7 +2183,8 @@ class ArticleViewModel: NSObject, ObservableObject {
             "collapsible_tables.css",
             "collapsible_sections.css",
             "switch_infobox_styles.css",
-            "fixes.css"
+            "fixes.css",
+            "ios-article-aesthetics.css"
         ]
 
         // Load and inject CSS
@@ -1776,11 +2218,12 @@ class ArticleViewModel: NSObject, ObservableObject {
             "tablesort_init.js",
             "article_tools.js",
             "collapsible_content.js",
-            "table_wrapper.js",
             "infobox_switcher_bootstrap.js",
             "switch_infobox.js",
+            "map_bridge.js",
             "horizontal_scroll_interceptor.js",
             "responsive_videos.js",
+            "mobile_article_polish.js",
             "clipboard_bridge.js"
         ]
 
@@ -1813,9 +2256,6 @@ class ArticleViewModel: NSObject, ObservableObject {
         print("🎨 Option B: Applying theme colors and final styling for Android parity")
         applyThemeColors(webView: webView, themeManager: themeManager) {
             print("✅ Option B: Theme colors applied successfully")
-
-            // Apply additional styling fixes for complete Android parity
-            self.applyFinalStylingFixes(webView: webView)
         }
     }
 
@@ -1990,41 +2430,6 @@ class ArticleViewModel: NSObject, ObservableObject {
         }
     }
 
-    /// Apply final styling fixes for complete Android parity
-    private func applyFinalStylingFixes(webView: WKWebView) {
-        print("🎨 ArticleViewModel: Applying final styling fixes for Android parity")
-
-        let finalStylingScript = """
-        (function() {
-            console.log('🎨 iOS: Applying final styling fixes for complete Android parity');
-
-            // Apply colorSurfaceVariant background to collapsible containers
-            const collapsibleContainers = document.querySelectorAll('.navbox, .collapsible, .mw-collapsible');
-            collapsibleContainers.forEach(container => {
-                container.style.backgroundColor = 'var(--colorsurfacevariant)';
-                container.style.border = '1px solid var(--coloroutline)';
-            });
-
-            // Ensure infoboxes use the proper theme colors
-            const infoboxes = document.querySelectorAll('.infobox');
-            infoboxes.forEach(infobox => {
-                infobox.style.backgroundColor = 'var(--colorsurfacevariant)';
-                infobox.style.border = '2px solid var(--coloroutline)';
-            });
-
-            console.log('✅ iOS: Final styling fixes applied successfully');
-        })();
-        """
-
-        webView.evaluateJavaScript(finalStylingScript) { result, error in
-            if let error = error {
-                print("❌ ArticleViewModel: Final styling fixes failed: \(error.localizedDescription)")
-            } else {
-                print("✅ ArticleViewModel: Final styling fixes applied successfully")
-            }
-        }
-    }
-
     /// Build HTML with proper asset links matching Android's approach
     private func buildHtmlWithAssetLinks(originalHtml: String, theme: any osrsThemeProtocol) -> String {
         print("🔗 ArticleViewModel: Building HTML with iOS asset links")
@@ -2040,7 +2445,8 @@ class ArticleViewModel: NSObject, ObservableObject {
             bodyContent: bodyContent,
             theme: theme,
             collapseTablesEnabled: collapseTablesEnabled,
-            includeAssetLinks: true  // This generates <link> and <script> tags
+            includeAssetLinks: true,  // This generates <link> and <script> tags
+            articleTextScale: articleTextScale
         )
 
         // Replace href and src attributes to use ios-assets:// scheme for internal resources only
@@ -2160,7 +2566,7 @@ class ArticleViewModel: NSObject, ObservableObject {
                 }
             </style>
         </head>
-        <body style="visibility: hidden;">
+        <body>
             \(bodyContent)
             <script>
                 \(jsContent)
@@ -2192,10 +2598,11 @@ class ArticleViewModel: NSObject, ObservableObject {
             "styles/components.css",
             "styles/wiki-integration.css",
             "styles/navbox_styles.css",
-            "styles/collapsible_tables.css",
+            "web/collapsible_tables.css",
             "web/collapsible_sections.css",
             "styles/infobox_switcher.css",
-            "styles/fixes.css"
+            "styles/fixes.css",
+            "styles/ios-article-aesthetics.css"
         ]
 
         return await withCheckedContinuation { continuation in
@@ -2228,11 +2635,12 @@ class ArticleViewModel: NSObject, ObservableObject {
             "js/tablesort_init.js",
             "web/article_tools.js",
             "web/collapsible_content.js",
-            "web/table_wrapper.js",
             "web/infobox_switcher_bootstrap.js",
             "web/switch_infobox.js",
+            "web/map_bridge.js",
             "web/horizontal_scroll_interceptor.js",
             "web/responsive_videos.js",
+            "web/mobile_article_polish.js",
             "web/clipboard_bridge.js"
         ]
 
@@ -2318,7 +2726,7 @@ class ArticleViewModel: NSObject, ObservableObject {
                 }
             </style>
         </head>
-        <body style="visibility: hidden;">
+        <body>
             <h1>🧪 DEBUG: Test Article Loaded Successfully!</h1>
             <div class="test-content">
                 <p><strong>SUCCESS!</strong> If you can see this colorful test page, the custom HTML loading is working!</p>
@@ -2622,6 +3030,11 @@ class ArticleViewModel: NSObject, ObservableObject {
         return true
     }
 
+    var articleBackTransitionIdentity: String {
+        let renderedURL = webView?.url?.absoluteString ?? pageUrl.absoluteString
+        return "page=\(pageUrl.absoluteString)|rendered=\(renderedURL)"
+    }
+
     func goBackToPreviousWebViewArticleIfNeeded() -> Bool {
         guard let webView = webView,
               webView.canGoBack,
@@ -2647,7 +3060,21 @@ class ArticleViewModel: NSObject, ObservableObject {
     }
 
     func scrollToSection(_ sectionId: String) {
-        webView?.evaluateJavaScript(Self.osrsScrollToSectionScript(for: sectionId))
+        webView?.evaluateJavaScript(Self.osrsScrollToSectionScript(for: sectionId)) { [weak self] result, _ in
+            guard let webView = self?.webView else { return }
+            let y: CGFloat
+            if let number = result as? Double {
+                y = CGFloat(number)
+            } else if let number = result as? Int {
+                y = CGFloat(number)
+            } else if let number = result as? NSNumber {
+                y = CGFloat(truncating: number)
+            } else {
+                return
+            }
+            guard y >= 0 else { return }
+            webView.scrollView.setContentOffset(CGPoint(x: 0, y: y), animated: false)
+        }
     }
 
     static func osrsScrollToSectionScript(for sectionId: String) -> String {
@@ -2658,17 +3085,36 @@ class ArticleViewModel: NSObject, ObservableObject {
                 const escapedId = (window.CSS && CSS.escape)
                     ? CSS.escape(sectionId)
                     : sectionId.replace(/[\"\\\\]/g, '\\\\$&');
-                const element = document.getElementById(sectionId)
-                    || document.querySelector('[id="' + escapedId + '"]');
+                const wanted = sectionId.replace(/_/g, ' ').trim().toLowerCase();
+                let element = document.getElementById(sectionId)
+                    || document.querySelector('[id="' + escapedId + '"]')
+                    || Array.from(document.querySelectorAll('caption, h1, h2, h3, h4, th, .mw-headline')).find(function(node) {
+                        const clone = node.cloneNode(true);
+                        const hideSel = document.body.classList.contains('floornumber-setting-us')
+                            ? '.floornumber-gb, .floornumber-help'
+                            : '.floornumber-us, .floornumber-help';
+                        clone.querySelectorAll(hideSel).forEach(function(mark) { mark.remove(); });
+                        return (clone.textContent || '').replace(/\\s+/g, ' ').trim().toLowerCase() === wanted
+                            || (node.id || '').toLowerCase() === sectionId.toLowerCase();
+                    });
                 if (!element) {
-                    return false;
+                    return -1;
                 }
 
                 const headerOffset = Math.max(72, Math.min(132, Math.round(window.innerHeight * 0.10)));
-                const elementTop = element.getBoundingClientRect().top + window.pageYOffset;
-                const targetY = Math.max(0, elementTop - headerOffset);
-                window.scrollTo({ top: targetY, behavior: 'smooth' });
-                return true;
+                element.style.scrollMarginTop = headerOffset + 'px';
+                const rectTop = element.getBoundingClientRect().top;
+                let offsetY = 0;
+                let node = element;
+                while (node) {
+                    offsetY += node.offsetTop || 0;
+                    node = node.offsetParent;
+                }
+                const scrollTop = window.pageYOffset || document.documentElement.scrollTop || 0;
+                const targetY = Math.max(0, Math.max(scrollTop + rectTop, offsetY) - headerOffset);
+                try { element.scrollIntoView(true); } catch (e) {}
+                try { window.scrollTo(0, targetY); } catch (e2) {}
+                return targetY;
             })();
         """
     }
@@ -2691,26 +3137,51 @@ class ArticleViewModel: NSObject, ObservableObject {
     // JavaScript bridge methods - updated to match Android CSS variable injection
     // (Note: The injectThemeColors implementation is now at line 395)
 
+    private func applyTableOfContents(
+        from html: String,
+        convention: osrsArticleFloorConvention = .current()
+    ) {
+        lastTableOfContentsHTML = html
+        let sections = osrsArticleTableOfContentsExtractor.extract(
+            displayTitle: pageTitle,
+            html: html,
+            convention: convention
+        )
+        tableOfContents = sections
+        hasTableOfContents = sections.count > 1
+    }
+
     func extractTableOfContents() {
+        if !tableOfContents.isEmpty {
+            hasTableOfContents = true
+            return
+        }
         let tocScript = """
             (function() {
-                const headings = document.querySelectorAll('h1, h2, h3, h4, h5, h6');
+                const headings = document.querySelectorAll('h2, h3');
                 const toc = [];
 
                 headings.forEach((heading, index) => {
                     const level = parseInt(heading.tagName.substring(1));
-                    const text = heading.textContent.trim();
-                    const id = heading.id || 'heading-' + index;
+                    const clone = heading.cloneNode(true);
+                    const hideSel = document.body.classList.contains('floornumber-setting-us')
+                        ? '.floornumber-gb, .floornumber-help'
+                        : '.floornumber-us, .floornumber-help';
+                    clone.querySelectorAll(hideSel).forEach((node) => node.remove());
+                    const text = (clone.textContent || '').replace(/\\s+/g, ' ').trim();
+                    const id = heading.id || heading.querySelector('[id]')?.id || ('heading-' + index);
 
                     if (!heading.id) {
                         heading.id = id;
                     }
 
-                    toc.push({
-                        id: id,
-                        title: text,
-                        level: level
-                    });
+                    if (text) {
+                        toc.push({
+                            id: id,
+                            title: text,
+                            level: level
+                        });
+                    }
                 });
 
                 return JSON.stringify(toc);
@@ -2735,11 +3206,17 @@ class ArticleViewModel: NSObject, ObservableObject {
     }
 
     deinit {
+        if let proxyCacheSessionToken {
+            Task { @MainActor in
+                ProxyInterceptorService.shared.disableMode(owner: proxyCacheSessionToken)
+            }
+        }
         currentLoadTask?.cancel()
         readinessTimeoutWorkItem?.cancel()
         reloadTimeoutWorkItem?.cancel()
         refreshTimeoutWorkItem?.cancel()
         deferredRefreshWorkItem?.cancel()
+        deferredMapPreloadTask?.cancel()
         progressObserver?.invalidate()
         renderedArticleIdentityProbe?.invalidate()
 
@@ -2958,6 +3435,16 @@ extension ArticleViewModel: WKNavigationDelegate {
             return
         }
         clearBoundWebKitNavigation(navigation)
+        startDeferredMapPreloadAfterWebKitReady(generation: generation, webView: webView)
+        if let pipeline = articlePipelineLoads.removeValue(forKey: generation) {
+            let elapsed = Date().timeIntervalSince(pipeline.startedAt)
+            Task {
+                await osrsArticleDocumentCoordinator.shared.recordWebKitReady(
+                    identity: pipeline.identity,
+                    elapsed: elapsed
+                )
+            }
+        }
 
         // TIMING MEASUREMENT: Record when WebView navigation completes (NOT when content is visible)
         if progressCompletionTime != nil && pageVisibilityTime == nil {
@@ -3019,7 +3506,7 @@ extension ArticleViewModel: WKNavigationDelegate {
         clearBoundWebKitNavigation(navigation)
         isLoading = false
         isRefreshing = false
-        errorMessage = "Failed to load page: \(error.localizedDescription)"
+        errorMessage = UserFacingError.message(for: error, fallback: "This page could not be loaded. Please try again.")
     }
 
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
@@ -3035,7 +3522,7 @@ extension ArticleViewModel: WKNavigationDelegate {
         clearBoundWebKitNavigation(navigation)
         isLoading = false
         isRefreshing = false
-        errorMessage = "Failed to load page: \(error.localizedDescription)"
+        errorMessage = UserFacingError.message(for: error, fallback: "This page could not be loaded. Please try again.")
     }
 
     // MARK: - Comprehensive Error Analysis
@@ -3181,14 +3668,21 @@ extension ArticleViewModel: WKNavigationDelegate {
             print("  - Original: \(url.absoluteString)")
             print("  - Article URL: \(articleURL.absoluteString)")
 
-            if #available(iOS 17.0, *) {
-                ProxyInterceptorService.shared.disableOfflineSaveMode()
-                print("📊 [\(timeString)] 🔄 WEBVIEW: Disabled offline mode for new article navigation")
-            }
-
             webView.stopLoading()
             DispatchQueue.main.async { [weak self] in
                 self?.navigateToInternalArticle?(articleURL)
+            }
+            return .cancel
+
+        case .floorNumberingSettings:
+            print("🔄 WEBVIEW: Opening floor numbering Appearance setting")
+            webView.stopLoading()
+            DispatchQueue.main.async {
+                NotificationCenter.default.post(
+                    name: .showAppearanceSettings,
+                    object: nil,
+                    userInfo: ["highlightFloorNumbering": true]
+                )
             }
             return .cancel
 
@@ -3294,24 +3788,87 @@ extension ArticleViewModel: WKNavigationDelegate {
 
         let savedPages = savedPagesRepository.getSavedPages()
         let cleanTitle = cleanPageTitle(pageTitle)
-        let isAlreadySaved = savedPages.contains { savedPage in
+        let matchingPage = savedPages.first { savedPage in
             savedPage.url == pageUrl || savedPage.title == cleanTitle || savedPage.title == pageTitle
         }
+        let controlState = Self.saveControlState(for: matchingPage)
 
-        isBookmarked = isAlreadySaved
-        saveState = isAlreadySaved ? .saved : .notSaved
-        saveProgress = isAlreadySaved ? 1.0 : 0.0
+        isBookmarked = controlState.isBookmarked
+        saveState = controlState.saveState
+        saveProgress = controlState.progress
 
         print("🔖 ArticleViewModel: Checked save status - isBookmarked: \(isBookmarked), saveState: \(saveState)")
     }
 
+    static func saveControlState(
+        for savedPage: SavedPage?
+    ) -> (isBookmarked: Bool, saveState: osrsArticleBottomBarSaveState, progress: Double) {
+        guard let savedPage else { return (false, .notSaved, 0) }
+        switch savedPage.offlineStatus {
+        case .available where savedPage.hasCurrentDurableSettlement:
+            return (true, .saved, 1)
+        case .available, .notDownloaded, .downloading, .failed, .outdated:
+            return (false, .error, 0)
+        }
+    }
+
+    static func offlineSaveRecordID(existingIncompletePage: SavedPage?) -> String {
+        existingIncompletePage?.id ?? UUID().uuidString
+    }
+
+    /// Saved-page metadata keeps the exact authored URL. Decoding the entire absolute string can
+    /// turn escaped path data such as `%3F` or `%23` into URL delimiters and change the article.
+    nonisolated static func savedPageURLForPersistence(_ pageURL: URL) -> URL {
+        pageURL
+    }
+
+    nonisolated static func offlineSaveStagingPageID(
+        recordID: String,
+        saveGeneration: String
+    ) -> String {
+        let digest = SHA256.hash(data: Data("\(recordID)|\(saveGeneration)".utf8))
+            .map { String(format: "%02x", $0) }
+            .joined()
+        return "\(recordID)__snapshot__\(digest.prefix(24))"
+    }
+
+    static func failedOfflineSaveRecord(from savedPage: SavedPage) -> SavedPage {
+        SavedPage(
+            id: savedPage.id,
+            title: savedPage.title,
+            description: savedPage.description,
+            url: savedPage.url,
+            thumbnailUrl: savedPage.thumbnailUrl,
+            savedDate: savedPage.savedDate,
+            isOfflineAvailable: false,
+            offlineDownloadDate: savedPage.offlineDownloadDate,
+            offlineStatus: .failed,
+            offlineFileSize: savedPage.offlineFileSize,
+            offlineLocalPath: savedPage.offlineLocalPath,
+            durableSettlementVersion: nil,
+            pendingSettlementGeneration: nil
+        )
+    }
+
     /// Save/bookmark toggle action - matches Android PageReadingListManager functionality
-    func performSaveAction() async {
-        guard saveState != .downloading else { return }
+    func performSaveAction(
+        explicitSaveReservation preReservedExplicitSaveLease: ProxyExplicitSaveReservation? = nil
+    ) async {
+        guard saveState != .downloading else {
+            if #available(iOS 17.0, *), let preReservedExplicitSaveLease {
+                ProxyInterceptorService.shared.releaseExplicitSaveReservation(preReservedExplicitSaveLease)
+            }
+            return
+        }
 
         print("🔖 ArticleViewModel: Save action triggered - current state: \(saveState), bookmarked: \(isBookmarked)")
 
         if isBookmarked {
+            if #available(iOS 17.0, *), let preReservedExplicitSaveLease {
+                // Defensive only: ArticleView never transfers a lease for an unsave, but do not
+                // strand the singleton if a future caller violates that contract.
+                ProxyInterceptorService.shared.releaseExplicitSaveReservation(preReservedExplicitSaveLease)
+            }
             // Remove from saved pages - matches Android unsaving logic
             saveState = .downloading
             saveProgress = 0.0
@@ -3329,7 +3886,12 @@ extension ArticleViewModel: WKNavigationDelegate {
                     }
 
                     // Remove from repository
-                    savedPagesRepository.removeSavedPage(savedPage.id)
+                    guard let removedPage = savedPagesRepository.removeSavedPage(savedPage.id) else {
+                        throw CancellationError()
+                    }
+                    if #available(iOS 17.0, *) {
+                        await ProxyInterceptorService.shared.removeCachedResponses(pageId: removedPage.offlineCachePageId)
+                    }
 
                     await MainActor.run {
                         self.isBookmarked = false
@@ -3354,6 +3916,35 @@ extension ArticleViewModel: WKNavigationDelegate {
             saveState = .downloading
             saveProgress = 0.0
 
+            var explicitSaveReservation = preReservedExplicitSaveLease
+            var explicitOfflineSaveToken: ProxyCacheSessionToken?
+            if #available(iOS 17.0, *) {
+                // This is intentionally synchronous on MainActor and precedes metadata/network
+                // awaits. New article presentation owners will wait behind the reservation.
+                suspendPassiveCachingSession()
+                if explicitSaveReservation == nil {
+                    guard let reservation = ProxyInterceptorService.shared.reserveExplicitSaveLease() else {
+                        saveState = .error
+                        if articleIsVisible && passiveCachingAllowedWhileVisible {
+                            beginPassiveCachingSessionIfNeeded()
+                        }
+                        return
+                    }
+                    explicitSaveReservation = reservation
+                }
+            }
+            defer {
+                if #available(iOS 17.0, *), let explicitOfflineSaveToken {
+                    ProxyInterceptorService.shared.disableMode(owner: explicitOfflineSaveToken)
+                }
+                if #available(iOS 17.0, *), let explicitSaveReservation {
+                    ProxyInterceptorService.shared.releaseExplicitSaveReservation(explicitSaveReservation)
+                }
+                if articleIsVisible && passiveCachingAllowedWhileVisible {
+                    beginPassiveCachingSessionIfNeeded()
+                }
+            }
+
             do {
                     print("🔄 ArticleViewModel: Starting page save process...")
 
@@ -3361,6 +3952,7 @@ extension ArticleViewModel: WKNavigationDelegate {
                     await MainActor.run { self.saveProgress = 0.1 }
 
                     let metadata = await fetchPageMetadata()
+                    try Task.checkCancellation()
 
                     // Step 2: Create SavedPage object with proper metadata
                     await MainActor.run { self.saveProgress = 0.2 }
@@ -3368,7 +3960,7 @@ extension ArticleViewModel: WKNavigationDelegate {
                     // CRITICAL VALIDATION: Clean title and URL to prevent encoding issues
                     let rawTitle = cleanPageTitle(pageTitle)
                     let cleanTitle = rawTitle.decodingHTMLEntities() // Remove HTML entities like &amp;
-                    let cleanUrl = pageUrl.absoluteString.removingPercentEncoding.flatMap(URL.init) ?? pageUrl // Decode URL encoding like %26
+                    let cleanUrl = Self.savedPageURLForPersistence(pageUrl)
 
                     print("🔧 VALIDATION: Page save validation")
                     print("  - Raw title: '\(rawTitle)'")
@@ -3376,98 +3968,159 @@ extension ArticleViewModel: WKNavigationDelegate {
                     print("  - Raw URL: \(pageUrl.absoluteString)")
                     print("  - Clean URL: \(cleanUrl.absoluteString)")
 
+                    let incompleteRetryPage = savedPagesRepository.getSavedPages().first { candidate in
+                        candidate.offlineStatus != .available &&
+                            (candidate.url == pageUrl || candidate.title == cleanTitle || candidate.title == pageTitle)
+                    }
+                    let saveGeneration = UUID().uuidString
                     let savedPage = SavedPage(
-                        id: UUID().uuidString,
+                        id: Self.offlineSaveRecordID(existingIncompletePage: incompleteRetryPage),
                         title: cleanTitle,
                         description: metadata.description?.decodingHTMLEntities() ?? extractPageDescription(),
                         url: cleanUrl,
-                        thumbnailUrl: metadata.thumbnailUrl ?? extractThumbnailUrl(),
+                        // Preserve the rich thumbnail already carried by Home/Search/History
+                        // navigation. Some update pages do not expose a pageimages thumbnail,
+                        // even though the feed supplied the correct card image.
+                        thumbnailUrl: metadata.thumbnailUrl ?? thumbnailUrl_ ?? extractThumbnailUrl(),
                         savedDate: Date(),
                         isOfflineAvailable: false, // Will be updated when offline content is downloaded
-                        offlineDownloadDate: nil,
-                        offlineStatus: .notDownloaded,
-                        offlineFileSize: nil,
-                        offlineLocalPath: nil
+                        offlineDownloadDate: incompleteRetryPage?.offlineDownloadDate,
+                        offlineStatus: .downloading,
+                        offlineFileSize: incompleteRetryPage?.offlineFileSize,
+                        offlineLocalPath: incompleteRetryPage?.offlineLocalPath,
+                        durableSettlementVersion: nil,
+                        pendingSettlementGeneration: saveGeneration
                     )
 
                     // Step 3: Save page metadata to repository
                     await MainActor.run { self.saveProgress = 0.3 }
 
-                    savedPagesRepository.addSavedPage(savedPage)
-                    print("📱 ArticleViewModel: Added page metadata to repository")
+                    if incompleteRetryPage == nil {
+                        savedPagesRepository.addSavedPage(savedPage)
+                        print("📱 ArticleViewModel: Added page metadata to repository")
+                    } else {
+                        guard savedPagesRepository.updateSavedPage(savedPage) else {
+                            throw CancellationError()
+                        }
+                        print("🔁 ArticleViewModel: Retrying failed offline save with existing metadata identity")
+                    }
 
                     // Step 4: Mark existing lazy-cached content as saved (Android-style instant save)
                     await MainActor.run { self.saveProgress = 0.5 }
 
                     print("⚡ ArticleViewModel: Using lazy caching - marking existing cache as saved")
 
+                    var unpublishedStagingPageId: String?
                     do {
                         var durableOfflineReady = false
+                        var durableOfflineByteCount: Int64?
+                        var publishedCachePageId = savedPage.id
 
                         // Use modern iOS 17+ lazy caching approach
                         if #available(iOS 17.0, *) {
                             print("🚀 ArticleViewModel: Lazy caching implementation - instant save")
 
-                            // Get the page ID that was used during browsing
-                            let browsingPageId = generatePageIdFromURL(pageUrl)
+                            // Explicit saves authoritatively refresh every exact required URL.
+                            // Passive browsing bytes are not copied into the durable namespace;
+                            // doing so would add large main-thread I/O without proving freshness.
 
-                            // Check if we have cached content from browsing
-                            let hasCache = ProxyInterceptorService.shared.hasCompleteOfflineCache(pageId: browsingPageId)
-
-                            if hasCache {
-                                print("✅ ArticleViewModel: Found existing cache from browsing - instant save!")
-
-                                // Just link the saved page to the existing cache
-                                ProxyInterceptorService.shared.linkSavedPageToCache(savedPageId: savedPage.id, browsingPageId: browsingPageId)
-                                durableOfflineReady = ProxyInterceptorService.shared.hasCompleteOfflineCache(pageId: savedPage.id)
-
-                                await MainActor.run { self.saveProgress = 0.8 }
-                                print("🎉 ArticleViewModel: Page saved instantly using lazy-cached content")
-                            } else {
-                                print("⚠️ ArticleViewModel: No lazy cache found - falling back to traditional download")
-
-                                // Fallback: Download content now (shouldn't happen with always-on caching)
-                                guard let webView = webView else {
-                                    throw NSError(domain: "ArticleViewModel", code: 1, userInfo: [NSLocalizedDescriptionKey: "WebView not available"])
-                                }
-
-                                // Enable save mode for this page
-                                let offlineSaveToken = ProxyInterceptorService.shared.enableOfflineSaveMode(pageId: savedPage.id)
-                                defer {
-                                    if let offlineSaveToken {
-                                        ProxyInterceptorService.shared.disableMode(owner: offlineSaveToken)
-                                    }
-                                }
-
-                                // Make a simple API request to cache the main content
-                                let pageTitle = cleanTitle.replacingOccurrences(of: " ", with: "_")
-                                var urlComponents = URLComponents(string: "https://oldschool.runescape.wiki/api.php")!
-                                urlComponents.queryItems = [
-                                    URLQueryItem(name: "action", value: "parse"),
-                                    URLQueryItem(name: "format", value: "json"),
-                                    URLQueryItem(name: "prop", value: "text|displaytitle|revid"),
-                                    URLQueryItem(name: "disablelimitreport", value: "1"),
-                                    URLQueryItem(name: "wrapoutputclass", value: "mw-parser-output"),
-                                    URLQueryItem(name: "page", value: pageTitle)
-                                ]
-
-                                if let apiURL = urlComponents.url {
-                                    print("📡 ArticleViewModel: Fallback - downloading main content")
-                                    let response = try? await NetworkManager.shared.performRequest(
-                                        url: apiURL,
-                                        responseType: osrsParseResponse.self
-                                    )
-
-                                    // CRITICAL: Also proactively download all images (Android-style)
-                                    if let htmlContent = response?.parse.text {
-                                        await proactivelyDownloadAllResources(pageId: savedPage.id, htmlContent: htmlContent)
-                                    }
-                                }
-
-                                durableOfflineReady = ProxyInterceptorService.shared.hasCompleteOfflineCache(pageId: savedPage.id)
-                                await MainActor.run { self.saveProgress = 0.8 }
-                                print("✅ ArticleViewModel: Fallback download completed")
+                            let stagingPageId = Self.offlineSaveStagingPageID(
+                                recordID: savedPage.id,
+                                saveGeneration: saveGeneration
+                            )
+                            unpublishedStagingPageId = stagingPageId
+                            guard let explicitSaveReservation else {
+                                throw osrsOfflineResourceSettlementError.requiredResourcesFailed(count: 1)
                             }
+                            guard let offlineSaveToken = await ProxyInterceptorService.shared.enableExplicitOfflineSaveMode(
+                                pageId: stagingPageId,
+                                saveGeneration: saveGeneration,
+                                fallbackPageId: savedPage.offlineLocalPath,
+                                reservation: explicitSaveReservation
+                            ) else {
+                                throw osrsOfflineResourceSettlementError.requiredResourcesFailed(count: 1)
+                            }
+                            explicitOfflineSaveToken = offlineSaveToken
+
+                            guard let apiURL = Self.makeParseRequestURL(pageTitle: cleanTitle) else {
+                                throw NetworkError.invalidResponse
+                            }
+                            print("📡 ArticleViewModel: Persisting article HTML for explicit offline save")
+                            let documentRequest = osrsArticleDocumentRequest(pageURL: pageUrl, pageTitle: cleanTitle)
+                            let cachedPayload = await osrsArticleDocumentCoordinator.shared.cachedPayload(for: documentRequest)
+                            let response: osrsParseResponse
+                            let parseData: Data
+                            if let cachedPayload {
+                                response = osrsParseResponse(
+                                    parse: osrsParseResult(
+                                        pageid: cachedPayload.payload.pageId,
+                                        title: cachedPayload.payload.title,
+                                        displaytitle: cachedPayload.payload.displayTitle,
+                                        revid: cachedPayload.payload.revisionId,
+                                        text: cachedPayload.payload.htmlContent
+                                    )
+                                )
+                                parseData = try JSONEncoder().encode(response)
+                            } else {
+                                let fetched = try await NetworkManager.shared.performExplicitOfflineDataRequest(
+                                    url: apiURL,
+                                    retryCount: 1
+                                )
+                                parseData = fetched.0
+                                response = try JSONDecoder().decode(osrsParseResponse.self, from: parseData)
+                            }
+                            if !(await ProxyInterceptorService.shared.hasPersistedResponseAsync(
+                                pageId: stagingPageId,
+                                url: apiURL,
+                                saveGeneration: saveGeneration
+                            )) {
+                                let persistResponse = HTTPURLResponse(
+                                    url: apiURL,
+                                    statusCode: 200,
+                                    httpVersion: "HTTP/1.1",
+                                    headerFields: ["Content-Type": "application/json"]
+                                )!
+                                let persisted = await ProxyInterceptorService.shared.persistExplicitSaveResponse(
+                                    pageId: stagingPageId,
+                                    url: apiURL,
+                                    data: parseData,
+                                    response: persistResponse,
+                                    saveGeneration: saveGeneration
+                                )
+                                guard persisted else {
+                                    throw osrsOfflineResourceSettlementError.requiredResourcesFailed(count: 1)
+                                }
+                            }
+
+                            let requiredResourceURLs: [URL]
+                            do {
+                                requiredResourceURLs = try await downloadBoundedOfflineResources(
+                                    pageId: stagingPageId,
+                                    htmlContent: response.parse.text,
+                                    saveGeneration: saveGeneration
+                                )
+                            } catch {
+                                print("⚠️ ArticleViewModel: Offline artwork settlement incomplete: \(error)")
+                                requiredResourceURLs = []
+                            }
+
+                            let mainResponsePersisted = await ProxyInterceptorService.shared.hasPersistedResponseAsync(
+                                pageId: stagingPageId,
+                                url: apiURL,
+                                saveGeneration: saveGeneration
+                            )
+                            let persistedByteCount = await ProxyInterceptorService.shared.persistedByteCountAsync(
+                                pageId: stagingPageId,
+                                urls: [apiURL] + requiredResourceURLs,
+                                saveGeneration: saveGeneration
+                            )
+                            // The article document is the durable save. Artwork is best-effort so a
+                            // single image persist miss cannot strand the user on Retry.
+                            durableOfflineReady = mainResponsePersisted
+                            durableOfflineByteCount = persistedByteCount
+                            publishedCachePageId = stagingPageId
+                            await MainActor.run { self.saveProgress = 0.8 }
+                            print("✅ ArticleViewModel: Explicit offline resource settlement completed")
 
                             await MainActor.run { self.saveProgress = 0.9 }
 
@@ -3500,51 +4153,58 @@ extension ArticleViewModel: WKNavigationDelegate {
                         print("✅ ArticleViewModel: Offline content download completed")
 
                         // Update SavedPage to reflect offline availability
-                        let updatedSavedPage = SavedPage(
-                            id: savedPage.id,
-                            title: savedPage.title,
-                            description: savedPage.description,
-                            url: savedPage.url,
-                            thumbnailUrl: savedPage.thumbnailUrl,
-                            savedDate: savedPage.savedDate,
-                            isOfflineAvailable: true, // Now available offline!
-                            offlineDownloadDate: Date(),
-                            offlineStatus: .available,
-                            offlineFileSize: nil, // TODO: Calculate actual file size
-                            offlineLocalPath: savedPage.id // Use page ID as directory name
+                        let updatedSavedPage = savedPage.markingCurrentDurableSettlementAvailable(
+                            at: Date(),
+                            offlineLocalPath: publishedCachePageId,
+                            offlineFileSize: durableOfflineByteCount
                         )
 
-                        // Update repository with offline-enabled page
-                        savedPagesRepository.updateSavedPage(updatedSavedPage)
+                        // This one metadata update is the publish point. Until it succeeds,
+                        // readers keep resolving the prior cache namespace byte-for-byte.
+                        guard savedPagesRepository.compareAndSwapOfflineSettlement(
+                            updatedSavedPage,
+                            expectedGeneration: saveGeneration,
+                            expectedPriorCachePageId: savedPage.offlineLocalPath
+                        ) else {
+                            throw CancellationError()
+                        }
+                        unpublishedStagingPageId = nil
                         print("📱 ArticleViewModel: Updated saved page with offline availability")
+
+                        if #available(iOS 17.0, *),
+                           let priorCachePageId = savedPage.offlineLocalPath,
+                           priorCachePageId != publishedCachePageId {
+                            Task { @MainActor in
+                                await ProxyInterceptorService.shared.removeCachedResponses(pageId: priorCachePageId)
+                            }
+                        }
 
                         await MainActor.run { self.saveProgress = 0.9 }
 
                     } catch {
                         print("❌ ArticleViewModel: Offline download failed: \(error)")
 
-                        // Update page status to failed but keep the metadata save
-                        let failedSavedPage = SavedPage(
-                            id: savedPage.id,
-                            title: savedPage.title,
-                            description: savedPage.description,
-                            url: savedPage.url,
-                            thumbnailUrl: savedPage.thumbnailUrl,
-                            savedDate: savedPage.savedDate,
-                            isOfflineAvailable: false,
-                            offlineDownloadDate: nil,
-                            offlineStatus: .failed,
-                            offlineFileSize: nil,
-                            offlineLocalPath: nil
-                        )
+                        if #available(iOS 17.0, *), let unpublishedStagingPageId {
+                            await ProxyInterceptorService.shared.removeCachedResponses(pageId: unpublishedStagingPageId)
+                        }
 
-                        savedPagesRepository.updateSavedPage(failedSavedPage)
-                        print("📱 ArticleViewModel: Marked saved page as offline download failed")
+                        // Update page status to failed but keep the metadata save
+                        let failedSavedPage = Self.failedOfflineSaveRecord(from: savedPage)
+
+                        if savedPagesRepository.compareAndSwapOfflineSettlement(
+                            failedSavedPage,
+                            expectedGeneration: saveGeneration,
+                            expectedPriorCachePageId: savedPage.offlineLocalPath
+                        ) {
+                            print("📱 ArticleViewModel: Marked saved page as offline download failed")
+                        } else {
+                            print("🗑️ ArticleViewModel: Save record was removed while refresh was active")
+                        }
 
                         await MainActor.run { self.saveProgress = 0.9 }
 
-                        // Note: We don't throw here - the page is still saved, just without offline content
-                        print("ℹ️ ArticleViewModel: Page saved successfully but offline download failed - page will load online")
+                        // Keep metadata for an in-place retry, but do not present this as saved.
+                        throw error
                     }
 
                     // Step 5: Complete save process
@@ -3565,6 +4225,19 @@ extension ArticleViewModel: WKNavigationDelegate {
         }
     }
 
+    func markOfflineSaveRetryUnavailable() {
+        isBookmarked = false
+        saveState = .error
+        saveProgress = 0
+    }
+
+    func currentSavedCachePageIdForArticle() -> String? {
+        let cleanTitle = cleanPageTitle(pageTitle)
+        return savedPagesRepository.getSavedPages().first { candidate in
+            candidate.url == pageUrl || candidate.title == cleanTitle || candidate.title == pageTitle
+        }?.offlineCachePageId
+    }
+
     /// Clean page title by removing HTML tags - matches Android title cleaning
     private func cleanPageTitle(_ title: String) -> String {
         // Remove HTML tags like <span class="mw-page-title-main">Varrock</span>
@@ -3572,144 +4245,50 @@ extension ArticleViewModel: WKNavigationDelegate {
         return cleanTitle.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    /// Extract all image URLs from HTML content - matches Android's extractAssetUrls
-    private func extractImageURLsFromHTML(_ html: String) -> [String] {
-        var imageURLs = Set<String>() // Use Set to avoid duplicates
-
-        do {
-            // Pattern to match <img> tags with src attribute
-            let imagePattern = #"<img[^>]+src\s*=\s*[\"']([^\"']+)[\"'][^>]*>"#
-            let regex = try NSRegularExpression(pattern: imagePattern, options: [.caseInsensitive])
-            let matches = regex.matches(in: html, range: NSRange(html.startIndex..., in: html))
-
-            for match in matches {
-                if match.numberOfRanges > 1 {
-                    let range = Range(match.range(at: 1), in: html)!
-                    var imageURL = String(html[range])
-
-                    // Convert relative URLs to absolute
-                    if imageURL.hasPrefix("//") {
-                        imageURL = "https:" + imageURL
-                    } else if imageURL.hasPrefix("/") {
-                        imageURL = "https://oldschool.runescape.wiki" + imageURL
-                    }
-
-                    imageURLs.insert(imageURL)
-                }
+    /// Explicit offline saves cache every unique article image with bounded concurrency, while
+    /// article loading and visible-row preparation remain text/document-only and never wait here.
+    private func downloadBoundedOfflineResources(
+        pageId: String,
+        htmlContent: String,
+        saveGeneration: String
+    ) async throws -> [URL] {
+        print("🚀 ArticleViewModel: Starting bounded offline resource download for pageId: \(pageId)")
+        let settledURLs = try await osrsOfflineArticleResourceSettlement.settle(
+            html: htmlContent,
+            maximumConcurrency: 6
+        ) { url in
+            if await ProxyInterceptorService.shared.hasPersistedResponseAsync(
+                pageId: pageId,
+                url: url,
+                saveGeneration: saveGeneration
+            ) {
+                return Data()
             }
-
-            // Also look for srcset attributes (responsive images)
-            let srcsetPattern = #"<img[^>]+srcset\s*=\s*[\"']([^\"']+)[\"'][^>]*>"#
-            let srcsetRegex = try NSRegularExpression(pattern: srcsetPattern, options: [.caseInsensitive])
-            let srcsetMatches = srcsetRegex.matches(in: html, range: NSRange(html.startIndex..., in: html))
-
-            for match in srcsetMatches {
-                if match.numberOfRanges > 1 {
-                    let range = Range(match.range(at: 1), in: html)!
-                    let srcsetValue = String(html[range])
-
-                    // Parse srcset format: "url1 1x, url2 2x, ..."
-                    let urls = srcsetValue.split(separator: ",").compactMap { part in
-                        part.trimmingCharacters(in: .whitespaces)
-                            .split(separator: " ")
-                            .first
-                            .map(String.init)
-                    }
-
-                    for var url in urls {
-                        if url.hasPrefix("//") {
-                            url = "https:" + url
-                        } else if url.hasPrefix("/") {
-                            url = "https://oldschool.runescape.wiki" + url
-                        }
-                        imageURLs.insert(url)
-                    }
-                }
+            let (data, response) = try await NetworkManager.shared.performExplicitOfflineDataRequest(
+                url: url,
+                retryCount: 1
+            )
+            if await ProxyInterceptorService.shared.hasPersistedResponseAsync(
+                pageId: pageId,
+                url: url,
+                saveGeneration: saveGeneration
+            ) {
+                return data
             }
-
-            print("📸 ArticleViewModel: Found \(imageURLs.count) unique image URLs to cache")
-        } catch {
-            print("❌ ArticleViewModel: Error extracting image URLs: \(error)")
-        }
-
-        return Array(imageURLs)
-    }
-
-    /// Proactively download all resources found in HTML - matches Android's PageAssetDownloader
-    private func proactivelyDownloadAllResources(pageId: String, htmlContent: String) async {
-        print("🚀 ArticleViewModel: Starting proactive resource download for pageId: \(pageId)")
-
-        // Extract all image URLs from HTML
-        let imageURLs = extractImageURLsFromHTML(htmlContent)
-
-        if imageURLs.isEmpty {
-            print("⚠️ ArticleViewModel: No images found in HTML to download")
-            return
-        }
-
-        print("📥 ArticleViewModel: Downloading \(imageURLs.count) images proactively...")
-
-        // Download each image through the proxy to populate cache
-        // Use concurrent downloads with limit for performance
-        await withTaskGroup(of: Void.self) { group in
-            // Limit concurrent downloads to 5
-            let semaphore = AsyncSemaphore(value: 5)
-
-            for imageURL in imageURLs {
-                group.addTask {
-                    await semaphore.wait()
-
-                    do {
-                        guard let url = URL(string: imageURL) else {
-                            await semaphore.signal()
-                            return
-                        }
-
-                        // Make request through proxy-enabled NetworkManager
-                        // This will trigger LocalHTTPServer to cache the response
-                        let _ = try await NetworkManager.shared.performDataRequest(url: url, retryCount: 1)
-                        print("✅ Cached image: \(url.lastPathComponent)")
-                    } catch {
-                        // Don't fail the whole process if one image fails
-                        print("⚠️ Failed to cache image: \(imageURL.split(separator: "/").last ?? "unknown")")
-                    }
-
-                    // Signal semaphore after operation completes
-                    await semaphore.signal()
-                }
+            let persisted = await ProxyInterceptorService.shared.persistExplicitSaveResponse(
+                pageId: pageId,
+                url: url,
+                data: data,
+                response: response,
+                saveGeneration: saveGeneration
+            )
+            guard persisted else {
+                throw osrsOfflineResourceSettlementError.requiredResourcesFailed(count: 1)
             }
+            return data
         }
-
-        print("✅ ArticleViewModel: Completed proactive resource download - all images cached")
-    }
-
-    // Simple async semaphore for limiting concurrent downloads
-    private actor AsyncSemaphore {
-        private var value: Int
-        private var waiters: [CheckedContinuation<Void, Never>] = []
-
-        init(value: Int) {
-            self.value = value
-        }
-
-        func wait() async {
-            if value > 0 {
-                value -= 1
-            } else {
-                await withCheckedContinuation { continuation in
-                    waiters.append(continuation)
-                }
-            }
-        }
-
-        func signal() {
-            if let waiter = waiters.first {
-                waiters.removeFirst()
-                waiter.resume()
-            } else {
-                value += 1
-            }
-        }
+        print("✅ ArticleViewModel: Settled \(settledURLs.count) required offline images")
+        return settledURLs
     }
 
     /// Fetch page metadata from MediaWiki API - matches Android metadata extraction

@@ -21,29 +21,6 @@
     margin: 0 auto;
 }
 
-.wikitable .plinkp-template .mw-default-size,
-.wikitable .league-badge .mw-default-size,
-.wikitable .league-region .mw-default-size {
-    display: inline-block !important;
-    height: auto !important;
-    line-height: 1 !important;
-    margin: 0 !important;
-    vertical-align: middle !important;
-    width: auto !important;
-}
-
-.wikitable .plinkp-template img.mw-file-element,
-.wikitable .league-badge img.mw-file-element,
-.wikitable .league-region img.mw-file-element {
-    display: inline-block !important;
-    height: auto !important;
-    margin: 0 !important;
-    max-height: 30px !important;
-    max-width: 30px !important;
-    vertical-align: middle !important;
-    width: auto !important;
-}
-
 /*
  * Fix for images inside list items (<li>) that were being
  * rendered as block elements, causing incorrect text wrapping.
@@ -119,16 +96,6 @@ figcaption:empty {
 }
 
 /*
- * FIX: Hide captions on floated images (.mw-halign-left, .mw-halign-right)
- * to match the live wiki's behavior. Captions on these elements are
- * suppressed to prevent layout issues with wrapped text.
- */
-.mw-halign-left > figcaption,
-.mw-halign-right > figcaption {
-    display: none;
-}
-
-/*
  * EXPERIMENTAL FIX: Force images within an infobox to display inline-block
  * to allow for grid-like layouts (e.g., coin stacks). This overrides the
  * general figure styles above that force images into block display.
@@ -144,38 +111,9 @@ figcaption:empty {
  * This rule targets a container with .infobox-full-width-content but
  * explicitly ignores it if it also has the .inventory-image class.
  */
-.infobox:not(.skill-info):not(.infobox-skill) .infobox-full-width-content:not(.inventory-image) img {
+.infobox-full-width-content:not(.inventory-image) img {
     width: 100%;
     height: auto; /* Maintain aspect ratio */
-}
-
-.infobox.infobox-skill .infobox-full-width-content .mw-default-size,
-.infobox.infobox-skill .infobox-full-width-content a.mw-file-description,
-.infobox.skill-info .infobox-full-width-content img.mw-file-element,
-.infobox.infobox-skill .infobox-full-width-content img.mw-file-element,
-.infobox.skill-info td img.mw-file-element,
-.infobox.infobox-skill td img.mw-file-element,
-.infobox.skill-info .infobox-full-width-content img,
-.infobox.infobox-skill .infobox-full-width-content img,
-.infobox.skill-info td img {
-    display: inline-block !important;
-    height: auto !important;
-    line-height: 1 !important;
-    margin: 0 !important;
-    max-height: 64px !important;
-    max-width: 64px !important;
-    vertical-align: middle !important;
-    width: auto !important;
-}
-
-.infobox.infobox-skill td img {
-    display: inline-block !important;
-    height: auto !important;
-    margin: 0 !important;
-    max-height: 64px !important;
-    max-width: 64px !important;
-    vertical-align: middle !important;
-    width: auto !important;
 }
 
 /* --- Responsive Video Embeds (Enhanced) --- */
@@ -302,400 +240,998 @@ iframe[width] {
     }
 }
 
-/* --- iOS-specific Infobox Border Fix --- */
-/* 
- * iOS WebKit sometimes renders borders differently than Android WebView.
- * This ensures the infobox border matches Android's appearance.
- */
-.infobox {
-    border: 1px solid var(--ooui-interface-border) !important;
-    -webkit-border-image: none !important; /* Disable any border image rendering */
-}
-
-/* Ensure consistent border rendering on iOS */
-@supports (-webkit-touch-callout: none) {
-    /* iOS-specific styles */
-    .infobox {
-        border-color: var(--ooui-interface-border) !important;
-        border-style: solid !important;
-        border-width: 1px !important;
-    }
-}
-
-/* Accessibility Dynamic Type reflow for pageZoom-driven article scaling. */
-html.osrs-accessibility-reflow,
-body.osrs-accessibility-reflow {
-    overflow-x: hidden !important;
-}
-
-body.osrs-accessibility-reflow {
-    font-size: calc(16px * var(--osrs-article-text-scale, 1)) !important;
-}
-
-body.osrs-accessibility-reflow .mw-parser-output,
-body.osrs-accessibility-reflow .collapsible-container,
-body.osrs-accessibility-reflow .collapsible-content,
-body.osrs-accessibility-reflow .scrollable-table-wrapper {
-    box-sizing: border-box;
-    max-width: 100% !important;
-}
-
-body.osrs-accessibility-reflow .collapsible-header,
-body.osrs-accessibility-reflow .collapsible-close-button {
-    align-items: flex-start;
-    display: flex;
-    gap: 0.5em;
-}
-
-body.osrs-accessibility-reflow .collapsible-header .title-wrapper,
-body.osrs-accessibility-reflow .collapsible-close-button .title-wrapper {
-    min-width: 0;
-    overflow-wrap: anywhere;
-    white-space: normal;
-}
-
-body.osrs-accessibility-reflow .collapsible-header .icon,
-body.osrs-accessibility-reflow .collapsible-close-button .icon {
-    flex: 0 0 auto;
-}
-
-body.osrs-accessibility-reflow .collapsible-content,
-body.osrs-accessibility-reflow .collapsible-content p,
-body.osrs-accessibility-reflow .collapsible-content li,
-body.osrs-accessibility-reflow .collapsible-content td,
-body.osrs-accessibility-reflow .collapsible-content th,
-body.osrs-accessibility-reflow .collapsible-content .messagebox-text {
-    font-size: inherit !important;
-}
-
-body.osrs-accessibility-reflow .collapsible-content [style*="font-size"] {
-    font-size: 1em !important;
-}
-
-body.osrs-accessibility-reflow .mw-halign-left,
-body.osrs-accessibility-reflow .mw-halign-right,
-body.osrs-accessibility-reflow figure.mw-halign-left,
-body.osrs-accessibility-reflow figure.mw-halign-right {
-    clear: both !important;
-    display: block !important;
-    float: none !important;
-    margin: 0.75em auto !important;
-    max-width: 100% !important;
+/* MediaWiki's semantic inline file spans are characters, not standalone figures. Keep this
+ * wrapper-scoped so normal thumbnails and article figures retain their block layout. */
+span.mw-default-size[typeof^="mw:File"],
+span.mw-default-size[typeof^="mw:File"] > a,
+span.mw-default-size[typeof^="mw:File"] img.mw-file-element {
+    display: inline-block !important;
+    height: auto !important;
+    margin: 0 !important;
+    max-width: none !important;
+    min-width: 0 !important;
+    padding: 0 !important;
+    vertical-align: top !important;
     width: auto !important;
 }
 
-body.osrs-accessibility-reflow figure[typeof^="mw:File"] > a > img,
-body.osrs-accessibility-reflow img.mw-file-element {
+/* Mobile reading geometry shared with Android. Small semantic images stay in the prose flow;
+   portrait/vignette art is capped by both line measure and viewport height. */
+.osrs-inline-icon-wrapper,
+.osrs-inline-icon {
+    display: inline-block !important;
     height: auto !important;
-    max-width: 100% !important;
-}
-
-body.osrs-accessibility-reflow .messagebox {
-    display: block !important;
-    margin: 0.75em 0 !important;
-    max-width: 100% !important;
-    width: 100% !important;
-}
-
-body.osrs-accessibility-reflow .messagebox tbody,
-body.osrs-accessibility-reflow .messagebox tr,
-body.osrs-accessibility-reflow .messagebox td {
-    display: block !important;
-    width: 100% !important;
-}
-
-body.osrs-accessibility-reflow .messagebox .messagebox-image {
-    padding-bottom: 0 !important;
-    text-align: left !important;
+    line-height: 0 !important;
+    margin: 0 0.08em 0 0 !important;
+    padding: 0 !important;
+    vertical-align: top !important;
     width: auto !important;
 }
 
-body.osrs-accessibility-reflow .infobox,
-body.osrs-accessibility-reflow .wikitable {
-    max-width: 100% !important;
+img.osrs-inline-icon {
+    max-height: 2em !important;
+    max-width: 2em !important;
+    object-fit: contain !important;
+    vertical-align: middle !important;
 }
 
-body.osrs-accessibility-reflow .infobox {
-    display: block !important;
-    table-layout: auto !important;
-    width: 100% !important;
+.osrs-inline-lore-note {
+    display: inline !important;
+    margin: 0 !important;
+    padding: 0 !important;
 }
 
-body.osrs-accessibility-reflow .infobox tbody,
-body.osrs-accessibility-reflow .infobox tr,
-body.osrs-accessibility-reflow .infobox th,
-body.osrs-accessibility-reflow .infobox td {
-    display: block !important;
-    max-width: 100% !important;
-    overflow-wrap: anywhere;
-    text-align: left !important;
-    white-space: normal !important;
-    width: 100% !important;
+.osrs-inline-lore-paragraph {
+    margin-top: 0.25em !important;
 }
 
-body.osrs-accessibility-reflow .infobox th[colspan],
-body.osrs-accessibility-reflow .infobox td[colspan],
-body.osrs-accessibility-reflow .infobox .infobox-header {
-    text-align: center !important;
+.osrs-inline-icon-only-paragraph {
+    display: inline !important;
+    line-height: 1 !important;
+    margin: 0 !important;
+    padding: 0 !important;
 }
 
-body.osrs-accessibility-reflow .infobox img {
+.osrs-balanced-vignette {
+    box-sizing: border-box !important;
+    clear: none !important;
+    margin: 0.2em 0.75em 0.45em 0 !important;
+    /* A prose vignette is supporting art, not a second reading column. On phone widths
+       keep it near one third of the line measure and roughly ten body-text lines tall. */
+    max-width: min(28vw, 112px) !important;
+    width: auto !important;
+}
+
+.osrs-balanced-vignette.mw-halign-right,
+.osrs-balanced-vignette.tright,
+.osrs-balanced-vignette.floatright {
+    float: right !important;
+    margin-left: 0.75em !important;
+    margin-right: 0 !important;
+}
+
+.osrs-balanced-vignette img {
     height: auto !important;
-    margin-left: auto !important;
-    margin-right: auto !important;
+    max-height: min(26vh, 196px) !important;
     max-width: 100% !important;
+    object-fit: contain !important;
+    width: auto !important;
 }
 
-body.osrs-accessibility-reflow .nowrap,
-body.osrs-accessibility-reflow .nowraplinks,
-body.osrs-accessibility-reflow .nowraplinks a {
-    white-space: normal !important;
+.infobox img.osrs-balanced-portrait {
+    display: block !important;
+    height: auto !important;
+    margin: 0.4em auto !important;
+    max-height: min(34vh, 280px) !important;
+    max-width: min(68vw, 220px) !important;
+    object-fit: contain !important;
+    width: auto !important;
 }
 
-body.osrs-accessibility-reflow h1.page-header {
-    overflow-wrap: anywhere;
-    word-break: normal;
+.GEChartBox,
+.GEdatachart.smallChart,
+.GEdatachart.smallChart .highcharts-container,
+.GEdatachart.smallChart svg {
+    box-sizing: border-box !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    overflow: hidden !important;
 }
 
-.collapsible-container.collapsible-wikitable {
+.osrs-article-scroll-region,
+.osrs-local-scroll-surface,
+.collapsible-content.osrs-article-scroll-region,
+.collapsible-content.osrs-local-scroll-surface {
     box-sizing: border-box;
-    max-width: 100% !important;
+    max-width: var(--osrs-local-scrollport-width, 100%);
     min-width: 0;
-    overflow-x: auto;
-    width: 100% !important;
+    overflow-x: auto !important;
+    overflow-y: hidden;
+    overscroll-behavior-inline: contain;
+    touch-action: pan-x pan-y;
+    width: var(--osrs-local-scrollport-width, 100%);
     -webkit-overflow-scrolling: touch;
 }
 
-.collapsible-container.collapsible-intrinsic-table {
-    clear: both;
-    display: block;
-    float: none !important;
-    margin: 1em 0 !important;
-    max-width: 100% !important;
-    overflow-x: auto;
-    width: fit-content !important;
-    width: -moz-fit-content !important;
+/* Local scrolling is discoverable through direct manipulation. Do not overlay gradients,
+   shadows, or fixed cue layers on article content. */
+.osrs-scroll-affordance,
+.osrs-scroll-can-left,
+.osrs-scroll-can-right {
+    background-image: none !important;
+    box-shadow: none !important;
 }
 
-.collapsible-container.collapsible-intrinsic-table .collapsible-content,
-.collapsible-container.collapsible-intrinsic-table table.wikitable {
+.osrs-scroll-cue-layer {
+    display: none !important;
+}
+
+.collapsible-header,
+.collapsible-close-button {
+    font-size: 1rem !important;
+    line-height: 1.3 !important;
+}
+
+.collapsible-header .title-wrapper,
+.collapsible-close-button .title-wrapper,
+.collapsible-label,
+.collapsible-state {
+    font-size: inherit !important;
+    line-height: inherit !important;
+}
+
+.collapsible-label {
+    font-weight: 700;
+}
+
+.collapsible-state {
+    font-weight: 400;
+    white-space: nowrap;
+}
+
+.osrs-local-scroll-surface > table,
+.osrs-local-scroll-surface > .osrs-disclosure-body > table,
+.collapsible-content.osrs-local-scroll-surface > table,
+.collapsible-content.osrs-local-scroll-surface > .osrs-disclosure-body > table {
+    clear: none !important;
+    float: none !important;
+    margin-inline: 0 !important;
+    max-width: none !important;
+    width: max-content !important;
+}
+
+/* An obsolete outer owner can remain as harmless structure around a disclosure, but never as
+   a second physical scrollport. The promoted inner content is the sole direct-manipulation area. */
+.osrs-demoted-scroll-surface {
+    overflow-x: visible !important;
+    overflow-y: visible !important;
+    overscroll-behavior-inline: auto;
+    touch-action: auto;
+}
+
+/* The article's primary infobox is a responsive card, never a horizontal viewport.
+   Keep the card chrome at 100%; the table itself must stay inset of that chrome. */
+.collapsible-primary-infobox,
+.collapsible-primary-infobox .collapsible-content {
+    box-sizing: border-box !important;
     max-width: 100% !important;
     min-width: 0 !important;
-    width: fit-content !important;
-    width: -moz-fit-content !important;
-}
-
-/* Locally rendered article controls. */
-.osrs-calculator-layout {
-    align-items: start;
-    display: grid;
-    gap: 0.75em;
-    grid-template-columns: minmax(0, 1fr);
-    margin: 0.75em 0 1em;
-}
-
-.osrs-calculator-templates {
-    float: none !important;
-    margin: 0 !important;
-    max-width: 100%;
+    overflow-x: hidden !important;
     width: 100% !important;
 }
 
-@media (min-width: 560px) {
-    .osrs-calculator-layout {
-        grid-template-columns: minmax(8rem, 14rem) minmax(0, 1fr);
-    }
-
-    .osrs-calculator-templates {
-        width: auto !important;
-    }
+.collapsible-primary-infobox table.main-infobox,
+.collapsible-container table.main-infobox,
+.collapsible-container table.infobox:not(.infobox-bonuses),
+.collapsible-container .tabber,
+.collapsible-container .osrs-tabber {
+    box-sizing: border-box !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    margin-inline: 0 !important;
+    overflow-x: hidden !important;
 }
 
-.osrs-calculator-panel,
-.osrs-mmg-rate-control,
-.osrs-calculator-result {
-    background: var(--wikitable-bg);
-    border: 1px solid var(--wikitable-border);
-    color: var(--text-color);
+.collapsible-primary-infobox table.main-infobox {
+    clear: both !important;
+    float: none !important;
+    table-layout: fixed !important;
 }
 
-.osrs-calculator-panel {
-    margin: 0;
-    padding: 0.75em;
+.collapsible-primary-infobox th,
+.collapsible-primary-infobox td {
+    overflow-wrap: anywhere;
+    white-space: normal !important;
 }
 
-.osrs-calculator-panel h2 {
+.osrs-intrinsic-table {
+    display: block !important;
+    max-width: 100% !important;
+    overflow: visible !important;
+    width: fit-content !important;
+    -webkit-overflow-scrolling: touch;
+}
+
+.osrs-intrinsic-table table.wikitable,
+table.osrs-intrinsic-recipe-table {
+    min-width: 0 !important;
+    width: fit-content !important;
+}
+
+.collapsible-container.collapsible-intrinsic-table,
+.collapsible-container:has(.osrs-recipe-unit) {
+    display: block !important;
+    margin-inline: 0 !important;
+    max-width: 100% !important;
+    overflow: hidden !important;
+    width: fit-content !important;
+}
+
+.collapsible-container.collapsible-intrinsic-table .collapsible-content,
+.collapsible-container:has(.osrs-recipe-unit) .collapsible-content,
+.collapsible-container:has(.osrs-recipe-unit) .collapsible-close-footer {
+    max-width: 100% !important;
+    width: fit-content !important;
+}
+
+/* Recipe disclosures are full-width cards like other tables, not shrink-wrapped floats. */
+.collapsible-container.collapsible-recipe-table,
+.collapsible-container.collapsible-recipe-table.collapsible-float-right,
+.collapsible-container.collapsible-recipe-table.collapsible-float-left {
+    clear: both !important;
+    float: none !important;
+    margin-inline: 0 !important;
+    max-width: 100% !important;
+    width: 100% !important;
+}
+
+/* Map tables have a platform-native map in each map cell. They must remain a single,
+   viewport-contained semantic table so every overlay can be measured and aligned.
+   Any cell that hosts a kartographer placeholder is the map column; do not assume
+   a two-column Destination|Map shape or first/last-child percentages. */
+.collapsible-map-table,
+.collapsible-map-table .collapsible-content,
+.collapsible-map-table table.osrs-map-table {
+    box-sizing: border-box !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    overflow-x: hidden !important;
+    width: 100% !important;
+}
+
+.collapsible-map-table table.osrs-map-table {
+    clear: both !important;
+    float: none !important;
+    table-layout: auto !important;
+}
+
+.collapsible-map-table table.osrs-map-table > tr > :is(th, td):not(:has(.mw-kartographer-map)),
+.collapsible-map-table table.osrs-map-table > :is(thead, tbody, tfoot) > tr > :is(th, td):not(:has(.mw-kartographer-map)) {
+    white-space: nowrap;
+    width: auto;
+}
+
+.collapsible-map-table table.osrs-map-table > tr > :is(th, td):has(.mw-kartographer-map),
+.collapsible-map-table table.osrs-map-table > :is(thead, tbody, tfoot) > tr > :is(th, td):has(.mw-kartographer-map),
+table.osrs-map-table > tr > :is(th, td):has(.mw-kartographer-map),
+table.osrs-map-table > :is(thead, tbody, tfoot) > tr > :is(th, td):has(.mw-kartographer-map) {
+    width: 99% !important;
+    min-width: 0 !important;
+    white-space: normal !important;
+}
+
+.collapsible-map-table .mw-kartographer-map,
+.mw-kartographer-map {
+    box-sizing: border-box !important;
+    aspect-ratio: var(--osrs-map-aspect, 1 / 1);
+    max-width: 100% !important;
+    min-height: 0;
+    width: 100% !important;
+    margin-inline: auto;
+    display: block;
+}
+
+/* OSRS_SHARED_ARTICLE_SEMANTICS_START
+   Canonical compact table/disclosure tokens. Keep this marked block identical in both
+   packaged assets; platform-only accessibility or renderer work belongs outside it. */
+:root {
+    /* Both native clients inject the persisted scalar under this shared name. */
+    --osrs-article-user-text-scale: 1;
+    --osrs-reader-text-size: calc(100% * var(--osrs-article-user-text-scale, 1));
+    /* Dynamic Type/font-scale and the persisted reader scale are independent factors. */
+    --osrs-reader-accessibility-text-size: calc(
+        16px * var(--osrs-article-text-scale, 1) * var(--osrs-article-user-text-scale, 1)
+    );
+    --osrs-table-cell-padding-block: 0.32em;
+    --osrs-table-cell-padding-inline: 0.48em;
+    --osrs-infobox-cell-padding-block: 0.24em;
+    --osrs-infobox-cell-padding-inline: 0.42em;
+    --osrs-disclosure-control-padding-block: 0.5rem;
+    --osrs-disclosure-control-padding-inline: 0.625rem;
+    --osrs-disclosure-content-inline-inset: 12px;
+    --osrs-disclosure-content-block-inset: 8px;
+    --osrs-disclosure-label-gap: 0.35em;
+    --osrs-table-icon-label-gap: 0.25em;
+    --osrs-infobox-state-control-gap: 0.25rem;
+    --osrs-infobox-state-control-padding-block: 0.25em;
+    --osrs-infobox-state-control-padding-inline: 0.5em;
+    --osrs-intrinsic-cell-min-inline-size: min(5rem, 24vw);
+    --osrs-intrinsic-cell-max-inline-size: min(16rem, 44vw);
+    /* Size bonuses to their cells instead of a viewport-width floor that stretched later columns. */
+    --osrs-bonuses-min-inline-size: 0;
+    --osrs-bonuses-label-inline-size: clamp(8rem, 34vw, 10rem);
+    --osrs-bonuses-state-inline-size: clamp(4.5rem, 20vw, 5.75rem);
+    --osrs-infobox-line-height: 1.3;
+}
+
+body {
+    font-size: var(--osrs-reader-text-size, 100%);
+}
+
+body.osrs-accessibility-reflow {
+    font-size: var(
+        --osrs-reader-accessibility-text-size,
+        calc(16px * var(--osrs-article-text-scale, 1) * var(--osrs-article-user-text-scale, 1))
+    ) !important;
+}
+
+body.osrs-accessibility-reflow .collapsible-content,
+body.osrs-accessibility-reflow .osrs-disclosure-body,
+body.osrs-accessibility-reflow .collapsible-content :is(th, td),
+body.osrs-accessibility-reflow .osrs-disclosure-body :is(th, td) {
+    font-size: inherit !important;
+}
+
+body.osrs-accessibility-reflow figure,
+body.osrs-accessibility-reflow .osrs-balanced-vignette {
+    float: none !important;
+}
+
+body.osrs-accessibility-reflow .messagebox {
+    float: none !important;
+    display: block !important;
+    max-width: 100% !important;
+}
+
+.collapsible-header,
+.collapsible-close-button {
+    align-items: center;
+    box-sizing: border-box;
+    column-gap: var(--osrs-disclosure-label-gap);
+    min-height: 44px;
+    padding: var(--osrs-disclosure-control-padding-block)
+        var(--osrs-disclosure-control-padding-inline) !important;
+}
+
+.collapsible-header .title-wrapper,
+.collapsible-close-button .title-wrapper {
+    align-items: baseline;
+    column-gap: var(--osrs-disclosure-label-gap);
+    display: flex;
+    flex-wrap: wrap;
+    min-width: 0;
+    row-gap: 0.1em;
+}
+
+.collapsible-header .collapsible-label,
+.collapsible-header .collapsible-state {
+    margin: 0 !important;
+}
+
+.collapsible-header .icon,
+.collapsible-close-button .icon {
+    flex: 0 0 18px;
+    height: 18px;
+    margin-inline-start: var(--osrs-disclosure-label-gap);
+    width: 18px;
+}
+
+.infobox-buttons,
+.switch-infobox-triggers {
+    column-gap: var(--osrs-infobox-state-control-gap) !important;
+    row-gap: var(--osrs-infobox-state-control-gap) !important;
+}
+
+.switch-infobox .switch-infobox-triggers .button,
+.infobox-switch .infobox-buttons .button,
+.infobox-wrapper .infobox-buttons .button,
+.infobox .infobox-buttons .button {
+    margin: 0 !important;
+    min-width: 0 !important;
+    width: auto !important;
+    flex: 0 0 auto !important;
+    -webkit-appearance: none;
+    appearance: none;
+    padding: var(--osrs-infobox-state-control-padding-block)
+        var(--osrs-infobox-state-control-padding-inline) !important;
+}
+
+table.wikitable:not(.navbox):not(.messagebox) > tr > :is(th, td):not(.no-cell-spacing):not(.infobox-padding),
+table.wikitable:not(.navbox):not(.messagebox) > :is(thead, tbody, tfoot) > tr > :is(th, td):not(.no-cell-spacing):not(.infobox-padding) {
+    box-sizing: border-box;
+    line-height: 1.25;
+    padding: var(--osrs-table-cell-padding-block)
+        var(--osrs-table-cell-padding-inline) !important;
+    vertical-align: middle;
+}
+
+table.infobox > tr > :is(th, td):not(.infobox-full-width-content):not(.infobox-padding):not(.no-cell-spacing),
+table.infobox > tbody > tr > :is(th, td):not(.infobox-full-width-content):not(.infobox-padding):not(.no-cell-spacing) {
+    line-height: var(--osrs-infobox-line-height) !important;
+    padding: var(--osrs-infobox-cell-padding-block)
+        var(--osrs-infobox-cell-padding-inline) !important;
+}
+
+table.infobox .infobox-subheader {
+    line-height: 1.2 !important;
+}
+
+table.infobox :is(th, td).infobox-padding:empty {
+    border: 0 !important;
+    height: 0 !important;
+    line-height: 0 !important;
+    padding: 0 !important;
+}
+
+/* Bonuses/state infoboxes remain genuinely horizontally scrollable on phones, but their
+   intrinsic geometry is content- and viewport-derived rather than the legacy 556/250/153px
+   constants. The primary article infobox is excluded and retains its viewport-fit contract. */
+table.infobox-bonuses:not(.main-infobox) {
+    max-width: 100% !important;
+    min-width: 0 !important;
+    table-layout: fixed !important;
+    width: 100% !important;
+}
+
+table.infobox-bonuses:not(.main-infobox) :is(th, td) {
+    line-height: var(--osrs-infobox-line-height) !important;
+}
+
+/* Equal-share leftover width so table-layout:auto does not dump extra
+   space on the last stat column (the ranged column on bonus tables). */
+.infobox.infobox-bonuses > tbody > tr > :is(th, td),
+table.infobox-bonuses > tbody > tr > :is(th, td),
+table.infobox-bonuses :is(th, td) {
+    text-align: center !important;
+    vertical-align: middle !important;
+}
+
+/* Desktop wiki spacer rows sit between bonus section labels and the icon
+   row. They read as an empty line on phones; collapse them everywhere. */
+table.infobox-bonuses tr:has(> .infobox-padding:only-child),
+table.infobox-bonuses :is(th, td).infobox-padding {
+    display: none !important;
+    border: 0 !important;
+    height: 0 !important;
+    line-height: 0 !important;
+    padding: 0 !important;
+}
+
+table.infobox-bonuses :is(th, td).infobox-nested {
+    min-width: 2.25em !important;
+    box-sizing: border-box;
+    padding: 0.12em 0.08em !important;
+    line-height: 1.15 !important;
+    vertical-align: middle !important;
+    text-align: center !important;
+    height: auto !important;
+    overflow: visible !important;
+}
+
+/* Inner combat grids share leftover width instead of stretching the last cell. */
+table.infobox-bonuses table {
+    table-layout: fixed !important;
+    width: 100% !important;
+}
+
+/* Nested combat cells contain an icon and sometimes a short label. Keep them
+   as inline content so vertical-align and text-align work. A 100% height flex
+   wrapper on every descendant inflates the cell and top-aligns the first child. */
+table.infobox-bonuses :is(th, td).infobox-nested :is(a, .mw-default-size, span) {
+    display: inline-block !important;
+    width: auto !important;
+    max-width: 100% !important;
+    min-height: 0 !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    vertical-align: middle !important;
+}
+
+table.infobox-bonuses :is(th, td).infobox-nested img {
+    display: inline-block !important;
+    margin-inline: auto;
+    max-width: 2em !important;
+    max-height: 2em !important;
+    height: auto !important;
+    width: auto !important;
+    object-fit: contain !important;
+    vertical-align: middle !important;
+}
+
+table.infobox-bonuses [data-attr-param="slot_link"] {
+    text-align: center !important;
+    white-space: nowrap !important;
+}
+
+table.infobox-bonuses [data-attr-param="slot_link"] a {
+    display: inline-block !important;
+    width: 100% !important;
+    text-align: center !important;
+    white-space: nowrap !important;
+}
+
+table.infobox-bonuses:not(.main-infobox) .infobox-subheader {
+    max-width: none !important;
+    min-width: 0 !important;
+    overflow-wrap: normal !important;
+    word-break: keep-all !important;
+    white-space: nowrap !important;
+    width: auto !important;
+    line-height: 1.2 !important;
+    padding-block: 0.18em !important;
+    vertical-align: middle !important;
+}
+
+table.infobox-bonuses:not(.main-infobox) .infobox-subheader:not([colspan]) {
+    min-width: 3.1em !important;
+    width: 3.1em !important;
+}
+
+table.infobox-bonuses:not(.main-infobox) .infobox-bonuses-image {
+    max-width: var(--osrs-bonuses-state-inline-size) !important;
+    min-width: var(--osrs-bonuses-state-inline-size) !important;
+    width: var(--osrs-bonuses-state-inline-size) !important;
+}
+
+table.infobox-bonuses:not(.main-infobox) .infobox-bonuses-image img {
+    height: auto !important;
+    max-width: calc(var(--osrs-bonuses-state-inline-size) - 0.75rem) !important;
+    width: auto !important;
+}
+
+table.infobox-bonuses:not(.main-infobox) :is(th, td):not(.infobox-bonuses-image):not(.infobox-padding) {
+    white-space: nowrap;
+}
+
+/* Wiki templates pin skill/item icon wrappers to 1em. That makes table icons
+   as short as the adjacent quantity text and top-aligns them in the leftover
+   cell. Restore a readable icon size and middle alignment in tables only. */
+:is(td, th) .scp,
+:is(td, th) .scp[style] {
+    display: inline-flex !important;
+    align-items: center !important;
+    height: auto !important;
+    min-height: 0 !important;
+    line-height: 1 !important;
+    vertical-align: middle !important;
+}
+
+:is(td, th) .scp a {
+    display: inline-flex !important;
+    align-items: center !important;
+    line-height: 1.2 !important;
+    min-height: 0 !important;
+}
+
+:is(td, th) :is(.scp, .inventory-image, .mw-default-size, .osrs-inline-icon-wrapper, .osrs-inline-icon) {
+    vertical-align: middle !important;
+}
+
+:is(td, th):not(.infobox-bonuses-image) :is(.scp, .inventory-image, .mw-default-size) img,
+:is(td, th):not(.infobox-bonuses-image) img.osrs-inline-icon,
+:is(td, th):not(.infobox-bonuses-image) img.mw-file-element {
+    vertical-align: middle !important;
+}
+
+:is(td, th) :is(.scp, .inventory-image, .plinkp-template) img.mw-file-element,
+:is(td, th) img.osrs-inline-icon {
+    max-height: 2em !important;
+    max-width: 2em !important;
+    width: auto !important;
+    height: auto !important;
+    object-fit: contain !important;
+}
+
+:is(td, th) {
+    vertical-align: middle;
+}
+
+table.wikitable :is(th, td) > :is(
+    span.mw-default-size,
+    .plinkp-template,
+    .league-badge,
+    .league-region,
+    .scp,
+    .coins
+):not(:last-child) {
+    margin-inline-end: var(--osrs-table-icon-label-gap) !important;
+}
+
+.collapsible-intrinsic-table table.wikitable {
+    table-layout: auto !important;
+}
+
+.collapsible-intrinsic-table table.wikitable > tr > :is(th, td):not([colspan]),
+.collapsible-intrinsic-table table.wikitable > :is(thead, tbody, tfoot) > tr > :is(th, td):not([colspan]) {
+    max-inline-size: var(--osrs-intrinsic-cell-max-inline-size);
+    min-inline-size: var(--osrs-intrinsic-cell-min-inline-size);
+    overflow-wrap: anywhere;
+    white-space: normal !important;
+}
+
+.recipe-table.osrs-recipe-unit {
+    box-sizing: border-box;
+    display: grid !important;
+    gap: 0.75rem;
+    margin: 0.75em 0 !important;
+    max-width: 100% !important;
+    overflow: visible !important;
+    width: 100% !important;
+}
+
+.recipe-table.osrs-recipe-unit > .collapsible-recipe-table,
+.recipe-table.osrs-recipe-unit > .collapsible-recipe-table:not(.collapsed) > .collapsible-content {
+    box-sizing: border-box !important;
+    float: none !important;
+    margin: 0 !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    width: 100% !important;
+}
+
+.recipe-table.osrs-recipe-unit > .collapsible-recipe-table {
+    display: block !important;
+    overflow: hidden !important;
+}
+
+.recipe-table.osrs-recipe-unit > .collapsible-recipe-table:not(.collapsed) > .collapsible-content {
+    overflow-x: auto !important;
+    padding-inline: 0 !important;
+    padding-block: 0 !important;
+}
+
+/* Collapsed disclosures must not keep content-box padding. Recipe cards previously
+   forced 12px top padding with !important, which made height:0 resolve to 12px. */
+.collapsible-container.collapsed > .collapsible-content,
+.recipe-table.osrs-recipe-unit > .collapsible-recipe-table.collapsed > .collapsible-content {
+    box-sizing: border-box !important;
+    height: 0 !important;
+    max-height: 0 !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border-width: 0 !important;
+    overflow: hidden !important;
+}
+
+.recipe-table.osrs-recipe-unit table.osrs-intrinsic-recipe-table {
+    display: table !important;
+    table-layout: auto !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin-inline: 0 !important;
+}
+
+.collapsible-recipe-table caption[aria-hidden="true"][data-osrs-caption-hidden-by-disclosure="true"] {
+    display: none !important;
+}
+
+.collapsible-container.collapsible-recipe-table .collapsible-close-footer {
+    display: block !important;
+    width: 100% !important;
+}
+
+.osrs-local-scroll-surface,
+.collapsible-container:not(.collapsed) > .collapsible-content {
+    scrollbar-gutter: stable;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(80, 70, 55, 0.45) rgba(80, 70, 55, 0.12);
+}
+
+/* Keep disclosure bodies nested inside the card chrome.
+   Never pad the overflow:auto scrollport: width:100% descendants size to
+   that padding box and kiss the header. Inset a width:auto inner column
+   instead; block margins shrink the used width. Card chrome uses the
+   table-header fill because --colorsurfacevariant matches the page and
+   infobox body in dark theme, which made a 12px inset invisible. */
+.collapsible-container {
+    background-color: var(--wikitable-header-bg) !important;
+}
+
+.collapsible-header,
+.collapsible-close-footer,
+.collapsible-close-button {
+    background-color: var(--wikitable-header-bg) !important;
+}
+
+.collapsible-container:not(.collapsed) > .collapsible-content {
+    box-sizing: border-box !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    padding-inline: 0 !important;
+    padding-block: 0 !important;
+    border-inline-width: 0 !important;
+    background-color: transparent !important;
+}
+
+.collapsible-container:not(.collapsed) > .collapsible-content > .osrs-disclosure-body,
+.recipe-table.osrs-recipe-unit > .collapsible-recipe-table:not(.collapsed) > .collapsible-content > .osrs-disclosure-body {
+    box-sizing: border-box !important;
+    display: flow-root !important;
+    width: auto !important;
+    max-width: none !important;
+    min-width: 0 !important;
+    margin-block: 0 !important;
+    margin-inline: var(--osrs-disclosure-content-inline-inset) !important;
+    padding-inline: 0 !important;
+    padding-block: var(--osrs-disclosure-content-block-inset) !important;
+    overflow-x: auto !important;
+}
+
+.collapsible-container .infobox,
+.collapsible-container table.infobox,
+.osrs-disclosure-body table,
+.osrs-disclosure-body .infobox-switch {
+    float: none !important;
+    clear: none !important;
+}
+
+.collapsible-container.collapsible-primary-infobox:not(.collapsed) > .collapsible-content > .osrs-disclosure-body,
+.collapsible-container:not(.collapsed) > .collapsible-content > .osrs-disclosure-body:has(> table.infobox),
+.collapsible-container:not(.collapsed) > .collapsible-content > .osrs-disclosure-body:has(> .infobox-switch) {
+    overflow-x: hidden !important;
+}
+
+.osrs-local-scroll-surface > .osrs-disclosure-body,
+.collapsible-content.osrs-local-scroll-surface > .osrs-disclosure-body {
+    overflow-x: auto !important;
+}
+
+.collapsible-container:not(.collapsed) table.infobox-bonuses,
+.collapsible-container:not(.collapsed) table.osrs-map-table,
+.collapsible-container:not(.collapsed) .osrs-intrinsic-table {
+    margin-inline: 0 !important;
+}
+
+/* Map tables need leftover width in the kartographer column. Do not inset
+   that grid; the 12px gutter is for infobox/recipe cards. */
+.collapsible-map-table:not(.collapsed) > .collapsible-content > .osrs-disclosure-body {
+    margin-inline: 0 !important;
+    width: 100% !important;
+    overflow-x: hidden !important;
+}
+
+.collapsible-map-table table.osrs-map-table > :is(thead, tbody, tfoot) > tr > :is(th, td):has(.mw-kartographer-map),
+.osrs-disclosure-body > table.osrs-map-table > :is(thead, tbody, tfoot) > tr > :is(th, td):has(.mw-kartographer-map),
+table.osrs-map-table > :is(thead, tbody, tfoot) > tr > :is(th, td):has(.mw-kartographer-map) {
+    width: 99% !important;
+    min-width: 0 !important;
+    white-space: normal !important;
+}
+
+.osrs-local-scroll-surface.osrs-scroll-affordance,
+.collapsible-container:not(.collapsed) > .collapsible-content.osrs-scroll-affordance {
+    overflow-x: scroll !important;
+}
+
+.osrs-local-scroll-surface::-webkit-scrollbar,
+.collapsible-container:not(.collapsed) > .collapsible-content::-webkit-scrollbar {
+    height: 6px;
+    display: block;
+}
+
+.osrs-local-scroll-surface::-webkit-scrollbar-track,
+.collapsible-container:not(.collapsed) > .collapsible-content::-webkit-scrollbar-track {
+    background: rgba(80, 70, 55, 0.12);
+    border-radius: 3px;
+}
+
+.osrs-local-scroll-surface::-webkit-scrollbar-thumb,
+.collapsible-container:not(.collapsed) > .collapsible-content::-webkit-scrollbar-thumb {
+    background: rgba(80, 70, 55, 0.45);
+    border-radius: 3px;
+}
+
+/* MediaWiki hides empty parser leftovers. Without this, a stray `*` after a
+   table renders as a lone bullet. */
+.mw-empty-elt,
+li.mw-empty-elt,
+p.mw-empty-elt {
+    display: none !important;
+}
+
+ul:not(:has(> li:not(.mw-empty-elt))),
+ol:not(:has(> li:not(.mw-empty-elt))) {
+    display: none !important;
+}
+
+/* Wide data tables keep one row height and scroll horizontally. Infoboxes,
+   recipe cards, and map tables stay viewport-fit. Map placeholders are
+   width:100% of their cell, so max-content + nowrap collapses that column
+   to min-content 0 on WebKit. */
+.collapsible-container:not(.collapsible-primary-infobox):not(.osrs-recipe-unit) table.wikitable:not(.infobox):not(.infobox-bonuses):not(.navbox):not(.osrs-map-table),
+.osrs-local-scroll-surface > table.wikitable:not(.osrs-map-table),
+.osrs-local-scroll-surface > .osrs-disclosure-body > table.wikitable:not(.osrs-map-table) {
+    width: max-content !important;
+    max-width: none !important;
+    table-layout: auto !important;
+}
+
+.collapsible-container:not(.collapsible-primary-infobox):not(.osrs-recipe-unit) table.wikitable:not(.infobox):not(.infobox-bonuses):not(.navbox):not(.osrs-map-table) :is(th, td),
+.osrs-local-scroll-surface > table.wikitable:not(.osrs-map-table) :is(th, td),
+.osrs-local-scroll-surface > .osrs-disclosure-body > table.wikitable:not(.osrs-map-table) :is(th, td) {
+    white-space: nowrap;
+}
+
+.collapsible-map-table table.osrs-map-table,
+table.osrs-map-table {
+    width: 100% !important;
+    max-width: 100% !important;
+    table-layout: auto !important;
+}
+
+.coins {
+    color: var(--coins-color, inherit);
+}
+
+.coins.coins-pos,
+.coins-pos {
+    color: var(--coins-pos-color) !important;
+}
+
+.coins.coins-neg,
+.coins-neg {
+    color: var(--coins-neg-color) !important;
+}
+
+.tabber .tabbernav,
+ul.tabbernav {
+    list-style: none !important;
+    list-style-image: none !important;
+    display: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+}
+
+.tabber .tabbernav > li,
+ul.tabbernav > li {
+    list-style: none !important;
+    list-style-image: none !important;
+    display: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+.tabber.osrs-tabber,
+.tabber.tabberlive {
+    background: var(--body-main, transparent);
+    border: 1px solid var(--body-border, rgba(127, 127, 127, 0.35));
+    border-radius: 10px;
+    box-sizing: border-box;
+    margin: 0.85em 0;
+    overflow: hidden;
+}
+
+.osrs-tabber-toolbar {
+    align-items: center;
+    background: var(--body-light, rgba(127, 127, 127, 0.12));
+    border-bottom: 1px solid var(--body-border, rgba(127, 127, 127, 0.35));
+    display: flex;
+    gap: 0.5rem;
+    padding: 0.45rem 0.65rem;
+}
+
+.osrs-tabber-toolbar-label {
+    color: var(--text-color, inherit);
+    flex: 0 0 auto;
+    font-size: 0.85em;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.osrs-tabber-select {
+    appearance: none;
+    background-color: var(--body-main, transparent);
+    background-image: linear-gradient(45deg, transparent 50%, currentColor 50%),
+        linear-gradient(135deg, currentColor 50%, transparent 50%);
+    background-position: calc(100% - 16px) calc(50% - 3px), calc(100% - 10px) calc(50% - 3px);
+    background-repeat: no-repeat;
+    background-size: 6px 6px, 6px 6px;
+    border: 1px solid var(--body-border, rgba(127, 127, 127, 0.45));
+    border-radius: 8px;
+    color: var(--text-color, inherit);
+    flex: 1 1 auto;
+    font: inherit;
+    min-height: 36px;
+    padding: 0.35rem 1.75rem 0.35rem 0.65rem;
+}
+
+.osrs-tabber-panel {
+    padding: 0.45rem 0.5rem 0.55rem;
+}
+
+.osrs-tabber-panel > .tabbertab,
+.tabber.tabberlive > .osrs-tabber-panel > .tabbertab {
+    background: transparent;
     border: 0;
-    font-family: sans-serif;
-    font-size: 1.1em;
-    margin: 0 0 0.75em;
+    margin: 0;
     padding: 0;
 }
 
-.osrs-calculator-row,
-.osrs-mmg-rate-control {
-    align-items: center;
-    display: grid;
-    gap: 0.5em;
-    grid-template-columns: minmax(7em, 1fr) auto;
-    margin: 0.45em 0;
+.tabber.tabberlive > .tabbertab,
+.tabber.tabberlive > .osrs-tabber-panel > .tabbertab {
+    display: none;
 }
 
-.osrs-calculator-row input,
-.osrs-mmg-rate-control input {
-    background: var(--ooui-input);
-    border: 1px solid var(--ooui-input-border);
-    border-radius: 4px;
-    box-sizing: border-box;
-    color: var(--text-color);
-    font: inherit;
-    min-height: 40px;
-    min-width: 0;
-    padding: 0.25em 0.5em;
-}
-
-.osrs-stepper {
-    align-items: stretch;
-    display: grid;
-    grid-template-columns: 40px minmax(4em, 1fr) 40px;
-}
-
-.osrs-stepper button,
-.osrs-calculator-lookup,
-.osrs-mmg-rate-control button {
-    background: var(--ooui-normal);
-    border: 1px solid var(--ooui-normal-border);
-    border-radius: 4px;
-    box-sizing: border-box;
-    color: var(--ooui-text);
-    font: inherit;
-    font-size: 1.125rem;
-    font-weight: 700;
-    min-height: 40px;
-    min-width: 40px;
-    padding: 0.25em 0.5em;
-}
-
-.osrs-stepper button:active,
-.osrs-calculator-lookup:active,
-.osrs-mmg-rate-control button:active {
-    background: var(--ooui-normal--hover, var(--ooui-normal));
-}
-
-.osrs-calculator-result {
-    margin: 0.75em 0;
-    padding: 0.6em 0.75em;
-}
-
-.osrs-mmg-rate-control {
-    gap: 0.4em;
-    grid-template-columns: 40px minmax(4.25em, 1fr) 40px 40px 40px;
-    margin: 0.75em 0;
-    padding: 0.5em;
-}
-
-.osrs-mmg-rate-control label {
-    align-items: center;
-    display: contents;
-}
-
-.osrs-mmg-label-text {
-    font-weight: 600;
-    grid-column: 1 / -1;
-    grid-row: 1;
-    min-width: 0;
-}
-
-.osrs-mmg-rate-control input {
-    grid-column: 2;
-    grid-row: 2;
-    width: 100%;
-}
-
-.osrs-mmg-rate-control button {
-    min-width: 40px;
-}
-
-.osrs-icon-button {
-    align-items: center;
-    display: inline-flex;
-    justify-content: center;
-}
-
-.osrs-mmg-info {
-    border-radius: 50% !important;
-    font-family: Georgia, serif !important;
-    font-style: italic;
-    grid-column: 1;
-    grid-row: 2;
-}
-
-.osrs-mmg-rate-control [data-osrs-mmg-action="decrement"] {
-    grid-column: 3;
-    grid-row: 2;
-}
-
-.osrs-mmg-rate-control [data-osrs-mmg-action="increment"] {
-    grid-column: 4;
-    grid-row: 2;
-}
-
-.osrs-mmg-rate-control [data-osrs-mmg-action="reset"] {
-    grid-column: 5;
-    grid-row: 2;
-}
-
-.osrs-mmg-reset svg {
+.tabber.tabberlive > .tabbertab.tabbertab-active,
+.tabber.tabberlive > .tabbertab[style=""],
+.tabber.tabberlive > .osrs-tabber-panel > .tabbertab.tabbertab-active,
+.tabber.tabberlive > .osrs-tabber-panel > .tabbertab[style=""] {
     display: block;
-    fill: none;
-    height: 20px;
-    stroke: currentColor;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-    stroke-width: 2;
-    width: 20px;
 }
 
-@media (max-width: 420px) {
-    .osrs-calculator-row {
-        grid-template-columns: 1fr;
-    }
+/* Local scrollports are direct-manipulation surfaces. They start at inline-start in JS and
+   intentionally have no gradient, shadow, or synthetic scroll-cue overlay. */
+.osrs-local-scroll-surface[data-osrs-scroll-start-initialized="true"] {
+    scroll-behavior: auto;
 }
 
-@media (min-width: 560px) {
-    .osrs-mmg-rate-control {
-        grid-template-columns: 40px max-content minmax(4.25em, 6em) 40px 40px 40px;
-    }
-
-    .osrs-mmg-label-text {
-        align-self: center;
-        grid-column: 2;
-        grid-row: 1;
-        white-space: nowrap;
-    }
-
-    .osrs-mmg-rate-control input {
-        grid-column: 3;
-        grid-row: 1;
-    }
-
-    .osrs-mmg-info {
-        grid-column: 1;
-        grid-row: 1;
-    }
-
-    .osrs-mmg-rate-control [data-osrs-mmg-action="decrement"] {
-        grid-column: 4;
-        grid-row: 1;
-    }
-
-    .osrs-mmg-rate-control [data-osrs-mmg-action="increment"] {
-        grid-column: 5;
-        grid-row: 1;
-    }
-
-    .osrs-mmg-rate-control [data-osrs-mmg-action="reset"] {
-        grid-column: 6;
-        grid-row: 1;
-    }
+.osrs-scroll-cue-layer,
+.osrs-scroll-cue-layer::before,
+.osrs-scroll-cue-layer::after {
+    display: none !important;
+    opacity: 0 !important;
 }
+/* OSRS_SHARED_ARTICLE_SEMANTICS_END */
+
+/*
+ * Floor-number dialects. Wiki markup always contains GB and US variants plus
+ * [UK]/[US] help marks. Nested `.floornumber .floornumber-*` rules must not
+ * outrank the locale/setting selectors: equal specificity plus later source
+ * order previously kept both dialects visible in article body.
+ */
+.floornumber-us,
+.floornumber .floornumber-us {
+    display: none;
+}
+
+.floornumber-gb,
+.floornumber .floornumber-gb {
+    display: inline;
+}
+
+.floornumber-help,
+.floornumber .floornumber-help,
+.floornumber-setting-gb .floornumber-help,
+.floornumber-setting-us .floornumber-help,
+.floornumber-help .floor-convention {
+    display: inline !important;
+    color: var(--link-color, #0645ad);
+    cursor: pointer;
+}
+
+.floornumber-setting-gb .floornumber-us,
+.floornumber-setting-gb .floornumber .floornumber-us,
+.floornumber-setting-us .floornumber-gb,
+.floornumber-setting-us .floornumber .floornumber-gb {
+    display: none !important;
+}
+
+.floornumber-setting-gb .floornumber-gb,
+.floornumber-setting-gb .floornumber .floornumber-gb,
+.floornumber-setting-us .floornumber-us,
+.floornumber-setting-us .floornumber .floornumber-us {
+    display: inline !important;
+}
+
+ul.gallery,
+ul.gallery > li,
+li.gallerybox {
+    list-style: none !important;
+    list-style-image: none !important;
+}
+

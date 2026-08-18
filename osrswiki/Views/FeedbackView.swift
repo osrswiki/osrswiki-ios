@@ -159,11 +159,17 @@ struct FeedbackView: View {
                 return
             }
 
+            let currentTheme = themeManager.currentTheme
+            if #available(iOS 26.0, *) {
+                navigationController.navigationBar.tintColor = UIColor(currentTheme.primary)
+                navigationController.overrideUserInterfaceStyle = themeManager.currentColorScheme == .dark ? .dark : .light
+                return
+            }
+
             let appearance = UINavigationBarAppearance()
             appearance.configureWithOpaqueBackground()
 
             // Apply theme colors directly (matching AppearanceSettingsView)
-            let currentTheme = themeManager.currentTheme
             appearance.backgroundColor = UIColor(currentTheme.surface)
             appearance.titleTextAttributes = [.foregroundColor: UIColor(currentTheme.onSurface)]
             appearance.largeTitleTextAttributes = [.foregroundColor: UIColor(currentTheme.onSurface)]
@@ -292,8 +298,7 @@ struct osrsFeedbackFormView: View {
                 }
             }
             .background(.osrsBackground)
-            .toolbarBackground(.osrsSurface, for: .navigationBar)
-            .toolbarBackground(.visible, for: .navigationBar)
+            .modifier(osrsLegacyFeedbackNavigationSurface())
             .toolbarColorScheme(themeManager.currentColorScheme, for: .navigationBar)
         }
     }
@@ -501,12 +506,27 @@ struct osrsFeedbackFormView: View {
                     isPresented = false
                 case .failure(let error):
                     if let feedbackError = error as? osrsFeedbackError {
-                        onError(feedbackError.localizedDescription)
+                        print("Feedback submission failed: \(feedbackError)")
+                        onError("Feedback could not be sent. Please try again.")
                     } else {
-                        onError("An unexpected error occurred: \(error.localizedDescription)")
+                        print("Unexpected feedback failure: \(error)")
+                        onError("Feedback could not be sent. Please try again.")
                     }
                 }
             }
+        }
+    }
+}
+
+private struct osrsLegacyFeedbackNavigationSurface: ViewModifier {
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            content
+        } else {
+            content
+                .toolbarBackground(.osrsSurface, for: .navigationBar)
+                .toolbarBackground(.visible, for: .navigationBar)
         }
     }
 }

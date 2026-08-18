@@ -107,7 +107,7 @@ struct ProxyInterceptorTestView: View {
         
         // Test 5: Service integration test
         addTestResult("📋 Test 5: Service Integration")
-        testServiceIntegration()
+        await testServiceIntegration()
         
         // Final results
         addTestResult("🏁 Test completed!")
@@ -135,9 +135,9 @@ struct ProxyInterceptorTestView: View {
         }
     }
     
-    private func testServiceIntegration() {
+    private func testServiceIntegration() async {
         // Test ProxyInterceptorService methods
-        ProxyInterceptorService.shared.enableOfflineSaveMode(pageId: "test-page-123")
+        _ = await ProxyInterceptorService.shared.enableOfflineSaveMode(pageId: "test-page-123")
         addTestResult("✅ Service save mode enabled successfully")
         
         let hasCache = ProxyInterceptorService.shared.hasCompleteOfflineCache(pageId: "test-page-123")

@@ -23,32 +23,65 @@
     return null;
   }
 
-  async function fetchSeries(itemId) {
-    const url = `https://prices.runescape.wiki/api/v1/osrs/timeseries?timestep=24h&id=${encodeURIComponent(itemId)}`;
-    const resp = await fetch(url, { credentials: 'omit', mode: 'cors', cache: 'force-cache' });
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-    const json = await resp.json();
+  function resolveHighcharts() {
+    if (window.Highcharts && typeof window.Highcharts.stockChart === 'function') {
+      return window.Highcharts;
+    }
+    // MediaWiki's AMD `define` captures Highcharts' UMD build, so the global
+    // never appears. Recover the module when requirejs is already on the page.
+    try {
+      if (typeof require === 'function') {
+        const mod = require('highcharts/highstock') || require('highcharts');
+        if (mod && typeof mod.stockChart === 'function') {
+          window.Highcharts = mod;
+          return mod;
+        }
+      }
+    } catch (e) {}
+    return null;
+  }
+
+  function seriesFromPayload(json) {
     const data = Array.isArray(json?.data) ? json.data : [];
     const series = [];
     for (const p of data) {
       const mid = toMidPrice(p);
       if (typeof mid === 'number' && typeof p.timestamp === 'number') {
-        // API timestamp in seconds
         series.push([p.timestamp * 1000, mid]);
       }
     }
     return series;
   }
 
+  async function fetchSeries(itemId) {
+    const url = `https://prices.runescape.wiki/api/v1/osrs/timeseries?timestep=24h&id=${encodeURIComponent(itemId)}`;
+    if (window.OsrsWikiBridge && typeof window.OsrsWikiBridge.fetchText === 'function') {
+      const raw = window.OsrsWikiBridge.fetchText(url);
+      if (raw) return seriesFromPayload(JSON.parse(raw));
+    }
+    const controller = typeof AbortController === 'function' ? new AbortController() : null;
+    const timer = controller ? setTimeout(() => controller.abort(), 4000) : null;
+    try {
+      const resp = await fetch(url, {
+        credentials: 'omit',
+        mode: 'cors',
+        cache: 'no-cache',
+        signal: controller ? controller.signal : undefined,
+        headers: { 'Accept': 'application/json' }
+      });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      return seriesFromPayload(await resp.json());
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  }
+
   function ensureStylesInjected() {
     if (document.getElementById('ge-charts-style')) return;
     const css = `
-      .GEdatachart.smallChart { width: 100% !important; max-width: 100% !important; overflow: visible !important; height: auto !important; }
-      .GEChartBox { width: 100%; margin: 0 !important; padding: 0 !important; }
-      /* Let Highcharts manage its own overflow; keep labels visible */
-      .GEdatachart.smallChart svg { overflow: visible !important; }
-      /* Ensure container doesn't clip labels */
-      .GEdatachart.smallChart .highcharts-container { overflow: visible !important; }
+      .GEdatachart.smallChart { box-sizing:border-box; width:100% !important; max-width:100% !important; min-width:0 !important; overflow:hidden !important; height:220px !important; touch-action:pan-y; }
+      .GEChartBox { box-sizing:border-box; width:100%; max-width:100%; min-width:0; overflow:hidden; margin:0 !important; padding:0 !important; }
+      .GEdatachart.smallChart svg, .GEdatachart.smallChart .highcharts-container { max-width:100% !important; overflow:hidden !important; }
     `;
     const style = document.createElement('style');
     style.id = 'ge-charts-style';
@@ -64,7 +97,7 @@
   }
 
   function renderChart(container, series) {
-    if (!window.Highcharts || !window.Highcharts.stockChart) {
+    if (!resolveHighcharts()) {
       log('e', 'Highcharts.stockChart not available');
       return;
     }
@@ -79,13 +112,19 @@
     const opts = {
       chart: {
         height,
-        backgroundColor: 'white',
+        backgroundColor: 'transparent',
         reflow: true,
         marginLeft: 48,
         marginRight: 16,
+        marginTop: 22,
+        spacingTop: 18,
         spacingBottom: 10,
-        spacing: [4, 4, 4, 4],
-        animation: false
+        spacing: [18, 4, 10, 4],
+        animation: false,
+        zoomType: 'x',
+        pinchType: 'x',
+        panning: { enabled: true, type: 'x' },
+        resetZoomButton: { position: { align: 'right', x: -4, y: 4 } }
       },
       title: { text: null },
       subtitle: { text: null },
@@ -96,9 +135,17 @@
       scrollbar: { enabled: false },
       xAxis: {
         ordinal: false,
+        crosshair: { width: 1, color: '#8B7355', dashStyle: 'ShortDot' },
         lineWidth: 1,
         tickWidth: 0,
         labels: { style: { color: bodyColor, fontSize: '11px' } }
+      },
+      tooltip: {
+        enabled: true,
+        shared: true,
+        followTouchMove: true,
+        valueDecimals: 0,
+        valueSuffix: ' gp'
       },
       yAxis: {
         opposite: false,
@@ -129,11 +176,16 @@
       }]
     };
     try {
-      if (id) {
-        window.Highcharts.stockChart(id, opts);
-      } else {
-        window.Highcharts.stockChart(container, opts);
+      const chart = id ? window.Highcharts.stockChart(id, opts) : window.Highcharts.stockChart(container, opts);
+      container.setAttribute('role', 'application');
+      container.setAttribute('aria-label', 'Interactive Grand Exchange price chart. Drag or pinch horizontally to inspect prices.');
+      container.tabIndex = 0;
+      if (window.ResizeObserver) {
+        const observer = new ResizeObserver(() => chart.reflow());
+        observer.observe(container);
+        container.__osrsChartResizeObserver = observer;
       }
+      container.__osrsHighchart = chart;
     } catch (e) {
       log('e', 'Failed to render chart', e);
     }
@@ -146,31 +198,91 @@
       if (!dataEl || !chartEl) return;
       const itemId = dataEl.getAttribute('data-itemid');
       if (!itemId) return;
-      // Prevent duplicate renders
-      if (chartEl.dataset.rendered === '1') return;
-      chartEl.dataset.rendered = '1';
+      // Only skip work that already produced a chart. A failed or empty
+      // fetch must remain retryable — marking rendered first left the
+      // wiki "Loading" placeholder stuck forever.
+      if (chartEl.dataset.rendered === '1' && chartEl.__osrsHighchart) return;
+      if (chartEl.dataset.osrsChartPending === '1') return;
+      chartEl.dataset.osrsChartPending = '1';
       // Install swipe-back guard so horizontal drags inside the chart
       // don't trigger the app's back gesture.
       installSwipeBackGuard(chartEl);
 
-      fetchSeries(itemId)
-        .then(series => {
-          if (series.length) renderChart(chartEl, series);
-          else log('w', 'No series data for item', itemId);
-        })
-        .catch(err => log('e', `fetchSeries failed for ${itemId}`, err));
+      const attempt = (remaining) => {
+        fetchSeries(itemId)
+          .then(series => {
+            if (series.length) {
+              renderChart(chartEl, series);
+              chartEl.dataset.rendered = '1';
+              delete chartEl.dataset.osrsChartPending;
+              return;
+            }
+            log('w', 'No series data for item', itemId);
+            if (remaining > 0) {
+              setTimeout(() => attempt(remaining - 1), 400);
+            } else {
+              delete chartEl.dataset.osrsChartPending;
+              chartEl.textContent = 'Price history unavailable';
+            }
+          })
+          .catch(err => {
+            log('e', `fetchSeries failed for ${itemId}`, err);
+            if (remaining > 0) {
+              setTimeout(() => attempt(remaining - 1), 400);
+            } else {
+              delete chartEl.dataset.osrsChartPending;
+              if (!chartEl.__osrsHighchart) {
+                chartEl.textContent = 'Price history unavailable';
+              }
+            }
+          });
+      };
+      attempt(1);
     } catch (e) {
       log('e', 'initOne error', e);
     }
   }
 
+  function markUnavailable(boxes) {
+    boxes.forEach((box) => {
+      const chartEl = box.querySelector('.GEdatachart');
+      if (chartEl && !chartEl.__osrsHighchart && chartEl.dataset.rendered !== '1') {
+        chartEl.textContent = 'Price history unavailable';
+        chartEl.dataset.rendered = '0';
+      }
+    });
+  }
+
+  let highchartsDeadline = 0;
+  let highchartsWaitQueued = false;
+  let initStartedAt = 0;
+
   function initAll() {
     if (!document || !document.body) return;
     const boxes = document.querySelectorAll('.GEChartBox');
     if (!boxes || boxes.length === 0) return;
-    if (!window.Highcharts) {
-      log('w', 'Highcharts not yet loaded; delaying init');
-      setTimeout(initAll, 100);
+    if (!initStartedAt) initStartedAt = Date.now();
+    if (Date.now() - initStartedAt > 6000) {
+      log('e', 'GE chart init exceeded 6s budget');
+      markUnavailable(boxes);
+      return;
+    }
+    if (!resolveHighcharts()) {
+      const now = Date.now();
+      if (!highchartsDeadline) highchartsDeadline = now + 4000;
+      if (now >= highchartsDeadline) {
+        log('e', 'Highcharts never became available');
+        markUnavailable(boxes);
+        return;
+      }
+      if (!highchartsWaitQueued) {
+        highchartsWaitQueued = true;
+        log('w', 'Highcharts not yet loaded; delaying init');
+        setTimeout(() => {
+          highchartsWaitQueued = false;
+          initAll();
+        }, 100);
+      }
       return;
     }
     boxes.forEach(initOne);

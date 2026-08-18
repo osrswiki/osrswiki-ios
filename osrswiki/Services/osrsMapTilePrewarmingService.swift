@@ -138,6 +138,7 @@ class osrsMapTilePrewarmingService: ObservableObject {
     private func createPrewarmingMapView() {
         // Create invisible MapLibre view for tile loading
         let mapView = MLNMapView(frame: CGRect(x: -1000, y: -1000, width: 100, height: 100))
+        osrsMapPreferredFrameRate.apply(to: mapView)
         
         // Configure like main map but optimized for pre-warming
         mapView.logoView.isHidden = true

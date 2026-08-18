@@ -2,269 +2,238 @@
 //  AppearanceSettingsView.swift
 //  OSRS Wiki
 //
-//  Complete rewrite to match Android appearance page exactly with visual previews
-//
 
 import SwiftUI
 
 struct AppearanceSettingsView: View {
     @EnvironmentObject var themeManager: osrsThemeManager
-    @Environment(\.osrsTheme) var osrsTheme
-    
+    @Environment(\.osrsTheme) private var osrsTheme
+    var highlightFloorNumbering: Bool = false
+    @State private var floorNumberingPulse = false
+
     var body: some View {
-        List {
-                Section {
-                    // Theme selection row
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("Theme")
-                            .font(.body)
-                            .foregroundStyle(.osrsPrimaryTextColor)
-                        
-                        // Three cards horizontally arranged, right-aligned
-                        HStack(spacing: 8) {
-                            Spacer()
-                            
-                            osrsThemePreviewCard(
-                                theme: .osrsLight,
-                                isSelected: themeManager.selectedTheme == .osrsLight,
-                                onSelect: { themeManager.setTheme(.osrsLight) }
-                            )
-                            
-                            osrsThemePreviewCard(
-                                theme: .osrsDark,
-                                isSelected: themeManager.selectedTheme == .osrsDark,
-                                onSelect: { themeManager.setTheme(.osrsDark) }
-                            )
-                            
-                            osrsThemePreviewCard(
-                                theme: .automatic,
-                                isSelected: themeManager.selectedTheme == .automatic,
-                                onSelect: { themeManager.setTheme(.automatic) }
-                            )
+        ScrollViewReader { proxy in
+            List {
+                Section("Display") {
+                    LabeledContent {
+                        Picker("Theme", selection: themeSelection) {
+                            ForEach(osrsThemeSelection.allCases, id: \.self) { theme in
+                                Text(theme.displayName).tag(theme)
+                            }
                         }
+                        .labelsHidden()
+                        .pickerStyle(.menu)
+                        .accessibilityIdentifier("appearance_theme_picker")
+                    } label: {
+                        osrsAppearancePreferenceLabel(
+                            icon: "circle.lefthalf.filled",
+                            title: "Theme",
+                            summary: themeManager.selectedTheme.description
+                        )
                     }
-                    .padding(.vertical, 8)
                     .listRowBackground(Color(osrsTheme.surfaceVariant))
-                    
-                    // Table preferences row
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("Tables")
-                            .font(.body)
-                            .foregroundStyle(.osrsPrimaryTextColor)
-                        
-                        HStack(spacing: 8) {
-                            Spacer()
-                            
-                            // Expanded preview
-                            osrsTablePreviewCard(
-                                title: "Expanded",
-                                subtitle: "",
-                                isSelected: !themeManager.collapseTables,
-                                collapsed: false,
-                                onSelect: { themeManager.setCollapseTables(false) }
-                            )
-                            
-                            // Collapsed preview
-                            osrsTablePreviewCard(
-                                title: "Collapsed", 
-                                subtitle: "",
-                                isSelected: themeManager.collapseTables,
-                                collapsed: true,
-                                onSelect: { themeManager.setCollapseTables(true) }
-                            )
-                        }
+
+                    Toggle(isOn: collapseTables) {
+                        osrsAppearancePreferenceLabel(
+                            icon: "tablecells",
+                            title: "Collapse tables",
+                            summary: "Start article tables collapsed"
+                        )
                     }
-                    .padding(.vertical, 8)
+                    .accessibilityIdentifier("appearance_collapse_tables_toggle")
+                    .listRowBackground(Color(osrsTheme.surfaceVariant))
+
+                    LabeledContent {
+                        Picker("Floor numbering", selection: floorNumberingSelection) {
+                            ForEach(osrsArticleFloorNumberingMode.allCases) { mode in
+                                Text(mode.displayName).tag(mode)
+                            }
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.menu)
+                        .accessibilityIdentifier("appearance_floor_numbering_picker")
+                    } label: {
+                        osrsAppearancePreferenceLabel(
+                            icon: "building.2",
+                            title: "Floor numbering",
+                            summary: themeManager.floorNumberingMode.summary
+                        )
+                    }
+                    .id("floor_numbering")
+                    .listRowBackground(
+                        floorNumberingPulse
+                            ? Color(osrsTheme.primary).opacity(0.28)
+                            : Color(osrsTheme.surfaceVariant)
+                    )
+
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack(alignment: .top, spacing: 12) {
+                            osrsAppearancePreferenceLabel(
+                                icon: "textformat.size",
+                                title: "Article text size",
+                                summary: "Adjust article text without changing app controls"
+                            )
+
+                            Spacer(minLength: 8)
+
+                            Text(articleTextScaleLabel)
+                                .font(.callout.monospacedDigit())
+                                .foregroundStyle(Color(osrsTheme.secondaryTextColor))
+                                .accessibilityHidden(true)
+                        }
+
+                        Slider(
+                            value: articleTextScale,
+                            in: osrsThemeManager.articleTextScaleRange,
+                            step: 0.05
+                        ) {
+                            Text("Article text size")
+                        } minimumValueLabel: {
+                            Image(systemName: "textformat.size.smaller")
+                        } maximumValueLabel: {
+                            Image(systemName: "textformat.size.larger")
+                        }
+                        .tint(Color(osrsTheme.primary))
+                        .accessibilityIdentifier("appearance_article_text_scale")
+                        .accessibilityValue(articleTextScaleLabel)
+                    }
+                    .padding(.vertical, 4)
                     .listRowBackground(Color(osrsTheme.surfaceVariant))
                 }
-                .listSectionSeparator(.hidden)
+
+                Section("Navigation") {
+                    Toggle(isOn: swipeRightToGoBack) {
+                        osrsAppearancePreferenceLabel(
+                            icon: "arrow.left",
+                            title: "Swipe right to go back",
+                            summary: "Navigate back from an article with a horizontal swipe"
+                        )
+                    }
+                    .accessibilityIdentifier("appearance_swipe_right_back_toggle")
+                    .listRowBackground(Color(osrsTheme.surfaceVariant))
+
+                    Toggle(isOn: swipeLeftToShowContents) {
+                        osrsAppearancePreferenceLabel(
+                            icon: "arrow.right",
+                            title: "Swipe left for contents",
+                            summary: "Open an article’s table of contents with a horizontal swipe"
+                        )
+                    }
+                    .accessibilityIdentifier("appearance_swipe_left_contents_toggle")
+                    .listRowBackground(Color(osrsTheme.surfaceVariant))
+                }
             }
             .listStyle(.insetGrouped)
             .scrollContentBackground(.hidden)
+            .background(Color(osrsTheme.background))
             .navigationTitle("Appearance")
             .navigationBarTitleDisplayMode(.inline)
-            .background(.osrsBackground)
             .accessibilityIdentifier("appearance_screen")
-            // Hybrid Approach: NavigationStack for context, UIKit theming for reliability
             .onAppear {
-                updateNavigationBarAppearance()
-            }
-            .onChange(of: themeManager.selectedTheme) { oldValue, newValue in
-                print("🔄 AppearanceSettingsView: Theme changed from \(oldValue) to \(newValue) - applying UIKit navigation bar theming")
-                updateNavigationBarAppearance()
-            }
-        // No view recreation - maintains navigation state
-    }
-    
-    /// Direct UIKit navigation bar theming to bypass SwiftUI limitations
-    private func updateNavigationBarAppearance() {
-        DispatchQueue.main.async {
-            guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-                  let window = windowScene.windows.first,
-                  let navigationController = findNavigationController(in: window.rootViewController) else {
-                return
-            }
-            
-            let appearance = UINavigationBarAppearance()
-            appearance.configureWithOpaqueBackground()
-            
-            // Apply theme colors directly
-            let currentTheme = themeManager.currentTheme
-            appearance.backgroundColor = UIColor(currentTheme.surface)
-            appearance.titleTextAttributes = [.foregroundColor: UIColor(currentTheme.onSurface)]
-            appearance.largeTitleTextAttributes = [.foregroundColor: UIColor(currentTheme.onSurface)]
-            
-            // Apply to navigation bar
-            navigationController.navigationBar.standardAppearance = appearance
-            navigationController.navigationBar.compactAppearance = appearance
-            navigationController.navigationBar.scrollEdgeAppearance = appearance
-            
-            // Set tint color for back buttons and navigation items
-            navigationController.navigationBar.tintColor = UIColor(currentTheme.primary)
-            
-            // Update color scheme for status bar and buttons
-            navigationController.overrideUserInterfaceStyle = themeManager.currentColorScheme == .dark ? .dark : .light
-            
-            print("📱 Applied UIKit navigation bar theming: \(themeManager.selectedTheme)")
-        }
-    }
-    
-    /// Helper to find the navigation controller in the view hierarchy
-    private func findNavigationController(in viewController: UIViewController?) -> UINavigationController? {
-        if let navigationController = viewController as? UINavigationController {
-            return navigationController
-        }
-        
-        for child in viewController?.children ?? [] {
-            if let found = findNavigationController(in: child) {
-                return found
-            }
-        }
-        
-        return nil
-    }
-}
-
-/// Theme preview card with actual rendered preview (matches Android exactly)
-struct osrsThemePreviewCard: View {
-    let theme: osrsThemeSelection
-    let isSelected: Bool
-    let onSelect: () -> Void
-    
-    @Environment(\.osrsTheme) var osrsTheme
-    
-    var body: some View {
-        Button(action: onSelect) {
-            VStack(spacing: 4) {
-                // Maximized preview image area - uses most of button space
-                ZStack(alignment: .center) {
-                    Color(osrsTheme.surfaceVariant)
-                    
-                    Image(osrsStaticSettingsPreviewAssets.themeImageName(for: theme))
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(width: 82, height: 120)
-                        .clipped()
+                guard highlightFloorNumbering else { return }
+                proxy.scrollTo("floor_numbering", anchor: .center)
+                floorNumberingPulse = true
+                withAnimation(.easeInOut(duration: 0.18).repeatCount(5, autoreverses: true)) {
+                    floorNumberingPulse.toggle()
                 }
-                .frame(width: 82, height: 120)
-                .background(Color(osrsTheme.surfaceVariant))
-                .cornerRadius(6)
-                
-                // Compact title - minimal space
-                Text(theme.displayName)
-                    .font(.caption2.weight(.medium))
-                    .foregroundStyle(.osrsPrimaryTextColor)
-                    .multilineTextAlignment(.center)
-                    .lineLimit(1)
-                    .frame(height: 14)
-            }
-            .frame(width: 90)
-            .padding(.vertical, 8)
-        }
-        .buttonStyle(PlainButtonStyle())
-        .background(Color(osrsTheme.surfaceVariant))
-        .cornerRadius(8)
-        .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(isSelected ? Color(osrsTheme.primary) : Color.clear, lineWidth: 2)
-        )
-        .overlay(alignment: .topTrailing) {
-            if isSelected {
-                Image(systemName: "checkmark.circle.fill")
-                    .foregroundStyle(.white, Color(osrsTheme.primary))
-                    .font(.system(size: 16))
-                    .offset(x: -6, y: 6)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.8) {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        floorNumberingPulse = false
+                    }
+                }
             }
         }
     }
+
+    private var themeSelection: Binding<osrsThemeSelection> {
+        Binding(
+            get: { themeManager.selectedTheme },
+            set: themeManager.setTheme
+        )
+    }
+
+    private var collapseTables: Binding<Bool> {
+        Binding(
+            get: { themeManager.collapseTables },
+            set: themeManager.setCollapseTables
+        )
+    }
+
+    private var articleTextScale: Binding<Double> {
+        Binding(
+            get: { themeManager.articleTextScale },
+            set: themeManager.setArticleTextScale
+        )
+    }
+
+    private var swipeRightToGoBack: Binding<Bool> {
+        Binding(
+            get: { themeManager.swipeRightToGoBackEnabled },
+            set: themeManager.setSwipeRightToGoBackEnabled
+        )
+    }
+
+    private var swipeLeftToShowContents: Binding<Bool> {
+        Binding(
+            get: { themeManager.swipeLeftToShowContentsEnabled },
+            set: themeManager.setSwipeLeftToShowContentsEnabled
+        )
+    }
+
+    private var floorNumberingSelection: Binding<osrsArticleFloorNumberingMode> {
+        Binding(
+            get: { themeManager.floorNumberingMode },
+            set: themeManager.setFloorNumberingMode
+        )
+    }
+
+    private var articleTextScaleLabel: String {
+        "\(Int((themeManager.articleTextScale * 100).rounded()))%"
+    }
 }
 
-/// Table preview card showing expanded or collapsed state (matches Android exactly)
-struct osrsTablePreviewCard: View {
+private struct osrsAppearancePreferenceLabel: View {
+    @Environment(\.osrsTheme) private var osrsTheme
+
+    let icon: String
     let title: String
-    let subtitle: String
-    let isSelected: Bool
-    let collapsed: Bool
-    let onSelect: () -> Void
-    
-    @EnvironmentObject var themeManager: osrsThemeManager
-    @Environment(\.osrsTheme) var osrsTheme
-    
+    let summary: String
+
     var body: some View {
-        Button(action: onSelect) {
-            VStack(spacing: 4) {
-                // Maximized table preview image - uses most of button space
-                ZStack(alignment: .center) {
-                    Color(osrsTheme.surfaceVariant)
-                    
-                    Image(osrsStaticSettingsPreviewAssets.tableImageName(collapsed: collapsed, theme: themeManager.currentTheme))
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(width: 82, height: 120)
-                        .clipped()
-                }
-                .frame(width: 82, height: 120)
-                .background(Color(osrsTheme.surfaceVariant))
-                .cornerRadius(6)
-                
-                // Compact title - minimal space
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: icon)
+                .font(.body.weight(.semibold))
+                .foregroundStyle(Color(osrsTheme.primary))
+                .frame(width: 24, height: 24)
+                .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.caption2.weight(.medium))
-                    .foregroundStyle(.osrsPrimaryTextColor)
-                    .multilineTextAlignment(.center)
-                    .lineLimit(1)
-                    .frame(height: 14)
-            }
-            .frame(width: 90)
-            .padding(.vertical, 8)
-        }
-        .buttonStyle(PlainButtonStyle())
-        .background(Color(osrsTheme.surfaceVariant))
-        .cornerRadius(8)
-        .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(isSelected ? Color(osrsTheme.primary) : Color.clear, lineWidth: 2)
-        )
-        .overlay(alignment: .topTrailing) {
-            if isSelected {
-                Image(systemName: "checkmark.circle.fill")
-                    .foregroundStyle(.white, Color(osrsTheme.primary))
-                    .font(.system(size: 16))
-                    .offset(x: -6, y: 6)
+                    .font(.body)
+                    .foregroundStyle(Color(osrsTheme.primaryTextColor))
+
+                Text(summary)
+                    .font(.caption)
+                    .foregroundStyle(Color(osrsTheme.secondaryTextColor))
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }
 }
 
 #Preview {
-    AppearanceSettingsView()
-        .environmentObject(osrsThemeManager.preview)
-        .environment(\.osrsTheme, osrsLightTheme())
+    NavigationStack {
+        AppearanceSettingsView()
+    }
+    .environmentObject(osrsThemeManager.preview)
+    .environment(\.osrsTheme, osrsLightTheme())
 }
 
 #Preview("Dark Theme") {
-    AppearanceSettingsView()
-        .environmentObject(osrsThemeManager.previewDark)
-        .environment(\.osrsTheme, osrsDarkTheme())
-        .preferredColorScheme(.dark)
+    NavigationStack {
+        AppearanceSettingsView()
+    }
+    .environmentObject(osrsThemeManager.previewDark)
+    .environment(\.osrsTheme, osrsDarkTheme())
+    .preferredColorScheme(.dark)
 }

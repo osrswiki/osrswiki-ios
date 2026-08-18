@@ -8,6 +8,44 @@
 import Foundation
 import Network
 
+/// One transport/cache identity for app-owned HTTP requests. Preserve meaningful path/query
+/// case and percent encoding, normalize only scheme/host/query ordering, and discard fragments
+/// because they are never sent over HTTP.
+nonisolated func osrsCanonicalNetworkURLString(_ urlString: String) -> String {
+    guard var components = URLComponents(string: urlString) else {
+        return urlString
+    }
+
+    components.scheme = components.scheme?.lowercased()
+    components.host = components.host?.lowercased()
+    components.fragment = nil
+
+    if let percentEncodedQuery = components.percentEncodedQuery,
+       !percentEncodedQuery.isEmpty {
+        // URLComponents.queryItems decodes reserved `%2F`/`%3F` bytes and may serialize them as
+        // literal query delimiters. Sort the encoded fields themselves so equivalent ordering is
+        // stable without changing authored query data or the loopback/cache identity.
+        components.percentEncodedQuery = percentEncodedQuery
+            .split(separator: "&", omittingEmptySubsequences: false)
+            .map(String.init)
+            .sorted()
+            .joined(separator: "&")
+    }
+
+    return components.string ?? urlString
+}
+
+extension Notification.Name {
+    static let osrsNetworkPathConditionsDidChange = Notification.Name("osrsNetworkPathConditionsDidChange")
+}
+
+enum osrsNetworkRoutingPolicy: Equatable, Sendable {
+    case configured
+    /// Retain configured proxy-first/direct-fallback and forced-offline cache behavior while
+    /// marking this individual request as ineligible for passive/offline cache writes.
+    case configuredNoStore
+}
+
 private func osrsNetworkDebugLog(_ message: @autoclosure () -> String) {
 #if DEBUG
     print(message())
@@ -20,11 +58,14 @@ class NetworkManager: ObservableObject {
     
     @Published var isConnected = true
     @Published var connectionType: NWInterface.InterfaceType?
+    @Published private(set) var isConstrained = false
+    @Published private(set) var isExpensive = false
     
     private let monitor = NWPathMonitor()
     private let queue = DispatchQueue(label: "NetworkMonitor")
     private var session: URLSession
     private var defaultSession: URLSession
+    private var directNoStoreSession: URLSession
     private var proxySession: URLSession?
 #if DEBUG
     private var forcedOfflineOverrideForTests = osrsTestEnvironment.forcesNetworkOfflineForUITests
@@ -62,6 +103,14 @@ class NetworkManager: ObservableObject {
         self.defaultSession = URLSession(configuration: defaultConfig)
         self.session = defaultSession // Start with default session
 
+        let directConfig = URLSessionConfiguration.ephemeral
+        directConfig.timeoutIntervalForRequest = 15.0
+        directConfig.timeoutIntervalForResource = 30.0
+        directConfig.waitsForConnectivity = false
+        directConfig.urlCache = nil
+        directConfig.requestCachePolicy = .reloadIgnoringLocalAndRemoteCacheData
+        self.directNoStoreSession = URLSession(configuration: directConfig)
+
 #if DEBUG
         if forcedOfflineOverrideForTests {
             isConnected = false
@@ -74,11 +123,17 @@ class NetworkManager: ObservableObject {
     
     private var proxyEnabled = false
     private var proxyPort = 8080
+    private var proxyAllowsDirectFallback = true
     
     /// Configure proxy routing through localhost server  
-    func configureProxyRouting(enabled: Bool, port: Int = 8080) {
+    func configureProxyRouting(
+        enabled: Bool,
+        port: Int = 8080,
+        allowsDirectFallback: Bool = true
+    ) {
         proxyEnabled = enabled
         proxyPort = port
+        proxyAllowsDirectFallback = allowsDirectFallback
         
         if enabled {
             osrsNetworkDebugLog("🔗 NetworkManager: Enabled request routing through localhost:\(port)")
@@ -90,14 +145,58 @@ class NetworkManager: ObservableObject {
     /// Rewrite URL to go through localhost if proxy is enabled
     private func rewriteURLForProxy(_ url: URL) -> URL {
         guard proxyEnabled else { return url }
-        
+
+        let canonicalString = osrsCanonicalNetworkURLString(url.absoluteString)
+        guard let original = URLComponents(string: canonicalString),
+              let host = original.host else {
+            return url
+        }
+        let authority = original.port.map { "\(host):\($0)" } ?? host
+        let originalPath = original.percentEncodedPath.isEmpty ? "/" : original.percentEncodedPath
+
         // Convert HTTPS URLs to go through localhost HTTP server
         // https://oldschool.runescape.wiki/api.php -> http://localhost:8080/https/oldschool.runescape.wiki/api.php
-        let rewrittenURL = URL(string: "http://127.0.0.1:\(proxyPort)/https/\(url.host ?? "unknown")\(url.path)\(url.query != nil ? "?" + url.query! : "")")
+        var rewritten = URLComponents()
+        rewritten.scheme = "http"
+        rewritten.host = "127.0.0.1"
+        rewritten.port = proxyPort
+        rewritten.percentEncodedPath = "/https/\(authority)\(originalPath)"
+        rewritten.percentEncodedQuery = original.percentEncodedQuery
+        let rewrittenURL = rewritten.url
         
         osrsNetworkDebugLog("🔄 NetworkManager: Rewriting URL: \(url.absoluteString) -> \(rewrittenURL?.absoluteString ?? "invalid")")
         return rewrittenURL ?? url
     }
+
+    private func requestURLs(
+        for url: URL,
+        routingPolicy: osrsNetworkRoutingPolicy
+    ) -> [URL] {
+        guard proxyEnabled else { return [url] }
+        let proxyURL = rewriteURLForProxy(url)
+#if DEBUG
+        // Forced-offline tests may still exercise the loopback cache server,
+        // but must never escape to the real network through direct fallback.
+        if forcedOfflineOverrideForTests {
+            return [proxyURL]
+        }
+#endif
+        guard proxyAllowsDirectFallback, proxyURL != url else { return [proxyURL] }
+        return [proxyURL, url]
+    }
+
+#if DEBUG
+    func requestURLsForTesting(
+        for url: URL,
+        routingPolicy: osrsNetworkRoutingPolicy
+    ) -> [URL] {
+        requestURLs(for: url, routingPolicy: routingPolicy)
+    }
+
+    var proxyRoutingStateForTesting: (enabled: Bool, allowsDirectFallback: Bool) {
+        (proxyEnabled, proxyAllowsDirectFallback)
+    }
+#endif
     
     private func startMonitoring() {
         monitor.pathUpdateHandler = { [weak self] path in
@@ -106,12 +205,18 @@ class NetworkManager: ObservableObject {
                 if self?.forcedOfflineOverrideForTests == true {
                     self?.isConnected = false
                     self?.connectionType = nil
+                    self?.isConstrained = false
+                    self?.isExpensive = false
                     osrsNetworkDebugLog("🧪 NetworkManager: Ignoring NWPathMonitor update while forced offline for UI tests")
+                    NotificationCenter.default.post(name: .osrsNetworkPathConditionsDidChange, object: nil)
                     return
                 }
 #endif
                 self?.isConnected = path.status == .satisfied
                 self?.connectionType = path.availableInterfaces.first?.type
+                self?.isConstrained = path.isConstrained
+                self?.isExpensive = path.isExpensive
+                NotificationCenter.default.post(name: .osrsNetworkPathConditionsDidChange, object: nil)
                 
                 if path.status == .satisfied {
                     osrsNetworkDebugLog("🌐 NetworkManager: Connection restored")
@@ -127,217 +232,174 @@ class NetworkManager: ObservableObject {
     func performRequest<T: Codable>(
         url: URL,
         responseType: T.Type,
+        retryCount: Int = 1,
+        bypassCache: Bool = false,
+        routingPolicy: osrsNetworkRoutingPolicy = .configured
+    ) async throws -> T {
+        let (data, _) = try await performTransportRequest(
+            url: url,
+            retryCount: retryCount,
+            bypassCache: bypassCache,
+            routingPolicy: routingPolicy
+        )
+
+        do {
+            let result = try JSONDecoder().decode(T.self, from: data)
+            osrsNetworkDebugLog("✅ NetworkManager: JSON decode successful for type: \(T.self)")
+            return result
+        } catch {
+            osrsNetworkDebugLog("❌ NetworkManager: JSON decode failed for type \(T.self): \(error)")
+            throw NetworkError.invalidData
+        }
+    }
+
+    /// Authoritative explicit-save transport. These requests must always reach the configured
+    /// loopback route instead of being satisfied by URLSession's warmed response cache, because
+    /// only a fresh loopback request can be stamped into the active save generation.
+    func performExplicitOfflineRequest<T: Codable>(
+        url: URL,
+        responseType: T.Type,
         retryCount: Int = 1
     ) async throws -> T {
-        var lastError: NetworkError?
-        
-        // PHASE 14.1: Add comprehensive proxy debugging
-        osrsNetworkDebugLog("🔍 NetworkManager: performRequest starting - proxyEnabled: \(proxyEnabled), isConnected: \(isConnected)")
-        osrsNetworkDebugLog("🔍 NetworkManager: Original URL: \(url.absoluteString)")
-        
-        // Check connectivity before attempting request (skip if proxy routing enabled for caching)
-        if !isConnected && !proxyEnabled {
-            throw NetworkError.noConnection
-        }
-        
-        // CRITICAL FIX: Apply URL rewriting for proxy routing (was missing!)
-        let requestURL = rewriteURLForProxy(url)
-        if requestURL.absoluteString != url.absoluteString {
-            osrsNetworkDebugLog("🔄 NetworkManager: URL rewritten for proxy: \(url.absoluteString) -> \(requestURL.absoluteString)")
-        }
-        
-        for attempt in 0...retryCount {
-            do {
-                osrsNetworkDebugLog("🌐 NetworkManager: Making request to: \(requestURL.absoluteString) (attempt \(attempt + 1))")
-                let data: Data
-                let response: URLResponse
-
-                if let simulatedResponse = try await simulatedNetworkResponseForTestsIfNeeded(url: requestURL) {
-                    data = simulatedResponse.data
-                    response = simulatedResponse.response
-                } else {
-                    (data, response) = try await session.data(from: requestURL)
-                }
-                
-                // Validate HTTP response
-                guard let httpResponse = response as? HTTPURLResponse else {
-                    osrsNetworkDebugLog("❌ NetworkManager: Invalid response type received")
-                    throw NetworkError.invalidResponse
-                }
-                
-                osrsNetworkDebugLog("✅ NetworkManager: HTTP response received - status: \(httpResponse.statusCode), data: \(data.count) bytes")
-                
-                // Handle HTTP error codes
-                if !(200...299).contains(httpResponse.statusCode) {
-                    osrsNetworkDebugLog("❌ NetworkManager: HTTP error status: \(httpResponse.statusCode)")
-                    throw NetworkError.from(httpStatusCode: httpResponse.statusCode)
-                }
-                
-                // Decode response with enhanced error handling
-                do {
-                    // Log raw response for debugging JSON decode issues
-                    if let jsonString = String(data: data, encoding: .utf8) {
-                        osrsNetworkDebugLog("📄 NetworkManager: Raw response preview: \(String(jsonString.prefix(200)))")
-                    }
-                    
-                    let result = try JSONDecoder().decode(T.self, from: data)
-                    osrsNetworkDebugLog("✅ NetworkManager: JSON decode successful for type: \(T.self)")
-                    return result
-                } catch {
-                    osrsNetworkDebugLog("❌ NetworkManager: JSON decode failed for type \(T.self): \(error)")
-                    if let jsonString = String(data: data, encoding: .utf8) {
-                        osrsNetworkDebugLog("📄 NetworkManager: Failed JSON content: \(jsonString)")
-                    }
-                    throw NetworkError.invalidData
-                }
-                
-            } catch let urlError as URLError {
-                let networkError = NetworkError.from(urlError)
-                lastError = networkError
-                
-                // Don't retry non-retryable errors
-                if !networkError.isRetryable || attempt >= retryCount {
-                    throw networkError
-                }
-                
-                osrsNetworkDebugLog("🔄 NetworkManager: Retrying request (attempt \(attempt + 1)/\(retryCount + 1)) after error: \(networkError.localizedDescription)")
-                
-                // Wait before retry with exponential backoff
-                let delay = TimeInterval(pow(2.0, Double(attempt)))
-                try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
-                
-            } catch let networkError as NetworkError {
-                lastError = networkError
-                
-                if !networkError.isRetryable || attempt >= retryCount {
-                    throw networkError
-                }
-                
-                osrsNetworkDebugLog("🔄 NetworkManager: Retrying request (attempt \(attempt + 1)/\(retryCount + 1)) after error: \(networkError.localizedDescription)")
-                
-                let delay = TimeInterval(pow(2.0, Double(attempt)))
-                try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
-                
-            } catch {
-                let networkError = NetworkError.unknown(error)
-                lastError = networkError
-                
-                if attempt >= retryCount {
-                    throw networkError
-                }
-                
-                osrsNetworkDebugLog("🔄 NetworkManager: Retrying request (attempt \(attempt + 1)/\(retryCount + 1)) after unknown error: \(error.localizedDescription)")
-                
-                let delay = TimeInterval(pow(2.0, Double(attempt)))
-                try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
-            }
-        }
-        
-        // This should never be reached, but provide fallback
-        throw lastError ?? NetworkError.unknown(NSError(domain: "NetworkManager", code: -1, userInfo: [NSLocalizedDescriptionKey: "Max retries exceeded"]))
+        try await performRequest(
+            url: url,
+            responseType: responseType,
+            retryCount: retryCount,
+            bypassCache: true,
+            routingPolicy: .configured
+        )
     }
     
     /// Perform raw data request with error handling (for HTML, images, etc.)
     func performDataRequest(
         url: URL,
         retryCount: Int = 1,
-        bypassCache: Bool = false
+        bypassCache: Bool = false,
+        routingPolicy: osrsNetworkRoutingPolicy = .configured
+    ) async throws -> (Data, URLResponse) {
+        try await performTransportRequest(
+            url: url,
+            retryCount: retryCount,
+            bypassCache: bypassCache,
+            routingPolicy: routingPolicy
+        )
+    }
+
+    func performExplicitOfflineDataRequest(
+        url: URL,
+        retryCount: Int = 1
+    ) async throws -> (Data, URLResponse) {
+        try await performDataRequest(
+            url: url,
+            retryCount: retryCount,
+            bypassCache: true,
+            routingPolicy: .configured
+        )
+    }
+
+    private nonisolated static func transportRequest(
+        for url: URL,
+        bypassCache: Bool,
+        routingPolicy: osrsNetworkRoutingPolicy
+    ) -> URLRequest {
+        var request = URLRequest(url: url)
+        if bypassCache || routingPolicy == .configuredNoStore {
+            request.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
+            request.setValue("no-store, no-cache", forHTTPHeaderField: "Cache-Control")
+            request.setValue("no-cache", forHTTPHeaderField: "Pragma")
+            request.setValue(String(Date().timeIntervalSince1970), forHTTPHeaderField: "X-Cache-Bust")
+        }
+        if routingPolicy == .configuredNoStore {
+            request.setValue("1", forHTTPHeaderField: "X-OSRS-No-Offline-Store")
+        }
+        return request
+    }
+
+#if DEBUG
+    nonisolated static func explicitOfflineRequestForTesting(url: URL) -> URLRequest {
+        transportRequest(for: url, bypassCache: true, routingPolicy: .configured)
+    }
+#endif
+
+    private func performTransportRequest(
+        url: URL,
+        retryCount: Int,
+        bypassCache: Bool,
+        routingPolicy: osrsNetworkRoutingPolicy = .configured
     ) async throws -> (Data, URLResponse) {
         var lastError: NetworkError?
-        
-        // PHASE 15.1: Add comprehensive proxy debugging
+
         osrsNetworkDebugLog("🔍 NetworkManager: performDataRequest starting - proxyEnabled: \(proxyEnabled), isConnected: \(isConnected)")
         osrsNetworkDebugLog("🔍 NetworkManager: Original URL: \(url.absoluteString)")
-        
-        // Check connectivity before attempting request (skip if proxy routing enabled for caching)
-        if !isConnected && !proxyEnabled {
+
+#if DEBUG
+        // Reachability monitors are advisory and can briefly be stale on app
+        // launch or network handoff. Only the explicit test override is a
+        // request gate; real requests are allowed to reach URLSession.
+        if forcedOfflineOverrideForTests && !proxyEnabled {
             throw NetworkError.noConnection
         }
-        
-        // Rewrite URL for proxy if enabled
-        let requestURL = rewriteURLForProxy(url)
-        if requestURL.absoluteString != url.absoluteString {
-            osrsNetworkDebugLog("🔄 NetworkManager: URL rewritten for proxy: \(url.absoluteString) -> \(requestURL.absoluteString)")
-        }
-        
-        for attempt in 0...retryCount {
-            do {
-                let (data, response): (Data, URLResponse)
-                osrsNetworkDebugLog("🌐 NetworkManager: Making data request to: \(requestURL.absoluteString) (attempt \(attempt + 1))")
-                
-                if let simulatedResponse = try await simulatedNetworkResponseForTestsIfNeeded(url: requestURL) {
-                    data = simulatedResponse.data
-                    response = simulatedResponse.response
-                } else {
-                    if bypassCache {
-                        // Create request with cache bypass headers
-                        var request = URLRequest(url: requestURL)
-                        request.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
-                        request.setValue("no-cache", forHTTPHeaderField: "Cache-Control")
-                        request.setValue("no-cache", forHTTPHeaderField: "Pragma")
-                        request.setValue(String(Date().timeIntervalSince1970), forHTTPHeaderField: "X-Cache-Bust")
+#endif
 
-                        osrsNetworkDebugLog("🔄 NetworkManager: Making fresh request (bypassing cache)")
-                        (data, response) = try await session.data(for: request)
+        let candidates = requestURLs(for: url, routingPolicy: routingPolicy)
+        for (candidateIndex, requestURL) in candidates.enumerated() {
+            let hasDirectFallback = candidateIndex < candidates.count - 1
+            for attempt in 0...retryCount {
+                do {
+                    let (data, response): (Data, URLResponse)
+                    osrsNetworkDebugLog("🌐 NetworkManager: Making data request to: \(requestURL.absoluteString) (attempt \(attempt + 1))")
+
+                    if let simulatedResponse = try await simulatedNetworkResponseForTestsIfNeeded(url: requestURL) {
+                        data = simulatedResponse.data
+                        response = simulatedResponse.response
                     } else {
-                        (data, response) = try await session.data(from: requestURL)
+                        if bypassCache || routingPolicy == .configuredNoStore {
+                            let request = Self.transportRequest(
+                                for: requestURL,
+                                bypassCache: bypassCache,
+                                routingPolicy: routingPolicy
+                            )
+                            let requestSession = routingPolicy == .configuredNoStore ? directNoStoreSession : session
+                            (data, response) = try await requestSession.data(for: request)
+                        } else {
+                            (data, response) = try await session.data(from: requestURL)
+                        }
                     }
-                }
-                
-                // Validate HTTP response if applicable
-                if let httpResponse = response as? HTTPURLResponse {
-                    osrsNetworkDebugLog("✅ NetworkManager: HTTP data response received - status: \(httpResponse.statusCode), data: \(data.count) bytes")
-                    
-                    if !(200...299).contains(httpResponse.statusCode) {
-                        osrsNetworkDebugLog("❌ NetworkManager: HTTP error status: \(httpResponse.statusCode)")
+
+                    if let httpResponse = response as? HTTPURLResponse,
+                       !(200...299).contains(httpResponse.statusCode) {
                         throw NetworkError.from(httpStatusCode: httpResponse.statusCode)
                     }
-                } else {
-                    osrsNetworkDebugLog("✅ NetworkManager: Non-HTTP response received - data: \(data.count) bytes")
-                }
-                
-                return (data, response)
-                
-            } catch let urlError as URLError {
-                let networkError = NetworkError.from(urlError)
-                lastError = networkError
-                
-                if !networkError.isRetryable || attempt >= retryCount {
+
+                    return (data, response)
+                } catch is CancellationError {
+                    throw CancellationError()
+                } catch {
+                    let networkError: NetworkError
+                    if let urlError = error as? URLError {
+                        networkError = NetworkError.from(urlError)
+                    } else if let typedError = error as? NetworkError {
+                        networkError = typedError
+                    } else {
+                        networkError = NetworkError.unknown(error)
+                    }
+                    lastError = networkError
+
+                    if networkError.isRetryable && attempt < retryCount {
+                        let delay = TimeInterval(pow(2.0, Double(attempt)))
+                        try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                        continue
+                    }
+
+                    if hasDirectFallback {
+                        osrsNetworkDebugLog("⚠️ NetworkManager: Local cache route failed; retrying the original URL directly")
+                        break
+                    }
                     throw networkError
                 }
-                
-                osrsNetworkDebugLog("🔄 NetworkManager: Retrying data request (attempt \(attempt + 1)/\(retryCount + 1)) after error: \(networkError.localizedDescription)")
-                
-                let delay = TimeInterval(pow(2.0, Double(attempt)))
-                try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
-                
-            } catch let networkError as NetworkError {
-                lastError = networkError
-                
-                if !networkError.isRetryable || attempt >= retryCount {
-                    throw networkError
-                }
-                
-                osrsNetworkDebugLog("🔄 NetworkManager: Retrying data request (attempt \(attempt + 1)/\(retryCount + 1)) after error: \(networkError.localizedDescription)")
-                
-                let delay = TimeInterval(pow(2.0, Double(attempt)))
-                try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
-                
-            } catch {
-                let networkError = NetworkError.unknown(error)
-                lastError = networkError
-                
-                if attempt >= retryCount {
-                    throw networkError
-                }
-                
-                osrsNetworkDebugLog("🔄 NetworkManager: Retrying data request (attempt \(attempt + 1)/\(retryCount + 1)) after unknown error: \(error.localizedDescription)")
-                
-                let delay = TimeInterval(pow(2.0, Double(attempt)))
-                try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
             }
         }
-        
+
         throw lastError ?? NetworkError.unknown(NSError(domain: "NetworkManager", code: -1, userInfo: [NSLocalizedDescriptionKey: "Max retries exceeded"]))
     }
 

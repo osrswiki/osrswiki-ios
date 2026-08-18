@@ -170,7 +170,8 @@ class osrsSpeechRecognitionManager: NSObject, ObservableObject {
                 try await startListening()
                 
             } catch {
-                await handleError("Failed to start voice recognition: \(error.localizedDescription)")
+                print("osrsSpeechRecognitionManager: Failed to start voice recognition: \(error)")
+                await handleError("Voice search could not start. Please try again.")
             }
         }
     }
@@ -333,7 +334,8 @@ class osrsSpeechRecognitionManager: NSObject, ObservableObject {
                 return "Speech recognition error. Please try again."
             }
         }
-        return error.localizedDescription
+        print("osrsSpeechRecognitionManager: Unclassified recognition error: \(error)")
+        return "Voice search could not complete. Please try again."
     }
     
     func cleanup() {

@@ -13,6 +13,7 @@ struct DedicatedSearchView: View {
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var themeManager: osrsThemeManager
     @Environment(\.osrsTheme) var osrsTheme
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @StateObject private var viewModel = SearchViewModel()
     @State private var searchText = ""
     @FocusState private var isSearchFocused: Bool
@@ -38,6 +39,7 @@ struct DedicatedSearchView: View {
             }
         }
         .onAppear {
+            configureVoiceSearch()
             // Focus immediately before any other setup
             isSearchFocused = true
             
@@ -57,9 +59,24 @@ struct DedicatedSearchView: View {
                 }
             }
         }
+        .onDisappear {
+            appState.speechManager.cleanup()
+        }
+        .alert(
+            "Voice Search Error",
+            isPresented: Binding(
+                get: { appState.speechManager.errorMessage != nil },
+                set: { if !$0 { appState.speechManager.clearError() } }
+            )
+        ) {
+            Button("OK") { appState.speechManager.clearError() }
+        } message: {
+            Text(appState.speechManager.errorMessage ?? "")
+        }
     }
     
     private func configureNavigationBarAppearance() {
+        guard #unavailable(iOS 26.0) else { return }
         let appearance = UINavigationBarAppearance()
         appearance.configureWithTransparentBackground()
         appearance.backgroundColor = UIColor(osrsTheme.surface)
@@ -89,7 +106,7 @@ struct DedicatedSearchView: View {
     private var searchInputSection: some View {
         VStack(spacing: 12) {
             // Main search bar (matches Android SearchActivity style)
-            HStack {
+            HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass")
                     .foregroundStyle(.osrsPlaceholderColor)
                 
@@ -100,6 +117,11 @@ struct DedicatedSearchView: View {
                     .tint(Color(osrsTheme.primary))
                     .autocorrectionDisabled(true)
                     .textInputAutocapitalization(.never)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .frame(minWidth: 0, maxWidth: .infinity)
+                    .layoutPriority(1)
+                    .accessibilityIdentifier("dedicated_search_input")
                     .onChange(of: searchText) { _, newValue in
                         viewModel.currentQuery = newValue
                     }
@@ -111,16 +133,26 @@ struct DedicatedSearchView: View {
                     Button(action: clearSearch) {
                         Image(systemName: "xmark.circle.fill")
                             .foregroundStyle(.osrsSecondaryTextColor)
+                            .frame(width: 36, height: 44)
                     }
+                    .accessibilityLabel("Clear search")
                 }
-                
+
+                osrsVoiceSearchButton(
+                    action: { appState.speechManager.startVoiceRecognition() },
+                    state: appState.speechManager.currentState,
+                    accessibilityIdentifier: "dedicated_search_voice_search"
+                )
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .frame(height: 36)
-            .background(.osrsSurfaceVariant)
-            .cornerRadius(18)
+            .padding(.leading, 12)
+            .padding(.trailing, 2)
+            .frame(minHeight: osrsSearchControlGeometry.height(for: dynamicTypeSize))
+            .osrsFloatingGlass(
+                in: osrsSearchControlGeometry.pillShape(for: dynamicTypeSize),
+                fallback: Color(osrsTheme.surfaceVariant)
+            )
             .padding(.horizontal)
+            .frame(maxWidth: .infinity)
             
             // Recent searches or suggestions
             if searchText.isEmpty && !viewModel.recentSearches.isEmpty {
@@ -135,12 +167,10 @@ struct DedicatedSearchView: View {
             if searchText.isEmpty {
                 // Show empty state when no search text (history now belongs in History tab)
                 emptySearchState
-            } else if viewModel.isSearching && viewModel.searchResults.isEmpty {
-                // Show loading during initial search
-                ProgressView("Searching...")
-                    .progressViewStyle(CircularProgressViewStyle())                    .tint(.osrsPrimaryColor)
+            } else if viewModel.searchResults.isEmpty && !viewModel.hasCompletedCurrentQuery {
+                Color(osrsTheme.background)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if viewModel.searchResults.isEmpty && !searchText.isEmpty && !viewModel.isSearching {
+            } else if viewModel.searchResults.isEmpty && !searchText.isEmpty {
                 // Show no results
                 EmptyStateView(
                     iconName: "magnifyingglass",
@@ -166,7 +196,7 @@ struct DedicatedSearchView: View {
     private var recentSearchesSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text("Recent Searches")
+                Text("Recent")
                     .font(.subheadline)
                     .fontWeight(.medium)
                     .foregroundStyle(.osrsSecondaryTextColor)
@@ -238,17 +268,15 @@ struct DedicatedSearchView: View {
                         viewModel.addToRecentSearches(searchText)
                         // Don't dismiss modal - let article present over search results
                     }
+                    .listRowInsets(EdgeInsets())
+                    .listRowSeparator(.hidden, edges: .all)
                 }
                 
                 // Load more section
                 if viewModel.hasMoreResults {
                     HStack {
                         Spacer()
-                        if viewModel.isSearching {
-                            ProgressView()
-                                .scaleEffect(0.8)
-                                .tint(osrsTheme.primary)
-                        } else {
+                        if !viewModel.isSearching {
                             Button("Load More Results") {
                                 Task {
                                     await viewModel.loadMoreResults()
@@ -268,6 +296,7 @@ struct DedicatedSearchView: View {
                 }
             }
             .listStyle(PlainListStyle())
+            .osrsHidesListSeparators()
             .scrollContentBackground(.hidden)
             .background(.osrsBackground)
     }
@@ -287,6 +316,22 @@ struct DedicatedSearchView: View {
         searchText = ""
         viewModel.currentQuery = ""
         viewModel.clearSearchResults()
+    }
+
+    private func configureVoiceSearch() {
+        appState.speechManager.configure(
+            onResult: { result in
+                searchText = result
+                viewModel.currentQuery = result
+                viewModel.addToRecentSearches(result)
+            },
+            onPartialResult: { partialResult in
+                guard !partialResult.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+                searchText = partialResult
+                viewModel.currentQuery = partialResult
+            },
+            onError: { _ in }
+        )
     }
 }
 

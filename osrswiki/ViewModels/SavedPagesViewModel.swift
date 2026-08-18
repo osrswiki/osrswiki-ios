@@ -30,7 +30,12 @@ class SavedPagesViewModel: ObservableObject {
     @Published var shareRequestRecordForUITests: SavedPagesShareRequestRecord?
 #endif
     
-    private let savedPagesRepository = SavedPagesRepository()
+    private let savedPagesRepository: SavedPagesRepository
+    private let metadataEnricher = osrsHistoryEnricher()
+
+    init(savedPagesRepository: SavedPagesRepository = SavedPagesRepository()) {
+        self.savedPagesRepository = savedPagesRepository
+    }
     
     enum SortOrder {
         case date
@@ -39,9 +44,42 @@ class SavedPagesViewModel: ObservableObject {
     
     func loadSavedPages() async {
         isLoading = true
-        savedPages = savedPagesRepository.getSavedPages()
+        savedPages = Self.visibleSavedPages(from: savedPagesRepository.getSavedPages())
         applySorting()
         isLoading = false
+        Task { await enrichMissingMetadata() }
+    }
+
+    /// Incomplete first-time saves stay in the repository so ArticleView can retry them in
+    /// place, but they are not Reading List entries until there is a readable prior snapshot.
+    /// A failed/outdated refresh of an existing snapshot remains visible and truthfully reports
+    /// that it needs attention instead of disappearing with the user's previously saved page.
+    static func visibleSavedPages(from pages: [SavedPage]) -> [SavedPage] {
+        pages.filter(\.isVisibleInSavedLibrary)
+    }
+
+    private func enrichMissingMetadata() async {
+        let cachedFeed = NewsRepository.shared.getCachedFeedSynchronously()
+        for page in savedPages where page.thumbnailUrl == nil || page.description == nil {
+            let cachedMetadata = osrsHistoryUpdateMetadataResolver.cachedMetadata(
+                forTitle: page.displayTitle,
+                in: cachedFeed
+            )
+            let metadata = await metadataEnricher.enrichHistoryEntry(
+                pageTitle: page.displayTitle,
+                pageUrl: page.url
+            )
+            let thumbnailUrl = metadata.thumbnailUrl ?? cachedMetadata?.thumbnailUrl
+            let description = metadata.snippet ?? cachedMetadata?.description
+            guard thumbnailUrl != nil || description != nil,
+                  let enriched = savedPagesRepository.updateSavedPageMetadata(
+                    id: page.id,
+                    description: description,
+                    thumbnailUrl: thumbnailUrl
+                  ),
+                  let index = savedPages.firstIndex(where: { $0.id == page.id }) else { continue }
+            savedPages[index] = enriched
+        }
     }
     
     func refresh() async {
@@ -54,14 +92,18 @@ class SavedPagesViewModel: ObservableObject {
     }
     
     func removeSavedPage(_ savedPage: SavedPage) {
-        savedPagesRepository.removeSavedPage(savedPage.id)
+        let removedPage = savedPagesRepository.removeSavedPage(savedPage.id)
         savedPages.removeAll { $0.id == savedPage.id }
+        if #available(iOS 17.0, *), let removedPage {
+            Task {
+                await ProxyInterceptorService.shared.removeCachedResponses(pageId: removedPage.offlineCachePageId)
+            }
+        }
     }
     
     func moveSavedPages(from: IndexSet, to: Int) {
         savedPages.move(fromOffsets: from, toOffset: to)
-        // Save new order to repository
-        savedPagesRepository.updateOrder(savedPages)
+        savedPagesRepository.updateOrder(pageIDs: savedPages.map(\.id))
     }
     
     func navigateToPage(_ savedPage: SavedPage, appState: AppState) {
@@ -90,7 +132,7 @@ class SavedPagesViewModel: ObservableObject {
             url: savedPage.url, // Always use original HTTPS URL, never custom schemes
             snippet: savedPage.description,
             thumbnailUrl: savedPage.thumbnailUrl,
-            savedPageId: savedPage.id // Pass saved page ID for proxy configuration
+            savedPageId: savedPage.offlineCachePageId
         )
         
         // Note: Proxy configuration now happens in SavedPagesView.onAppear with intelligent mode detection
@@ -106,11 +148,11 @@ class SavedPagesViewModel: ObservableObject {
         
         // UNIFIED OFFLINE/ONLINE NAVIGATION: Use viewingURL which automatically chooses offline custom scheme or original URL
         let rawNavigationUrl = savedPage.viewingURL
-        let offlineStatusLog = savedPage.isAvailableOffline ? " (OFFLINE via \(rawNavigationUrl.scheme ?? "unknown")://)" : " (ONLINE)"
+        let offlineStatusLog = savedPage.canAttemptOfflineCacheRead ? " (CACHE CANDIDATE via \(rawNavigationUrl.scheme ?? "unknown")://)" : " (ONLINE)"
         
         // URL NORMALIZATION: For online URLs, ensure they're in the correct format
         let navigationUrl: URL
-        if savedPage.isAvailableOffline {
+        if savedPage.canAttemptOfflineCacheRead {
             // Offline URLs use custom scheme - don't normalize
             navigationUrl = rawNavigationUrl
         } else {
@@ -184,6 +226,7 @@ class SavedPagesViewModel: ObservableObject {
     }
 
     static func exportReadingListText(from pages: [SavedPage]) -> String {
+        let pages = visibleSavedPages(from: pages)
         var lines: [String] = [
             "OSRS Wiki Reading List",
             "Exported \(DateFormatter.localizedString(from: Date(), dateStyle: .medium, timeStyle: .short))",
@@ -220,7 +263,15 @@ class SavedPagesViewModel: ObservableObject {
     }
     
     func clearAllSavedPages() {
-        savedPagesRepository.clearSavedPages()
+        let removedPages = savedPagesRepository.clearSavedPages()
+        let cachePageIDs = Set(removedPages.map(\.offlineCachePageId))
+        if #available(iOS 17.0, *) {
+            Task {
+                for pageID in cachePageIDs {
+                    await ProxyInterceptorService.shared.removeCachedResponses(pageId: pageID)
+                }
+            }
+        }
         savedPages.removeAll()
         print("🗑️ SavedPagesViewModel: Cleared all saved pages")
     }
@@ -343,75 +394,6 @@ class SavedPagesViewModel: ObservableObject {
         print("  - With fragments: \(withFragmentCount)/\(savedPages.count)")
     }
     
-    // MARK: - Offline Functionality
-    
-    /// Download a saved page for offline viewing
-    func downloadPageForOffline(_ savedPage: SavedPage) async {
-        guard savedPage.offlineStatus.needsDownload else {
-            print("📄 SavedPagesViewModel: Page '\(savedPage.title)' already downloaded or in progress")
-            return
-        }
-        
-        print("⬇️ SavedPagesViewModel: Starting offline download for '\(savedPage.title)'")
-        
-        // Update status to downloading
-        updateSavedPageOfflineStatus(savedPage.id, status: .downloading)
-        
-        do {
-            try await OfflineContentService.shared.downloadPageForOfflineViewing(
-                pageUrl: savedPage.url,
-                pageId: savedPage.id,
-                pageTitle: savedPage.title
-            )
-            
-            // Update status to available and set metadata
-            updateSavedPageOfflineStatus(
-                savedPage.id,
-                status: .available,
-                downloadDate: Date(),
-                localPath: savedPage.id // Using page ID as the local directory name
-            )
-            
-            print("✅ SavedPagesViewModel: Successfully downloaded '\(savedPage.title)' for offline viewing")
-            
-        } catch {
-            print("❌ SavedPagesViewModel: Failed to download '\(savedPage.title)' for offline viewing: \(error)")
-            updateSavedPageOfflineStatus(savedPage.id, status: .failed)
-        }
-    }
-    
-    /// Update offline status for a saved page
-    private func updateSavedPageOfflineStatus(
-        _ pageId: String,
-        status: SavedPage.OfflineStatus,
-        downloadDate: Date? = nil,
-        localPath: String? = nil
-    ) {
-        guard let index = savedPages.firstIndex(where: { $0.id == pageId }) else { return }
-        
-        // Create updated page with new offline metadata
-        let currentPage = savedPages[index]
-        let updatedPage = SavedPage(
-            id: currentPage.id,
-            title: currentPage.title,
-            description: currentPage.description,
-            url: currentPage.url,
-            thumbnailUrl: currentPage.thumbnailUrl,
-            savedDate: currentPage.savedDate,
-            isOfflineAvailable: status == .available,
-            offlineDownloadDate: downloadDate ?? currentPage.offlineDownloadDate,
-            offlineStatus: status,
-            offlineFileSize: currentPage.offlineFileSize, // TODO: Calculate actual size
-            offlineLocalPath: localPath ?? currentPage.offlineLocalPath
-        )
-        
-        // Update in both the view model and repository
-        savedPages[index] = updatedPage
-        savedPagesRepository.updateSavedPage(updatedPage)
-        
-        print("🔄 SavedPagesViewModel: Updated offline status for '\(currentPage.title)' to \(status.rawValue)")
-    }
-    
     func filteredSavedPages(searchText: String) -> [SavedPage] {
         if searchText.isEmpty {
             return savedPages
@@ -448,9 +430,135 @@ struct SavedPage: Identifiable, Codable {
     let offlineStatus: OfflineStatus
     let offlineFileSize: Int64?
     let offlineLocalPath: String? // Path relative to offline_pages directory
+    /// Only an exact main-document + exhaustive artwork settlement may write the current marker.
+    /// A missing value identifies an older app record that must be refreshed before it is trusted.
+    let durableSettlementVersion: Int?
+    /// A persisted compare-and-swap token for one explicit refresh attempt. It prevents a stale
+    /// completion from publishing over a newer retry or resurrecting a deleted record.
+    let pendingSettlementGeneration: String?
+
+    static let currentDurableSettlementVersion = 1
+
+    init(
+        id: String,
+        title: String,
+        description: String?,
+        url: URL,
+        thumbnailUrl: URL?,
+        savedDate: Date,
+        isOfflineAvailable: Bool,
+        offlineDownloadDate: Date?,
+        offlineStatus: OfflineStatus,
+        offlineFileSize: Int64?,
+        offlineLocalPath: String?,
+        durableSettlementVersion: Int? = nil,
+        pendingSettlementGeneration: String? = nil
+    ) {
+        self.id = id
+        self.title = title
+        self.description = description
+        self.url = url
+        self.thumbnailUrl = thumbnailUrl
+        self.savedDate = savedDate
+        self.isOfflineAvailable = isOfflineAvailable
+        self.offlineDownloadDate = offlineDownloadDate
+        self.offlineStatus = offlineStatus
+        self.offlineFileSize = offlineFileSize
+        self.offlineLocalPath = offlineLocalPath
+        self.durableSettlementVersion = durableSettlementVersion
+        self.pendingSettlementGeneration = pendingSettlementGeneration
+    }
+
+    var hasCurrentDurableSettlement: Bool {
+        durableSettlementVersion == Self.currentDurableSettlementVersion
+    }
+
+    /// A legacy namespace can remain useful as a best-effort cache source while its metadata is
+    /// truthfully retryable. The proxy still verifies the exact main response before serving it.
+    var canAttemptOfflineCacheRead: Bool {
+        offlineLocalPath != nil && offlineStatus != .notDownloaded
+    }
+
+    /// The Saved list is a library of readable snapshots, not a progress/error queue for the
+    /// first save attempt. Retry records with an older readable namespace remain discoverable.
+    var isVisibleInSavedLibrary: Bool {
+        isAvailableOffline || canAttemptOfflineCacheRead
+    }
+
+    var savedLibraryStatusLabel: String {
+        if isAvailableOffline {
+            return "SAVED"
+        }
+        return offlineStatus == .downloading ? "UPDATING" : "RETRY"
+    }
+
+    /// Repository identity and cache namespace are intentionally distinct. Exact refreshes are
+    /// assembled under a generation-specific namespace and this pointer is changed only after
+    /// the entire snapshot is durable.
+    var offlineCachePageId: String {
+        offlineLocalPath ?? id
+    }
+
+    func requiringDurableSettlementRefresh() -> SavedPage {
+        SavedPage(
+            id: id,
+            title: title,
+            description: description,
+            url: url,
+            thumbnailUrl: thumbnailUrl,
+            savedDate: savedDate,
+            isOfflineAvailable: false,
+            offlineDownloadDate: offlineDownloadDate,
+            offlineStatus: .outdated,
+            offlineFileSize: offlineFileSize,
+            offlineLocalPath: offlineLocalPath,
+            durableSettlementVersion: nil,
+            pendingSettlementGeneration: nil
+        )
+    }
+
+    func markingCurrentDurableSettlementAvailable(
+        at downloadDate: Date,
+        offlineLocalPath: String? = nil,
+        offlineFileSize: Int64? = nil
+    ) -> SavedPage {
+        SavedPage(
+            id: id,
+            title: title,
+            description: description,
+            url: url,
+            thumbnailUrl: thumbnailUrl,
+            savedDate: savedDate,
+            isOfflineAvailable: true,
+            offlineDownloadDate: downloadDate,
+            offlineStatus: .available,
+            offlineFileSize: offlineFileSize,
+            offlineLocalPath: offlineLocalPath ?? id,
+            durableSettlementVersion: Self.currentDurableSettlementVersion,
+            pendingSettlementGeneration: nil
+        )
+    }
     
     var displayTitle: String {
         return title.replacingOccurrences(of: "_", with: " ").decodingHTMLEntities()
+    }
+
+    func replacingMetadata(description: String?, thumbnailUrl: URL?) -> SavedPage {
+        SavedPage(
+            id: id,
+            title: title,
+            description: description,
+            url: url,
+            thumbnailUrl: thumbnailUrl,
+            savedDate: savedDate,
+            isOfflineAvailable: isOfflineAvailable,
+            offlineDownloadDate: offlineDownloadDate,
+            offlineStatus: offlineStatus,
+            offlineFileSize: offlineFileSize,
+            offlineLocalPath: offlineLocalPath,
+            durableSettlementVersion: durableSettlementVersion,
+            pendingSettlementGeneration: pendingSettlementGeneration
+        )
     }
     
     // MARK: - Offline Status Enum
@@ -466,7 +574,7 @@ struct SavedPage: Identifiable, Codable {
         }
         
         var needsDownload: Bool {
-            return self == .notDownloaded || self == .failed
+            return self == .notDownloaded || self == .failed || self == .outdated
         }
     }
     
@@ -474,13 +582,15 @@ struct SavedPage: Identifiable, Codable {
     
     /// True if the page is fully available for offline viewing
     var isAvailableOffline: Bool {
-        return offlineStatus.isDownloadedSuccessfully && offlineLocalPath != nil
+        return offlineStatus.isDownloadedSuccessfully &&
+            offlineLocalPath != nil &&
+            hasCurrentDurableSettlement
     }
     
     /// Generate the appropriate URL for this page (iOS Web Archive approach)
     /// Returns custom scheme URL for offline content, original HTTPS URL for online content
     var viewingURL: URL {
-        if isAvailableOffline {
+        if canAttemptOfflineCacheRead {
             // Page is available offline - return custom scheme URL for web archive loading
             print("📦 SavedPage: Returning custom scheme URL for web archive loading")
             return URL(string: "app-assets://saved-pages/\(id)")!

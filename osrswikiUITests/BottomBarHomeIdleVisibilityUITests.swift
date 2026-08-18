@@ -6,7 +6,7 @@ final class BottomBarHomeIdleVisibilityUITests: XCTestCase {
         app.launchArguments = ["-startTab", "news"]
         app.launch()
 
-        let homeTab = app.buttons["news_tab"]
+        let homeTab = app.buttons["home_tab"]
         XCTAssertTrue(homeTab.waitForExistence(timeout: 10), "Home tab should be visible after launch")
 
         Thread.sleep(forTimeInterval: 8)

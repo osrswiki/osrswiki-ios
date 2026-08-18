@@ -7,8 +7,43 @@
 
 import Foundation
 
+struct osrsHistoryMetadataSnapshot: Sendable, Equatable {
+    let thumbnailUrl: URL?
+    let description: String?
+}
+
+/// Resolves rich update-card metadata already cached by Home. Wiki update pages often omit a
+/// `pageimages` thumbnail even though the feed carries the canonical card image, so History and
+/// Saved must share this deterministic fallback instead of independently losing that image.
+enum osrsHistoryUpdateMetadataResolver {
+    static func cachedMetadata(for item: HistoryItem, in feed: WikiFeed?) -> osrsHistoryMetadataSnapshot? {
+        cachedMetadata(forTitle: item.displayTitle, in: feed)
+    }
+
+    static func cachedMetadata(forTitle title: String, in feed: WikiFeed?) -> osrsHistoryMetadataSnapshot? {
+        guard let update = feed?.recentUpdates.first(where: {
+            normalizedTitle($0.title) == normalizedTitle(title)
+        }) else {
+            return nil
+        }
+
+        return osrsHistoryMetadataSnapshot(
+            thumbnailUrl: update.imageUrl.isEmpty ? nil : URL(string: update.imageUrl),
+            description: update.snippet.isEmpty ? nil : update.snippet
+        )
+    }
+
+    private static func normalizedTitle(_ title: String) -> String {
+        osrsStringUtils.extractMainTitle(title)
+            .folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
+            .split(whereSeparator: { $0.isWhitespace })
+            .joined(separator: " ")
+            .lowercased()
+    }
+}
+
 /// Service to enrich history entries with thumbnails and snippets, matching Android functionality
-class osrsHistoryEnricher {
+final class osrsHistoryEnricher: @unchecked Sendable {
     private let session: URLSession
     private let baseURL = "https://oldschool.runescape.wiki/api.php"
     
@@ -41,23 +76,24 @@ class osrsHistoryEnricher {
     /// Fetches thumbnail URL for a given page title
     /// Matches Android's PageImages API usage
     private func fetchThumbnailUrl(for title: String) async -> URL? {
-        let cleanTitle = title.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? title
-        
         var components = URLComponents(string: baseURL)!
         components.queryItems = [
             URLQueryItem(name: "action", value: "query"),
             URLQueryItem(name: "format", value: "json"),
             URLQueryItem(name: "formatversion", value: "2"),
-            URLQueryItem(name: "titles", value: cleanTitle),
+            URLQueryItem(name: "titles", value: title),
             URLQueryItem(name: "prop", value: "pageimages"),
+            URLQueryItem(name: "piprop", value: "thumbnail|original"),
             URLQueryItem(name: "pithumbsize", value: "240"), // Match Android's thumbnail size
-            URLQueryItem(name: "pilicense", value: "any")
+            URLQueryItem(name: "pilicense", value: "any"),
+            URLQueryItem(name: "redirects", value: "1")
         ]
         
         guard let url = components.url else { return nil }
         
         do {
-            let (data, _) = try await session.data(from: url)
+            let request = URLRequest(url: url, cachePolicy: .reloadRevalidatingCacheData, timeoutInterval: 10)
+            let (data, _) = try await session.data(for: request)
             let response = try JSONDecoder().decode(HistoryThumbnailResponse.self, from: data)
             
             if let pages = response.query?.pages,
@@ -75,25 +111,25 @@ class osrsHistoryEnricher {
     /// Fetches page extract/snippet for a given page title
     /// Matches Android's PageExtracts API usage
     private func fetchPageExtract(for title: String) async -> String? {
-        let cleanTitle = title.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? title
-        
         var components = URLComponents(string: baseURL)!
         components.queryItems = [
             URLQueryItem(name: "action", value: "query"),
             URLQueryItem(name: "format", value: "json"),
             URLQueryItem(name: "formatversion", value: "2"),
-            URLQueryItem(name: "titles", value: cleanTitle),
+            URLQueryItem(name: "titles", value: title),
             URLQueryItem(name: "prop", value: "extracts"),
             URLQueryItem(name: "exintro", value: "true"), // Only intro section
             URLQueryItem(name: "explaintext", value: "true"), // Plain text, no HTML
             URLQueryItem(name: "exsectionformat", value: "plain"),
-            URLQueryItem(name: "exchars", value: "200") // Limit to ~200 characters
+            URLQueryItem(name: "exchars", value: "200"), // Limit to ~200 characters
+            URLQueryItem(name: "redirects", value: "1")
         ]
         
         guard let url = components.url else { return nil }
         
         do {
-            let (data, _) = try await session.data(from: url)
+            let request = URLRequest(url: url, cachePolicy: .reloadRevalidatingCacheData, timeoutInterval: 10)
+            let (data, _) = try await session.data(for: request)
             let response = try JSONDecoder().decode(WikiExtractResponse.self, from: data)
             
             if let pages = response.query?.pages,
@@ -137,8 +173,8 @@ private struct HistoryThumbnailQuery: Codable {
 }
 
 private struct HistoryThumbnailPage: Codable {
-    let pageid: Int
-    let title: String
+    let pageid: Int?
+    let title: String?
     let thumbnail: HistoryWikiThumbnail?
 }
 
@@ -158,7 +194,7 @@ private struct WikiExtractQuery: Codable {
 }
 
 private struct WikiExtractPage: Codable {
-    let pageid: Int
-    let title: String
+    let pageid: Int?
+    let title: String?
     let extract: String?
 }

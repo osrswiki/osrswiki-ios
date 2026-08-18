@@ -11,86 +11,82 @@ import Foundation
 class SearchRepository {
     private let baseURL = "https://oldschool.runescape.wiki/api.php"
     
-    func search(query: String, limit: Int = 50, offset: Int = 0) async throws -> SearchResponse {
+    func search(
+        query: String,
+        limit: Int = 50,
+        offset: Int = 0,
+        onPartialResults: ((SearchResponse) -> Void)? = nil
+    ) async throws -> SearchResponse {
         guard !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             return SearchResponse(results: [], hasMore: false, totalCount: 0)
         }
         
-        // Build MediaWiki API search URL with pagination support and relevance ranking
-        var components = URLComponents(string: baseURL)!
-        components.queryItems = [
-            URLQueryItem(name: "action", value: "query"),
-            URLQueryItem(name: "format", value: "json"),
-            URLQueryItem(name: "formatversion", value: "2"), // Use format version 2 for consistency with Android
-            URLQueryItem(name: "list", value: "search"),
-            URLQueryItem(name: "srsearch", value: query),
-            URLQueryItem(name: "srlimit", value: String(limit)),
-            URLQueryItem(name: "sroffset", value: String(offset)),
-            URLQueryItem(name: "srprop", value: "snippet|size|wordcount|timestamp"), // Match Android's props
-            URLQueryItem(name: "srsort", value: "relevance"), // Critical: explicit relevance sorting
-            // Removed srnamespace filter to match Android (includes all namespaces)
-            URLQueryItem(name: "srinfo", value: "totalhits") // Get total result count
-        ]
-        
-        guard let url = components.url else {
-            throw SearchError.invalidURL
-        }
-
-        // Make API request with proper error handling
+        // Fulltext search misses title-prefix hits such as "earth ru" → Earth rune
+        // (Cirrus ranks popular *rune* pages instead). OpenSearch/prefixsearch is
+        // what the website search box uses. Fetch both in parallel on the first
+        // page so typeahead ranking matches the web box without dropping
+        // descriptive queries like "amulet glo".
         do {
-            let (data, response) = try await NetworkManager.shared.performDataRequest(url: url)
-            
-            guard let httpResponse = response as? HTTPURLResponse else {
-                throw SearchError.invalidResponse
-            }
-            
-            switch httpResponse.statusCode {
-            case 200:
-                break
-            case 429:
-                throw SearchError.rateLimited
-            case 500...599:
-                throw SearchError.serverError
-            default:
-                throw SearchError.invalidResponse
-            }
-            
-            // Parse JSON response
-            let searchResponse = try JSONDecoder().decode(WikiSearchResponse.self, from: data)
-
-            // Step 1: Map search results to SearchResult objects with preserved ranking
-            var searchResults = searchResponse.query.search.enumerated().map { (index, apiResult) in
-                SearchResult(
-                    id: String(apiResult.pageid),
-                    title: apiResult.title,
-                    description: apiResult.snippet?.htmlStripped(), // HTML-stripped for fallback
-                    rawSnippet: apiResult.snippet, // Raw HTML with <span class="searchmatch"> tags
-                    url: URL(string: "https://oldschool.runescape.wiki/w/\(apiResult.title.replacingOccurrences(of: " ", with: "_"))")!,
-                    thumbnailUrl: nil, // Will be set in step 2
-                    ns: apiResult.ns, // Include namespace ID to match Android
-                    namespace: namespaceDisplayName(for: apiResult.ns), // Convert to readable name
-                    score: nil,
-                    index: index + 1, // Maintain search ranking order
-                    size: apiResult.size,
-                    wordcount: apiResult.wordcount,
-                    timestamp: apiResult.timestamp
+            async let openSearchResult = fetchOpenSearchPagesIfNeeded(
+                query: query,
+                limit: min(limit, 10),
+                offset: offset
+            )
+            async let prefixResult = offset == 0
+                ? fetchGeneratedPages(
+                    generator: "prefixsearch",
+                    searchItemName: "gpssearch",
+                    searchValue: SearchQueryPolicy.apiQuery(query),
+                    limitItemName: "gpslimit",
+                    limit: min(limit, 10),
+                    offsetItemName: nil,
+                    offset: 0,
+                    extraItems: [],
+                    includeExtracts: true
                 )
+                : SearchGeneratorPageFetch(pages: [], hasMore: false)
+            async let fulltextResult = fetchGeneratedPages(
+                generator: "search",
+                searchItemName: "gsrsearch",
+                searchValue: SearchQueryPolicy.networkQuery(query),
+                limitItemName: "gsrlimit",
+                limit: limit,
+                offsetItemName: "gsroffset",
+                offset: offset,
+                extraItems: [
+                    URLQueryItem(name: "gsrprop", value: "snippet|size|wordcount|timestamp"),
+                    URLQueryItem(name: "gsrsort", value: "relevance")
+                ],
+                includeExtracts: false
+            )
+
+            let openSearchPages = await openSearchResult
+            if offset == 0, let onPartialResults, !openSearchPages.isEmpty {
+                onPartialResults(makeSearchResponse(
+                    pages: openSearchPages,
+                    offset: offset,
+                    hasMore: true
+                ))
             }
-            
-            // Step 2: Fetch thumbnails in batch (matching Android's efficient approach)
-            if !searchResults.isEmpty {
-                let thumbnailMap = await fetchThumbnailsBatch(for: searchResults)
-                searchResults = searchResults.map { result in
-                    var updatedResult = result
-                    updatedResult.thumbnailUrl = thumbnailMap[result.id]
-                    return updatedResult
-                }
+            let fulltextFetch = try await fulltextResult
+            if offset == 0, let onPartialResults {
+                onPartialResults(makeSearchResponse(
+                    pages: SearchQueryPolicy.merge(prefix: [], fulltext: fulltextFetch.pages, for: query),
+                    offset: offset,
+                    hasMore: fulltextFetch.hasMore
+                ))
             }
-            
-            let totalHits = searchResponse.query.searchinfo?.totalhits ?? searchResults.count
-            let hasMore = (offset + searchResults.count) < totalHits
-            
-            return SearchResponse(results: searchResults, hasMore: hasMore, totalCount: totalHits)
+            let prefixFetch = try await prefixResult
+            let rankedPages = SearchQueryPolicy.merge(
+                prefix: prefixFetch.pages,
+                fulltext: fulltextFetch.pages,
+                for: query
+            )
+            return makeSearchResponse(
+                pages: rankedPages,
+                offset: offset,
+                hasMore: fulltextFetch.hasMore
+            )
             
         } catch let error as SearchError {
             throw error
@@ -110,6 +106,145 @@ class SearchRepository {
                 throw SearchError.unknown(error)
             }
         }
+    }
+
+    private struct SearchGeneratorPageFetch {
+        let pages: [WikiGeneratedSearchPage]
+        let hasMore: Bool
+    }
+
+    private func makeSearchResponse(
+        pages: [WikiGeneratedSearchPage],
+        offset: Int,
+        hasMore: Bool
+    ) -> SearchResponse {
+        let searchResults = pages.map { apiResult in
+            SearchResult(
+                id: apiResult.pageid > 0 ? String(apiResult.pageid) : "title:\(apiResult.title)",
+                title: apiResult.title,
+                description: apiResult.snippet?.htmlStripped(),
+                rawSnippet: apiResult.snippet,
+                url: URL(string: "https://oldschool.runescape.wiki/w/\(apiResult.title.replacingOccurrences(of: " ", with: "_"))")!,
+                thumbnailUrl: apiResult.thumbnail.flatMap { URL(string: $0.source) },
+                ns: apiResult.ns,
+                namespace: namespaceDisplayName(for: apiResult.ns),
+                score: nil,
+                index: apiResult.index,
+                size: apiResult.size,
+                wordcount: apiResult.wordcount,
+                timestamp: apiResult.timestamp
+            )
+        }
+        let totalHits = offset + searchResults.count + (hasMore ? 1 : 0)
+        return SearchResponse(results: searchResults, hasMore: hasMore, totalCount: totalHits)
+    }
+
+    private func fetchOpenSearchPagesIfNeeded(query: String, limit: Int, offset: Int) async -> [WikiGeneratedSearchPage] {
+        guard offset == 0 else { return [] }
+        return (try? await fetchOpenSearchPages(query: query, limit: limit)) ?? []
+    }
+
+    private func fetchOpenSearchPages(query: String, limit: Int) async throws -> [WikiGeneratedSearchPage] {
+        var components = URLComponents(string: baseURL)!
+        components.queryItems = [
+            URLQueryItem(name: "action", value: "opensearch"),
+            URLQueryItem(name: "format", value: "json"),
+            URLQueryItem(name: "redirects", value: "resolve"),
+            URLQueryItem(name: "search", value: SearchQueryPolicy.apiQuery(query)),
+            URLQueryItem(name: "limit", value: String(limit))
+        ]
+        guard let url = components.url else { throw SearchError.invalidURL }
+        let (data, response) = try await NetworkManager.shared.performDataRequest(url: url)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw SearchError.invalidResponse
+        }
+        guard httpResponse.statusCode == 200 else {
+            throw SearchError.invalidResponse
+        }
+        guard let root = try JSONSerialization.jsonObject(with: data) as? [Any],
+              root.count >= 3,
+              let titles = root[1] as? [String] else {
+            return []
+        }
+        let descriptions = root[2] as? [String] ?? []
+        return titles.enumerated().map { index, title in
+            let snippet = descriptions.indices.contains(index) ? descriptions[index] : nil
+            return WikiGeneratedSearchPage(
+                ns: 0,
+                pageid: 0,
+                title: title,
+                index: index + 1,
+                snippet: snippet?.isEmpty == false ? snippet : nil,
+                size: nil,
+                wordcount: nil,
+                timestamp: nil,
+                thumbnail: nil
+            )
+        }
+    }
+
+    private func fetchGeneratedPages(
+        generator: String,
+        searchItemName: String,
+        searchValue: String,
+        limitItemName: String,
+        limit: Int,
+        offsetItemName: String?,
+        offset: Int,
+        extraItems: [URLQueryItem],
+        includeExtracts: Bool
+    ) async throws -> SearchGeneratorPageFetch {
+        var components = URLComponents(string: baseURL)!
+        var items: [URLQueryItem] = [
+            URLQueryItem(name: "action", value: "query"),
+            URLQueryItem(name: "format", value: "json"),
+            URLQueryItem(name: "formatversion", value: "2"),
+            URLQueryItem(name: "redirects", value: "true"),
+            URLQueryItem(name: "generator", value: generator),
+            URLQueryItem(name: searchItemName, value: searchValue),
+            URLQueryItem(name: limitItemName, value: String(limit)),
+            URLQueryItem(name: "prop", value: includeExtracts ? "pageimages|extracts" : "pageimages"),
+            URLQueryItem(name: "piprop", value: "thumbnail"),
+            URLQueryItem(name: "pilicense", value: "any"),
+            URLQueryItem(name: "pithumbsize", value: "240")
+        ]
+        if includeExtracts {
+            items.append(contentsOf: [
+                URLQueryItem(name: "exintro", value: "1"),
+                URLQueryItem(name: "explaintext", value: "1"),
+                URLQueryItem(name: "exchars", value: "160"),
+                URLQueryItem(name: "exlimit", value: "max")
+            ])
+        }
+        if let offsetItemName, offset > 0 {
+            items.append(URLQueryItem(name: offsetItemName, value: String(offset)))
+        }
+        items.append(contentsOf: extraItems)
+        components.queryItems = items
+        guard let url = components.url else {
+            throw SearchError.invalidURL
+        }
+
+        let (data, response) = try await NetworkManager.shared.performDataRequest(url: url)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw SearchError.invalidResponse
+        }
+        switch httpResponse.statusCode {
+        case 200:
+            break
+        case 429:
+            throw SearchError.rateLimited
+        case 500...599:
+            throw SearchError.serverError
+        default:
+            throw SearchError.invalidResponse
+        }
+
+        let decoded = try JSONDecoder().decode(WikiGeneratedSearchResponse.self, from: data)
+        return SearchGeneratorPageFetch(
+            pages: decoded.query?.pages ?? [],
+            hasMore: decoded.continuation?.gsroffset != nil
+        )
     }
 
     private func searchError(from error: NetworkError) -> SearchError {
@@ -134,78 +269,6 @@ class SearchRepository {
             }
             return .unknown(error)
         }
-    }
-    
-    // Efficient batch thumbnail fetching (matching Android's approach)
-    private func fetchThumbnailsBatch(for searchResults: [SearchResult]) async -> [String: URL] {
-        // Limit to first 50 results to respect MediaWiki API constraints
-        let resultsToFetch = Array(searchResults.prefix(50))
-        let pageIds = resultsToFetch.map { $0.id }.joined(separator: "|")
-        
-        var components = URLComponents(string: baseURL)!
-        components.queryItems = [
-            URLQueryItem(name: "action", value: "query"),
-            URLQueryItem(name: "format", value: "json"),
-            URLQueryItem(name: "formatversion", value: "2"),
-            URLQueryItem(name: "pageids", value: pageIds), // Use pageids instead of titles for efficiency
-            URLQueryItem(name: "prop", value: "pageimages"),
-            URLQueryItem(name: "pilicense", value: "any"),
-            URLQueryItem(name: "pithumbsize", value: "240") // Match Android's thumbnail size
-        ]
-        
-        guard let url = components.url else { return [:] }
-        
-        do {
-            let (data, _) = try await NetworkManager.shared.performDataRequest(url: url)
-            let response = try JSONDecoder().decode(WikiBatchThumbnailResponse.self, from: data)
-            
-            var thumbnailMap: [String: URL] = [:]
-            
-            if let pages = response.query?.pages {
-                for page in pages {
-                    if let thumbnail = page.thumbnail,
-                       let thumbnailURL = URL(string: thumbnail.source) {
-                        thumbnailMap[String(page.pageid)] = thumbnailURL
-                    }
-                }
-            }
-            
-            return thumbnailMap
-        } catch {
-            // Silently fail for thumbnail fetching - not critical for functionality
-            return [:]
-        }
-    }
-    
-    // Legacy method - kept for compatibility but not used in new implementation
-    private func fetchThumbnailURL(for title: String) async -> URL? {
-        let cleanTitle = title.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? title
-        
-        var components = URLComponents(string: baseURL)!
-        components.queryItems = [
-            URLQueryItem(name: "action", value: "query"),
-            URLQueryItem(name: "format", value: "json"),
-            URLQueryItem(name: "titles", value: cleanTitle),
-            URLQueryItem(name: "prop", value: "pageimages"),
-            URLQueryItem(name: "pithumbsize", value: "240") // Updated to match Android
-        ]
-        
-        guard let url = components.url else { return nil }
-        
-        do {
-            let (data, _) = try await NetworkManager.shared.performDataRequest(url: url)
-            let response = try JSONDecoder().decode(WikiThumbnailResponse.self, from: data)
-            
-            if let pages = response.query?.pages,
-               let page = pages.values.first,
-               let thumbnail = page.thumbnail {
-                return URL(string: thumbnail.source)
-            }
-        } catch {
-            // Silently fail for thumbnail fetching
-        }
-        
-        return nil
     }
     
     // Convert namespace ID to human readable name (matching Android behavior)
@@ -252,9 +315,9 @@ enum SearchError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .invalidURL:
-            return "Invalid search URL"
+            return "Search is unavailable right now. Please try again."
         case .invalidResponse:
-            return "Invalid server response"
+            return "Search is unavailable right now. Please try again."
         case .networkUnavailable:
             return "No internet connection"
         case .timeout:
@@ -262,11 +325,11 @@ enum SearchError: LocalizedError {
         case .rateLimited:
             return "Too many requests. Please try again later."
         case .serverError:
-            return "Server error. Please try again."
-        case .networkError(let urlError):
-            return urlError.localizedDescription
-        case .unknown(let error):
-            return error.localizedDescription
+            return "Search is unavailable right now. Please try again."
+        case .networkError:
+            return "Search is unavailable right now. Please try again."
+        case .unknown:
+            return "Something went wrong. Please try again."
         }
     }
 }
@@ -295,31 +358,125 @@ struct WikiSearchResult: Codable {
     let timestamp: String?
 }
 
-// Legacy thumbnail response (for single page requests)
-struct WikiThumbnailResponse: Codable {
-    let query: WikiThumbnailQuery?
+struct WikiGeneratedSearchResponse: Codable {
+    let continuation: WikiGeneratedSearchContinuation?
+    let query: WikiGeneratedSearchQuery?
+
+    enum CodingKeys: String, CodingKey {
+        case continuation = "continue"
+        case query
+    }
 }
 
-struct WikiThumbnailQuery: Codable {
-    let pages: [String: WikiPage]?
+struct WikiGeneratedSearchContinuation: Codable {
+    let gsroffset: Int?
 }
 
-struct WikiPage: Codable {
-    let thumbnail: WikiThumbnail?
+struct WikiGeneratedSearchQuery: Codable {
+    let pages: [WikiGeneratedSearchPage]
 }
 
-// Batch thumbnail response (for multiple pages using pageids)
-struct WikiBatchThumbnailResponse: Codable {
-    let query: WikiBatchThumbnailQuery?
-}
+struct WikiGeneratedSearchPage: Codable {
+    enum CodingKeys: String, CodingKey {
+        case ns, pageid, title, index, snippet, extract, size, wordcount, timestamp, thumbnail
+    }
 
-struct WikiBatchThumbnailQuery: Codable {
-    let pages: [WikiBatchPage]
-}
-
-struct WikiBatchPage: Codable {
+    let ns: Int
     let pageid: Int
+    let title: String
+    let index: Int
+    let snippet: String?
+    let extract: String?
+    let size: Int?
+    let wordcount: Int?
+    let timestamp: String?
     let thumbnail: WikiThumbnail?
+
+    init(
+        ns: Int,
+        pageid: Int,
+        title: String,
+        index: Int,
+        snippet: String?,
+        extract: String? = nil,
+        size: Int?,
+        wordcount: Int?,
+        timestamp: String?,
+        thumbnail: WikiThumbnail?
+    ) {
+        self.ns = ns
+        self.pageid = pageid
+        self.title = title
+        self.index = index
+        self.snippet = snippet
+        self.extract = extract
+        self.size = size
+        self.wordcount = wordcount
+        self.timestamp = timestamp
+        self.thumbnail = thumbnail
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        ns = try container.decodeIfPresent(Int.self, forKey: .ns) ?? 0
+        pageid = try container.decode(Int.self, forKey: .pageid)
+        title = try container.decode(String.self, forKey: .title)
+        index = try container.decodeIfPresent(Int.self, forKey: .index) ?? 0
+        snippet = try container.decodeIfPresent(String.self, forKey: .snippet)
+        extract = try container.decodeIfPresent(String.self, forKey: .extract)
+        size = try container.decodeIfPresent(Int.self, forKey: .size)
+        wordcount = try container.decodeIfPresent(Int.self, forKey: .wordcount)
+        timestamp = try container.decodeIfPresent(String.self, forKey: .timestamp)
+        thumbnail = try container.decodeIfPresent(WikiThumbnail.self, forKey: .thumbnail)
+    }
+
+    func withPreviewFallback() -> WikiGeneratedSearchPage {
+        let preview = firstNonBlank(snippet, extract)
+        guard preview != snippet else { return self }
+        return replacing(snippet: preview, extract: extract, thumbnail: thumbnail, size: size, wordcount: wordcount, timestamp: timestamp)
+    }
+
+    func enriched(with other: WikiGeneratedSearchPage) -> WikiGeneratedSearchPage {
+        replacing(
+            snippet: firstNonBlank(snippet, extract, other.snippet, other.extract),
+            extract: firstNonBlank(extract, other.extract),
+            thumbnail: thumbnail ?? other.thumbnail,
+            size: size ?? other.size,
+            wordcount: wordcount ?? other.wordcount,
+            timestamp: timestamp ?? other.timestamp
+        )
+    }
+
+    private func replacing(
+        snippet: String?,
+        extract: String?,
+        thumbnail: WikiThumbnail?,
+        size: Int?,
+        wordcount: Int?,
+        timestamp: String?
+    ) -> WikiGeneratedSearchPage {
+        WikiGeneratedSearchPage(
+            ns: ns,
+            pageid: pageid,
+            title: title,
+            index: index,
+            snippet: snippet,
+            extract: extract,
+            size: size,
+            wordcount: wordcount,
+            timestamp: timestamp,
+            thumbnail: thumbnail
+        )
+    }
+}
+
+private func firstNonBlank(_ values: String?...) -> String? {
+    for value in values {
+        if let value, !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return value
+        }
+    }
+    return nil
 }
 
 struct WikiThumbnail: Codable {

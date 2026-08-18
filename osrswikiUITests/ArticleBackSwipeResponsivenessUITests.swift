@@ -53,6 +53,106 @@ final class ArticleBackSwipeResponsivenessUITests: XCTestCase {
         attachScreenshot(named: "03-after-short-leading-edge-swipe")
     }
 
+    func testSlowLeadingSwipeRevealsPreviousArticleBeforeCommit() throws {
+        let firstArticle = articleWebView()
+        XCTAssertTrue(firstArticle.waitForExistence(timeout: 20), "Expected Blood Moon article to open from launch arguments")
+        try navigateToQuickGuideFromArticle()
+
+        let secondArticle = articleWebView()
+        XCTAssertTrue(secondArticle.waitForExistence(timeout: 20), "Expected quick guide article to open as a second article push")
+        attachScreenshot(named: "interactive-before-slow-back-swipe")
+
+        let start = secondArticle.coordinate(withNormalizedOffset: CGVector(dx: 0.04, dy: 0.50))
+        let mid = secondArticle.coordinate(withNormalizedOffset: CGVector(dx: 0.52, dy: 0.50))
+        start.press(
+            forDuration: 0.12,
+            thenDragTo: mid,
+            withVelocity: XCUIGestureVelocity(45),
+            thenHoldForDuration: 0.8
+        )
+
+        XCTAssertTrue(
+            backTargetAfterPoppingSecondArticle().waitForExistence(timeout: 5),
+            "A slow interactive back swipe should pop once the finger crosses the commit threshold"
+        )
+        attachScreenshot(named: "interactive-after-slow-back-swipe")
+    }
+
+    func testVerticalDragDoesNotTriggerArticleSwipe() throws {
+        let article = articleWebView()
+        XCTAssertTrue(article.waitForExistence(timeout: 20), "Expected Blood Moon article to open from launch arguments")
+        attachScreenshot(named: "vertical-before-scroll")
+
+        let start = article.coordinate(withNormalizedOffset: CGVector(dx: 0.50, dy: 0.42))
+        let end = article.coordinate(withNormalizedOffset: CGVector(dx: 0.52, dy: 0.12))
+        start.press(
+            forDuration: 0.05,
+            thenDragTo: end,
+            withVelocity: XCUIGestureVelocity(220),
+            thenHoldForDuration: 0.05
+        )
+
+        XCTAssertTrue(
+            app.staticTexts["The Blood Moon Rises"].waitForExistence(timeout: 2),
+            "A mostly vertical drag must keep the current article instead of swiping back or opening contents"
+        )
+        XCTAssertFalse(app.otherElements["contents_drawer"].exists)
+        attachScreenshot(named: "vertical-after-scroll")
+    }
+
+    func testHomeArticleBackButtonReturnsToHome() throws {
+        try launchHomeRootArticle()
+
+        let backButton = app.buttons["Back"]
+        XCTAssertTrue(backButton.waitForExistence(timeout: 5), app.debugDescription)
+        backButton.tap()
+
+        assertHomeReturnedAfterRootArticleBack()
+        attachScreenshot(named: "home-after-root-article-back")
+    }
+
+    func testHomeArticleLeadingEdgeSwipeReturnsToHome() throws {
+        try launchHomeRootArticle()
+
+        let article = articleWebView()
+        let start = article.coordinate(withNormalizedOffset: CGVector(dx: 0.08, dy: 0.50))
+        let end = article.coordinate(withNormalizedOffset: CGVector(dx: 0.55, dy: 0.50))
+        start.press(forDuration: 0.04, thenDragTo: end)
+
+        assertHomeReturnedAfterRootArticleBack()
+        attachScreenshot(named: "home-after-root-article-edge-swipe")
+    }
+
+    private func launchHomeRootArticle() throws {
+        app.terminate()
+        app = XCUIApplication()
+        app.launchArguments = [
+            "-disableBackgroundPreloading",
+            "-disableSearchAutofocusForUITests",
+            "-startTab",
+            "news",
+            "-allowProxyStartupDuringTests"
+        ]
+        app.launch()
+
+        let updateCard = app.buttons.matching(identifier: "home_update_card").firstMatch
+        XCTAssertTrue(updateCard.waitForExistence(timeout: 25), app.debugDescription)
+        updateCard.tap()
+        XCTAssertTrue(articleWebView().waitForExistence(timeout: 25), "Expected Home update to open as a root article")
+    }
+
+    private func assertHomeReturnedAfterRootArticleBack(
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        XCTAssertTrue(
+            app.otherElements["home_screen"].waitForExistence(timeout: 3),
+            "Home article back must pop the visible News stack rather than an off-screen stack or WebView redirect",
+            file: file,
+            line: line
+        )
+    }
+
     private func navigateToQuickGuideFromArticle() throws {
         let quickGuideLink = app.links.matching(NSPredicate(format: "label CONTAINS[c] %@", "quick guide")).firstMatch
         XCTAssertTrue(quickGuideLink.waitForExistence(timeout: 20), app.debugDescription)

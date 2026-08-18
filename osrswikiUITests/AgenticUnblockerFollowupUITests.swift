@@ -42,7 +42,7 @@ final class AgenticUnblockerFollowupUITests: XCTestCase {
         let app = makeApp(
             startTab: "saved",
             extraArguments: [
-                "-seedSavedPagesForUITests",
+                "-seedRetryableSavedPageForUITests",
                 "-forceNetworkOfflineForUITests",
                 "-allowProxyStartupDuringTests"
             ]
@@ -55,6 +55,68 @@ final class AgenticUnblockerFollowupUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Failed to Load Page"].waitForExistence(timeout: loadTimeout))
         XCTAssertTrue(app.buttons["Retry"].waitForExistence(timeout: 3))
         attachDebugDescription(from: app, name: "offline-uncached-saved-article")
+    }
+
+    func testRetryableSavedArticleTransfersRoutePublishesAndRefreshesSavedRoot() throws {
+        let app = makeApp(
+            startTab: "saved",
+            extraArguments: [
+                "-seedRetryableSavedPageForUITests",
+                "-allowProxyStartupDuringTests"
+            ]
+        )
+        app.launch()
+
+        XCTAssertTrue(app.wait(for: .runningForeground, timeout: launchTimeout))
+        let initialMetadata = app.staticTexts["saved_row_metadata"]
+        XCTAssertTrue(initialMetadata.waitForExistence(timeout: 8))
+        XCTAssertTrue(initialMetadata.label.hasPrefix("RETRY"))
+        openSeededSavedPage(in: app)
+
+        XCTAssertTrue(app.webViews.firstMatch.waitForExistence(timeout: loadTimeout))
+        let retry = app.buttons["Retry"]
+        XCTAssertTrue(
+            retry.waitForExistence(timeout: 8),
+            "An outdated/failed Saved article should expose its in-place Retry action"
+        )
+        retry.tap()
+
+        let saving = app.buttons.matching(
+            NSPredicate(format: "label BEGINSWITH 'Saving...'" )
+        ).firstMatch
+        XCTAssertTrue(saving.waitForExistence(timeout: 8), "Retry must enter its explicit settlement before Back")
+        let back = try articleBackButton(in: app)
+        XCTAssertTrue(back.isHittable)
+        back.tap()
+        XCTAssertTrue(element(in: app, identifier: "saved_pages_screen").waitForExistence(timeout: 10))
+
+        let refreshedMetadata = app.staticTexts["saved_row_metadata"]
+        XCTAssertTrue(refreshedMetadata.waitForExistence(timeout: 10))
+        let savedPredicate = NSPredicate(format: "label BEGINSWITH 'SAVED'")
+        expectation(
+            for: savedPredicate,
+            evaluatedWith: refreshedMetadata,
+            handler: nil
+        )
+        waitForExpectations(timeout: 120)
+
+        openSeededSavedPage(in: app)
+        XCTAssertTrue(app.webViews.firstMatch.waitForExistence(timeout: loadTimeout))
+        XCTAssertTrue(
+            app.buttons["Saved"].waitForExistence(timeout: 8),
+            "Reopening the same row must bind the newly published snapshot rather than the retired route"
+        )
+        attachScreenshot(from: app, name: "saved-retry-published-and-reopened")
+        attachDebugDescription(from: app, name: "saved-retry-published-and-reopened")
+
+        app.buttons["Saved"].tap()
+        let secondBack = try articleBackButton(in: app)
+        secondBack.tap()
+        XCTAssertTrue(element(in: app, identifier: "saved_pages_screen").waitForExistence(timeout: 10))
+        XCTAssertTrue(
+            app.staticTexts["No Saved Pages"].waitForExistence(timeout: 10),
+            "An unsave mutation from ArticleView must remove the retained Saved row after Back"
+        )
     }
 
     func testForcedOfflineSearchShowsSearchErrorWithoutHostDnsBlackhole() throws {
@@ -84,6 +146,32 @@ final class AgenticUnblockerFollowupUITests: XCTestCase {
             "Forced-offline Search should not show a stale online Varrock result"
         )
         attachDebugDescription(from: app, name: "forced-offline-search-error")
+    }
+
+    func testOnlineSearchOpensArticleWithoutFalseOfflineError() throws {
+        let app = makeApp(
+            startTab: "search",
+            extraArguments: ["-disableSearchAutofocusForUITests"]
+        )
+        app.launch()
+
+        XCTAssertTrue(app.wait(for: .runningForeground, timeout: launchTimeout))
+        XCTAssertTrue(element(in: app, identifier: "search_screen").waitForExistence(timeout: 8))
+
+        let searchField = app.textFields["search_input"]
+        XCTAssertTrue(searchField.waitForExistence(timeout: 5))
+        searchField.tap()
+        app.typeText("Lumbridge")
+
+        let result = app.staticTexts["Lumbridge"].firstMatch
+        XCTAssertTrue(result.waitForExistence(timeout: loadTimeout), "Live Search should return Lumbridge")
+        XCTAssertFalse(app.alerts["Search Error"].exists, "Reachable Search must not surface a false offline error")
+        result.tap()
+
+        XCTAssertTrue(element(in: app, identifier: "article_web_view").waitForExistence(timeout: loadTimeout))
+        XCTAssertFalse(app.staticTexts["Failed to Load Page"].exists, "Selected live Search result should load its article")
+        attachScreenshot(from: app, name: "online-search-article-loaded")
+        attachDebugDescription(from: app, name: "online-search-article-loaded")
     }
 
     func testDegradedNetworkSearchTimeoutShowsErrorAndKeepsTabsReachable() throws {
@@ -226,8 +314,11 @@ final class AgenticUnblockerFollowupUITests: XCTestCase {
         XCTAssertTrue(searchEntry.waitForExistence(timeout: 5))
         searchEntry.tap()
 
-        let filterField = app.textFields["Search saved pages"]
+        let filterField = app.textFields["saved_search_input"]
         XCTAssertTrue(filterField.waitForExistence(timeout: 5))
+
+        XCTAssertTrue(app.buttons["saved_search_back_button"].exists)
+        XCTAssertTrue(app.buttons["saved_search_voice_search"].exists)
 
         app.typeText("Var")
 
@@ -237,7 +328,109 @@ final class AgenticUnblockerFollowupUITests: XCTestCase {
             "Saved search should focus the destination field when opened; value was '\(value)'"
         )
         XCTAssertTrue(seededSavedRow(in: app).waitForExistence(timeout: 3))
+
+        let clear = app.buttons["saved_search_clear_button"]
+        XCTAssertTrue(clear.waitForExistence(timeout: 3))
+        clear.tap()
+        XCTAssertFalse(
+            (filterField.value as? String ?? "").localizedCaseInsensitiveContains("Var"),
+            "Clearing Saved search must remove the typed query without replacing the editor."
+        )
         attachDebugDescription(from: app, name: "saved-filter-focused")
+    }
+
+    func testSavedLauncherEditorGeometryRowsAndThemedCanvasInLightAndDark() throws {
+        var canvasLuminanceByTheme: [String: Double] = [:]
+
+        for theme in ["osrs_light", "osrs_dark"] {
+            let app = makeApp(
+                startTab: "saved",
+                extraArguments: [
+                    "-seedSavedPagesForUITests",
+                    "-forceThemeForUITests", theme
+                ]
+            )
+            app.launch()
+
+            XCTAssertTrue(app.wait(for: .runningForeground, timeout: launchTimeout))
+            let rowTitle = app.staticTexts["Varrock"]
+            let preview = app.staticTexts["saved_row_preview"]
+            let metadata = app.staticTexts["saved_row_metadata"]
+            XCTAssertTrue(rowTitle.waitForExistence(timeout: 8))
+            XCTAssertTrue(preview.waitForExistence(timeout: 5))
+            XCTAssertTrue(metadata.waitForExistence(timeout: 5))
+            XCTAssertEqual(preview.label, "Seeded saved page for UI navigation testing")
+            XCTAssertLessThan(preview.frame.height, 30, "Normal-size Saved preview must remain exactly one visual line")
+            XCTAssertTrue(metadata.label.hasPrefix("SAVED •"), "Saved metadata must remain below the one-line preview")
+            XCTAssertTrue(metadata.label.contains("2025"), "Saved metadata must retain the compact localized date")
+            XCTAssertFalse(metadata.label.localizedCaseInsensitiveContains("Last updated:"), "The visual metadata should keep the date without a verbose prefix")
+
+            let launcher = app.buttons["saved_search"]
+            XCTAssertTrue(launcher.waitForExistence(timeout: 5))
+            XCTAssertEqual(preview.frame.minX, rowTitle.frame.minX, accuracy: 2, "Saved preview must share the title alignment in \(theme)")
+            XCTAssertEqual(metadata.frame.minX, rowTitle.frame.minX, accuracy: 2, "Saved metadata must share the title alignment in \(theme)")
+            XCTAssertEqual(rowTitle.frame.minX, 16, accuracy: 2, "Saved rows keep the 16pt leading inset in \(theme)")
+            XCTAssertLessThan(metadata.frame.height, 30, "Normal-size Saved metadata must remain one line in \(theme)")
+
+            let downloadStatusImages = app.images.matching(NSPredicate(
+                format: "label CONTAINS[c] %@ OR label CONTAINS[c] %@",
+                "download",
+                "offline"
+            ))
+            XCTAssertEqual(downloadStatusImages.count, 0, "Saved rows must not expose a green download/offline status arrow")
+
+            let rowAttachment = XCTAttachment(screenshot: app.screenshot())
+            rowAttachment.name = "saved-row-title-preview-metadata-\(theme)"
+            rowAttachment.lifetime = .keepAlways
+            add(rowAttachment)
+
+            let launchHeight = launcher.frame.height
+            launcher.tap()
+            XCTAssertTrue(element(in: app, identifier: "saved_search_screen").waitForExistence(timeout: 5))
+
+            let input = app.textFields["saved_search_input"]
+            XCTAssertTrue(input.waitForExistence(timeout: 5))
+            let emptyFrame = input.frame
+            app.typeText("Var")
+            let typedFrame = input.frame
+
+            let clear = app.buttons["saved_search_clear_button"]
+            XCTAssertTrue(clear.waitForExistence(timeout: 3))
+            clear.tap()
+            let clearedFrame = input.frame
+
+            XCTAssertEqual(emptyFrame.height, launchHeight, accuracy: 2)
+            XCTAssertEqual(typedFrame.height, emptyFrame.height, accuracy: 2)
+            XCTAssertEqual(clearedFrame.height, emptyFrame.height, accuracy: 2)
+            XCTAssertEqual(typedFrame.minY, emptyFrame.minY, accuracy: 2)
+            XCTAssertEqual(clearedFrame.minY, emptyFrame.minY, accuracy: 2)
+
+            app.typeText("no-matching-saved-page")
+            let screenshot = app.screenshot()
+            canvasLuminanceByTheme[theme] = try averageLuminance(
+                in: screenshot,
+                normalizedRects: [
+                    CGRect(x: 0.02, y: 0.30, width: 0.08, height: 0.45),
+                    CGRect(x: 0.45, y: 0.55, width: 0.10, height: 0.12),
+                    CGRect(x: 0.90, y: 0.30, width: 0.08, height: 0.45)
+                ]
+            )
+
+            let attachment = XCTAttachment(screenshot: screenshot)
+            attachment.name = "saved-search-geometry-themed-canvas-\(theme)"
+            attachment.lifetime = .keepAlways
+            add(attachment)
+            attachDebugDescription(from: app, name: "saved-search-geometry-themed-canvas-\(theme)")
+            app.terminate()
+        }
+
+        let lightLuminance = try XCTUnwrap(canvasLuminanceByTheme["osrs_light"])
+        let darkLuminance = try XCTUnwrap(canvasLuminanceByTheme["osrs_dark"])
+        XCTAssertGreaterThan(
+            lightLuminance - darkLuminance,
+            60,
+            "Saved active-search gaps/canvas must follow the selected light/dark OSRS theme; light=\(lightLuminance), dark=\(darkLuminance)"
+        )
     }
 
     func testEmptySavedMenuDisablesExportAndClearAll() throws {
@@ -289,7 +482,7 @@ final class AgenticUnblockerFollowupUITests: XCTestCase {
         XCTAssertTrue(backButton.waitForExistence(timeout: 5), "Article back button should be available after saving")
         backButton.tap()
 
-        let savedTab = app.buttons["saved_tab"]
+        let savedTab = tabButton(in: app, identifier: "saved_tab", label: "Saved tab")
         XCTAssertTrue(savedTab.waitForExistence(timeout: 8), "Global Saved tab should return after leaving the article")
         XCTAssertTrue(savedTab.isHittable, "Global Saved tab should be hittable after leaving the saved article")
         savedTab.tap()
@@ -541,7 +734,7 @@ final class AgenticUnblockerFollowupUITests: XCTestCase {
         try assertTabSwitch(in: app, tabIdentifier: "search_tab", expectedScreenIdentifier: "search_screen")
         try assertTabSwitch(in: app, tabIdentifier: "map_tab", expectedScreenIdentifier: "map_screen")
         try assertTabSwitch(in: app, tabIdentifier: "more_tab", expectedScreenIdentifier: "more_screen")
-        try assertTabSwitch(in: app, tabIdentifier: "news_tab", expectedScreenIdentifier: "home_screen")
+        try assertTabSwitch(in: app, tabIdentifier: "home_tab", expectedScreenIdentifier: "home_screen")
 
         attachDebugDescription(from: app, name: "clean-launch-bottom-tabs-visible-screens")
     }
@@ -641,6 +834,124 @@ final class AgenticUnblockerFollowupUITests: XCTestCase {
         attachDebugDescription(from: app, name: "article-accessibility-dynamic-type-scale")
     }
 
+    func testAppearanceReaderPreferencesPersistAndReachArticleRuntime() throws {
+        let settingsApp = makeApp(
+            startTab: "more",
+            extraArguments: [
+                "-startMoreDestination", "appearance",
+                "-resetReaderPreferencesForUITests"
+            ]
+        )
+        settingsApp.launch()
+        XCTAssertTrue(settingsApp.wait(for: .runningForeground, timeout: launchTimeout))
+        XCTAssertTrue(element(in: settingsApp, identifier: "appearance_screen").waitForExistence(timeout: 10))
+
+        let collapse = settingsApp.switches["appearance_collapse_tables_toggle"]
+        XCTAssertTrue(collapse.waitForExistence(timeout: 5))
+        XCTAssertEqual(collapse.value as? String, "1")
+        setSwitch(collapse, enabled: false, in: settingsApp)
+
+        let slider = settingsApp.sliders["appearance_article_text_scale"]
+        XCTAssertTrue(slider.waitForExistence(timeout: 5))
+        slider.adjust(toNormalizedSliderPosition: 0.75)
+        let selectedScale = try XCTUnwrap(slider.value as? String)
+        XCTAssertNotEqual(selectedScale, "100%")
+
+        let swipeRight = settingsApp.switches["appearance_swipe_right_back_toggle"]
+        let swipeLeft = settingsApp.switches["appearance_swipe_left_contents_toggle"]
+        for _ in 0..<3 where !swipeLeft.isHittable {
+            settingsApp.swipeUp()
+        }
+        XCTAssertTrue(swipeRight.isHittable)
+        XCTAssertTrue(swipeLeft.isHittable)
+        setSwitch(swipeRight, enabled: false, in: settingsApp)
+        setSwitch(swipeLeft, enabled: false, in: settingsApp)
+
+        let changedAttachment = XCTAttachment(screenshot: settingsApp.screenshot())
+        changedAttachment.name = "appearance-reader-preferences-changed"
+        changedAttachment.lifetime = .keepAlways
+        add(changedAttachment)
+        settingsApp.terminate()
+
+        let relaunchedApp = makeApp(
+            startTab: "more",
+            extraArguments: ["-startMoreDestination", "appearance"]
+        )
+        relaunchedApp.launch()
+        XCTAssertTrue(relaunchedApp.wait(for: .runningForeground, timeout: launchTimeout))
+        XCTAssertTrue(element(in: relaunchedApp, identifier: "appearance_screen").waitForExistence(timeout: 10))
+
+        let persistedCollapse = relaunchedApp.switches["appearance_collapse_tables_toggle"]
+        let persistedSlider = relaunchedApp.sliders["appearance_article_text_scale"]
+        XCTAssertEqual(persistedCollapse.value as? String, "0")
+        XCTAssertEqual(persistedSlider.value as? String, selectedScale)
+        let persistedSwipeRight = relaunchedApp.switches["appearance_swipe_right_back_toggle"]
+        let persistedSwipeLeft = relaunchedApp.switches["appearance_swipe_left_contents_toggle"]
+        for _ in 0..<3 where !persistedSwipeLeft.isHittable {
+            relaunchedApp.swipeUp()
+        }
+        XCTAssertEqual(persistedSwipeRight.value as? String, "0")
+        XCTAssertEqual(persistedSwipeLeft.value as? String, "0")
+        relaunchedApp.terminate()
+
+        let articleApp = makeApp(
+            startTab: "search",
+            extraArguments: [
+                "-startArticleTitle", "Varrock",
+                "-startArticleURL", "https://oldschool.runescape.wiki/w/Varrock"
+            ]
+        )
+        articleApp.launch()
+        XCTAssertTrue(articleApp.wait(for: .runningForeground, timeout: launchTimeout))
+        let webView = element(in: articleApp, identifier: "article_web_view")
+        XCTAssertTrue(webView.waitForExistence(timeout: loadTimeout))
+        let runtimeState = try XCTUnwrap(webView.value as? String)
+        XCTAssertTrue(runtimeState.contains("article_user_text_scale="), runtimeState)
+        XCTAssertFalse(runtimeState.contains("article_user_text_scale=1.00"), runtimeState)
+        XCTAssertTrue(runtimeState.contains("article_collapse_tables=0"), runtimeState)
+        XCTAssertTrue(runtimeState.contains("article_swipe_right_back=0"), runtimeState)
+        XCTAssertTrue(runtimeState.contains("article_swipe_left_contents=0"), runtimeState)
+        attachDebugDescription(from: articleApp, name: "appearance-reader-preferences-article-runtime")
+    }
+
+    func testDarkArticlePaintsTheTopSafeAreaWithTheActiveTheme() throws {
+        let app = makeApp(
+            startTab: "search",
+            extraArguments: [
+                "-forceThemeForUITests",
+                "osrs_dark",
+                "-startArticleTitle",
+                "Lumbridge",
+                "-startArticleURL",
+                "https://oldschool.runescape.wiki/w/Lumbridge"
+            ]
+        )
+        app.launch()
+
+        XCTAssertTrue(app.wait(for: .runningForeground, timeout: launchTimeout))
+        XCTAssertTrue(element(in: app, identifier: "article_web_view").waitForExistence(timeout: loadTimeout))
+
+        let screenshot = app.screenshot()
+        let topSafeAreaLuminance = try averageLuminance(
+            in: screenshot,
+            normalizedRects: [
+                CGRect(x: 0.02, y: 0.0, width: 0.30, height: 0.055),
+                CGRect(x: 0.68, y: 0.0, width: 0.30, height: 0.055)
+            ]
+        )
+        XCTAssertLessThan(
+            topSafeAreaLuminance,
+            110,
+            "Dark article chrome should paint behind the Dynamic Island/status bar; luminance was \(topSafeAreaLuminance)"
+        )
+
+        let attachment = XCTAttachment(screenshot: screenshot)
+        attachment.name = "dark-article-top-safe-area"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+        attachDebugDescription(from: app, name: "dark-article-top-safe-area")
+    }
+
     func testDynamicTypeDirectRoutesAtCurrentContentSize() throws {
         try assertDirectRoute(startTab: "news", expectedIdentifier: "home_screen")
         try assertDirectRoute(startTab: "saved", expectedIdentifier: "saved_pages_screen", seedSaved: true)
@@ -677,10 +988,7 @@ final class AgenticUnblockerFollowupUITests: XCTestCase {
         XCTAssertTrue(emptyMessage.waitForExistence(timeout: 5))
         XCTAssertTrue(mapTab.waitForExistence(timeout: 5))
 
-        let title = try savedHeaderTitle(in: app, above: search)
-
         let contentFrame = readableContentFrame(in: app)
-        assertFrame(title.frame, of: "Saved header", isInside: contentFrame)
         assertFrame(search.frame, of: "Saved search entry", isInside: contentFrame)
         assertFrame(menu.frame, of: "Saved menu", isInside: contentFrame)
         assertFrame(emptyTitle.frame, of: "Saved empty-state title", isInside: contentFrame)
@@ -832,7 +1140,14 @@ final class AgenticUnblockerFollowupUITests: XCTestCase {
         file: StaticString = #filePath,
         line: UInt = #line
     ) throws {
-        let tab = app.buttons[tabIdentifier]
+        let label = [
+            "home_tab": "Home tab",
+            "saved_tab": "Saved tab",
+            "search_tab": "Search tab",
+            "map_tab": "Map tab",
+            "more_tab": "More tab"
+        ][tabIdentifier] ?? tabIdentifier
+        let tab = tabButton(in: app, identifier: tabIdentifier, label: label)
         XCTAssertTrue(tab.waitForExistence(timeout: 5), "Missing \(tabIdentifier)", file: file, line: line)
         XCTAssertTrue(tab.isHittable, "\(tabIdentifier) should be hittable", file: file, line: line)
 
@@ -846,16 +1161,43 @@ final class AgenticUnblockerFollowupUITests: XCTestCase {
         )
     }
 
+    private func tabButton(
+        in app: XCUIApplication,
+        identifier: String,
+        label: String
+    ) -> XCUIElement {
+        let identified = app.buttons[identifier]
+        if identified.exists {
+            return identified
+        }
+
+        let labeled = app.buttons[label]
+        if labeled.exists {
+            return labeled
+        }
+
+        return app.buttons.matching(
+            NSPredicate(format: "identifier == %@ OR label == %@", identifier, label)
+        ).firstMatch
+    }
+
     private func assertGlobalTabsAreNotHittable(
         in app: XCUIApplication,
         file: StaticString = #filePath,
         line: UInt = #line
     ) {
-        for tabIdentifier in ["news_tab", "saved_tab", "search_tab", "map_tab", "more_tab"] {
-            let tab = app.buttons[tabIdentifier]
+        let tabs = [
+            (identifier: "home_tab", label: "Home tab"),
+            (identifier: "saved_tab", label: "Saved tab"),
+            (identifier: "search_tab", label: "Search tab"),
+            (identifier: "map_tab", label: "Map tab"),
+            (identifier: "more_tab", label: "More tab")
+        ]
+        for candidate in tabs {
+            let tab = tabButton(in: app, identifier: candidate.identifier, label: candidate.label)
             XCTAssertFalse(
                 tab.exists && tab.isHittable,
-                "\(tabIdentifier) should not be hittable while article chrome owns the bottom bar",
+                "\(candidate.identifier) should not be hittable while article chrome owns the bottom bar",
                 file: file,
                 line: line
             )
@@ -1066,6 +1408,34 @@ final class AgenticUnblockerFollowupUITests: XCTestCase {
         app.typeText(text)
     }
 
+    private func setSwitch(
+        _ control: XCUIElement,
+        enabled: Bool,
+        in app: XCUIApplication,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        let expectedValue = enabled ? "1" : "0"
+        XCTAssertTrue(control.exists, "Switch must exist", file: file, line: line)
+        XCTAssertTrue(control.isHittable, "Switch must be hittable", file: file, line: line)
+        guard (control.value as? String) != expectedValue else { return }
+
+        // SwiftUI exposes the whole labeled row as the Switch AX frame on iOS 26. Tapping the
+        // element midpoint lands on the label, so exercise the visible native switch affordance.
+        control.coordinate(withNormalizedOffset: CGVector(dx: 0.92, dy: 0.5)).tap()
+        let changed = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "value == %@", expectedValue),
+            object: control
+        )
+        XCTAssertEqual(
+            XCTWaiter.wait(for: [changed], timeout: 3),
+            .completed,
+            "Switch binding did not persist target value \(expectedValue)",
+            file: file,
+            line: line
+        )
+    }
+
     private func element(in app: XCUIApplication, identifier: String) -> XCUIElement {
         let any = app.descendants(matching: .any)[identifier]
         if any.exists {
@@ -1074,9 +1444,49 @@ final class AgenticUnblockerFollowupUITests: XCTestCase {
         return app.otherElements[identifier]
     }
 
+    private func averageLuminance(
+        in screenshot: XCUIScreenshot,
+        normalizedRects: [CGRect]
+    ) throws -> Double {
+        let image = try XCTUnwrap(UIImage(data: screenshot.pngRepresentation)?.cgImage)
+        var luminanceTotal = 0.0
+        var pixelTotal = 0
+
+        for normalizedRect in normalizedRects {
+            let imageBounds = CGRect(x: 0, y: 0, width: image.width, height: image.height)
+            let cropRect = CGRect(
+                x: Double(image.width) * normalizedRect.minX,
+                y: Double(image.height) * normalizedRect.minY,
+                width: Double(image.width) * normalizedRect.width,
+                height: Double(image.height) * normalizedRect.height
+            ).integral.intersection(imageBounds)
+            let cropped = try XCTUnwrap(image.cropping(to: cropRect))
+            var pixels = [UInt8](repeating: 0, count: cropped.width * cropped.height * 4)
+            let context = try XCTUnwrap(CGContext(
+                data: &pixels,
+                width: cropped.width,
+                height: cropped.height,
+                bitsPerComponent: 8,
+                bytesPerRow: cropped.width * 4,
+                space: CGColorSpaceCreateDeviceRGB(),
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+            ))
+            context.draw(cropped, in: CGRect(x: 0, y: 0, width: cropped.width, height: cropped.height))
+
+            for offset in stride(from: 0, to: pixels.count, by: 4) {
+                luminanceTotal += 0.2126 * Double(pixels[offset])
+                    + 0.7152 * Double(pixels[offset + 1])
+                    + 0.0722 * Double(pixels[offset + 2])
+                pixelTotal += 1
+            }
+        }
+
+        return luminanceTotal / Double(pixelTotal)
+    }
+
     private func readableContentFrame(in app: XCUIApplication) -> CGRect {
         let windowFrame = app.windows.firstMatch.frame
-        let tabTop = ["news_tab", "saved_tab", "search_tab", "map_tab", "more_tab"]
+        let tabTop = ["home_tab", "saved_tab", "search_tab", "map_tab", "more_tab"]
             .compactMap { identifier -> CGFloat? in
                 let tab = app.buttons[identifier]
                 return tab.exists ? tab.frame.minY : nil
@@ -1096,6 +1506,11 @@ final class AgenticUnblockerFollowupUITests: XCTestCase {
         file: StaticString = #filePath,
         line: UInt = #line
     ) throws -> XCUIElement {
+        let identifiedTitle = app.staticTexts["saved_header"]
+        if identifiedTitle.exists {
+            return identifiedTitle
+        }
+
         let candidates = app.staticTexts
             .matching(NSPredicate(format: "label == %@", "Saved"))
             .allElementsBoundByIndex

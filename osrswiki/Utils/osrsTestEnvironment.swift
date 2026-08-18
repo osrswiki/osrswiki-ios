@@ -88,6 +88,10 @@ enum osrsTestEnvironment {
         ProcessInfo.processInfo.arguments.contains("-seedOfflineSavedPageForUITests")
     }
 
+    static var seedsRetryableSavedPageForUITests: Bool {
+        ProcessInfo.processInfo.arguments.contains("-seedRetryableSavedPageForUITests")
+    }
+
     static var stubsShareSheetsForUITests: Bool {
         ProcessInfo.processInfo.arguments.contains("-stubShareSheetsForUITests")
     }

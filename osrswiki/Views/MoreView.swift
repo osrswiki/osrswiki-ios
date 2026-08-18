@@ -61,8 +61,10 @@ struct MoreView: View {
             }
             .listStyle(.insetGrouped)
             .scrollContentBackground(.hidden)
-            .navigationTitle("More")
+            .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
+            .navigationBarHidden(true)
+            .toolbar(.hidden, for: .navigationBar)
             .background(.osrsBackground)
             .overlay(alignment: .topLeading) {
                 osrsAccessibilityMarker(identifier: "more_screen", label: "More screen")
@@ -112,12 +114,18 @@ struct MoreView: View {
                   let navigationController = findNavigationController(in: window.rootViewController) else {
                 return
             }
+
+            let currentTheme = themeManager.currentTheme
+            if #available(iOS 26.0, *) {
+                navigationController.navigationBar.tintColor = UIColor(currentTheme.primary)
+                navigationController.overrideUserInterfaceStyle = themeManager.currentColorScheme == .dark ? .dark : .light
+                return
+            }
             
             let appearance = UINavigationBarAppearance()
             appearance.configureWithOpaqueBackground()
             
             // Apply theme colors directly
-            let currentTheme = themeManager.currentTheme
             appearance.backgroundColor = UIColor(currentTheme.surface)
             appearance.titleTextAttributes = [.foregroundColor: UIColor(currentTheme.onSurface)]
             appearance.largeTitleTextAttributes = [.foregroundColor: UIColor(currentTheme.onSurface)]

@@ -18,6 +18,7 @@ class SearchViewModel: ObservableObject {
     @Published var hasMoreResults: Bool = false
     @Published var totalResultCount: Int = 0
     @Published var currentQuery: String = ""
+    @Published private(set) var hasCompletedCurrentQuery: Bool = false
     
     private let searchRepository = SearchRepository()
     private let historyRepository = HistoryRepository()
@@ -26,6 +27,7 @@ class SearchViewModel: ObservableObject {
     private var searchOffset = 0
     private let searchLimit = 20
     private let recentSearchesKey = "recent_searches"
+    private var searchGeneration = 0
     
     // Navigation callback - will be set by the view
     var navigateToArticle: ((String, URL, SearchResult?) -> Void)?
@@ -45,9 +47,10 @@ class SearchViewModel: ObservableObject {
     }
     
     private func setupSearchDebouncing() {
-        // Fixed: Use debounced search to prevent rapid API calls and UI conflicts
+        // Coalesce only the same keystroke burst; cancellation below prevents stale requests from
+        // replacing newer live results.
         $currentQuery
-            .debounce(for: .milliseconds(300), scheduler: RunLoop.main) // Faster than 500ms but prevents conflicts
+            .debounce(for: .milliseconds(80), scheduler: RunLoop.main)
             .removeDuplicates()
             .sink { [weak self] query in
                 Task { @MainActor in
@@ -60,22 +63,25 @@ class SearchViewModel: ObservableObject {
     func performSearch(query: String, isNewSearch: Bool = true) async {
         let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedQuery.isEmpty else {
+            currentSearchTask?.cancel()
+            searchGeneration += 1
+            isSearching = false
             clearSearchResults()
             return
         }
         
         // Cancel previous search if it's still running
         currentSearchTask?.cancel()
+        searchGeneration += 1
+        let generation = searchGeneration
         
         // CRASH FIX: Atomic state updates to prevent race conditions during list rendering
         if isNewSearch {
-            await Task.yield() // Let other UI updates complete
             searchOffset = 0
-            searchResults = []
-            themedSearchResults = []
             errorMessage = nil
             hasMoreResults = false
             totalResultCount = 0
+            hasCompletedCurrentQuery = false
         }
         
         isSearching = true
@@ -86,67 +92,88 @@ class SearchViewModel: ObservableObject {
                     query: trimmedQuery,
                     limit: searchLimit,
                     offset: searchOffset
-                )
-                
-                guard !Task.isCancelled else { 
-                    // CRASH FIX: Clean up state on cancellation
-                    await MainActor.run {
-                        isSearching = false
+                ) { [weak self] partial in
+                    guard let self else { return }
+                    Task { @MainActor in
+                        guard generation == self.searchGeneration else { return }
+                        await self.applySearchResponse(
+                            partial,
+                            query: trimmedQuery,
+                            isNewSearch: isNewSearch,
+                            generation: generation,
+                            completed: false
+                        )
                     }
-                    return 
                 }
-                
-                // FREEZE FIX: Process results on background thread, then update UI atomically
-                let processedResults = await processSearchResultsInBackground(
-                    results: response.results, 
-                    searchQuery: trimmedQuery,
-                    isNewSearch: isNewSearch
+
+                guard !Task.isCancelled, generation == searchGeneration else { return }
+                await applySearchResponse(
+                    response,
+                    query: trimmedQuery,
+                    isNewSearch: isNewSearch,
+                    generation: generation,
+                    completed: true
                 )
-                
-                // CRASH FIX: Atomic array updates to prevent list rendering conflicts
-                await MainActor.run { [weak self] in
-                    guard let self = self else { return }
-                    
-                    if isNewSearch {
-                        self.searchResults = response.results
-                        self.themedSearchResults = processedResults
-                    } else {
-                        // Use batch update to prevent intermediate states
-                        var updatedResults = self.searchResults
-                        var updatedThemedResults = self.themedSearchResults
-                        updatedResults.append(contentsOf: response.results)
-                        updatedThemedResults.append(contentsOf: processedResults)
-                        self.searchResults = updatedResults
-                        self.themedSearchResults = updatedThemedResults
-                    }
-                    
-                    self.totalResultCount = response.totalCount
-                    self.hasMoreResults = response.hasMore
-                    self.searchOffset += response.results.count
-                }
                 
             } catch let error as SearchError {
                 guard !Task.isCancelled else { return }
-                errorMessage = error.localizedDescription
+                errorMessage = error.errorDescription ?? "Something went wrong. Please try again."
                 if isNewSearch {
                     searchResults = []
                     themedSearchResults = []
                     hasMoreResults = false
                     totalResultCount = 0
+                    hasCompletedCurrentQuery = true
                 }
             } catch {
                 guard !Task.isCancelled else { return }
-                errorMessage = "Search failed: \(error.localizedDescription)"
+                errorMessage = "Something went wrong. Please try again."
                 if isNewSearch {
                     searchResults = []
                     themedSearchResults = []
                     hasMoreResults = false
                     totalResultCount = 0
+                    hasCompletedCurrentQuery = true
                 }
             }
             
-            isSearching = false
+            if generation == searchGeneration {
+                isSearching = false
+            }
         }
+    }
+
+    private func applySearchResponse(
+        _ response: SearchResponse,
+        query: String,
+        isNewSearch: Bool,
+        generation: Int,
+        completed: Bool
+    ) async {
+        let processedResults = await processSearchResultsInBackground(
+            results: response.results,
+            searchQuery: query,
+            isNewSearch: isNewSearch
+        )
+        guard generation == searchGeneration else { return }
+        if isNewSearch {
+            searchResults = response.results
+            themedSearchResults = processedResults
+            if completed {
+                searchOffset = response.results.count
+            }
+        } else if completed {
+            var updatedResults = searchResults
+            var updatedThemedResults = themedSearchResults
+            updatedResults.append(contentsOf: response.results)
+            updatedThemedResults.append(contentsOf: processedResults)
+            searchResults = updatedResults
+            themedSearchResults = updatedThemedResults
+            searchOffset += response.results.count
+        }
+        totalResultCount = response.totalCount
+        hasMoreResults = response.hasMore
+        hasCompletedCurrentQuery = completed
     }
     
     func loadMoreResults() async {
@@ -202,6 +229,7 @@ class SearchViewModel: ObservableObject {
         totalResultCount = 0
         searchOffset = 0
         errorMessage = nil
+        hasCompletedCurrentQuery = false
     }
     
     func navigateToPage(_ pageTitle: String) {
@@ -255,11 +283,11 @@ class SearchViewModel: ObservableObject {
         searchQuery: String,
         isNewSearch: Bool
     ) async -> [ThemedSearchResult] {
-        return await withTaskGroup(of: ThemedSearchResult.self, returning: [ThemedSearchResult].self) { group in
-            for result in results {
+        return await withTaskGroup(of: (Int, ThemedSearchResult).self, returning: [ThemedSearchResult].self) { group in
+            for (position, result) in results.enumerated() {
                 group.addTask {
                     // Create ThemedSearchResult on background thread
-                    return ThemedSearchResult(
+                    return (position, ThemedSearchResult(
                         title: result.displayTitle,
                         snippet: result.rawSnippet,
                         description: result.namespace,
@@ -267,23 +295,16 @@ class SearchViewModel: ObservableObject {
                         thumbnailUrl: result.thumbnailUrl,
                         pageId: Int(result.id),
                         searchQuery: searchQuery
-                    )
+                    ))
                 }
             }
             
-            var processedResults: [ThemedSearchResult] = []
+            var processedResults: [(Int, ThemedSearchResult)] = []
             for await themedResult in group {
                 processedResults.append(themedResult)
             }
             
-            // Maintain original order by sorting by pageId if available
-            return processedResults.sorted { lhs, rhs in
-                guard let lhsPageId = lhs.pageId, let rhsPageId = rhs.pageId else {
-                    return false
-                }
-                return results.firstIndex { $0.id == String(lhsPageId) } ?? 0 <
-                       results.firstIndex { $0.id == String(rhsPageId) } ?? 0
-            }
+            return processedResults.sorted { $0.0 < $1.0 }.map(\.1)
         }
     }
 }
@@ -309,16 +330,63 @@ struct SearchResult: Identifiable, Codable {
     }
 }
 
-struct HistoryItem: Identifiable, Codable {
+struct HistoryItem: Identifiable, Codable, Sendable {
     let id: String
     let pageTitle: String
     let pageUrl: URL
     let visitedDate: Date
     let thumbnailUrl: URL?
     let description: String?
+    let metadataUpdatedAt: Date?
+
+    init(
+        id: String,
+        pageTitle: String,
+        pageUrl: URL,
+        visitedDate: Date,
+        thumbnailUrl: URL?,
+        description: String?,
+        metadataUpdatedAt: Date? = nil
+    ) {
+        self.id = id
+        self.pageTitle = pageTitle
+        self.pageUrl = pageUrl
+        self.visitedDate = visitedDate
+        self.thumbnailUrl = thumbnailUrl
+        self.description = description
+        self.metadataUpdatedAt = metadataUpdatedAt
+    }
     
     var displayTitle: String {
-        return pageTitle.replacingOccurrences(of: "_", with: " ")
+        osrsStringUtils.extractMainTitle(pageTitle.replacingOccurrences(of: "_", with: " "))
+    }
+
+    func normalizedForStorage() -> HistoryItem {
+        HistoryItem(
+            id: id,
+            pageTitle: osrsStringUtils.decodeHTMLEntitiesFixedPoint(pageTitle),
+            pageUrl: pageUrl,
+            visitedDate: visitedDate,
+            thumbnailUrl: thumbnailUrl,
+            description: description.map(osrsStringUtils.decodeHTMLEntitiesFixedPoint),
+            metadataUpdatedAt: metadataUpdatedAt
+        )
+    }
+
+    func replacingMetadata(
+        thumbnailUrl: URL?,
+        description: String?,
+        updatedAt: Date?
+    ) -> HistoryItem {
+        HistoryItem(
+            id: id,
+            pageTitle: pageTitle,
+            pageUrl: pageUrl,
+            visitedDate: visitedDate,
+            thumbnailUrl: thumbnailUrl ?? self.thumbnailUrl,
+            description: description ?? self.description,
+            metadataUpdatedAt: updatedAt
+        ).normalizedForStorage()
     }
     
     var timeAgo: String {

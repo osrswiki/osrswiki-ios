@@ -66,8 +66,7 @@ struct HistoryRowView: View {
         }
         .buttonStyle(PlainButtonStyle())
         .listRowBackground(osrsTheme.surface)
-        .listRowSeparator(.visible, edges: .bottom)
-        .listRowSeparatorTint(osrsTheme.divider)
+        .listRowSeparator(.hidden)
     }
 }
 

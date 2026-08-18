@@ -35,16 +35,24 @@ class TOCSidebarUITest: XCTestCase {
         contentsButton.tap()
         
         // Verify TOC sidebar appears
-        let tocSidebar = app.otherElements["Contents"]
+        let tocSidebar = app.otherElements["contents_drawer"]
         XCTAssertTrue(tocSidebar.waitForExistence(timeout: 3))
         
         // Verify sidebar extends full height (check if it has proper frame)
         let sidebarFrame = tocSidebar.frame
         let screenHeight = app.frame.height
         
-        // Sidebar should extend close to full screen height
-        XCTAssertTrue(sidebarFrame.height > screenHeight * 0.9, 
-                     "TOC sidebar should extend to full height. Current height: \(sidebarFrame.height), Screen height: \(screenHeight)")
+        // Sidebar should float as a glass panel, not a full-height opaque slab.
+        XCTAssertLessThan(
+            sidebarFrame.height,
+            screenHeight * 0.9,
+            "TOC sidebar should not span the full screen height. Current height: \(sidebarFrame.height), Screen height: \(screenHeight)"
+        )
+        XCTAssertGreaterThan(
+            sidebarFrame.minX,
+            8,
+            "TOC sidebar should sit inset from the trailing edge, not flush to the screen."
+        )
         
         // Verify no shadow artifacts are visible (shadow was removed)
         // This is validated visually but we can check the sidebar renders correctly

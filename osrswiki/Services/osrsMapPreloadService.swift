@@ -79,7 +79,11 @@ class osrsMapPreloadService: ObservableObject {
     
     /// Preload maps from HTML content before JavaScript measurement
     func preloadMapsFromHTML(_ html: String) {
-        let mapDataArray = parseMapDataFromHTML(html)
+        let mapDataArray = Self.parseMapDataFromHTML(html)
+        preloadMaps(mapDataArray)
+    }
+
+    func preloadMaps(_ mapDataArray: [osrsPreloadMapData]) {
         print("🗺️ MapPreloadService: Found \(mapDataArray.count) maps to preload")
         
         for mapData in mapDataArray {
@@ -118,7 +122,7 @@ class osrsMapPreloadService: ObservableObject {
     
     // MARK: - HTML Parsing
     
-    private func parseMapDataFromHTML(_ html: String) -> [osrsPreloadMapData] {
+    nonisolated static func parseMapDataFromHTML(_ html: String) -> [osrsPreloadMapData] {
         var mapDataArray: [osrsPreloadMapData] = []
         
         // Parse HTML for map divs with data attributes
@@ -227,6 +231,7 @@ class osrsMapPreloadService: ObservableObject {
     
     private func createPreloadMapView(data: osrsPreloadMapData) -> MLNMapView {
         let mapView = MLNMapView()
+        osrsMapPreferredFrameRate.apply(to: mapView)
         
         // Configure for preloading (similar to embedded map but optimized)
         mapView.logoView.isHidden = true

@@ -30,11 +30,7 @@ class AppState: ObservableObject {
     // Navigation protection to prevent rapid/double navigation
     internal var lastNavigationTime: Date = Date.distantPast
     internal let navigationDebounceInterval: TimeInterval = 0.5
-    internal var lastArticleBackActionTime: Date = Date.distantPast
-    internal let articleBackActionDebounceInterval: TimeInterval = 3.0
-    internal var suppressedInternalArticleRouteURL: URL?
-    internal var suppressedInternalArticleRouteUntil: Date = Date.distantPast
-    internal let internalArticleRouteSuppressionInterval: TimeInterval = 10.0
+    internal var lastAcceptedArticleBackTransitionIdentity: String?
 #if DEBUG
     internal var articleBackActionDebugCount = 0
     internal var isDeepNavigationFixtureAuditRunning = false
@@ -49,8 +45,26 @@ class AppState: ObservableObject {
     @Published var mapNavigationStack: [MapNavigationDestination] = []
     @Published var moreNavigationStack: [MoreNavigationDestination] = []
     @Published var historyNavigationStack: [HistoryNavigationDestination] = []  // Dedicated for HistoryView
+    @Published var newsFeedScrollPosition = ScrollPosition()
+    @Published var searchHistoryScrollPosition = ScrollPosition()
+    @Published var savedPagesScrollPosition = ScrollPosition()
+    @Published var historyListScrollPosition = ScrollPosition()
     @Published var articleBackStackRecoveryRequestID: Int = 0
     internal(set) var articleBackStackRecoveryDestination: ArticleDestination?
+    @Published internal(set) var pendingSearchActivationIntent: osrsSearchActivationIntent?
+    @Published internal(set) var pendingSearchQuery: String?
+    @Published var pendingArticleScrollSection: String?
+    @Published internal(set) var activeSearchReturnContext: osrsSearchReturnContext?
+    internal var nextSearchActivationGeneration: UInt64 = 0
+    private var articleScrollOffsets: [String: CGFloat] = [:]
+
+    func captureArticleScrollOffset(_ identity: String, offsetY: CGFloat) {
+        articleScrollOffsets[identity] = offsetY
+    }
+
+    func capturedArticleScrollOffset(_ identity: String) -> CGFloat? {
+        articleScrollOffsets[identity]
+    }
 
     init() {
         loadUserPreferences()
@@ -71,8 +85,9 @@ class AppState: ObservableObject {
             queue: .main
         ) { [weak self] notification in
             guard let url = notification.userInfo?["url"] as? URL else { return }
+            let sourceArticleURL = notification.userInfo?["sourceArticleURL"] as? URL
             Task { @MainActor [weak self] in
-                self?.routeInternalArticleLink(url)
+                self?.routeInternalArticleLink(url, sourceArticleURL: sourceArticleURL)
             }
         }
         notificationObservers.append(observer)
@@ -92,6 +107,11 @@ class AppState: ObservableObject {
 
     func setSelectedTab(_ tab: TabItem) {
         guard selectedTab != tab else { return }
+
+        if tab != .search {
+            pendingSearchActivationIntent = nil
+            activeSearchReturnContext = nil
+        }
 
         // Cancel all active tasks from previous tab before showing the new destination.
         cancelActiveTabTasks()
@@ -178,6 +198,15 @@ class AppState: ObservableObject {
             UserDefaults.standard.set([seedValue], forKey: "recent_searches")
             print("UITest: seeded recent searches")
         }
+
+        if let queryIndex = arguments.firstIndex(of: "-startSearchQuery"),
+           queryIndex + 1 < arguments.count {
+            let query = arguments[queryIndex + 1]
+            guard !query.hasPrefix("-") else { return }
+            pendingSearchQuery = query
+            navigateToActiveSearch(startsVoiceRecognition: false)
+            print("UITest: starting search query \(query)")
+        }
     }
 
     private func seedSearchRecentValue(from arguments: [String]) -> String? {
@@ -193,7 +222,8 @@ class AppState: ObservableObject {
     private func handleUITestSavedPagesArguments(_ arguments: [String]) {
         guard arguments.contains("-resetSavedPagesForUITests") ||
               arguments.contains("-seedSavedPagesForUITests") ||
-              osrsTestEnvironment.seedsOfflineSavedPageForUITests else {
+              osrsTestEnvironment.seedsOfflineSavedPageForUITests ||
+              osrsTestEnvironment.seedsRetryableSavedPageForUITests else {
             return
         }
 
@@ -205,12 +235,13 @@ class AppState: ObservableObject {
         }
 
         if arguments.contains("-seedSavedPagesForUITests") ||
-            osrsTestEnvironment.seedsOfflineSavedPageForUITests {
-            let isOfflineSeed = osrsTestEnvironment.seedsOfflineSavedPageForUITests
+            osrsTestEnvironment.seedsOfflineSavedPageForUITests ||
+            osrsTestEnvironment.seedsRetryableSavedPageForUITests {
+            let isRetryableSeed = osrsTestEnvironment.seedsRetryableSavedPageForUITests
             let pageId: String
-            if isOfflineSeed {
+            if osrsTestEnvironment.seedsOfflineSavedPageForUITests {
                 pageId = "ui-test-varrock-offline"
-            } else if osrsTestEnvironment.forcesNetworkOfflineForUITests {
+            } else if isRetryableSeed {
                 pageId = "ui-test-varrock-uncached"
             } else {
                 pageId = "ui-test-varrock"
@@ -222,16 +253,17 @@ class AppState: ObservableObject {
                 url: URL(string: "https://oldschool.runescape.wiki/w/Varrock")!,
                 thumbnailUrl: nil,
                 savedDate: Date(timeIntervalSince1970: 1_735_732_800),
-                isOfflineAvailable: isOfflineSeed,
-                offlineDownloadDate: isOfflineSeed ? Date(timeIntervalSince1970: 1_735_732_800) : nil,
-                offlineStatus: isOfflineSeed ? .available : .notDownloaded,
-                offlineFileSize: isOfflineSeed ? 512 : nil,
-                offlineLocalPath: isOfflineSeed ? pageId : nil
+                isOfflineAvailable: !isRetryableSeed,
+                offlineDownloadDate: isRetryableSeed ? nil : Date(timeIntervalSince1970: 1_735_732_800),
+                offlineStatus: isRetryableSeed ? .failed : .available,
+                offlineFileSize: 512,
+                offlineLocalPath: pageId,
+                durableSettlementVersion: isRetryableSeed ? nil : SavedPage.currentDurableSettlementVersion
             )
             repository.addSavedPage(varrockPage)
             print("UITest: seeded saved page \(varrockPage.title)")
 
-            if isOfflineSeed, #available(iOS 17.0, *) {
+            if !isRetryableSeed, #available(iOS 17.0, *) {
                 ProxyInterceptorService.shared.seedOfflineSavedPageForUITests(
                     pageId: varrockPage.id,
                     title: varrockPage.title
@@ -241,15 +273,31 @@ class AppState: ObservableObject {
     }
 
     private func handleUITestNavigationArguments(_ arguments: [String]) {
-        if let articleTitleIndex = arguments.firstIndex(of: "-startArticleTitle"),
-           articleTitleIndex + 1 < arguments.count,
-           let articleURLIndex = arguments.firstIndex(of: "-startArticleURL"),
+        if let articleURLIndex = arguments.firstIndex(of: "-startArticleURL"),
            articleURLIndex + 1 < arguments.count,
-           let url = URL(string: arguments[articleURLIndex + 1]) {
-            let title = arguments[articleTitleIndex + 1]
+           let url = osrsWikiURL.parse(arguments[articleURLIndex + 1]),
+           !arguments[articleURLIndex + 1].hasPrefix("-") {
+            let title: String
+            if let articleTitleIndex = arguments.firstIndex(of: "-startArticleTitle"),
+               articleTitleIndex + 1 < arguments.count,
+               !arguments[articleTitleIndex + 1].hasPrefix("-") {
+                title = arguments[articleTitleIndex + 1]
+            } else {
+                title = url.lastPathComponent
+                    .removingPercentEncoding?
+                    .replacingOccurrences(of: "_", with: " ")
+                    ?? url.lastPathComponent
+            }
             let destination = ArticleDestination(title: title, url: url)
             appendArticleDestinationForSelectedTab(destination)
             print("UITest: starting article \(title) at \(url.absoluteString)")
+        }
+
+        if let scrollIndex = arguments.firstIndex(of: "-osrsScrollTo"),
+           scrollIndex + 1 < arguments.count,
+           !arguments[scrollIndex + 1].hasPrefix("-") {
+            pendingArticleScrollSection = arguments[scrollIndex + 1]
+            print("UITest: pending article scroll to \(arguments[scrollIndex + 1])")
         }
 
         guard selectedTab == .more,
@@ -395,24 +443,52 @@ enum NavigationDestination: Hashable {
     case article(ArticleDestination)
 }
 
+/// A one-shot request for the Search tab to expose its active input surface. Keeping the
+/// request in AppState lets a SearchView that is newly constructed after a tab switch consume
+/// it from `onAppear`, while an already-mounted SearchView consumes it from `onChange`.
+struct osrsSearchActivationIntent: Equatable {
+    let generation: UInt64
+    let startsVoiceRecognition: Bool
+    let returnContext: osrsSearchReturnContext
+}
+
+struct osrsSearchReturnContext: Equatable {
+    let generation: UInt64
+    let originTab: TabItem
+    let priorSearchNavigationStack: [SearchNavigationDestination]
+}
+
 struct ArticleDestination: Hashable {
     let title: String?  // Optional - will be extracted from URL if nil
     let url: URL
     let snippet: String?  // Optional - for rich history display
     let thumbnailUrl: URL?  // Optional - for rich history display
     let savedPageId: String?  // Optional - for saved page proxy configuration
+    /// Uniquely identifies one presentation of an article. It stays stable while that
+    /// destination is recovered in place, but a later reopen of the same URL receives a new
+    /// value so a retained callback from the old presentation cannot suppress the new one.
+    let navigationInstanceID: UUID
     let navigationRevision: Int
 
     var navigationIdentity: String {
-        "\(url.absoluteString)|savedPageId=\(savedPageId ?? "")|revision=\(navigationRevision)"
+        "\(url.absoluteString)|savedPageId=\(savedPageId ?? "")|instance=\(navigationInstanceID.uuidString)|revision=\(navigationRevision)"
     }
 
-    init(title: String?, url: URL, snippet: String? = nil, thumbnailUrl: URL? = nil, savedPageId: String? = nil, navigationRevision: Int = 0) {
+    init(
+        title: String?,
+        url: URL,
+        snippet: String? = nil,
+        thumbnailUrl: URL? = nil,
+        savedPageId: String? = nil,
+        navigationInstanceID: UUID = UUID(),
+        navigationRevision: Int = 0
+    ) {
         self.title = title
         self.url = url
         self.snippet = snippet
         self.thumbnailUrl = thumbnailUrl
         self.savedPageId = savedPageId
+        self.navigationInstanceID = navigationInstanceID
         self.navigationRevision = navigationRevision
     }
 
@@ -423,6 +499,7 @@ struct ArticleDestination: Hashable {
             snippet: snippet,
             thumbnailUrl: thumbnailUrl,
             savedPageId: savedPageId,
+            navigationInstanceID: navigationInstanceID,
             navigationRevision: navigationRevision + 1
         )
     }
@@ -433,6 +510,21 @@ struct ArticleDestination: Hashable {
         hasher.combine(snippet)
         hasher.combine(thumbnailUrl)
         hasher.combine(savedPageId)
+        hasher.combine(navigationInstanceID)
         hasher.combine(navigationRevision)
+    }
+}
+
+/// Wiki article URLs often include apostrophes (`Heroes' Guild`). `URL(string:)`
+/// rejects those path characters unless they are percent-encoded.
+enum osrsWikiURL {
+    static func parse(_ raw: String) -> URL? {
+        if let url = URL(string: raw) {
+            return url
+        }
+        let encoded = raw
+            .replacingOccurrences(of: "'", with: "%27")
+            .replacingOccurrences(of: " ", with: "%20")
+        return URL(string: encoded)
     }
 }

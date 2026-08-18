@@ -8,31 +8,32 @@
 import Foundation
 
 class HistoryRepository {
+    private static let queue = DispatchQueue(label: "HistoryRepository.Serial")
     private let userDefaults: UserDefaults
     private let historyKey = "search_history"
     private let maxHistoryItems = 100
     private let historyEnricher = osrsHistoryEnricher()
-    private let queue = DispatchQueue(label: "HistoryRepository.Serial")
 
     init(userDefaults: UserDefaults = .standard) {
         self.userDefaults = userDefaults
     }
     
     func getHistory() -> [HistoryItem] {
-        queue.sync {
+        Self.queue.sync {
             loadHistory()
         }
     }
 
     func addToHistory(_ item: HistoryItem) {
-        queue.sync {
+        Self.queue.sync {
             var history = loadHistory()
+            let normalizedItem = item.normalizedForStorage()
 
             // Remove existing item with same URL to avoid duplicates
-            history.removeAll { $0.pageUrl == item.pageUrl }
+            history.removeAll { $0.pageUrl == normalizedItem.pageUrl }
 
             // Add new item at the beginning
-            history.insert(item, at: 0)
+            history.insert(normalizedItem, at: 0)
 
             // Keep only the most recent items
             if history.count > maxHistoryItems {
@@ -48,7 +49,9 @@ class HistoryRepository {
               let history = try? JSONDecoder().decode([HistoryItem].self, from: data) else {
             return []
         }
-        return history.sorted { $0.visitedDate > $1.visitedDate }
+        return history
+            .map { $0.normalizedForStorage() }
+            .sorted { $0.visitedDate > $1.visitedDate }
     }
     
     /// Adds an enriched history entry with thumbnail and snippet data
@@ -76,14 +79,15 @@ class HistoryRepository {
             pageUrl: pageUrl,
             visitedDate: visitedDate,
             thumbnailUrl: thumbnailUrl,
-            description: snippet
+            description: snippet,
+            metadataUpdatedAt: thumbnailUrl != nil && snippet != nil ? Date() : nil
         )
 
         return historyItem
     }
     
     func removeFromHistory(_ itemId: String) {
-        queue.sync {
+        Self.queue.sync {
             var history = loadHistory()
             history.removeAll { $0.id == itemId }
             saveHistory(history)
@@ -91,8 +95,33 @@ class HistoryRepository {
     }
     
     func clearHistory() {
-        queue.sync {
+        Self.queue.sync {
             userDefaults.removeObject(forKey: historyKey)
+        }
+    }
+
+    func updateMetadata(
+        for pageURL: URL,
+        thumbnailUrl: URL?,
+        description: String?,
+        updatedAt: Date = Date()
+    ) {
+        Self.queue.sync {
+            var history = loadHistory()
+            guard let index = history.firstIndex(where: { $0.pageUrl == pageURL }) else { return }
+            let existingItem = history[index]
+            let resolvedThumbnail = thumbnailUrl ?? existingItem.thumbnailUrl
+            let resolvedDescription = description ?? existingItem.description
+            let refreshProducedMetadata = thumbnailUrl != nil || description != nil
+            let refreshCompletedMetadata = refreshProducedMetadata && resolvedThumbnail != nil && resolvedDescription != nil
+            history[index] = history[index].replacingMetadata(
+                thumbnailUrl: resolvedThumbnail,
+                description: resolvedDescription,
+                // A failed or partial response must remain eligible for retry.
+                // Preserve an older timestamp rather than falsely marking it fresh.
+                updatedAt: refreshCompletedMetadata ? updatedAt : existingItem.metadataUpdatedAt
+            )
+            saveHistory(history)
         }
     }
     

@@ -89,28 +89,56 @@ class osrsThemeManager: ObservableObject {
     @Published private(set) var systemColorScheme: ColorScheme = .light
     
     /// Collapse tables setting
-    @Published var collapseTables: Bool = true {
+    @Published var collapseTables: Bool = false {
         didSet {
             saveCollapseTablesSettings()
         }
     }
+
+    /// Reader preferences use explicit defaults so an upgrade preserves the gestures and
+    /// typography that existing installs already had before these controls were introduced.
+    @Published private(set) var articleTextScale: Double = 1.0
+    @Published private(set) var swipeRightToGoBackEnabled: Bool = true
+    @Published private(set) var swipeLeftToShowContentsEnabled: Bool = true
+    @Published private(set) var floorNumberingMode: osrsArticleFloorNumberingMode = .auto
     
     // MARK: - Private Properties
     
-    private let userDefaults = UserDefaults.standard
+    static let articleTextScaleRange = 0.85 ... 1.40
+
+    private let userDefaults: UserDefaults
     private let themeSelectionKey = "osrs_theme_selection"
     private let collapseTablesKey = "collapseTables"
+    private let articleTextScaleKey = "osrs_article_text_scale"
+    private let swipeRightToGoBackKey = "osrs_swipe_right_back_enabled"
+    private let swipeLeftToShowContentsKey = "osrs_swipe_left_contents_enabled"
+    private let floorNumberingKey = osrsArticleFloorNumberingMode.persistenceKey
+    private let readerPreferencesMigrationKey = "osrs_reader_preferences_migration_version"
     private var cancellables = Set<AnyCancellable>()
     
     // MARK: - Initialization
     
-    init() {
+    init(userDefaults: UserDefaults = .standard) {
+        self.userDefaults = userDefaults
+#if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("-resetReaderPreferencesForUITests") {
+            [
+                collapseTablesKey,
+                articleTextScaleKey,
+                swipeRightToGoBackKey,
+                swipeLeftToShowContentsKey,
+                floorNumberingKey,
+                readerPreferencesMigrationKey
+            ].forEach { userDefaults.removeObject(forKey: $0) }
+        }
+#endif
         // Detect system color scheme immediately to prevent flash
         let currentSystemScheme = UITraitCollection.current.userInterfaceStyle == .dark ? ColorScheme.dark : ColorScheme.light
         systemColorScheme = currentSystemScheme
         
         loadSavedTheme()
         loadCollapseTablesSettings()
+        loadReaderPreferences()
         updateCurrentTheme()
         setupSystemColorSchemeObserver()
         // Note: Navigation bar and global theming is now handled in osrswikiApp.swift
@@ -125,6 +153,7 @@ class osrsThemeManager: ObservableObject {
     
     /// Update system color scheme (called from app level)
     func updateSystemColorScheme(_ colorScheme: ColorScheme) {
+        guard systemColorScheme != colorScheme else { return }
         systemColorScheme = colorScheme
         updateCurrentTheme()
     }
@@ -132,6 +161,27 @@ class osrsThemeManager: ObservableObject {
     /// Set the collapse tables setting and persist it
     func setCollapseTables(_ enabled: Bool) {
         collapseTables = enabled
+    }
+
+    func setArticleTextScale(_ scale: Double) {
+        let clamped = min(max(scale, Self.articleTextScaleRange.lowerBound), Self.articleTextScaleRange.upperBound)
+        articleTextScale = clamped
+        userDefaults.set(clamped, forKey: articleTextScaleKey)
+    }
+
+    func setSwipeRightToGoBackEnabled(_ enabled: Bool) {
+        swipeRightToGoBackEnabled = enabled
+        userDefaults.set(enabled, forKey: swipeRightToGoBackKey)
+    }
+
+    func setSwipeLeftToShowContentsEnabled(_ enabled: Bool) {
+        swipeLeftToShowContentsEnabled = enabled
+        userDefaults.set(enabled, forKey: swipeLeftToShowContentsKey)
+    }
+
+    func setFloorNumberingMode(_ mode: osrsArticleFloorNumberingMode) {
+        floorNumberingMode = mode
+        userDefaults.set(mode.rawValue, forKey: floorNumberingKey)
     }
     
     /// Get theme colors for WebView JavaScript injection
@@ -189,15 +239,45 @@ class osrsThemeManager: ObservableObject {
     }
     
     private func loadCollapseTablesSettings() {
-        collapseTables = userDefaults.bool(forKey: collapseTablesKey)
-        // Default to true if no setting exists
-        if !userDefaults.objectExists(forKey: collapseTablesKey) {
-            collapseTables = true
+        // Inspect existence before assigning so didSet cannot persist a stale default
+        // before the stored value is read. Fresh installs leave tables expanded.
+        if userDefaults.objectExists(forKey: collapseTablesKey) {
+            collapseTables = userDefaults.bool(forKey: collapseTablesKey)
+        } else {
+            collapseTables = false
         }
     }
     
     private func saveCollapseTablesSettings() {
         userDefaults.set(collapseTables, forKey: collapseTablesKey)
+    }
+
+    private func loadReaderPreferences() {
+        if userDefaults.objectExists(forKey: articleTextScaleKey) {
+            setArticleTextScale(userDefaults.double(forKey: articleTextScaleKey))
+        } else {
+            setArticleTextScale(1.0)
+        }
+
+        if userDefaults.objectExists(forKey: swipeRightToGoBackKey) {
+            swipeRightToGoBackEnabled = userDefaults.bool(forKey: swipeRightToGoBackKey)
+        } else {
+            setSwipeRightToGoBackEnabled(true)
+        }
+
+        if userDefaults.objectExists(forKey: swipeLeftToShowContentsKey) {
+            swipeLeftToShowContentsEnabled = userDefaults.bool(forKey: swipeLeftToShowContentsKey)
+        } else {
+            setSwipeLeftToShowContentsEnabled(true)
+        }
+
+        floorNumberingMode = osrsArticleFloorNumberingMode.resolved(userDefaults: userDefaults)
+
+        // Version one formalizes the legacy defaults above. Keeping a versioned marker makes
+        // future key renames or value-shape migrations deterministic instead of heuristic.
+        if userDefaults.integer(forKey: readerPreferencesMigrationKey) < 1 {
+            userDefaults.set(1, forKey: readerPreferencesMigrationKey)
+        }
     }
     
     private func updateCurrentTheme() {

@@ -2246,8 +2246,8 @@ table.align-center-1 td:nth-of-type(1), table.align-center-10 td:nth-of-type(10)
     background-color: var(--wikitable-bg);
 }
 
-#toc li a span.toctext span span:nth-child(2), .floornumber > .floornumber-us, .floornumber-setting-gb #toc li a span.toctext span span:nth-child(2), .floornumber-setting-gb .floornumber > .floornumber-us, .floornumber-setting-us #toc li a span.toctext span span:nth-child(1), .floornumber-setting-us .floornumber > .floornumber-gb {
-    display: inline;
+#toc li a span.toctext span span:nth-child(2), .floornumber-setting-gb #toc li a span.toctext span span:nth-child(2), .floornumber-setting-us #toc li a span.toctext span span:nth-child(1) {
+    display: none;
 }
 
 .catlinks li {

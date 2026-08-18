@@ -20,7 +20,7 @@ class TabBarAlignmentUITests: XCTestCase {
         _ = app.wait(for: .runningForeground, timeout: 5.0)
         
         // Wait for main interface elements to appear
-        let homeTab = app.tabBars.buttons["news_tab"]
+        let homeTab = app.tabBars.buttons["home_tab"]
         XCTAssertTrue(homeTab.waitForExistence(timeout: 10.0), "Home tab should exist")
     }
     
@@ -29,7 +29,7 @@ class TabBarAlignmentUITests: XCTestCase {
         let tabBar = app.tabBars.firstMatch
         XCTAssertTrue(tabBar.exists, "Tab bar should exist")
         
-        let homeTab = tabBar.buttons["news_tab"]
+        let homeTab = tabBar.buttons["home_tab"]
         let savedTab = tabBar.buttons["saved_tab"] 
         let searchTab = tabBar.buttons["search_tab"]
         let mapTab = tabBar.buttons["map_tab"]
@@ -130,7 +130,7 @@ class TabBarAlignmentUITests: XCTestCase {
         let tabBar = app.tabBars.firstMatch
         XCTAssertTrue(tabBar.exists, "Tab bar should exist")
         
-        let homeTab = tabBar.buttons["news_tab"]
+        let homeTab = tabBar.buttons["home_tab"]
         let moreTab = tabBar.buttons["more_tab"]
         
         XCTAssertTrue(homeTab.exists, "Home tab should exist")
@@ -172,7 +172,7 @@ class TabBarAlignmentUITests: XCTestCase {
                      "More view should load after tapping More tab")
         
         // Go back to home tab
-        let homeTab = tabBar.buttons["news_tab"]
+        let homeTab = tabBar.buttons["home_tab"]
         homeTab.tap()
         
         // Verify we're back on the home screen

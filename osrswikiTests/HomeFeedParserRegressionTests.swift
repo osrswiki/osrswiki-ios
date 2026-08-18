@@ -3,6 +3,13 @@ import XCTest
 
 @MainActor
 final class HomeFeedParserRegressionTests: XCTestCase {
+    func testHomeListPlainTextPreservesBlockBoundariesAndDecodesEntities() {
+        XCTAssertEqual(
+            osrsStringUtils.plainText(fromHTML: "<p>One &amp;amp; two</p><p>Three</p><br><ul><li>Four</li></ul>"),
+            "One & two Three Four"
+        )
+    }
+
     override func tearDown() {
         NewsRepository.shared.clearCache()
         super.tearDown()
@@ -52,5 +59,27 @@ final class HomeFeedParserRegressionTests: XCTestCase {
         XCTAssertEqual(feed.onThisDay?.title, "On this day...")
         XCTAssertEqual(feed.onThisDay?.events.count, 1)
         XCTAssertEqual(feed.popularPages.first?.title, "Money making guide")
+    }
+
+    func testInlineHomeLinksPrewarmOnlyInternalArticlesAfterViewportEntry() {
+        let html = """
+        <a href="https://example.com/external">External</a>
+        <a href="/w/File:Icon.png">File namespace</a>
+        <a href="/w/Internal_A">Internal A</a>
+        <a href="https://oldschool.runescape.wiki/w/Internal_B">Internal B</a>
+        """
+        let urls = osrsHomeFeedArticleLinkExtractor.internalArticleURLs(in: html)
+        XCTAssertEqual(urls.map(\.path), ["/w/Internal_A", "/w/Internal_B"])
+
+        var visibility = osrsArticlePrewarmVisibilityGate()
+        XCTAssertEqual(
+            visibility.transition(
+                .appeared(applicationIsActive: true, environmentAllowsPrewarm: true)
+            ),
+            .none,
+            "Instantiation alone must not prewarm an offscreen announcement or event link"
+        )
+        XCTAssertEqual(visibility.transition(.visibilityChanged(true)), .schedule)
+        XCTAssertEqual(visibility.transition(.visibilityChanged(false)), .cancel)
     }
 }
