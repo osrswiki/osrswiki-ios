@@ -362,7 +362,7 @@ struct osrsLightTheme: osrsThemeProtocol {
     
     // Accent and functional colors
     let accent = Color(hex: "#FFB800")            // osrs_gold
-    let link = Color(hex: "#936039")              // link_color_osrs_light
+    let link = Color(hex: "#744e2f")              // link_color_osrs_light (darker copper for readability)
     let error = Color(hex: "#B00020")             // color_error
     let onError = Color(hex: "#FFFFFF")           // white
     let outline = Color(hex: "#4C3D2A")           // osrs_brown_deep
@@ -376,7 +376,7 @@ struct osrsLightTheme: osrsThemeProtocol {
     var primaryTextColor: Color { onSurface }     // osrs_text_dark
     
     /// Equivalent to Android: secondary_text_color → @color/osrs_text_secondary_light
-    var secondaryTextColor: Color { Color(hex: "#8B7355") } // osrs_text_secondary_light
+    var secondaryTextColor: Color { Color(hex: "#4C3D2A") } // osrs_brown_deep (darker for readability)
     
     /// Equivalent to Android: ?attr/border_color → ?attr/colorSurfaceVariant
     var borderColor: Color { surfaceVariant }     // osrs_parchment_surface_light
@@ -447,8 +447,8 @@ struct osrsDarkTheme: osrsThemeProtocol {
     /// Equivalent to Android: ?attr/primary_text_color → ?attr/colorOnSurface
     var primaryTextColor: Color { onSurface }     // osrs_text_light_alt
     
-    /// Equivalent to Android: secondary_text_color → osrs_text_secondary_light (unified brown)
-    var secondaryTextColor: Color { Color(hex: "#8B7355") } // osrs_text_secondary_light - unified across themes
+    /// Equivalent to Android: secondary_text_color → osrs_text_secondary_dark
+    var secondaryTextColor: Color { Color(hex: "#a5917a") } // osrs_text_secondary_dark (lighter for readability in dark mode)
     
     /// Equivalent to Android: ?attr/border_color → ?attr/colorSurfaceVariant
     var borderColor: Color { surfaceVariant }     // osrs_interface_grey_dark

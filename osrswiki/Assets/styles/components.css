@@ -70,8 +70,8 @@ table.sortable th:not([aria-sort])::before {
     top: calc(50% - 6px);
     border-left: 5px solid transparent;
     border-right: 5px solid transparent;
-    border-bottom: 5px solid var(--link-color);
-    opacity: 0.3;
+    border-bottom: 5px solid var(--wikitable-color, var(--text-color));
+    opacity: 0.75;
 }
 table.sortable th:not([aria-sort])::after {
     /* Faint down arrow. */
@@ -81,8 +81,8 @@ table.sortable th:not([aria-sort])::after {
     top: calc(50% + 1px);
     border-left: 5px solid transparent;
     border-right: 5px solid transparent;
-    border-top: 5px solid var(--link-color);
-    opacity: 0.3;
+    border-top: 5px solid var(--wikitable-color, var(--text-color));
+    opacity: 0.75;
 }
 
 /*

@@ -7270,7 +7270,7 @@ table.align-center-1 td:nth-of-type(1), table.align-center-10 td:nth-of-type(10)
     --color-visited--active: var(--color-visited);
     --color-visited--hover: var(--color-visited);
     --color-visited: var(--ooui-progressive);
-    --link-color: #936039;
+    --link-color: #744e2f;
     --osrsw-brown: #605443;
     --outline-color-progressive--focus: var(--ooui-accent);
     --redlink-color: var(--redlink-color);
