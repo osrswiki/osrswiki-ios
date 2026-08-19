@@ -115,7 +115,7 @@
 }
 
 .infobox .infobox-full-width-content {
-        padding: 0;
+        padding: var(--osrs-infobox-cell-padding-block, 0.24em) var(--osrs-infobox-cell-padding-inline, 0.42em);
         text-align: center;
 }
 
@@ -163,8 +163,10 @@
         width: fit-content; /* Wrap around child exactly */
 }
 
-/* Full Width Content (navboxes, large tables) */
-.collapsible-container:has(.navbox, .wikitable) {
+/* Full Width Content (navboxes, large tables).
+   Do not let a nested .wikitable inside an infobox (maps, subtables)
+   promote the infobox card to a full-bleed navbox. */
+.collapsible-container:has(.navbox, .wikitable):not(.collapsible-infobox):not(.collapsible-primary-infobox) {
         width: 100%; /* Match full-width content */
         max-width: calc(100vw - 32px); /* Account for body margin (16px each side) */
         margin: 1em auto 0; /* Match navbox margins */
@@ -172,6 +174,17 @@
         /* Enable horizontal scrolling for wide content */
         overflow-x: auto;
         -webkit-overflow-scrolling: touch;
+}
+
+.collapsible-container:not(.collapsible-infobox):not(.collapsible-primary-infobox) .wikitable {
+        width: 100%;
+        table-layout: auto;
+        margin: 0;
+}
+
+.collapsible-container:has(.wikitable):not(.collapsible-infobox):not(.collapsible-primary-infobox) .collapsible-content {
+        padding-inline: 0;
+        padding-block: 0;
 }
 
 /* ========================================================================

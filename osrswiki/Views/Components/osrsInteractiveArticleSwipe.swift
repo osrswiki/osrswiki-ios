@@ -270,7 +270,8 @@ final class osrsInteractiveArticleSwipe {
         distance: CGFloat
     ) -> Animation {
         let remaining = remainingDistance(from: from, to: to, distance: distance)
-        let initial = remaining > 1 ? Double(abs(velocity) / remaining) : 0
+        let speed = max(abs(velocity), settleCoastPointsPerSecond)
+        let initial = remaining > 1 ? Double(speed / remaining) : 0
         return .interpolatingSpring(stiffness: 170, damping: 26, initialVelocity: initial)
     }
 

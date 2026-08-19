@@ -501,9 +501,24 @@ private struct ArticleViewContent: View {
 
     private func settleContents(to progress: CGFloat, velocity: CGFloat) {
         let target = min(1, max(0, progress))
-        withAnimation(osrsContentsReveal.settleAnimation) {
+        let from = contentsRevealProgress
+        let animation = osrsContentsReveal.settleAnimation(
+            from: from,
+            to: target,
+            velocity: velocity
+        )
+        withAnimation(animation) {
             contentsRevealProgress = target
-            isShowingTableOfContents = target >= 1
+            if target >= 1 {
+                isShowingTableOfContents = true
+            }
+        } completion: {
+            if target < 1 {
+                isShowingTableOfContents = false
+            } else {
+                isShowingTableOfContents = true
+            }
+            contentsRevealProgress = target
         }
     }
 

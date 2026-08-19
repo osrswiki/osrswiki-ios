@@ -727,6 +727,42 @@ img.osrs-inline-icon {
     white-space: nowrap !important;
 }
 
+/* Infobox cards: put the disclosure gutter in padding, not child margins.
+   `width: fit-content` plus `overflow-x: hidden` clips body margins, which is
+   why location infoboxes looked full-bleed while compact item infoboxes did not.
+   Nested maps/wikitables inside an infobox must not inherit that clip. */
+.collapsible-infobox:not(.collapsed) > .collapsible-content,
+.collapsible-primary-infobox:not(.collapsed) > .collapsible-content {
+    box-sizing: border-box !important;
+    padding-inline: var(--osrs-disclosure-content-inline-inset) !important;
+    padding-block: var(--osrs-disclosure-content-block-inset) !important;
+    overflow-x: hidden !important;
+}
+
+.collapsible-infobox:not(.collapsed) > .collapsible-content > .osrs-disclosure-body,
+.collapsible-primary-infobox:not(.collapsed) > .collapsible-content > .osrs-disclosure-body {
+    margin-inline: 0 !important;
+    width: auto !important;
+    max-width: 100% !important;
+}
+
+.collapsible-infobox table.infobox:not(.infobox-bonuses),
+.collapsible-primary-infobox table.infobox:not(.infobox-bonuses) {
+    max-width: 100% !important;
+}
+
+.collapsible-infobox .infobox-full-width-content:not(.inventory-image),
+.collapsible-primary-infobox .infobox-full-width-content:not(.inventory-image) {
+    padding-block: var(--osrs-infobox-cell-padding-block) !important;
+    padding-inline: var(--osrs-infobox-cell-padding-inline) !important;
+}
+
+.collapsible-infobox .infobox-full-width-content:not(.inventory-image) img,
+.collapsible-primary-infobox .infobox-full-width-content:not(.inventory-image) img {
+    max-width: 100% !important;
+    height: auto !important;
+}
+
 .osrs-intrinsic-table {
     display: block !important;
     max-width: 100% !important;
@@ -1291,6 +1327,48 @@ table.wikitable :is(th, td) > :is(
 .collapsible-container:not(.collapsed) > .collapsible-content > .osrs-disclosure-body:has(> table.infobox),
 .collapsible-container:not(.collapsed) > .collapsible-content > .osrs-disclosure-body:has(> .infobox-switch) {
     overflow-x: hidden !important;
+}
+
+/* Last in this file so equal-specificity padding:0 above cannot clip the gutter. */
+.collapsible-infobox:not(.collapsed) > .collapsible-content,
+.collapsible-primary-infobox:not(.collapsed) > .collapsible-content {
+    box-sizing: border-box !important;
+    padding-inline: var(--osrs-disclosure-content-inline-inset) !important;
+    padding-block: var(--osrs-disclosure-content-block-inset) !important;
+    overflow-x: hidden !important;
+}
+
+.collapsible-infobox:not(.collapsed) > .collapsible-content > .osrs-disclosure-body,
+.collapsible-primary-infobox:not(.collapsed) > .collapsible-content > .osrs-disclosure-body {
+    margin-inline: 0 !important;
+    width: auto !important;
+    max-width: 100% !important;
+}
+
+.collapsible-infobox:not(.collapsible-bonuses-infobox):not(.collapsed) > .collapsible-content > .osrs-disclosure-body,
+.collapsible-primary-infobox:not(.collapsible-bonuses-infobox):not(.collapsed) > .collapsible-content > .osrs-disclosure-body {
+    margin-inline: auto !important;
+    width: max-content !important;
+    max-width: min(18.75rem, 100%) !important;
+}
+
+/* Compact item infoboxes already shrink-wrap. Location screenshots must not
+   stretch the table to the card; keep them inside the same chrome gutter.
+   Cap the inner column, not the table: tables ignore max-width. */
+.collapsible-infobox:not(.collapsible-bonuses-infobox) table.infobox:not(.infobox-bonuses),
+.collapsible-primary-infobox:not(.collapsible-bonuses-infobox) table.infobox:not(.infobox-bonuses),
+.collapsible-infobox:not(.collapsible-bonuses-infobox) .infobox-switch,
+.collapsible-primary-infobox:not(.collapsible-bonuses-infobox) .infobox-switch {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin-inline: 0 !important;
+}
+
+.collapsible-infobox .infobox-full-width-content:not(.inventory-image) img,
+.collapsible-primary-infobox .infobox-full-width-content:not(.inventory-image) img {
+    width: auto !important;
+    max-width: 100% !important;
+    height: auto !important;
 }
 
 .osrs-local-scroll-surface > .osrs-disclosure-body,

@@ -19,7 +19,7 @@
     --subtle-color: #777777;
     --sidebar-color: var(--body-border);
     --wikitable-header-bg: var(--body-dark-shade);
-    --osrs-disclosure-chrome-bg: var(--body-mid);
+    --osrs-disclosure-chrome-bg: color-mix(in srgb, var(--body-main) 78%, var(--body-light) 22%);
     --wikitable-border: var(--body-border);
     --wikitable-bg: var(--body-light);
     --wikitable-color: var(--text-color);

@@ -17,10 +17,19 @@ enum osrsContentsReveal {
         isVisuallyOpen(isPresented: isPresented, interactiveProgress: interactiveProgress)
     }
 
-    /// Finger-follow uses a disabled transaction. After lift, this spring is
-    /// sampled every display frame; interpolatingSpring plus glass snapshots
-    /// dropped ProMotion after the finger left the screen.
-    static var settleAnimation: Animation {
-        .interactiveSpring(response: 0.30, dampingFraction: 0.92, blendDuration: 0)
+    /// Finger-follow uses a disabled transaction. After lift, continue with the
+    /// same velocity-matched interpolating spring used by the article swipe so
+    /// the coast is not a second animation from rest.
+    static func settleAnimation(
+        from: CGFloat,
+        to: CGFloat,
+        velocity: CGFloat
+    ) -> Animation {
+        osrsInteractiveArticleSwipe.settleAnimation(
+            from: from,
+            to: to,
+            velocity: velocity,
+            distance: osrsInteractiveArticleSwipe.contentsDrawerWidth
+        )
     }
 }

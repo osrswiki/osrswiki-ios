@@ -128,6 +128,56 @@ final class ArticleFeedbackFixesUITests: XCTestCase {
         attachScreenshot(named: "contents-during-load")
     }
 
+    func testSlowContentsOpenSwipeSettlesToFullyOpen() throws {
+        launchArticle(title: "Varrock", path: "Varrock")
+        let webView = articleWebView()
+        XCTAssertTrue(webView.waitForExistence(timeout: 25))
+
+        let start = webView.coordinate(withNormalizedOffset: CGVector(dx: 0.92, dy: 0.52))
+        let mid = webView.coordinate(withNormalizedOffset: CGVector(dx: 0.55, dy: 0.52))
+        start.press(
+            forDuration: 0.12,
+            thenDragTo: mid,
+            withVelocity: XCUIGestureVelocity(80),
+            thenHoldForDuration: 0.35
+        )
+
+        XCTAssertTrue(
+            waitForContentsDrawerVisible(timeout: 5),
+            "A slow left swipe must keep travelling into a fully open contents drawer. \(app.debugDescription)"
+        )
+        attachScreenshot(named: "contents-after-slow-open-swipe")
+    }
+
+    func testSlowDownwardContentsDismissDoesNotFreeze() throws {
+        launchArticle(title: "Varrock", path: "Varrock")
+        XCTAssertTrue(articleWebView().waitForExistence(timeout: 25))
+        openContents()
+
+        let drawer = contentsDrawer()
+        let start = drawer.coordinate(withNormalizedOffset: CGVector(dx: 0.45, dy: 0.35))
+        let end = drawer.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.62))
+        start.press(
+            forDuration: 0.18,
+            thenDragTo: end,
+            withVelocity: XCUIGestureVelocity(55),
+            thenHoldForDuration: 0.45
+        )
+
+        let deadline = Date().addingTimeInterval(4)
+        var stillVisible = true
+        while Date() < deadline {
+            stillVisible = drawer.exists && drawer.frame.minX < app.frame.width - 80
+            if !stillVisible { break }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.15))
+        }
+        XCTAssertFalse(
+            stillVisible,
+            "A slow down-and-right dismiss must finish sliding the drawer away, not freeze mid-gesture. \(app.debugDescription)"
+        )
+        attachScreenshot(named: "contents-after-slow-down-dismiss")
+    }
+
     func testBackSwipeDuringPageAppearKeepsPreviousArticleVisible() throws {
         launchArticle(title: "The Blood Moon Rises", path: "The_Blood_Moon_Rises")
         XCTAssertTrue(articleWebView().waitForExistence(timeout: 25))

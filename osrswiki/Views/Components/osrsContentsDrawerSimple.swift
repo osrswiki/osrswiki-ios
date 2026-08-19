@@ -19,6 +19,7 @@ struct osrsContentsDrawerSimple: View {
     let onSectionSelected: (String) -> Void
 
     private let drawerWidth: CGFloat = osrsInteractiveArticleSwipe.contentsDrawerWidth
+    @State private var isDismissTracking = false
 
     private var revealProgress: CGFloat {
         min(1, max(0, interactiveProgress))
@@ -43,7 +44,7 @@ struct osrsContentsDrawerSimple: View {
                     .padding(.top, topClearance)
                     .padding(.bottom, bottomClearance)
                     .offset(x: (1 - revealProgress) * drawerWidth)
-                    .allowsHitTesting(isPresented || revealProgress > 0.5)
+                    .allowsHitTesting(isPresented || revealProgress > 0.02)
                     .accessibilityHidden(revealProgress <= 0)
                     .simultaneousGesture(dismissDrag)
             }
@@ -119,6 +120,7 @@ struct osrsContentsDrawerSimple: View {
                     .padding(.bottom, 12)
                 }
                 .scrollContentBackground(.hidden)
+                .scrollDisabled(isDismissTracking)
 
                 osrsDottedRail()
                     .frame(width: 2)
@@ -131,15 +133,17 @@ struct osrsContentsDrawerSimple: View {
             .accessibilityIdentifier("contents_drawer")
     }
 
-    /// Glass is a rest-state material. Applying it while the panel is translating
-    /// drops ProMotion to a choppy snapshot cadence and reads as a fade on dismiss.
+    /// Glass is a rest-state material. Keep it while the drawer is still
+    /// presented so a dismiss drag does not tear down `.glassEffect` on the
+    /// first pixel of motion. Opening finger-follow keeps `isPresented` false
+    /// until settle completes, so that path stays solid.
     @ViewBuilder
     private func osrsDrawerChrome<Content: View>(
         _ content: Content,
         shape: RoundedRectangle,
         fallback: Color
     ) -> some View {
-        if revealProgress >= 1 {
+        if isPresented {
             content.osrsFloatingGlass(in: shape, fallback: fallback)
         } else {
             content
@@ -155,7 +159,10 @@ struct osrsContentsDrawerSimple: View {
                     isPresented: isPresented,
                     interactiveProgress: revealProgress
                 ) else { return }
-                guard abs(value.translation.width) > abs(value.translation.height) else { return }
+                if !isDismissTracking {
+                    guard abs(value.translation.width) > abs(value.translation.height) else { return }
+                    isDismissTracking = true
+                }
                 let next = min(1, max(0, 1 - max(0, value.translation.width) / drawerWidth))
                 var transaction = Transaction()
                 transaction.disablesAnimations = true
@@ -167,6 +174,7 @@ struct osrsContentsDrawerSimple: View {
                 }
             }
             .onEnded { value in
+                defer { isDismissTracking = false }
                 guard osrsContentsReveal.isVisuallyOpen(
                     isPresented: isPresented,
                     interactiveProgress: revealProgress
@@ -177,19 +185,34 @@ struct osrsContentsDrawerSimple: View {
                     velocityX: value.velocity.width,
                     contentsOpenAtStart: true
                 )
-                let target: CGFloat = shouldDismiss ? 0 : 1
-                withAnimation(osrsContentsReveal.settleAnimation) {
-                    interactiveProgress = target
-                    isPresented = target >= 1
-                }
+                settleDrawer(to: shouldDismiss ? 0 : 1, velocity: value.velocity.width)
             }
     }
 
-    private func dismissContents() {
-        withAnimation(osrsContentsReveal.settleAnimation) {
-            isPresented = false
-            interactiveProgress = 0
+    private func settleDrawer(to target: CGFloat, velocity: CGFloat) {
+        let clamped = min(1, max(0, target))
+        let animation = osrsContentsReveal.settleAnimation(
+            from: interactiveProgress,
+            to: clamped,
+            velocity: velocity
+        )
+        withAnimation(animation) {
+            interactiveProgress = clamped
+            if clamped >= 1 {
+                isPresented = true
+            }
+        } completion: {
+            if clamped < 1 {
+                isPresented = false
+            } else {
+                isPresented = true
+            }
+            interactiveProgress = clamped
         }
+    }
+
+    private func dismissContents() {
+        settleDrawer(to: 0, velocity: 0)
     }
 
     private func fontForSection(_ section: TableOfContentsSection) -> Font {
