@@ -1907,6 +1907,105 @@ final class ArticleAestheticRenderingTests: XCTestCase {
         XCTAssertEqual(state["vignetteFloat"] as? String, "none")
     }
 
+    func testExpandedDisclosureHeaderToContentGapsMatchAcrossKinds() async throws {
+        let fixesCss = try readAsset("Assets/styles/fixes.css")
+        let tablesCss = try readAsset("Assets/web/collapsible_tables.css")
+        let collapsible = try readAsset("Assets/web/collapsible_content.js")
+        XCTAssertTrue(collapsible.contains("osrsMeasureDisclosureHeaderGaps"))
+        XCTAssertTrue(fixesCss.contains("--osrs-disclosure-control-padding-block: 6px;"))
+        XCTAssertTrue(fixesCss.contains("html.osrs-table-cells-wrap"))
+
+        func disclosure(
+            kind: String,
+            extraClass: String,
+            label: String,
+            body: String
+        ) -> String {
+            """
+            <div class="collapsible-container \(extraClass)" data-osrs-disclosure-kind="\(kind)">
+                <div class="collapsible-header">
+                    <div class="title-wrapper">
+                        <span class="collapsible-label">\(label)</span>
+                        <span class="collapsible-state">Tap to collapse</span>
+                    </div>
+                    <div class="icon"></div>
+                </div>
+                <div class="collapsible-content">
+                    <div class="osrs-disclosure-body">\(body)</div>
+                </div>
+            </div>
+            """
+        }
+
+        let html = """
+        <!doctype html>
+        <html>
+        <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <style>
+        html { font-size: 16px; }
+        body { margin: 16px; font-family: -apple-system, sans-serif; }
+        \(fixesCss)
+        \(tablesCss)
+        table.infobox { margin: 1em 0 !important; }
+        </style>
+        </head>
+        <body>
+        \(disclosure(
+            kind: "infobox",
+            extraClass: "collapsible-infobox collapsible-primary-infobox",
+            label: "Infobox",
+            body: "<br><table class=\"infobox\"><tr><td>Varrock</td></tr></table>"
+        ))
+        \(disclosure(
+            kind: "wikitable",
+            extraClass: "collapsible-wikitable",
+            label: "Table",
+            body: "<table class=\"wikitable\"><tr><th>A</th><td>One</td></tr></table>"
+        ))
+        \(disclosure(
+            kind: "section",
+            extraClass: "",
+            label: "Section",
+            body: "<p>First section paragraph.</p>"
+        ))
+        <script>\(collapsible)</script>
+        </body>
+        </html>
+        """
+        try await load(html)
+        try await Task.sleep(nanoseconds: 250_000_000)
+        let state = try await evaluate("""
+        (() => {
+            const result = window.osrsMeasureDisclosureHeaderGaps();
+            const heights = result.measurements.map((item) => item.headerHeightPx);
+            const gaps = result.measurements.map((item) => item.gapPx);
+            const spread = result.summary.reduce((max, item) => Math.max(max, item.spreadPx), 0);
+            const kinds = result.summary.map((item) => item.kind).sort();
+            return {
+                count: result.measurements.length,
+                minHeader: Math.min.apply(null, heights),
+                maxHeader: Math.max.apply(null, heights),
+                minGap: Math.min.apply(null, gaps),
+                maxGap: Math.max.apply(null, gaps),
+                kindSpread: spread,
+                kinds: kinds.join(',')
+            };
+        })()
+        """)
+
+        XCTAssertEqual(number(state, "count"), 3, accuracy: 0.1)
+        XCTAssertGreaterThanOrEqual(number(state, "minHeader"), 30)
+        XCTAssertEqual(
+            number(state, "maxGap"),
+            number(state, "minGap"),
+            accuracy: 2.0,
+            "Expanded header-text to first-content gap must be consistent across disclosure kinds"
+        )
+        XCTAssertLessThanOrEqual(number(state, "kindSpread"), 2.0)
+        XCTAssertEqual(state["kinds"] as? String, "infobox,section,wikitable")
+    }
+
     func testArticleWebViewTogglesAccessibilityReflowClass() throws {
         let webViewSource = try readSource("Views/ArticleWebView.swift")
         let viewModelSource = try readSource("ViewModels/ArticleViewModel.swift")
@@ -1937,6 +2036,16 @@ final class ArticleAestheticRenderingTests: XCTestCase {
         webView.navigationDelegate = delegate
         webView.loadHTMLString(html, baseURL: URL(string: "https://oldschool.runescape.wiki/"))
         await fulfillment(of: [didFinish], timeout: 10.0)
+    }
+
+    private func number(_ state: [String: Any], _ key: String) -> Double {
+        if let value = state[key] as? NSNumber {
+            return value.doubleValue
+        }
+        if let value = state[key] as? Double {
+            return value
+        }
+        return 0
     }
 
     private func evaluate(_ script: String) async throws -> [String: Any] {

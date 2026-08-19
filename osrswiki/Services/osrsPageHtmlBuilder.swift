@@ -352,7 +352,8 @@ class osrsPageHtmlBuilder {
         collapseTablesEnabled: Bool = true,
         includeAssetLinks: Bool = false,
         articleTextScale: CGFloat = 1.0,
-        floorConvention: osrsArticleFloorConvention = .current()
+        floorConvention: osrsArticleFloorConvention = .current(),
+        wrapTableCellsEnabled: Bool = false
     ) -> String {
         let startTime = CFAbsoluteTimeGetCurrent()
 
@@ -369,6 +370,7 @@ class osrsPageHtmlBuilder {
         let finalBodyContent = titleHeaderHtml + articleBodyContent
 
         let themeClass = (theme is osrsDarkTheme) ? "theme-osrs-dark" : ""
+        let wrapClass = wrapTableCellsEnabled ? "osrs-table-cells-wrap" : ""
         let clampedArticleTextScale = min(max(articleTextScale, 0.85), 1.40)
         let articleTextScaleLiteral = String(
             format: "%.3f",
@@ -490,7 +492,7 @@ class osrsPageHtmlBuilder {
         // Build final HTML document
         let finalHtml = """
         <!DOCTYPE html>
-        <html>
+        <html class="\(wrapClass)">
         <head>
             <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
             <title>\(documentTitle)</title>
@@ -502,7 +504,7 @@ class osrsPageHtmlBuilder {
             \(tableCollapseScript)
             \(smartMediawikiVariables)
         </head>
-        <body class="\(themeClass) \(floorConvention.bodyClass)">
+        <body class="\(themeClass) \(floorConvention.bodyClass) \(wrapClass)">
             \(finalBodyContent)
             \(createInternalArticleLinkNormalizationScript(customScheme: customScheme))
             \(transformScripts)

@@ -95,6 +95,13 @@ class osrsThemeManager: ObservableObject {
         }
     }
 
+    /// Wrap table cells instead of keeping them on one horizontally scrolling line.
+    @Published var wrapTableCells: Bool = false {
+        didSet {
+            saveWrapTableCellsSettings()
+        }
+    }
+
     /// Reader preferences use explicit defaults so an upgrade preserves the gestures and
     /// typography that existing installs already had before these controls were introduced.
     @Published private(set) var articleTextScale: Double = 1.0
@@ -109,6 +116,7 @@ class osrsThemeManager: ObservableObject {
     private let userDefaults: UserDefaults
     private let themeSelectionKey = "osrs_theme_selection"
     private let collapseTablesKey = "collapseTables"
+    private let wrapTableCellsKey = "osrs_wrap_table_cells"
     private let articleTextScaleKey = "osrs_article_text_scale"
     private let swipeRightToGoBackKey = "osrs_swipe_right_back_enabled"
     private let swipeLeftToShowContentsKey = "osrs_swipe_left_contents_enabled"
@@ -124,6 +132,7 @@ class osrsThemeManager: ObservableObject {
         if ProcessInfo.processInfo.arguments.contains("-resetReaderPreferencesForUITests") {
             [
                 collapseTablesKey,
+                wrapTableCellsKey,
                 articleTextScaleKey,
                 swipeRightToGoBackKey,
                 swipeLeftToShowContentsKey,
@@ -138,6 +147,7 @@ class osrsThemeManager: ObservableObject {
         
         loadSavedTheme()
         loadCollapseTablesSettings()
+        loadWrapTableCellsSettings()
         loadReaderPreferences()
         updateCurrentTheme()
         setupSystemColorSchemeObserver()
@@ -161,6 +171,11 @@ class osrsThemeManager: ObservableObject {
     /// Set the collapse tables setting and persist it
     func setCollapseTables(_ enabled: Bool) {
         collapseTables = enabled
+    }
+
+    /// Set whether table cells wrap onto multiple lines.
+    func setWrapTableCells(_ enabled: Bool) {
+        wrapTableCells = enabled
     }
 
     func setArticleTextScale(_ scale: Double) {
@@ -250,6 +265,18 @@ class osrsThemeManager: ObservableObject {
     
     private func saveCollapseTablesSettings() {
         userDefaults.set(collapseTables, forKey: collapseTablesKey)
+    }
+
+    private func loadWrapTableCellsSettings() {
+        if userDefaults.objectExists(forKey: wrapTableCellsKey) {
+            wrapTableCells = userDefaults.bool(forKey: wrapTableCellsKey)
+        } else {
+            wrapTableCells = false
+        }
+    }
+
+    private func saveWrapTableCellsSettings() {
+        userDefaults.set(wrapTableCells, forKey: wrapTableCellsKey)
     }
 
     private func loadReaderPreferences() {

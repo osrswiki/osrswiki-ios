@@ -122,17 +122,20 @@ struct osrsArticleDocumentRequest: Hashable, Sendable {
 struct osrsArticleRenderOptions: Hashable, Sendable {
     let usesDarkTheme: Bool
     let collapseTablesEnabled: Bool
+    let wrapTableCellsEnabled: Bool
     let articleTextScale: Double
     let floorNumberingBodyClass: String
 
     init(
         usesDarkTheme: Bool,
         collapseTablesEnabled: Bool,
+        wrapTableCellsEnabled: Bool = false,
         articleTextScale: Double,
         floorNumberingBodyClass: String = osrsArticleFloorConvention.current().bodyClass
     ) {
         self.usesDarkTheme = usesDarkTheme
         self.collapseTablesEnabled = collapseTablesEnabled
+        self.wrapTableCellsEnabled = wrapTableCellsEnabled
         self.articleTextScale = min(max(articleTextScale, 0.85), 1.40)
         self.floorNumberingBodyClass = floorNumberingBodyClass
     }
@@ -1331,7 +1334,8 @@ actor osrsArticleDocumentCoordinator {
                 articleTextScale: CGFloat(options.articleTextScale),
                 floorConvention: options.floorNumberingBodyClass == osrsArticleFloorConvention.us.bodyClass
                     ? .us
-                    : .gb
+                    : .gb,
+                wrapTableCellsEnabled: options.wrapTableCellsEnabled
             )
             try Task.checkCancellation()
             return html
@@ -1561,6 +1565,7 @@ private struct osrsArticleVisibleRowPrewarmModifier: ViewModifier {
         let renderOptions = osrsArticleRenderOptions(
             usesDarkTheme: themeManager.currentTheme is osrsDarkTheme,
             collapseTablesEnabled: themeManager.collapseTables,
+            wrapTableCellsEnabled: themeManager.wrapTableCells,
             articleTextScale: Double(themeManager.articleTextScale)
         )
         dwellTask = Task { @MainActor in

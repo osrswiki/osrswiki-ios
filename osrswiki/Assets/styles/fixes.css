@@ -735,7 +735,7 @@ img.osrs-inline-icon {
 .collapsible-primary-infobox:not(.collapsed) > .collapsible-content {
     box-sizing: border-box !important;
     padding-inline: var(--osrs-disclosure-content-inline-inset) !important;
-    padding-block: var(--osrs-disclosure-content-block-inset) !important;
+    padding-block: 0 !important;
     overflow-x: hidden !important;
 }
 
@@ -865,8 +865,8 @@ table.osrs-map-table > :is(thead, tbody, tfoot) > tr > :is(th, td):has(.mw-karto
     --osrs-table-cell-padding-inline: 0.48em;
     --osrs-infobox-cell-padding-block: 0.24em;
     --osrs-infobox-cell-padding-inline: 0.42em;
-    --osrs-disclosure-control-padding-block: 0.2rem;
-    --osrs-disclosure-control-padding-inline: 0.625rem;
+    --osrs-disclosure-control-padding-block: 6px;
+    --osrs-disclosure-control-padding-inline: 10px;
     --osrs-disclosure-content-inline-inset: 12px;
     --osrs-disclosure-content-block-inset: 8px;
     --osrs-disclosure-label-gap: 0.35em;
@@ -958,8 +958,8 @@ body.osrs-accessibility-reflow .messagebox {
 .collapsible-close-button .icon {
     background-color: var(--wikitable-color, var(--text-color)) !important;
     background-image: none !important;
-    flex: 0 0 18px;
-    height: 18px;
+    flex: 0 0 20px;
+    height: 20px;
     margin-inline-start: var(--osrs-disclosure-label-gap);
     -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20'%3E%3Cpath d='M17.5 4.75l-7.5 7.5-7.5-7.5L1 6.25l9 9 9-9z' fill='%23000'/%3E%3C/svg%3E");
     mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20'%3E%3Cpath d='M17.5 4.75l-7.5 7.5-7.5-7.5L1 6.25l9 9 9-9z' fill='%23000'/%3E%3C/svg%3E");
@@ -967,9 +967,9 @@ body.osrs-accessibility-reflow .messagebox {
     mask-position: center;
     -webkit-mask-repeat: no-repeat;
     mask-repeat: no-repeat;
-    -webkit-mask-size: 18px 18px;
-    mask-size: 18px 18px;
-    width: 18px;
+    -webkit-mask-size: 20px 20px;
+    mask-size: 20px 20px;
+    width: 20px;
 }
 
 .infobox-buttons,
@@ -1315,6 +1315,19 @@ table.wikitable :is(th, td) > :is(
     overflow-x: auto !important;
 }
 
+.collapsible-container:not(.collapsed) > .collapsible-content > .osrs-disclosure-body > :first-child,
+.recipe-table.osrs-recipe-unit > .collapsible-recipe-table:not(.collapsed) > .collapsible-content > .osrs-disclosure-body > :first-child,
+.collapsible-content > .osrs-disclosure-body > :first-child,
+.collapsible-content > .osrs-disclosure-body > :first-child:is(:empty, br, [hidden], [aria-hidden="true"]) + *,
+.collapsible-content > .osrs-disclosure-body > .osrs-disclosure-first-content,
+.collapsible-infobox .osrs-disclosure-body > table.infobox,
+.collapsible-primary-infobox .osrs-disclosure-body > table.infobox,
+.osrs-disclosure-body > .infobox-switch,
+.osrs-disclosure-body > .switch-infobox-triggers,
+.osrs-disclosure-body > .infobox-buttons {
+    margin-block-start: 0 !important;
+}
+
 .collapsible-container .infobox,
 .collapsible-container table.infobox,
 .osrs-disclosure-body table,
@@ -1334,7 +1347,7 @@ table.wikitable :is(th, td) > :is(
 .collapsible-primary-infobox:not(.collapsed) > .collapsible-content {
     box-sizing: border-box !important;
     padding-inline: var(--osrs-disclosure-content-inline-inset) !important;
-    padding-block: var(--osrs-disclosure-content-block-inset) !important;
+    padding-block: 0 !important;
     overflow-x: hidden !important;
 }
 
@@ -1450,6 +1463,42 @@ ol:not(:has(> li:not(.mw-empty-elt))) {
 .osrs-local-scroll-surface > table.wikitable:not(.osrs-map-table) :is(th, td),
 .osrs-local-scroll-surface > .osrs-disclosure-body > table.wikitable:not(.osrs-map-table) :is(th, td) {
     white-space: nowrap;
+}
+
+/* Appearance: wrap table cells instead of forcing one line plus horizontal scroll.
+   Disclosure chrome labels stay one line even when wrapping is on. */
+html.osrs-table-cells-wrap .collapsible-container:not(.collapsible-primary-infobox):not(.osrs-recipe-unit) table.wikitable:not(.infobox):not(.infobox-bonuses):not(.navbox):not(.osrs-map-table),
+body.osrs-table-cells-wrap .collapsible-container:not(.collapsible-primary-infobox):not(.osrs-recipe-unit) table.wikitable:not(.infobox):not(.infobox-bonuses):not(.navbox):not(.osrs-map-table),
+html.osrs-table-cells-wrap .osrs-local-scroll-surface > table.wikitable:not(.osrs-map-table),
+body.osrs-table-cells-wrap .osrs-local-scroll-surface > table.wikitable:not(.osrs-map-table),
+html.osrs-table-cells-wrap .osrs-local-scroll-surface > .osrs-disclosure-body > table.wikitable:not(.osrs-map-table),
+body.osrs-table-cells-wrap .osrs-local-scroll-surface > .osrs-disclosure-body > table.wikitable:not(.osrs-map-table) {
+    width: 100% !important;
+    max-width: 100% !important;
+}
+
+html.osrs-table-cells-wrap .collapsible-container:not(.collapsible-primary-infobox):not(.osrs-recipe-unit) table.wikitable:not(.infobox):not(.infobox-bonuses):not(.navbox):not(.osrs-map-table) :is(th, td),
+body.osrs-table-cells-wrap .collapsible-container:not(.collapsible-primary-infobox):not(.osrs-recipe-unit) table.wikitable:not(.infobox):not(.infobox-bonuses):not(.navbox):not(.osrs-map-table) :is(th, td),
+html.osrs-table-cells-wrap .osrs-local-scroll-surface > table.wikitable:not(.osrs-map-table) :is(th, td),
+body.osrs-table-cells-wrap .osrs-local-scroll-surface > table.wikitable:not(.osrs-map-table) :is(th, td),
+html.osrs-table-cells-wrap .osrs-local-scroll-surface > .osrs-disclosure-body > table.wikitable:not(.osrs-map-table) :is(th, td),
+body.osrs-table-cells-wrap .osrs-local-scroll-surface > .osrs-disclosure-body > table.wikitable:not(.osrs-map-table) :is(th, td),
+html.osrs-table-cells-wrap .collapsible-infobox table.infobox th:not(.infobox-header):not([colspan]),
+body.osrs-table-cells-wrap .collapsible-infobox table.infobox th:not(.infobox-header):not([colspan]) {
+    white-space: normal !important;
+    overflow-wrap: anywhere;
+}
+
+html.osrs-table-cells-wrap .collapsible-header .collapsible-label,
+body.osrs-table-cells-wrap .collapsible-header .collapsible-label,
+html.osrs-table-cells-wrap .collapsible-header .collapsible-state,
+body.osrs-table-cells-wrap .collapsible-header .collapsible-state,
+html.osrs-table-cells-wrap .collapsible-label,
+body.osrs-table-cells-wrap .collapsible-label,
+html.osrs-table-cells-wrap .collapsible-state,
+body.osrs-table-cells-wrap .collapsible-state {
+    white-space: nowrap !important;
+    overflow-wrap: normal;
 }
 
 .collapsible-map-table table.osrs-map-table,

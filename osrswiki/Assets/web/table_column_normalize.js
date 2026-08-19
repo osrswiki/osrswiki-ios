@@ -2,6 +2,11 @@
 // last column (the "wide ranged cell" failure). Applies to every bonuses /
 // nested-stat row, not a specific article.
 (function () {
+  function tableCellsWrapEnabled() {
+    return document.documentElement.classList.contains('osrs-table-cells-wrap') ||
+      (document.body && document.body.classList.contains('osrs-table-cells-wrap'));
+  }
+
   function median(values) {
     if (!values.length) return 0;
     const sorted = values.slice().sort((a, b) => a - b);
@@ -69,7 +74,11 @@
       cell.style.setProperty('padding', '0', 'important');
     });
     table.querySelectorAll('.infobox-subheader').forEach((cell) => {
-      cell.style.setProperty('white-space', 'nowrap', 'important');
+      if (!tableCellsWrapEnabled()) {
+        cell.style.setProperty('white-space', 'nowrap', 'important');
+      } else {
+        cell.style.removeProperty('white-space');
+      }
       cell.style.setProperty('overflow-wrap', 'normal', 'important');
       cell.style.setProperty('word-break', 'keep-all', 'important');
       cell.style.setProperty('vertical-align', 'middle', 'important');
@@ -192,6 +201,23 @@
   });
 
   window.__osrsNormalizeArticleTables = normalize;
+  window.osrsApplyTableCellWrapPreference = function (enabled) {
+    const wrap = !!enabled;
+    [document.documentElement, document.body].forEach((element) => {
+      if (element) element.classList.toggle('osrs-table-cells-wrap', wrap);
+    });
+    document.querySelectorAll('th, td').forEach((cell) => {
+      if (!(cell instanceof HTMLElement)) return;
+      if (cell.closest('.collapsible-header, .collapsible-close-button, .collapsible-close-footer')) return;
+      if (cell.matches('.infobox-nested')) return;
+      if (wrap && cell.style.getPropertyValue('white-space') === 'nowrap') {
+        cell.style.removeProperty('white-space');
+      }
+    });
+    if (!wrap) {
+      normalize();
+    }
+  };
   window.__osrsDumpArticleTableMetrics = function () {
     function box(el) {
       if (!el) return null;

@@ -101,7 +101,9 @@
 
         if (surface.matches && surface.matches('table.wikitable') &&
             !surface.matches('.infobox, .infobox-bonuses, .navbox, .main-infobox') &&
-            !surface.closest('.collapsible-primary-infobox, .osrs-recipe-unit')) {
+            !surface.closest('.collapsible-primary-infobox, .osrs-recipe-unit') &&
+            !(document.documentElement.classList.contains('osrs-table-cells-wrap') ||
+                (document.body && document.body.classList.contains('osrs-table-cells-wrap')))) {
             surface.querySelectorAll(':scope > * > tr > :is(th, td), :scope > tr > :is(th, td)').forEach(function(cell) {
                 cell.style.setProperty('white-space', 'nowrap');
             });

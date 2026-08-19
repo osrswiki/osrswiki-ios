@@ -310,6 +310,7 @@ struct NewsView: View {
                 osrsArticleRenderOptions(
                     usesDarkTheme: themeManager.currentTheme is osrsDarkTheme,
                     collapseTablesEnabled: themeManager.collapseTables,
+                    wrapTableCellsEnabled: themeManager.wrapTableCells,
                     articleTextScale: Double(themeManager.articleTextScale)
                 )
             }

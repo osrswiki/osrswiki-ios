@@ -43,6 +43,16 @@ struct AppearanceSettingsView: View {
                     .accessibilityIdentifier("appearance_collapse_tables_toggle")
                     .listRowBackground(Color(osrsTheme.surfaceVariant))
 
+                    Toggle(isOn: wrapTableCells) {
+                        osrsAppearancePreferenceLabel(
+                            icon: "text.alignleft",
+                            title: "Wrap table cells",
+                            summary: "Let table text wrap onto multiple lines"
+                        )
+                    }
+                    .accessibilityIdentifier("appearance_wrap_table_cells_toggle")
+                    .listRowBackground(Color(osrsTheme.surfaceVariant))
+
                     LabeledContent {
                         Picker("Floor numbering", selection: floorNumberingSelection) {
                             ForEach(osrsArticleFloorNumberingMode.allCases) { mode in
@@ -158,6 +168,13 @@ struct AppearanceSettingsView: View {
         Binding(
             get: { themeManager.collapseTables },
             set: themeManager.setCollapseTables
+        )
+    }
+
+    private var wrapTableCells: Binding<Bool> {
+        Binding(
+            get: { themeManager.wrapTableCells },
+            set: themeManager.setWrapTableCells
         )
     }
 

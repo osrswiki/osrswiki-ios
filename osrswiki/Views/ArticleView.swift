@@ -179,6 +179,9 @@ private struct ArticleViewContent: View {
         .onChange(of: themeManager.floorNumberingMode) { _, _ in
             viewModel.applyFloorNumberingConvention(osrsArticleFloorConvention.current())
         }
+        .onChange(of: themeManager.wrapTableCells) { _, enabled in
+            viewModel.applyWrapTableCells(enabled)
+        }
         .onChange(of: themeManager.collapseTables) { _, shouldCollapse in
             guard collapseTablesEnabled else { return }
             viewModel.setCollapseTablesEnabled(shouldCollapse)
@@ -404,6 +407,7 @@ private struct ArticleViewContent: View {
     private func startPreparedArticleLoad(isReload: Bool) {
         viewModel.setCollapseTablesEnabled(collapseTablesEnabled && themeManager.collapseTables)
         viewModel.setArticleTextScale(CGFloat(themeManager.articleTextScale))
+        viewModel.applyWrapTableCells(themeManager.wrapTableCells)
         viewModel.loadArticle(theme: osrsTheme, isReload: isReload)
         movedOffTopOfArticleStack = false
         updateArticleBottomBar()

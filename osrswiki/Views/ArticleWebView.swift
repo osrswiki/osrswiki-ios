@@ -1127,6 +1127,7 @@ struct ArticleWebView: UIViewRepresentable {
         let renderOptions = osrsArticleRenderOptions(
             usesDarkTheme: themeManager.currentTheme is osrsDarkTheme,
             collapseTablesEnabled: viewModel.collapseTablesEnabled,
+            wrapTableCellsEnabled: themeManager.wrapTableCells,
             articleTextScale: Double(themeManager.articleTextScale)
         )
         if let prepared = osrsPreparedArticleWebViewStore.shared.take(
@@ -1320,6 +1321,7 @@ struct ArticleWebView: UIViewRepresentable {
             String(format: "article_dynamic_type_scale=%.2f", Double(scale)),
             String(format: "article_user_text_scale=%.2f", themeManager.articleTextScale),
             "article_collapse_tables=\(themeManager.collapseTables ? 1 : 0)",
+            "article_wrap_table_cells=\(themeManager.wrapTableCells ? 1 : 0)",
             "article_swipe_right_back=\(themeManager.swipeRightToGoBackEnabled ? 1 : 0)",
             "article_swipe_left_contents=\(themeManager.swipeLeftToShowContentsEnabled ? 1 : 0)"
         ] + nativeMapTokens)

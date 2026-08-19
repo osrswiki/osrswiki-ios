@@ -252,6 +252,7 @@
 
         updateHeaderText(container, titleWrapper, captionText);
         syncDisclosureAccessibility(container, content);
+        markFirstVisibleDisclosureContent(content);
         mapPlaceholders.forEach(function(mapPlaceholder) {
             bridgeCall('onCollapsibleToggled', mapPlaceholder.dataset.osrsNativeMapId, isOpening);
         });
@@ -733,6 +734,76 @@
         });
     }
 
+    function markFirstVisibleDisclosureContent(root) {
+        const scope = root || document;
+        const bodies = root && root.classList && root.classList.contains('osrs-disclosure-body')
+            ? [root]
+            : Array.from(scope.querySelectorAll('.osrs-disclosure-body'));
+        bodies.forEach(function(body) {
+            Array.from(body.children).forEach(function(child) {
+                child.classList.remove('osrs-disclosure-first-content');
+            });
+            const first = firstVisibleDisclosureChild(body);
+            if (first) first.classList.add('osrs-disclosure-first-content');
+        });
+    }
+
+    function firstVisibleDisclosureChild(body) {
+        if (!body || !body.children) return null;
+        const children = Array.from(body.children);
+        for (let index = 0; index < children.length; index += 1) {
+            const child = children[index];
+            if (!(child instanceof HTMLElement)) continue;
+            const style = window.getComputedStyle(child);
+            if (style.display === 'none' || style.visibility === 'hidden') continue;
+            if (child.getBoundingClientRect().height <= 0) continue;
+            return child;
+        }
+        return body.firstElementChild;
+    }
+
+    function measureDisclosureHeaderGaps() {
+        const measurements = [];
+        document.querySelectorAll('.collapsible-container:not(.collapsed)').forEach(function(container) {
+            const header = container.querySelector(':scope > .collapsible-header');
+            const label = header && header.querySelector('.collapsible-label');
+            const body = container.querySelector(':scope > .collapsible-content > .osrs-disclosure-body') ||
+                container.querySelector(':scope > .collapsible-content');
+            const first = firstVisibleDisclosureChild(body);
+            if (!header || !label || !first) return;
+            const labelRect = label.getBoundingClientRect();
+            const firstRect = first.getBoundingClientRect();
+            const headerRect = header.getBoundingClientRect();
+            measurements.push({
+                kind: container.dataset.osrsDisclosureKind || '',
+                tableRole: container.dataset.osrsTableRole || '',
+                label: normalizeText(label.textContent),
+                headerHeightPx: Math.round(headerRect.height * 100) / 100,
+                gapPx: Math.round((firstRect.top - labelRect.bottom) * 100) / 100
+            });
+        });
+        const byKind = {};
+        measurements.forEach(function(item) {
+            const key = item.kind || 'unknown';
+            if (!byKind[key]) byKind[key] = [];
+            byKind[key].push(item.gapPx);
+        });
+        const summary = Object.keys(byKind).sort().map(function(kind) {
+            const values = byKind[kind];
+            const min = Math.min.apply(null, values);
+            const max = Math.max.apply(null, values);
+            return {
+                kind: kind,
+                count: values.length,
+                minGapPx: min,
+                maxGapPx: max,
+                spreadPx: Math.round((max - min) * 100) / 100
+            };
+        });
+        return { measurements: measurements, summary: summary };
+    }
+    window.osrsMeasureDisclosureHeaderGaps = measureDisclosureHeaderGaps;
+
     function collectCollapseMetrics() {
         const controls = Array.from(document.querySelectorAll('.collapsible-container')).map(function(container) {
             return {
@@ -813,6 +884,7 @@
         if (typeof initializeInfoboxSwitcher === 'function') initializeInfoboxSwitcher();
         document.querySelectorAll('.collapsible-content').forEach(absorbDisclosureChildren);
         scheduleDisclosureInnerInsets();
+        markFirstVisibleDisclosureContent();
         if (typeof window.OSRSApplyArticlePolish === 'function') {
             window.OSRSApplyArticlePolish();
         }

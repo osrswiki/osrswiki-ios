@@ -20,7 +20,7 @@ final class osrsPreparedArticleWebViewStore: NSObject, WKNavigationDelegate {
         let options: osrsArticleRenderOptions
 
         var token: String {
-            "\(identity.value)|dark=\(options.usesDarkTheme)|collapse=\(options.collapseTablesEnabled)|scale=\(options.articleTextScale)"
+            "\(identity.value)|dark=\(options.usesDarkTheme)|collapse=\(options.collapseTablesEnabled)|wrap=\(options.wrapTableCellsEnabled)|scale=\(options.articleTextScale)"
         }
     }
 

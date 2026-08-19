@@ -440,6 +440,7 @@ class ArticleViewModel: NSObject, ObservableObject {
     private(set) var pageTitle_: String?
     let pageId: Int?
     private(set) var collapseTablesEnabled: Bool
+    private(set) var wrapTableCellsEnabled: Bool = false
     private(set) var snippet_: String?  // Metadata for rich history display
     private(set) var thumbnailUrl_: URL?  // Metadata for rich history display
     let excludeFromHistory: Bool  // Exclude from history tracking (for preview generation)
@@ -652,6 +653,11 @@ class ArticleViewModel: NSObject, ObservableObject {
         collapseTablesEnabled = enabled
     }
 
+    func applyWrapTableCells(_ enabled: Bool) {
+        wrapTableCellsEnabled = enabled
+        applyWrapTableCells(enabled, to: webView)
+    }
+
     private func applyArticleTextScale(to webView: WKWebView?) {
         guard let webView else { return }
         let scaleLiteral = String(
@@ -681,6 +687,25 @@ class ArticleViewModel: NSObject, ObservableObject {
                 if (!body) return;
                 body.classList.remove('floornumber-setting-gb', 'floornumber-setting-us');
                 body.classList.add('\(bodyClass)');
+            })();
+        """)
+    }
+
+    private func applyWrapTableCells(_ enabled: Bool, to webView: WKWebView?) {
+        guard let webView else { return }
+        let enabledLiteral = enabled ? "true" : "false"
+        webView.evaluateJavaScript("""
+            (function() {
+                var enabled = \(enabledLiteral);
+                if (typeof window.osrsApplyTableCellWrapPreference === 'function') {
+                    window.osrsApplyTableCellWrapPreference(enabled);
+                    return;
+                }
+                [document.documentElement, document.body].forEach(function(element) {
+                    if (element) {
+                        element.classList.toggle('osrs-table-cells-wrap', enabled);
+                    }
+                });
             })();
         """)
     }
@@ -1107,6 +1132,7 @@ class ArticleViewModel: NSObject, ObservableObject {
         let renderOptions = osrsArticleRenderOptions(
             usesDarkTheme: theme is osrsDarkTheme,
             collapseTablesEnabled: collapseTablesEnabled,
+            wrapTableCellsEnabled: wrapTableCellsEnabled,
             articleTextScale: Double(articleTextScale)
         )
         let shouldForceDocumentReload = forceNextDocumentReload
@@ -1223,7 +1249,8 @@ class ArticleViewModel: NSObject, ObservableObject {
             theme: theme,
             collapseTablesEnabled: false,
             includeAssetLinks: false,
-            articleTextScale: articleTextScale
+            articleTextScale: articleTextScale,
+            wrapTableCellsEnabled: wrapTableCellsEnabled
         )
 
         currentLoadTask = Task { [weak self] in
@@ -1367,7 +1394,8 @@ class ArticleViewModel: NSObject, ObservableObject {
                 pageContent: pageContent,
                 theme: theme,
                 collapseTablesEnabled: collapseTablesEnabled,
-                articleTextScale: articleTextScale
+                articleTextScale: articleTextScale,
+                wrapTableCellsEnabled: wrapTableCellsEnabled
             )
 
             print("🏗️ ArticleViewModel: Built custom HTML document (\(finalHtml.count) characters)")
@@ -2369,7 +2397,8 @@ class ArticleViewModel: NSObject, ObservableObject {
             theme: theme,
             collapseTablesEnabled: collapseTablesEnabled,
             includeAssetLinks: true,  // This generates <link> and <script> tags
-            articleTextScale: articleTextScale
+            articleTextScale: articleTextScale,
+            wrapTableCellsEnabled: wrapTableCellsEnabled
         )
 
         // Replace href and src attributes to use ios-assets:// scheme for internal resources only

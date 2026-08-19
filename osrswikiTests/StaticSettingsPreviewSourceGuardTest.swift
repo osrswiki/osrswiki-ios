@@ -20,6 +20,7 @@ final class StaticSettingsPreviewSourceGuardTest: XCTestCase {
         XCTAssertFalse(appearance.contains("osrsStaticSettingsPreviewAssets"))
         XCTAssertTrue(appearance.contains("appearance_theme_picker"))
         XCTAssertTrue(appearance.contains("appearance_collapse_tables_toggle"))
+        XCTAssertTrue(appearance.contains("appearance_wrap_table_cells_toggle"))
         XCTAssertTrue(appearance.contains("appearance_article_text_scale"))
         XCTAssertTrue(appearance.contains("appearance_swipe_right_back_toggle"))
         XCTAssertTrue(appearance.contains("appearance_swipe_left_contents_toggle"))
@@ -35,11 +36,13 @@ final class StaticSettingsPreviewSourceGuardTest: XCTestCase {
         XCTAssertTrue(initial.swipeRightToGoBackEnabled)
         XCTAssertTrue(initial.swipeLeftToShowContentsEnabled)
         XCTAssertFalse(initial.collapseTables)
+        XCTAssertFalse(initial.wrapTableCells)
 
         initial.setArticleTextScale(1.25)
         initial.setSwipeRightToGoBackEnabled(false)
         initial.setSwipeLeftToShowContentsEnabled(false)
         initial.setCollapseTables(false)
+        initial.setWrapTableCells(true)
         initial.setTheme(.osrsDark)
         XCTAssertTrue(initial.currentTheme is osrsDarkTheme)
 
@@ -48,6 +51,7 @@ final class StaticSettingsPreviewSourceGuardTest: XCTestCase {
         XCTAssertFalse(reloaded.swipeRightToGoBackEnabled)
         XCTAssertFalse(reloaded.swipeLeftToShowContentsEnabled)
         XCTAssertFalse(reloaded.collapseTables)
+        XCTAssertTrue(reloaded.wrapTableCells)
         XCTAssertEqual(reloaded.selectedTheme, .osrsDark)
         XCTAssertTrue(reloaded.currentTheme is osrsDarkTheme)
 

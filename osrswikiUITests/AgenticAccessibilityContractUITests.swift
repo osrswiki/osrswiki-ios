@@ -175,7 +175,8 @@ final class AgenticAccessibilityContractUITests: XCTestCase {
 
             for identifier in [
                 "appearance_theme_picker",
-                "appearance_collapse_tables_toggle"
+                "appearance_collapse_tables_toggle",
+                "appearance_wrap_table_cells_toggle"
             ] {
                 let control = element(in: app, identifier: identifier)
                 XCTAssertTrue(control.waitForExistence(timeout: 5), "Missing \(identifier) in \(theme)")
@@ -238,6 +239,7 @@ final class AgenticAccessibilityContractUITests: XCTestCase {
             XCTAssertTrue(app.staticTexts["Display"].waitForExistence(timeout: 5))
             XCTAssertTrue(element(in: app, identifier: "appearance_theme_picker").isHittable)
             XCTAssertTrue(element(in: app, identifier: "appearance_collapse_tables_toggle").isHittable)
+            XCTAssertTrue(element(in: app, identifier: "appearance_wrap_table_cells_toggle").isHittable)
             XCTAssertTrue(element(in: app, identifier: "appearance_article_text_scale").isHittable)
 
             let displayAttachment = XCTAttachment(screenshot: app.screenshot())
