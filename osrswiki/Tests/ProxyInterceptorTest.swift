@@ -143,8 +143,12 @@ struct ProxyInterceptorTestView: View {
         let hasCache = ProxyInterceptorService.shared.hasCompleteOfflineCache(pageId: "test-page-123")
         addTestResult("ℹ️ Has complete cache: \(hasCache)")
         
+#if DEBUG
         ProxyInterceptorService.shared.disableOfflineSaveMode()
         addTestResult("✅ Service save mode disabled successfully")
+#else
+        addTestResult("ℹ️ Service save mode disable skipped in Release")
+#endif
     }
     
     private func addTestResult(_ result: String) {
