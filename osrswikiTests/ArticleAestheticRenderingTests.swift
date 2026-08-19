@@ -57,8 +57,9 @@ final class ArticleAestheticRenderingTests: XCTestCase {
         XCTAssertFalse(tables.contains("body:not(.js-transforms-complete) .infobox"))
         XCTAssertTrue(tables.contains(".mw-parser-output > table.infobox"))
         XCTAssertTrue(collapsible.contains("authoredMapId"))
-        XCTAssertFalse(collapsible.contains("Tap to collapse"))
-        XCTAssertFalse(collapsible.contains("Tap to expand"))
+        XCTAssertTrue(collapsible.contains("Tap to collapse"))
+        XCTAssertTrue(collapsible.contains("Tap to expand"))
+        XCTAssertTrue(collapsible.contains("collapsible-state"))
         XCTAssertTrue(fixes.contains("mask-image:"))
         XCTAssertTrue(fixes.contains("text-overflow: ellipsis"))
         XCTAssertTrue(tables.contains("mask-image:"))
@@ -380,9 +381,13 @@ final class ArticleAestheticRenderingTests: XCTestCase {
         """)
 
         XCTAssertEqual(state["firstInfoboxCollapsed"] as? Bool, false)
-        XCTAssertTrue((state["firstInfoboxHeader"] as? String ?? "").contains("Dragon scimitar"))
+        XCTAssertTrue((state["firstInfoboxHeader"] as? String ?? "").contains("Infobox"))
+        XCTAssertTrue((state["firstInfoboxHeader"] as? String ?? "").contains("Tap to collapse"))
+        XCTAssertFalse((state["firstInfoboxHeader"] as? String ?? "").contains("Dragon scimitar"))
         XCTAssertEqual(state["firstTableCollapsed"] as? Bool, true)
-        XCTAssertTrue((state["firstTableHeader"] as? String ?? "").contains("Level / New abilities"))
+        XCTAssertTrue((state["firstTableHeader"] as? String ?? "").contains("Table"))
+        XCTAssertTrue((state["firstTableHeader"] as? String ?? "").contains("Tap to expand"))
+        XCTAssertFalse((state["firstTableHeader"] as? String ?? "").contains("Level / New abilities"))
         XCTAssertEqual(state["secondTableCollapsed"] as? Bool, true)
         XCTAssertEqual(state["navCollapsed"] as? Bool, true)
     }
@@ -426,7 +431,7 @@ final class ArticleAestheticRenderingTests: XCTestCase {
         XCTAssertEqual(state["containerCount"] as? Int, 1)
         XCTAssertEqual(state["tableInsideContainer"] as? Bool, true)
         XCTAssertEqual(state["collapsed"] as? Bool, true)
-        XCTAssertTrue((state["header"] as? String ?? "").contains("Details"))
+        XCTAssertTrue((state["header"] as? String ?? "").contains("Quest details"))
         XCTAssertEqual(state["outsideQuestdetails"] as? Int, 0)
     }
 
@@ -477,7 +482,8 @@ final class ArticleAestheticRenderingTests: XCTestCase {
         XCTAssertEqual(state["containerCount"] as? Int, 2)
         XCTAssertEqual(state["watchdogInsideContainer"] as? Bool, true)
         XCTAssertEqual(state["watchdogCollapsed"] as? Bool, true)
-        XCTAssertTrue((state["watchdogHeader"] as? String ?? "").contains("Importable Watchdog config"))
+        XCTAssertTrue((state["watchdogHeader"] as? String ?? "").contains("Table"))
+        XCTAssertFalse((state["watchdogHeader"] as? String ?? "").contains("Importable Watchdog config"))
         XCTAssertEqual(state["alreadyWrappedDepth"] as? Int, 1)
         XCTAssertEqual(state["outsideExplicitTables"] as? Int, 0)
     }
@@ -525,7 +531,8 @@ final class ArticleAestheticRenderingTests: XCTestCase {
         })()
         """)
 
-        XCTAssertTrue((state["headerText"] as? String ?? "").contains("Doom of Mokhaiotl"))
+        XCTAssertTrue((state["headerText"] as? String ?? "").contains("Infobox"))
+        XCTAssertFalse((state["headerText"] as? String ?? "").contains("Doom of Mokhaiotl"))
         XCTAssertEqual(state["containsVariantButtons"] as? Bool, false)
         XCTAssertEqual(state["containsResourceBank"] as? Bool, false)
     }
@@ -575,7 +582,8 @@ final class ArticleAestheticRenderingTests: XCTestCase {
         })()
         """)
 
-        XCTAssertTrue((state["headerText"] as? String ?? "").contains("Ankou"))
+        XCTAssertTrue((state["headerText"] as? String ?? "").contains("Infobox"))
+        XCTAssertFalse((state["headerText"] as? String ?? "").contains("Ankou"))
         XCTAssertEqual(state["containsTriggers"] as? Bool, false)
         XCTAssertEqual(state["containsInactiveContent"] as? Bool, false)
     }
@@ -623,9 +631,11 @@ final class ArticleAestheticRenderingTests: XCTestCase {
         """)
 
         XCTAssertEqual(state["unlockCollapsed"] as? Bool, true)
-        XCTAssertTrue((state["unlockHeader"] as? String ?? "").contains("Crafting level up table"))
+        XCTAssertTrue((state["unlockHeader"] as? String ?? "").contains("Table"))
+        XCTAssertFalse((state["unlockHeader"] as? String ?? "").contains("Crafting level up table"))
         XCTAssertEqual(state["summaryCollapsed"] as? Bool, false)
-        XCTAssertTrue((state["summaryHeader"] as? String ?? "").contains("Crafting"))
+        XCTAssertTrue((state["summaryHeader"] as? String ?? "").contains("Infobox"))
+        XCTAssertFalse((state["summaryHeader"] as? String ?? "").contains("Crafting"))
         XCTAssertEqual(state["expandedWikitablesBeforeSummary"] as? Int, 0)
     }
 
@@ -662,7 +672,8 @@ final class ArticleAestheticRenderingTests: XCTestCase {
         """)
 
         XCTAssertEqual(state["collapsed"] as? Bool, true)
-        XCTAssertTrue((state["header"] as? String ?? "").contains("Construction level up table"))
+        XCTAssertTrue((state["header"] as? String ?? "").contains("Table"))
+        XCTAssertFalse((state["header"] as? String ?? "").contains("Construction level up table"))
     }
 
     func testBroadWikitableSpritesStayCompactWhileTableCanScrollHorizontally() async throws {
@@ -1119,6 +1130,91 @@ final class ArticleAestheticRenderingTests: XCTestCase {
         XCTAssertLessThanOrEqual(state["documentOverflow"] as? Double ?? 1, 0.5)
     }
 
+    func testIconPlusAuthoredProseKeepsWrappedLineBoxes() async throws {
+        let polish = try readAsset("Assets/web/mobile_article_polish.js")
+        let fixes = try readAsset("Assets/styles/fixes.css")
+        let iosAesthetics = try readAsset("Assets/styles/ios-article-aesthetics.css")
+        XCTAssertTrue(polish.contains("osrsWrapperIsIconChrome"))
+        XCTAssertTrue(polish.contains("osrs-inline-icon-prose"))
+        XCTAssertTrue(fixes.contains(".osrs-inline-icon-prose"))
+        XCTAssertTrue(iosAesthetics.contains(".osrs-inline-icon-prose"))
+        XCTAssertFalse(polish.contains("[style*=\"padding\"]"))
+
+        let bitmap = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=="
+        webView.frame = CGRect(x: 0, y: 0, width: 320, height: 812)
+        let html = """
+        <!doctype html>
+        <html>
+        <head>
+          <meta name="viewport" content="width=device-width, initial-scale=1">
+          <style>
+            body { margin: 8px; font: 16px/1.5 -apple-system, sans-serif; width: 180px; }
+            \(fixes)
+            \(iosAesthetics)
+          </style>
+        </head>
+        <body>
+          <div class="mw-parser-output mw-body-content">
+            <p id="lore">
+              <span id="group" style="padding:25.6px; text-align:center; font-size:10pt;">
+                <span typeof="mw:File"><span>
+                  <img class="mw-file-element" width="18" height="17" src="\(bitmap)">
+                </span></span>
+                <i id="sentence">The following lore is sourced from the Varrock Museum</i>.
+              </span>
+            </p>
+            <p id="follow">169 years ago, the lost art of Runecraft was rediscovered.</p>
+          </div>
+          <script>\(polish)</script>
+        </body>
+        </html>
+        """
+
+        try await load(html)
+        let state = try await evaluate("""
+        (() => {
+          window.OSRSApplyArticlePolish();
+          const lore = document.getElementById('lore');
+          const group = document.getElementById('group');
+          const sentence = document.getElementById('sentence');
+          const loreStyle = getComputedStyle(lore);
+          const groupStyle = getComputedStyle(group);
+          const sentenceStyle = getComputedStyle(sentence);
+          const loreRect = lore.getBoundingClientRect();
+          const followRect = document.getElementById('follow').getBoundingClientRect();
+          const sentenceLineHeight = parseFloat(sentenceStyle.lineHeight) || parseFloat(sentenceStyle.fontSize) * 1.2;
+          const sentenceRects = Array.from(sentence.getClientRects());
+          return {
+            groupIsWrapper: group.classList.contains('osrs-inline-icon-wrapper'),
+            groupIsProse: group.classList.contains('osrs-inline-icon-prose'),
+            paragraphClass: lore.classList.contains('osrs-inline-lore-paragraph'),
+            groupDisplay: groupStyle.display,
+            groupOverflow: groupStyle.overflow,
+            groupLineHeight: groupStyle.lineHeight,
+            sentenceLineHeight,
+            sentenceRectCount: sentenceRects.length,
+            sentenceHeight: sentence.getBoundingClientRect().height,
+            sentenceScrollHeight: sentence.scrollHeight,
+            loreHeight: loreRect.height,
+            loreOverflow: loreStyle.overflow,
+            gapToFollow: followRect.top - loreRect.bottom,
+            innerWrapper: !!group.querySelector('.osrs-inline-icon-wrapper')
+          };
+        })()
+        """)
+
+        XCTAssertEqual(state["groupIsWrapper"] as? Bool, false)
+        XCTAssertEqual(state["groupIsProse"] as? Bool, true)
+        XCTAssertEqual(state["paragraphClass"] as? Bool, true)
+        XCTAssertEqual(state["groupDisplay"] as? String, "block")
+        XCTAssertEqual(state["groupOverflow"] as? String, "visible")
+        XCTAssertNotEqual(state["groupLineHeight"] as? String, "0px")
+        XCTAssertGreaterThanOrEqual(state["sentenceRectCount"] as? Int ?? 0, 2)
+        XCTAssertGreaterThan(state["loreHeight"] as? Double ?? 0, (state["sentenceLineHeight"] as? Double ?? 0) * 1.6)
+        XCTAssertGreaterThanOrEqual(state["gapToFollow"] as? Double ?? -99, -1)
+        XCTAssertEqual(state["innerWrapper"] as? Bool, true)
+    }
+
     func testWideDisclosureOwnsHorizontalGesturesAcrossHeaderAndContent() async throws {
         let polish = try readAsset("Assets/web/mobile_article_polish.js")
         let horizontalScroll = try readAsset("Assets/web/horizontal_scroll_interceptor.js")
@@ -1552,6 +1648,7 @@ final class ArticleAestheticRenderingTests: XCTestCase {
         )
         XCTAssertFalse(iosAesthetics.contains("max-height: 1em !important"))
         XCTAssertFalse(iosAesthetics.contains("max-width: 1.25em !important"))
+        XCTAssertTrue(iosAesthetics.contains(".osrs-inline-icon-prose"))
         XCTAssertTrue(iosAesthetics.contains("overflow: hidden !important"))
         XCTAssertTrue(iosAesthetics.contains("scroll-padding-top:"))
         XCTAssertTrue(iosAesthetics.contains("line-height: 0 !important"))

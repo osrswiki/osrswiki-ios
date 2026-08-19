@@ -305,6 +305,26 @@ final class osrsWebKitBridgeHardeningTests: XCTestCase {
         )
     }
 
+    @MainActor
+    func testExternalEmbedNavigationsStayInWebViewUntilUserActivatesALink() {
+        XCTAssertEqual(
+            ArticleViewModel.osrsExternalNavigationAction(navigationType: .other, isMainFrame: false),
+            .allowInWebView
+        )
+        XCTAssertEqual(
+            ArticleViewModel.osrsExternalNavigationAction(navigationType: .linkActivated, isMainFrame: false),
+            .allowInWebView
+        )
+        XCTAssertEqual(
+            ArticleViewModel.osrsExternalNavigationAction(navigationType: .other, isMainFrame: true),
+            .cancelSilently
+        )
+        XCTAssertEqual(
+            ArticleViewModel.osrsExternalNavigationAction(navigationType: .linkActivated, isMainFrame: true),
+            .openInBrowser
+        )
+    }
+
     func testAppAssetsNonArticleWikiNamespacesConvertToTrustedWikiURLForExternalHandling() throws {
         let cases: [(source: String, expected: String)] = [
             (

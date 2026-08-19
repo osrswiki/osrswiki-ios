@@ -17,12 +17,24 @@
     return Number.isFinite(value) ? value : 0;
   }
 
-  function hasOnlyInlineIconContent(element) {
-    if (!element || normalizeText(element.textContent)) return false;
-    if (element.querySelectorAll('img.osrs-inline-icon').length !== 1) return false;
+  function osrsAuthoredPhrasingText(element) {
+    if (!element || !element.cloneNode) return '';
+    const clone = element.cloneNode(true);
+    clone.querySelectorAll('img').forEach((image) => image.remove());
+    return normalizeText(clone.textContent);
+  }
+
+  function osrsWrapperIsIconChrome(element) {
+    if (!element) return false;
+    if (osrsAuthoredPhrasingText(element)) return false;
     return Array.from(element.querySelectorAll('*')).every((child) =>
-      child.matches('a, span, img.osrs-inline-icon')
+      child.matches('a, span, img')
     );
+  }
+
+  function hasOnlyInlineIconContent(element) {
+    if (!osrsWrapperIsIconChrome(element)) return false;
+    return element.querySelectorAll('img.osrs-inline-icon').length === 1;
   }
 
   function normalizeText(text) {
@@ -42,14 +54,18 @@
       image.removeAttribute('height');
       let wrapper = image.parentElement;
       while (wrapper && wrapper !== phrasing && /^(A|SPAN)$/i.test(wrapper.tagName)) {
-        wrapper.classList.add('osrs-inline-icon-wrapper');
+        /* Only chrome around the bitmap. Grouping spans that also hold the
+           following sentence must stay in normal paragraph line boxes. */
+        if (osrsWrapperIsIconChrome(wrapper)) {
+          wrapper.classList.add('osrs-inline-icon-wrapper');
+        }
         wrapper = wrapper.parentElement;
       }
       diagnostics.inlineIcons += 1;
 
       // Some templates place a prose icon in its own otherwise-empty paragraph. Treat that
       // paragraph as phrasing content so the icon does not manufacture a blank article row.
-      if (phrasing.tagName === 'P' && !phrasing.textContent.trim()) {
+      if (phrasing.tagName === 'P' && !osrsAuthoredPhrasingText(phrasing)) {
         phrasing.classList.add('osrs-inline-icon-only-paragraph');
       }
     });
@@ -60,9 +76,20 @@
       }
     });
 
+    /* Templates such as LoreSources wrap the icon and the sourced sentence in
+       one span. That span is not icon chrome: keep its authored font-size and
+       let wrapping lines size to a normal line-height. */
+    root.querySelectorAll('.osrs-inline-icon-wrapper, p span:has(img.osrs-inline-icon), li span:has(img.osrs-inline-icon)').forEach((wrapper) => {
+      if (!wrapper.querySelector('img')) return;
+      if (osrsWrapperIsIconChrome(wrapper)) return;
+      if (!osrsAuthoredPhrasingText(wrapper)) return;
+      wrapper.classList.remove('osrs-inline-icon-wrapper');
+      wrapper.classList.add('osrs-inline-icon-prose');
+    });
+
     // Keep structurally isolated inline icons and following prose in one line box without
     // depending on a template name, page title, or presentation-style substring.
-    root.querySelectorAll('p:has(> .osrs-inline-lore-note)').forEach((paragraph) => {
+    root.querySelectorAll('p:has(> .osrs-inline-lore-note), p:has(> .osrs-inline-icon-prose)').forEach((paragraph) => {
       paragraph.classList.add('osrs-inline-lore-paragraph');
     });
   }

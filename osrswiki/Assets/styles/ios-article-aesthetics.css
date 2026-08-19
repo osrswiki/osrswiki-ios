@@ -225,14 +225,24 @@ table.infobox {
 }
 
 table.infobox:not(.skill-info):not(.infobox-skill):not(.infobox-bonuses),
+.collapsible-infobox,
+.collapsible-primary-infobox,
 .infobox-switch,
 .multi-infobox,
 .switch-infobox {
     float: none !important;
     clear: both !important;
-    width: 100% !important;
+    width: fit-content !important;
     max-width: 100% !important;
     margin: 1em 0 !important;
+}
+
+.collapsible-infobox table.infobox,
+.collapsible-primary-infobox table.main-infobox,
+.collapsible-container table.main-infobox {
+    width: fit-content !important;
+    max-width: 100% !important;
+    table-layout: auto !important;
 }
 
 /* Recipe/skill rows: keep icon+label in the middle of the cell. */
@@ -243,18 +253,17 @@ table.wikitable > tbody > tr > :is(th, td) {
 /* Last-wins lock: inset the inner disclosure column, not the overflow
    scrollport or the card itself. width:auto + inline margins leave the
    header full-bleed while tables size to the narrower column. Paint the
-   card with table-header fill so the gutter is visible against the page
-   and against infobox body fill. */
+   card with disclosure chrome so table headers remain distinct. */
 .collapsible-container:not(.collapsed) {
     padding-inline: 0 !important;
-    background-color: var(--wikitable-header-bg) !important;
+    background-color: var(--osrs-disclosure-chrome-bg, var(--body-mid)) !important;
 }
 
 .collapsible-container:not(.collapsed) > .collapsible-header {
     margin-inline: 0 !important;
     width: auto !important;
     max-width: none !important;
-    background-color: var(--wikitable-header-bg) !important;
+    background-color: var(--osrs-disclosure-chrome-bg, var(--body-mid)) !important;
 }
 
 .collapsible-container:not(.collapsed) > .collapsible-content {
@@ -333,12 +342,12 @@ table.osrs-map-table > :is(thead, tbody, tfoot) > tr > :is(th, td):has(.mw-karto
    line-height:0 wrapper does not, which is why the same bitmap sits lower on
    iOS. Kill that extra strut only. Keep Android's 2em cap and auto height so
    the glyph is not rescaled smaller than Android. */
-.mw-parser-output :is(p, li, dd, figcaption) :is(.osrs-inline-icon-wrapper, span.mw-default-size),
-.mw-body-content :is(p, li, dd, figcaption) :is(.osrs-inline-icon-wrapper, span.mw-default-size),
-:is(p, li, dd, figcaption) :is(.osrs-inline-icon-wrapper, span.mw-default-size),
-.mw-parser-output :is(p, li, dd, figcaption) :is(.osrs-inline-icon-wrapper, span.mw-default-size) > a,
-.mw-body-content :is(p, li, dd, figcaption) :is(.osrs-inline-icon-wrapper, span.mw-default-size) > a,
-:is(p, li, dd, figcaption) :is(.osrs-inline-icon-wrapper, span.mw-default-size) > a {
+.mw-parser-output :is(p, li, dd, figcaption) :is(.osrs-inline-icon-wrapper, span.mw-default-size):not(:has(:not(img):not(a))),
+.mw-body-content :is(p, li, dd, figcaption) :is(.osrs-inline-icon-wrapper, span.mw-default-size):not(:has(:not(img):not(a))),
+:is(p, li, dd, figcaption) :is(.osrs-inline-icon-wrapper, span.mw-default-size):not(:has(:not(img):not(a))),
+.mw-parser-output :is(p, li, dd, figcaption) :is(.osrs-inline-icon-wrapper, span.mw-default-size):not(:has(:not(img):not(a))) > a,
+.mw-body-content :is(p, li, dd, figcaption) :is(.osrs-inline-icon-wrapper, span.mw-default-size):not(:has(:not(img):not(a))) > a,
+:is(p, li, dd, figcaption) :is(.osrs-inline-icon-wrapper, span.mw-default-size):not(:has(:not(img):not(a))) > a {
     display: inline-block !important;
     align-items: unset !important;
     font-size: inherit !important;
@@ -388,4 +397,42 @@ th :is(p, li, dd, figcaption) img.osrs-inline-icon {
     max-height: 2em !important;
     max-width: 2em !important;
     vertical-align: middle !important;
+}
+
+/* Last-wins: wrapping prose next to an inline icon must size to its own
+   line boxes. The WebKit strut hack (line-height:0; overflow:hidden) is
+   only for icon-only wrappers; it must not clip a two-line sentence. */
+.osrs-inline-lore-paragraph,
+p:has(> .osrs-inline-lore-note),
+p:has(> .osrs-inline-icon-prose),
+.mw-parser-output p:has(> span.mw-default-size),
+.mw-body-content p:has(> span.mw-default-size) {
+    overflow: visible !important;
+    height: auto !important;
+    max-height: none !important;
+    line-height: inherit !important;
+}
+
+.osrs-inline-lore-note,
+.osrs-inline-icon-prose,
+.osrs-inline-icon-wrapper:has(> :not(span, a, img)),
+.osrs-inline-icon-wrapper:has(:is(i, em, b, strong)),
+:is(p, li, dd, figcaption) span:has(img.mw-file-element, img.osrs-inline-icon):has(> :not(span, a, img)),
+:is(p, li, dd, figcaption) span:has(img.mw-file-element, img.osrs-inline-icon):has(:is(i, em, b, strong)) {
+    display: block !important;
+    overflow: visible !important;
+    height: auto !important;
+    max-height: none !important;
+    min-height: 2.6em !important;
+    line-height: 1.55 !important;
+    margin: 0.2em 0 0.7em !important;
+    padding: 0 0.35em 0 0 !important;
+    text-align: start !important;
+    white-space: normal !important;
+    max-width: 100% !important;
+}
+
+.osrs-inline-lore-note {
+    display: inline !important;
+    line-height: inherit !important;
 }

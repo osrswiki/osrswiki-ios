@@ -188,6 +188,11 @@
         label.textContent = captionText;
         titleWrapper.appendChild(label);
 
+        const hint = document.createElement('span');
+        hint.className = 'collapsible-state';
+        hint.textContent = isCollapsed ? 'Tap to expand' : 'Tap to collapse';
+        titleWrapper.appendChild(hint);
+
         container.setAttribute('aria-expanded', String(!isCollapsed));
         const header = container.querySelector(':scope > .collapsible-header');
         if (header) header.setAttribute('aria-expanded', String(!isCollapsed));
@@ -420,45 +425,15 @@
     }
 
     function deriveCaptionText(kind, defaultTitle, elementToWrap, table) {
-        if (table && table.querySelector('.mw-kartographer-map')) {
-            return findContextHeading(elementToWrap) ||
-                visibleCaptionText(directCaption(table)) ||
-                firstHeaderCells(table) ||
-                'Map table';
+        /* Category labels only. Do not scrape table cells, captions, or nearby
+           headings — those produced uninformative one-line titles. */
+        if (kind !== 'infobox' && table && table.querySelector('.mw-kartographer-map')) {
+            return 'Map table';
         }
-        if (kind === 'infobox') {
-            if (table.classList.contains('infobox-bonuses')) {
-                return findContextHeading(elementToWrap) ||
-                    firstText(table, '.infobox-subheader') ||
-                    'Equipment bonuses';
-            }
-            return switchInfoboxSemanticTitle(table) ||
-                switchInfoboxSemanticTitle(elementToWrap) ||
-                switchInfoboxSemanticTitle(nearestSwitchInfoboxElement(table)) ||
-                visibleCaptionText(directCaption(table)) ||
-                firstText(table, '.infobox-header') ||
-                firstText(table, 'th') ||
-                findContextHeading(elementToWrap) ||
-                defaultTitle;
+        if (kind === 'infobox' && table && table.classList.contains('infobox-bonuses')) {
+            return 'Equipment bonuses';
         }
-        if (kind === 'navbox') {
-            return firstText(table, '.navbox-title-name') ||
-                firstText(table, '.navbox-title') ||
-                'Navigation';
-        }
-        if (kind === 'questdetails') {
-            return findContextHeading(elementToWrap) ||
-                visibleCaptionText(directCaption(table)) ||
-                'Quest details';
-        }
-        return switchInfoboxSemanticTitle(table) ||
-            switchInfoboxSemanticTitle(elementToWrap) ||
-            switchInfoboxSemanticTitle(nearestSwitchInfoboxElement(table)) ||
-            visibleCaptionText(directCaption(table)) ||
-            firstHeaderCells(table) ||
-            findContextHeading(elementToWrap) ||
-            firstText(table, 'th') ||
-            defaultTitle;
+        return defaultTitle;
     }
 
     function recipeRoleForTable(table) {

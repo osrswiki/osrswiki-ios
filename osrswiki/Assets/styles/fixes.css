@@ -146,9 +146,9 @@ figure.embedvideo {
 .embedvideo-wrapper.responsive-embed-wrapper {
     position: relative !important;
     width: 100% !important;
-    height: 0 !important;
+    height: auto !important;
+    aspect-ratio: 16 / 9;
     overflow: hidden !important;
-    /* padding-bottom is set dynamically by JavaScript based on aspect ratio */
 }
 
 /* Classes added by JavaScript for enhanced targeting */
@@ -167,7 +167,9 @@ iframe[src*="youtu.be"][height],
 iframe[src*="youtube-nocookie.com"][height] {
     max-width: 100% !important;
     width: 100% !important;
+    aspect-ratio: 16 / 9;
     height: auto !important;
+    min-height: 180px !important;
     display: block !important;
     margin: 0.5em auto !important;
 }
@@ -177,7 +179,9 @@ figure.embedvideo iframe,
 .embedvideo-wrapper iframe {
     max-width: 100% !important;
     width: 100% !important;
-    height: auto !important;
+    aspect-ratio: 16 / 9;
+    height: 100% !important;
+    min-height: 180px !important;
     display: block !important;
 }
 
@@ -273,6 +277,39 @@ span.mw-default-size[typeof^="mw:File"] img.mw-file-element {
     width: auto !important;
 }
 
+/* A grouping span that still contains the sourced sentence (or any other
+   authored phrasing) must not inherit the icon strut. line-height:0 plus
+   overflow:hidden clips the second wrapped line into one line-box.
+   Use a block box with an explicit line-height so wrapping lines do not
+   share a parent line-height:0 inline formatting context. */
+.osrs-inline-icon-wrapper:has(> :not(span, a, img)),
+.osrs-inline-icon-wrapper:has(:is(i, em, b, strong)),
+.osrs-inline-icon-prose,
+:is(p, li, dd, figcaption) span:has(img.mw-file-element, img.osrs-inline-icon):has(> :not(span, a, img)),
+:is(p, li, dd, figcaption) span:has(img.mw-file-element, img.osrs-inline-icon):has(:is(i, em, b, strong)) {
+    display: block !important;
+    height: auto !important;
+    line-height: 1.55 !important;
+    margin: 0.2em 0 0.7em !important;
+    max-height: none !important;
+    min-height: 2.6em !important;
+    overflow: visible !important;
+    padding: 0 0.35em 0 0 !important;
+    text-align: start !important;
+    vertical-align: baseline !important;
+    white-space: normal !important;
+    width: auto !important;
+    max-width: 100% !important;
+}
+
+:is(p, li, dd, figcaption):has(> .osrs-inline-icon-prose),
+:is(p, li, dd, figcaption):has(> span:has(img.mw-file-element):has(:is(i, em))) {
+    overflow: visible !important;
+    height: auto !important;
+    max-height: none !important;
+    line-height: 1.45 !important;
+}
+
 img.osrs-inline-icon {
     max-height: 2em !important;
     max-width: 2em !important;
@@ -284,10 +321,19 @@ img.osrs-inline-icon {
     display: inline !important;
     margin: 0 !important;
     padding: 0 !important;
+    line-height: inherit !important;
+    overflow: visible !important;
+    height: auto !important;
+    max-height: none !important;
+    vertical-align: middle !important;
 }
 
 .osrs-inline-lore-paragraph {
     margin-top: 0.25em !important;
+    overflow: visible !important;
+    height: auto !important;
+    max-height: none !important;
+    line-height: inherit !important;
 }
 
 .osrs-inline-icon-only-paragraph {
@@ -636,40 +682,49 @@ img.osrs-inline-icon {
     touch-action: auto;
 }
 
-/* The article's primary infobox is a responsive card, never a horizontal viewport.
-   Keep the card chrome at 100%; the table itself must stay inset of that chrome. */
+/* Infobox disclosures shrink-wrap to the table's intrinsic width. Stretching them
+   to the article column made every location/item card look like a full-bleed slab. */
+.collapsible-infobox,
 .collapsible-primary-infobox,
-.collapsible-primary-infobox .collapsible-content {
+.collapsible-primary-infobox .collapsible-content,
+.collapsible-infobox .collapsible-content {
     box-sizing: border-box !important;
     max-width: 100% !important;
     min-width: 0 !important;
     overflow-x: hidden !important;
-    width: 100% !important;
+    width: fit-content !important;
 }
 
 .collapsible-primary-infobox table.main-infobox,
 .collapsible-container table.main-infobox,
-.collapsible-container table.infobox:not(.infobox-bonuses),
+.collapsible-container table.infobox:not(.skill-info):not(.infobox-skill):not(.infobox-bonuses),
+.collapsible-infobox table.infobox:not(.infobox-bonuses),
 .collapsible-container .tabber,
 .collapsible-container .osrs-tabber {
     box-sizing: border-box !important;
-    width: 100% !important;
+    width: fit-content !important;
     max-width: 100% !important;
     min-width: 0 !important;
     margin-inline: 0 !important;
     overflow-x: hidden !important;
+    table-layout: auto !important;
 }
 
 .collapsible-primary-infobox table.main-infobox {
     clear: both !important;
     float: none !important;
-    table-layout: fixed !important;
 }
 
 .collapsible-primary-infobox th,
 .collapsible-primary-infobox td {
-    overflow-wrap: anywhere;
+    overflow-wrap: break-word;
     white-space: normal !important;
+}
+
+.collapsible-infobox table.infobox th:not(.infobox-header):not([colspan]) {
+    overflow-wrap: normal !important;
+    word-break: normal !important;
+    white-space: nowrap !important;
 }
 
 .osrs-intrinsic-table {
@@ -774,7 +829,7 @@ table.osrs-map-table > :is(thead, tbody, tfoot) > tr > :is(th, td):has(.mw-karto
     --osrs-table-cell-padding-inline: 0.48em;
     --osrs-infobox-cell-padding-block: 0.24em;
     --osrs-infobox-cell-padding-inline: 0.42em;
-    --osrs-disclosure-control-padding-block: 0.5rem;
+    --osrs-disclosure-control-padding-block: 0.2rem;
     --osrs-disclosure-control-padding-inline: 0.625rem;
     --osrs-disclosure-content-inline-inset: 12px;
     --osrs-disclosure-content-block-inset: 8px;
@@ -826,7 +881,7 @@ body.osrs-accessibility-reflow .messagebox {
     align-items: center;
     box-sizing: border-box;
     column-gap: var(--osrs-disclosure-label-gap);
-    min-height: 44px;
+    min-height: 0;
     padding: var(--osrs-disclosure-control-padding-block)
         var(--osrs-disclosure-control-padding-inline) !important;
 }
@@ -853,6 +908,10 @@ body.osrs-accessibility-reflow .messagebox {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.collapsible-state {
+    flex: 0 0 auto;
 }
 
 .collapsible-header {
@@ -1184,17 +1243,16 @@ table.wikitable :is(th, td) > :is(
 /* Keep disclosure bodies nested inside the card chrome.
    Never pad the overflow:auto scrollport: width:100% descendants size to
    that padding box and kiss the header. Inset a width:auto inner column
-   instead; block margins shrink the used width. Card chrome uses the
-   table-header fill because --colorsurfacevariant matches the page and
-   infobox body in dark theme, which made a 12px inset invisible. */
+   instead; block margins shrink the used width. Card chrome uses a step
+   between the page fill and table-header fill so tables remain distinct. */
 .collapsible-container {
-    background-color: var(--wikitable-header-bg) !important;
+    background-color: var(--osrs-disclosure-chrome-bg, var(--body-mid)) !important;
 }
 
 .collapsible-header,
 .collapsible-close-footer,
 .collapsible-close-button {
-    background-color: var(--wikitable-header-bg) !important;
+    background-color: var(--osrs-disclosure-chrome-bg, var(--body-mid)) !important;
 }
 
 .collapsible-container:not(.collapsed) > .collapsible-content {

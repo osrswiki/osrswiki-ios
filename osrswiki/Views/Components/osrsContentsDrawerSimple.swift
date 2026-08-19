@@ -36,17 +36,16 @@ struct osrsContentsDrawerSimple: View {
                     }
                     .accessibilityIdentifier("contents_drawer_backdrop")
 
-                if revealProgress > 0 {
-                    panel
-                        .frame(width: min(drawerWidth, max(240, geometry.size.width - 24)))
-                        .frame(maxHeight: panelMaxHeight(in: geometry.size))
-                        .padding(.trailing, 12)
-                        .padding(.top, topClearance)
-                        .padding(.bottom, bottomClearance)
-                        .offset(x: (1 - revealProgress) * drawerWidth)
-                        .allowsHitTesting(isPresented || revealProgress > 0.5)
-                        .simultaneousGesture(dismissDrag)
-                }
+                panel
+                    .frame(width: min(drawerWidth, max(240, geometry.size.width - 24)))
+                    .frame(maxHeight: panelMaxHeight(in: geometry.size))
+                    .padding(.trailing, 12)
+                    .padding(.top, topClearance)
+                    .padding(.bottom, bottomClearance)
+                    .offset(x: (1 - revealProgress) * drawerWidth)
+                    .allowsHitTesting(isPresented || revealProgress > 0.5)
+                    .accessibilityHidden(revealProgress <= 0)
+                    .simultaneousGesture(dismissDrag)
             }
         }
         .allowsHitTesting(osrsContentsReveal.allowsOverlayHitTesting(
@@ -73,7 +72,9 @@ struct osrsContentsDrawerSimple: View {
     }
 
     private var panel: some View {
-        VStack(spacing: 0) {
+        let shape = RoundedRectangle(cornerRadius: 28, style: .continuous)
+        let fallback = Color(osrsTheme.surface)
+        let content = VStack(spacing: 0) {
             HStack {
                 Text("Contents")
                     .font(.headline)
@@ -87,7 +88,7 @@ struct osrsContentsDrawerSimple: View {
 
             ZStack(alignment: .trailing) {
                 ScrollView {
-                    LazyVStack(spacing: 0) {
+                    VStack(spacing: 0) {
                         ForEach(sections) { section in
                             Button(action: {
                                 onSectionSelected(section.id)
@@ -124,11 +125,27 @@ struct osrsContentsDrawerSimple: View {
                     .offset(x: -39)
             }
         }
-        .osrsFloatingGlass(
-            in: RoundedRectangle(cornerRadius: 28, style: .continuous),
-            fallback: Color(osrsTheme.surface)
-        )
-        .accessibilityIdentifier("contents_drawer")
+
+        return osrsDrawerChrome(content, shape: shape, fallback: fallback)
+            .contentTransition(.identity)
+            .accessibilityIdentifier("contents_drawer")
+    }
+
+    /// Glass is a rest-state material. Applying it while the panel is translating
+    /// drops ProMotion to a choppy snapshot cadence and reads as a fade on dismiss.
+    @ViewBuilder
+    private func osrsDrawerChrome<Content: View>(
+        _ content: Content,
+        shape: RoundedRectangle,
+        fallback: Color
+    ) -> some View {
+        if revealProgress >= 1 {
+            content.osrsFloatingGlass(in: shape, fallback: fallback)
+        } else {
+            content
+                .background(fallback, in: shape)
+                .clipShape(shape)
+        }
     }
 
     private var dismissDrag: some Gesture {
@@ -161,14 +178,7 @@ struct osrsContentsDrawerSimple: View {
                     contentsOpenAtStart: true
                 )
                 let target: CGFloat = shouldDismiss ? 0 : 1
-                withAnimation(
-                    osrsInteractiveArticleSwipe.settleAnimation(
-                        from: interactiveProgress,
-                        to: target,
-                        velocity: value.velocity.width,
-                        distance: drawerWidth
-                    )
-                ) {
+                withAnimation(osrsContentsReveal.settleAnimation) {
                     interactiveProgress = target
                     isPresented = target >= 1
                 }
@@ -176,14 +186,7 @@ struct osrsContentsDrawerSimple: View {
     }
 
     private func dismissContents() {
-        withAnimation(
-            osrsInteractiveArticleSwipe.settleAnimation(
-                from: interactiveProgress,
-                to: 0,
-                velocity: 0,
-                distance: drawerWidth
-            )
-        ) {
+        withAnimation(osrsContentsReveal.settleAnimation) {
             isPresented = false
             interactiveProgress = 0
         }

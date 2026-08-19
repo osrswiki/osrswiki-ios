@@ -78,6 +78,12 @@ enum osrsArticleNavigationDecision: Equatable {
     case allow
 }
 
+enum osrsExternalNavigationAction: Equatable {
+    case allowInWebView
+    case openInBrowser
+    case cancelSilently
+}
+
 enum osrsOfflineResourceSettlementError: LocalizedError, Equatable, Sendable {
     case requiredResourcesFailed(count: Int)
 
@@ -546,6 +552,22 @@ class ArticleViewModel: NSObject, ObservableObject {
         }
 
         return .allow
+    }
+
+    /// Embed iframes (YouTube, etc.) load as non-main-frame `.other` navigations.
+    /// Opening those in Safari made the player invisible and felt like a phantom tap.
+    /// Open the system browser only for an explicit user-activated main-frame link.
+    static func osrsExternalNavigationAction(
+        navigationType: WKNavigationType,
+        isMainFrame: Bool
+    ) -> osrsExternalNavigationAction {
+        if !isMainFrame {
+            return .allowInWebView
+        }
+        if navigationType == .linkActivated {
+            return .openInBrowser
+        }
+        return .cancelSilently
     }
 
     static func osrsShouldUseWebViewArticleHistory(currentURL: URL?, pageURL: URL) -> Bool {
@@ -3590,12 +3612,26 @@ extension ArticleViewModel: WKNavigationDelegate {
             return .cancel
 
         case .external(let externalURL):
-            print("  - Should open externally: true")
-            print("📊 [\(timeString)] 🚀 WEBVIEW: Opening externally, cancelling WebView navigation")
-            print("  - Original: \(url.absoluteString)")
-            print("  - External URL: \(externalURL.absoluteString)")
-            UIApplication.shared.open(externalURL)
-            return .cancel
+            let isMainFrame = navigationAction.targetFrame?.isMainFrame ?? true
+            switch Self.osrsExternalNavigationAction(
+                navigationType: navigationAction.navigationType,
+                isMainFrame: isMainFrame
+            ) {
+            case .allowInWebView:
+                print("  - Allowing embed/subframe load in WebView: \(url.absoluteString)")
+                return .allow
+            case .openInBrowser:
+                print("  - Should open externally: true")
+                print("📊 [\(timeString)] 🚀 WEBVIEW: Opening externally, cancelling WebView navigation")
+                print("  - Original: \(url.absoluteString)")
+                print("  - External URL: \(externalURL.absoluteString)")
+                UIApplication.shared.open(externalURL)
+                return .cancel
+            case .cancelSilently:
+                print("  - Cancelling ungestured main-frame external navigation without opening Safari")
+                print("  - Original: \(url.absoluteString)")
+                return .cancel
+            }
 
         case .allow:
             print("  - Should open externally: false")

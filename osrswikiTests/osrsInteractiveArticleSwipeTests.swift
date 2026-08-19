@@ -72,6 +72,7 @@ final class osrsInteractiveArticleSwipeTests: XCTestCase {
         XCTAssertTrue(osrsContentsReveal.allowsOverlayHitTesting(isPresented: false, interactiveProgress: 0.5))
         XCTAssertTrue(osrsContentsReveal.allowsOverlayHitTesting(isPresented: false, interactiveProgress: 1))
         XCTAssertFalse(osrsContentsReveal.allowsOverlayHitTesting(isPresented: false, interactiveProgress: 0))
+        _ = osrsContentsReveal.settleAnimation
     }
 
     func testOpenContentsRightSwipeLocksContentsAndDecreasesProgress() {

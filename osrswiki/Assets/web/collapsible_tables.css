@@ -16,10 +16,12 @@
         word-break: break-word;
 }
 
-/* The main infobox should fill its container. */
+/* The main infobox shrink-wraps to authored columns instead of stretching
+   to the article column. Bonuses tables keep their own fixed layout below. */
 .collapsible-container .main-infobox {
-        width: 100%;
-        table-layout: fixed;
+        width: fit-content;
+        max-width: 100%;
+        table-layout: auto;
 }
 
 /*
@@ -191,11 +193,10 @@
            the lead text reflows when wrapping runs. */
         .mw-parser-output > table.infobox:not(.skill-info):not(.infobox-skill):not(.infobox-bonuses),
         .mw-parser-output > .infobox-switch,
-        .mw-parser-output > .multi-infobox,
-        table.infobox:not(.skill-info):not(.infobox-skill):not(.infobox-bonuses) {
+        .mw-parser-output > .multi-infobox {
                 float: none !important;
                 clear: both !important;
-                width: 100% !important;
+                width: fit-content !important;
                 max-width: 100% !important;
                 margin: 1em 0 !important;
         }
@@ -211,7 +212,7 @@
 .collapsible-header {
         display: flex;
         align-items: center;
-        padding: 12px;
+        padding: 6px 10px;
         cursor: pointer;
         -webkit-user-select: none;
         -ms-user-select: none;
