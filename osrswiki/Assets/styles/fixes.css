@@ -715,19 +715,22 @@ img.osrs-inline-icon {
     float: none !important;
 }
 
-.collapsible-primary-infobox th,
-.collapsible-primary-infobox td {
+/* Values may wrap. Location infobox labels use th[colspan="2"] (Inhabitants,
+   Teleports, …); do not force those cells to wrap. */
+.collapsible-primary-infobox td,
+.collapsible-primary-infobox th.infobox-header {
     overflow-wrap: break-word;
     white-space: normal !important;
 }
 
-.collapsible-infobox table.infobox th:not(.infobox-header):not([colspan]),
-.collapsible-primary-infobox table.infobox th:not(.infobox-header):not([colspan]) {
+.collapsible-infobox table.infobox th:not(.infobox-header),
+.collapsible-primary-infobox table.infobox th:not(.infobox-header) {
     overflow-wrap: normal !important;
-    word-break: normal !important;
+    word-break: keep-all !important;
     white-space: nowrap !important;
     width: max-content !important;
-    min-width: max-content;
+    min-width: max-content !important;
+    hyphens: none !important;
 }
 
 /* Infobox cards: put the disclosure gutter in padding, not child margins.

@@ -79,6 +79,17 @@ final class ArticleAestheticRenderingTests: XCTestCase {
         ).prefix(while: { $0 != "}" }))
         XCTAssertTrue(infoboxRule.contains("float: none"))
         XCTAssertFalse(infoboxRule.contains("float: right"))
+        XCTAssertTrue(fixes.contains("min-width: max-content !important;"))
+        XCTAssertTrue(fixes.contains("hyphens: none !important;"))
+        XCTAssertTrue(fixes.contains(".collapsible-primary-infobox table.infobox th:not(.infobox-header) {"))
+        XCTAssertFalse(
+            fixes.contains("table.infobox th:not(.infobox-header):not([colspan])"),
+            "Location labels are th[colspan=2]; excluding colspan from nowrap wraps Inhabitants."
+        )
+        XCTAssertFalse(
+            fixes.contains(".collapsible-primary-infobox th,\n.collapsible-primary-infobox td {"),
+            "Blanket white-space:normal on every primary-infobox th wraps location labels such as Inhabitants."
+        )
     }
 
     func testJcConfigCombatCalculatorRendersUsableControls() async throws {
