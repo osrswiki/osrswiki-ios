@@ -26,6 +26,16 @@ enum osrsInteractiveArticleSwipeFinish {
 /// Tracks one article pan and keeps the destination visible while the finger moves.
 final class osrsInteractiveArticleSwipe {
     static let contentsDrawerWidth: CGFloat = 280
+    static let contentsDrawerTrailingInset: CGFloat = 12
+    /// Extra travel past the trailing inset so liquid-glass bleed cannot rest on-screen.
+    static let contentsDrawerParkBleed: CGFloat = 80
+    static var contentsDrawerTravelDistance: CGFloat {
+        contentsDrawerWidth + contentsDrawerTrailingInset + contentsDrawerParkBleed
+    }
+
+    static func contentsParkedOffset(panelWidth: CGFloat) -> CGFloat {
+        panelWidth + contentsDrawerTrailingInset + contentsDrawerParkBleed
+    }
     static let lockDistance: CGFloat = 12
     static let horizontalDominance: CGFloat = 1.75
     static let commitProgress: CGFloat = 0.35

@@ -19,6 +19,7 @@ struct osrsContentsDrawerSimple: View {
     let onSectionSelected: (String) -> Void
 
     private let drawerWidth: CGFloat = osrsInteractiveArticleSwipe.contentsDrawerWidth
+    private let drawerTrailingInset: CGFloat = osrsInteractiveArticleSwipe.contentsDrawerTrailingInset
     @State private var isDismissTracking = false
     @State private var suppressSectionSelection = false
 
@@ -26,8 +27,13 @@ struct osrsContentsDrawerSimple: View {
         min(1, max(0, interactiveProgress))
     }
 
+    private func panelWidth(in size: CGSize) -> CGFloat {
+        min(drawerWidth, max(240, size.width - 24))
+    }
+
     var body: some View {
         GeometryReader { geometry in
+            let resolvedPanelWidth = panelWidth(in: geometry.size)
             ZStack(alignment: .trailing) {
                 Color.black.opacity(0.18 * revealProgress)
                     .ignoresSafeArea()
@@ -39,16 +45,18 @@ struct osrsContentsDrawerSimple: View {
                     .accessibilityIdentifier("contents_drawer_backdrop")
 
                 panel
-                    .frame(width: min(drawerWidth, max(240, geometry.size.width - 24)))
+                    .frame(width: resolvedPanelWidth)
                     .frame(maxHeight: panelMaxHeight(in: geometry.size))
-                    .padding(.trailing, 12)
+                    .padding(.trailing, drawerTrailingInset)
                     .padding(.top, topClearance)
                     .padding(.bottom, bottomClearance)
-                    .offset(x: (1 - revealProgress) * drawerWidth)
+                    .offset(x: (1 - revealProgress) * osrsInteractiveArticleSwipe.contentsParkedOffset(panelWidth: resolvedPanelWidth))
+                    .opacity(revealProgress <= 0 ? 0 : 1)
                     .allowsHitTesting(isPresented || revealProgress > 0.02)
                     .accessibilityHidden(revealProgress <= 0)
                     .simultaneousGesture(dismissDrag)
             }
+            .clipped()
         }
         .allowsHitTesting(osrsContentsReveal.allowsOverlayHitTesting(
             isPresented: isPresented,

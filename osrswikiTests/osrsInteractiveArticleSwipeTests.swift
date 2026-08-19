@@ -136,6 +136,32 @@ final class osrsInteractiveArticleSwipeTests: XCTestCase {
         )
     }
 
+    func testClosedContentsDrawerParksFullyPastTrailingInset() {
+        XCTAssertEqual(
+            osrsInteractiveArticleSwipe.contentsDrawerTravelDistance,
+            osrsInteractiveArticleSwipe.contentsDrawerWidth
+                + osrsInteractiveArticleSwipe.contentsDrawerTrailingInset
+                + osrsInteractiveArticleSwipe.contentsDrawerParkBleed,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            osrsInteractiveArticleSwipe.contentsParkedOffset(panelWidth: 280),
+            372,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            osrsInteractiveArticleSwipe.contentsParkedOffset(panelWidth: 240),
+            332,
+            accuracy: 0.001
+        )
+        XCTAssertGreaterThan(osrsInteractiveArticleSwipe.contentsDrawerTrailingInset, 0)
+        XCTAssertGreaterThan(osrsInteractiveArticleSwipe.contentsDrawerParkBleed, 24)
+        XCTAssertGreaterThan(
+            osrsInteractiveArticleSwipe.contentsParkedOffset(panelWidth: 280),
+            280 + osrsInteractiveArticleSwipe.contentsDrawerTrailingInset
+        )
+    }
+
     func testClosedContentsLeftSwipeStillOpens() {
         XCTAssertEqual(
             osrsInteractiveArticleSwipe.lockAxis(

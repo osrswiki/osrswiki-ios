@@ -29,7 +29,7 @@ enum osrsContentsReveal {
             from: from,
             to: to,
             velocity: velocity,
-            distance: osrsInteractiveArticleSwipe.contentsDrawerWidth
+            distance: osrsInteractiveArticleSwipe.contentsDrawerTravelDistance
         )
     }
 }

@@ -23,6 +23,28 @@
         return (text || '').replace(/\s+/g, ' ').trim();
     }
 
+    function osrsUsesAndroidDisclosureChrome() {
+        return window.OSRS_ANDROID_DISCLOSURE_CHROME === true ||
+            !!(document.getElementById('osrs-android-disclosure-chrome') ||
+                document.querySelector('link[href*="android-article-aesthetics"]'));
+    }
+
+    function osrsApplyAndroidDisclosureChrome(element) {
+        if (!element || !osrsUsesAndroidDisclosureChrome()) return;
+        element.style.setProperty('box-sizing', 'border-box', 'important');
+        element.style.setProperty('flex-shrink', '0', 'important');
+        element.style.setProperty('height', 'auto', 'important');
+        element.style.setProperty('min-height', '64px', 'important');
+        element.style.setProperty('padding', '16px 16px', 'important');
+        element.style.setProperty('background-color', 'var(--body-mid, #d0bd97)', 'important');
+    }
+
+    function osrsApplyAndroidDisclosureChromeAll() {
+        if (!osrsUsesAndroidDisclosureChrome()) return;
+        document.querySelectorAll('.collapsible-header, .collapsible-close-button')
+            .forEach(osrsApplyAndroidDisclosureChrome);
+    }
+
     function bridgeCall(method) {
         const bridge = window.OsrsWikiBridge;
         if (!bridge || typeof bridge[method] !== 'function') return;
@@ -285,6 +307,7 @@
         closeFooter.className = 'collapsible-close-footer';
         const closeButton = document.createElement('div');
         closeButton.className = 'collapsible-close-button';
+        osrsApplyAndroidDisclosureChrome(closeButton);
         closeButton.setAttribute('role', 'button');
         closeButton.setAttribute('tabindex', '0');
         closeButton.setAttribute('aria-label', 'Collapse ' + captionText);
@@ -616,6 +639,7 @@
 
         const header = document.createElement('div');
         header.className = 'collapsible-header';
+        osrsApplyAndroidDisclosureChrome(header);
         const titleWrapper = document.createElement('div');
         titleWrapper.className = 'title-wrapper';
         const icon = document.createElement('span');
@@ -709,6 +733,7 @@
             container.dataset.osrsDisclosureKind = 'section';
             const header = document.createElement('div');
             header.className = 'collapsible-header';
+            osrsApplyAndroidDisclosureChrome(header);
             const titleWrapper = document.createElement('div');
             titleWrapper.className = 'title-wrapper';
             const icon = document.createElement('span');
@@ -888,6 +913,7 @@
         if (typeof window.OSRSApplyArticlePolish === 'function') {
             window.OSRSApplyArticlePolish();
         }
+        osrsApplyAndroidDisclosureChromeAll();
         document.body.classList.add('js-transforms-complete');
 
         const finishedAt = window.performance && performance.now ? performance.now() : Date.now();

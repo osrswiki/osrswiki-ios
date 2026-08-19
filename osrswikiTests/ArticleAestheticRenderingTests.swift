@@ -57,6 +57,8 @@ final class ArticleAestheticRenderingTests: XCTestCase {
         XCTAssertFalse(tables.contains("body:not(.js-transforms-complete) .infobox"))
         XCTAssertTrue(tables.contains(".mw-parser-output > table.infobox"))
         XCTAssertTrue(collapsible.contains("authoredMapId"))
+        XCTAssertTrue(collapsible.contains("osrsUsesAndroidDisclosureChrome"))
+        XCTAssertTrue(collapsible.contains("android-article-aesthetics"))
         XCTAssertTrue(collapsible.contains("Tap to collapse"))
         XCTAssertTrue(collapsible.contains("Tap to expand"))
         XCTAssertTrue(collapsible.contains("collapsible-state"))
@@ -1677,6 +1679,12 @@ final class ArticleAestheticRenderingTests: XCTestCase {
         XCTAssertTrue(switcher.contains("preloader.decode()"))
         XCTAssertTrue(switcher.contains("updateExistingImage"))
         XCTAssertTrue(switcher.contains("lockSwitcherMinBlockSize"))
+        XCTAssertTrue(switcher.contains("applySwitcherLayoutLock"))
+        XCTAssertTrue(switcher.contains("scheduleSwitcherLayoutLock"))
+        XCTAssertTrue(switcher.contains("watchSwitcherHostSize"))
+        XCTAssertTrue(switcher.contains("th.scrollWidth"))
+        XCTAssertTrue(switcher.contains("setProperty('table-layout'"))
+        XCTAssertFalse(switcher.contains("'width:max-content'"))
         XCTAssertFalse(switcher.contains("container.classList.contains('infobox-bonuses')"))
         XCTAssertFalse(switcher.contains("\n            stabilizeInfoboxWidth(mainInfobox"))
         XCTAssertTrue(fonts.contains("font-display: optional"))
@@ -2027,6 +2035,114 @@ final class ArticleAestheticRenderingTests: XCTestCase {
         XCTAssertTrue(searchBarSource.contains("accessibilityLabel(\"Search OSRS Wiki\")"))
         XCTAssertTrue(bottomBarSource.contains("compactText"))
         XCTAssertTrue(bottomBarSource.contains("case \"Appearance\": return \"Text\""))
+    }
+
+    func testInfoboxSwitcherKeepsLabelColumnAndWidthAcrossStates() async throws {
+        let switcher = try readAsset("Assets/web/switch_infobox.js")
+        let html = """
+        <!doctype html>
+        <html>
+        <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <style>
+        body { margin: 0; font: 16px/1.3 -apple-system, sans-serif; }
+        .article { width: 280px; }
+        table.infobox, .infobox-switch {
+            border-collapse: collapse;
+            width: max-content !important;
+            max-width: 100% !important;
+            table-layout: auto !important;
+        }
+        table.infobox th, table.infobox td {
+            padding: 0.24em 0.42em;
+            border: 1px solid #333;
+        }
+        .infobox-header { text-align: center; }
+        .infobox-buttons { display: flex; gap: 4px; }
+        .infobox-buttons .button { padding: 2px 6px; cursor: pointer; }
+        .infobox-resources-test { display: none; }
+        </style>
+        </head>
+        <body>
+        <script>window.mw = { hook: function() { return { add: function(fn) { fn(); } }; } };</script>
+        <div class="article">
+        <table class="infobox infobox-switch" data-resource-class=".infobox-resources-test">
+            <tr><th colspan="2" class="infobox-header" data-attr-param="name">Amulet of glory(4)</th></tr>
+            <tr><th>Equipable</th><td data-attr-param="equipable">Yes</td></tr>
+            <tr><th>Tradeable</th><td data-attr-param="tradeable">Yes</td></tr>
+            <tr><th>Destroyed</th><td data-attr-param="destroyed">Drop</td></tr>
+            <tr><td colspan="2">
+                <div class="infobox-buttons" data-default-version="0">
+                    <span class="button button-selected" data-switch-index="0">4</span>
+                    <span class="button" data-switch-index="1">3</span>
+                    <span class="button" data-switch-index="2">Uncharged</span>
+                </div>
+            </td></tr>
+        </table>
+        </div>
+        <div class="infobox-resources-test">
+            <div data-attr-param="name">
+                <div data-attr-index="0">Amulet of glory(4)</div>
+                <div data-attr-index="1">Amulet of glory(3)</div>
+                <div data-attr-index="2">Amulet of glory</div>
+            </div>
+            <div data-attr-param="equipable">
+                <div data-attr-index="0">Yes</div>
+                <div data-attr-index="1">Yes</div>
+                <div data-attr-index="2">Yes</div>
+            </div>
+            <div data-attr-param="tradeable">
+                <div data-attr-index="0">Yes</div>
+                <div data-attr-index="1">Yes, plus a much longer value that used to steal the label column WWWWWWWWWWWWWWWWWWWWWWWWW</div>
+                <div data-attr-index="2">Yes</div>
+            </div>
+            <div data-attr-param="destroyed">
+                <div data-attr-index="0">Drop</div>
+                <div data-attr-index="1">Drop</div>
+                <div data-attr-index="2">Drop</div>
+            </div>
+        </div>
+        <script>\(switcher)</script>
+        </body>
+        </html>
+        """
+
+        try await load(html)
+        try await Task.sleep(nanoseconds: 250_000_000)
+        func metrics() async throws -> [String: Any] {
+            try await evaluate("""
+            (() => {
+                const box = document.querySelector('.infobox-switch');
+                const label = Array.from(box.querySelectorAll('th')).find((th) => th.textContent.trim() === 'Equipable');
+                const boxRect = box.getBoundingClientRect();
+                const labelRect = label.getBoundingClientRect();
+                return {
+                    width: boxRect.width,
+                    height: boxRect.height,
+                    labelWidth: labelRect.width,
+                    labelHeight: labelRect.height
+                };
+            })()
+            """)
+        }
+
+        let baseline = try await metrics()
+        _ = try await evaluate("""
+        (() => { performSwitch('1'); return { ok: 1 }; })()
+        """)
+        let wideState = try await metrics()
+        _ = try await evaluate("""
+        (() => { performSwitch('2'); return { ok: 1 }; })()
+        """)
+        let uncharged = try await metrics()
+
+        XCTAssertGreaterThan(number(baseline, "width"), 80)
+        XCTAssertEqual(number(wideState, "width"), number(baseline, "width"), accuracy: 1.0)
+        XCTAssertEqual(number(uncharged, "width"), number(baseline, "width"), accuracy: 1.0)
+        XCTAssertEqual(number(wideState, "labelWidth"), number(baseline, "labelWidth"), accuracy: 1.0)
+        XCTAssertEqual(number(uncharged, "labelWidth"), number(baseline, "labelWidth"), accuracy: 1.0)
+        XCTAssertEqual(number(wideState, "labelHeight"), number(baseline, "labelHeight"), accuracy: 1.0)
+        XCTAssertEqual(number(uncharged, "labelHeight"), number(baseline, "labelHeight"), accuracy: 1.0)
     }
 
     private func load(_ html: String) async throws {

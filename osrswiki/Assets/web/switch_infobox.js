@@ -60,7 +60,7 @@ function initializePage() {
                 (selectedButton && selectedButton.getAttribute('data-switch-index')) ||
                 mainButtons[0].getAttribute('data-switch-index');
             performSwitch(initialIndex);
-            lockSwitcherMinBlockSize();
+            scheduleSwitcherLayoutLock();
             mainInfobox.dataset.osrsSwitcherReady = 'true';
             document.querySelectorAll('.switch-infobox, .rsw-synced-switch').forEach(function(box) {
                 box.dataset.osrsSwitcherReady = 'true';
@@ -95,6 +95,7 @@ function performSwitch(switchIndex) {
         if (resources) {
             populatePlaceholders(infobox, resources, switchIndex);
         }
+        applySwitcherLayoutLock(infobox);
     });
 
     // Update synced galleries
@@ -161,59 +162,135 @@ function updateExistingImage(oldImg, newImg) {
     }
 }
 
+const switcherLayoutLocks = new WeakMap();
+
+function scheduleSwitcherLayoutLock() {
+    const run = function() {
+        lockSwitcherMinBlockSize();
+    };
+    run();
+    requestAnimationFrame(function() {
+        requestAnimationFrame(run);
+    });
+    if (document.fonts && document.fonts.ready) {
+        document.fonts.ready.then(run);
+    }
+    document.querySelectorAll('.infobox-switch img').forEach((img) => {
+        if (!img.complete) {
+            img.addEventListener('load', run, { once: true });
+        }
+    });
+}
+
+function applySwitcherLayoutLock(infobox) {
+    const lock = switcherLayoutLocks.get(infobox);
+    if (!lock) return;
+
+    infobox.style.setProperty('width', lock.widthPx + 'px', 'important');
+    infobox.style.setProperty('min-width', lock.widthPx + 'px', 'important');
+    infobox.style.setProperty('max-width', lock.widthPx + 'px', 'important');
+    infobox.style.setProperty('table-layout', 'fixed', 'important');
+
+    const tables = infobox.matches('table')
+        ? [infobox]
+        : Array.from(infobox.querySelectorAll('table'));
+    tables.forEach((table) => {
+        table.style.setProperty('table-layout', 'fixed', 'important');
+        table.style.setProperty('width', '100%', 'important');
+    });
+
+    infobox.querySelectorAll('th:not(.infobox-header):not([colspan])').forEach((th) => {
+        th.style.setProperty('width', lock.labelPx + 'px', 'important');
+        th.style.setProperty('min-width', lock.labelPx + 'px', 'important');
+        th.style.setProperty('max-width', lock.labelPx + 'px', 'important');
+        th.style.setProperty('white-space', 'nowrap', 'important');
+    });
+}
+
+function watchSwitcherHostSize(infobox) {
+    if (infobox.dataset.osrsSwitcherResizeWatch === 'true') return;
+    infobox.dataset.osrsSwitcherResizeWatch = 'true';
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(() => {
+        const lock = switcherLayoutLocks.get(infobox);
+        const width = infobox.getBoundingClientRect().width;
+        if (lock && lock.widthPx > 48 && width <= lock.widthPx + 8) return;
+        if (width > 48) {
+            lockSwitcherMinBlockSize();
+        }
+    });
+    observer.observe(infobox);
+}
+
+function clearSwitcherLockStyles(root) {
+    const targets = [root].concat(Array.from(root.querySelectorAll('table, th')));
+    targets.forEach((node) => {
+        ['width', 'min-width', 'max-width', 'table-layout', 'white-space', 'min-height'].forEach((prop) => {
+            node.style.removeProperty(prop);
+        });
+    });
+}
+
 function lockSwitcherMinBlockSize() {
     document.querySelectorAll('.infobox-switch[data-resource-class]').forEach((infobox) => {
         const resourceClass = infobox.getAttribute('data-resource-class');
         const resources = resourceClass ? document.querySelector(resourceClass) : null;
-        if (!resources) return;
+        if (!resources || !infobox.parentNode) return;
 
         const indices = Array.from(
             infobox.querySelectorAll('.infobox-buttons .button[data-switch-index]')
         ).map((button) => button.getAttribute('data-switch-index')).filter(Boolean);
         if (indices.length === 0) return;
 
+        watchSwitcherHostSize(infobox);
+        const measuredWidth = infobox.getBoundingClientRect().width;
+        const existing = switcherLayoutLocks.get(infobox);
+        if (!(measuredWidth > 48) && !(existing && existing.widthPx > 48)) return;
+        const liveWidth = (existing && existing.widthPx > 48 && measuredWidth <= existing.widthPx + 8)
+            ? existing.widthPx
+            : measuredWidth;
+
         const probe = infobox.cloneNode(true);
         probe.setAttribute('aria-hidden', 'true');
+        clearSwitcherLockStyles(probe);
         probe.style.cssText = [
             'position:absolute',
             'left:-10000px',
             'top:0',
             'visibility:hidden',
             'pointer-events:none',
-            'width:max-content',
-            'max-width:none',
-            'min-width:0',
-            'min-height:0',
-            'table-layout:auto'
+            'box-sizing:border-box'
         ].join(';');
+        probe.style.setProperty('width', liveWidth + 'px', 'important');
+        probe.style.setProperty('max-width', liveWidth + 'px', 'important');
+        probe.style.setProperty('min-width', '0', 'important');
+        probe.style.setProperty('min-height', '0', 'important');
+        probe.style.setProperty('table-layout', 'auto', 'important');
         infobox.parentNode.appendChild(probe);
 
-        let maxHeight = infobox.getBoundingClientRect().height;
-        let maxWidth = infobox.getBoundingClientRect().width;
         let maxLabelWidth = 0;
         indices.forEach((index) => {
             populatePlaceholders(probe, resources, index);
-            const rect = probe.getBoundingClientRect();
-            maxHeight = Math.max(maxHeight, rect.height);
-            maxWidth = Math.max(maxWidth, rect.width);
             probe.querySelectorAll('th:not(.infobox-header):not([colspan])').forEach((th) => {
-                maxLabelWidth = Math.max(maxLabelWidth, th.getBoundingClientRect().width);
+                th.style.setProperty('white-space', 'nowrap', 'important');
+                th.style.setProperty('width', 'auto', 'important');
+                th.style.setProperty('min-width', '0', 'important');
+                th.style.setProperty('max-width', 'none', 'important');
+                maxLabelWidth = Math.max(
+                    maxLabelWidth,
+                    th.scrollWidth,
+                    th.getBoundingClientRect().width
+                );
             });
         });
         probe.remove();
 
-        if (maxHeight > 0) {
-            infobox.style.minHeight = Math.ceil(maxHeight) + 'px';
-        }
-        if (maxWidth > 0) {
-            infobox.style.minWidth = Math.ceil(maxWidth) + 'px';
-        }
-        if (maxLabelWidth > 0) {
-            const labelPx = Math.ceil(maxLabelWidth) + 'px';
-            infobox.querySelectorAll('th:not(.infobox-header):not([colspan])').forEach((th) => {
-                th.style.minWidth = labelPx;
-            });
-        }
+        const labelCap = Math.max(1, Math.floor(liveWidth * 0.62));
+        switcherLayoutLocks.set(infobox, {
+            widthPx: Math.ceil(liveWidth),
+            labelPx: Math.max(1, Math.min(labelCap, Math.ceil(maxLabelWidth)))
+        });
+        applySwitcherLayoutLock(infobox);
     });
 }
 
