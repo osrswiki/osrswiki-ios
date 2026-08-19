@@ -18,6 +18,7 @@ enum osrsWebKitSecurityPolicy {
         "clipboardBridge",
         "linkHandler",
         "mapBridge",
+        "osrsYouTube",
         "renderTimeline"
     ]
 
@@ -106,5 +107,67 @@ enum osrsWebKitSecurityPolicy {
             return script.isForMainFrameOnly
         }
         return true
+    }
+}
+
+enum osrsYouTubeEmbed {
+    static let wikiOrigin = "https://oldschool.runescape.wiki"
+
+    static func videoID(from raw: String) -> String? {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        guard let url = URL(string: trimmed) ?? URL(string: trimmed, relativeTo: URL(string: wikiOrigin)) else {
+            return nil
+        }
+        let host = (url.host ?? "").lowercased().replacingOccurrences(of: "www.", with: "")
+        if host == "youtu.be" {
+            let id = url.path.split(separator: "/").first.map(String.init)
+            return validVideoID(id)
+        }
+        if host == "youtube.com" || host == "youtube-nocookie.com" || host == "m.youtube.com" {
+            if let queryID = URLComponents(url: url, resolvingAgainstBaseURL: false)?
+                .queryItems?
+                .first(where: { $0.name == "v" })?
+                .value {
+                return validVideoID(queryID)
+            }
+            let parts = url.path.split(separator: "/").map(String.init)
+            if let embedIndex = parts.firstIndex(of: "embed"), parts.indices.contains(embedIndex + 1) {
+                return validVideoID(parts[embedIndex + 1])
+            }
+            if let shortsIndex = parts.firstIndex(of: "shorts"), parts.indices.contains(shortsIndex + 1) {
+                return validVideoID(parts[shortsIndex + 1])
+            }
+        }
+        return validVideoID(trimmed)
+    }
+
+    static func playerURL(videoID: String) -> URL? {
+        guard let id = validVideoID(videoID) else { return nil }
+        var components = URLComponents(string: "https://www.youtube.com/embed/\(id)")
+        components?.queryItems = [
+            URLQueryItem(name: "playsinline", value: "1"),
+            URLQueryItem(name: "rel", value: "0"),
+            URLQueryItem(name: "modestbranding", value: "1"),
+            URLQueryItem(name: "origin", value: wikiOrigin)
+        ]
+        return components?.url
+    }
+
+    static func playerRequest(url: URL) -> URLRequest {
+        var request = URLRequest(url: url)
+        request.setValue(wikiOrigin + "/", forHTTPHeaderField: "Referer")
+        request.setValue(wikiOrigin, forHTTPHeaderField: "Origin")
+        return request
+    }
+
+    private static func validVideoID(_ raw: String?) -> String? {
+        guard let raw else { return nil }
+        let id = raw.split(separator: "?").first.map(String.init) ?? raw
+        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "_-"))
+        guard id.count >= 8, id.count <= 20, id.unicodeScalars.allSatisfy({ allowed.contains($0) }) else {
+            return nil
+        }
+        return id
     }
 }

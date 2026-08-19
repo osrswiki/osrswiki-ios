@@ -24,6 +24,7 @@ extension DateFormatter {
 extension Notification.Name {
     static let showAppearanceSettings = Notification.Name("showAppearanceSettings")
     static let osrsInternalArticleLinkRequested = Notification.Name("osrsInternalArticleLinkRequested")
+    static let osrsPlayYouTubeRequested = Notification.Name("osrsPlayYouTubeRequested")
 }
 
 // MARK: - Color Extension for Hex Conversion
@@ -423,6 +424,8 @@ struct osrsDeferredMapPreloadState {
 @MainActor
 class ArticleViewModel: NSObject, ObservableObject {
     @Published var isLoading: Bool = false
+    @Published var pendingYouTubeEmbedURL: URL?
+    @Published var needsContentProcessRecovery: Bool = false
     @Published var loadingProgress: Double = 0.0
     @Published var loadingProgressText: String? = nil
     @Published var errorMessage: String?
@@ -3445,6 +3448,16 @@ extension ArticleViewModel: WKNavigationDelegate {
         """)
 
         print("🎉 ArticleViewModel: Page rendering complete")
+    }
+
+    func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+        print("⚠️ ArticleViewModel: Web content process terminated; requesting article recovery")
+        needsContentProcessRecovery = true
+    }
+
+    func playYouTubeVideo(id: String) {
+        guard let url = osrsYouTubeEmbed.playerURL(videoID: id) else { return }
+        pendingYouTubeEmbedURL = url
     }
 
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {

@@ -320,7 +320,7 @@ table.wikitable > tbody > tr > :is(th, td) {
 .collapsible-container.collapsible-primary-infobox:not(.collapsed) > .collapsible-content > .osrs-disclosure-body,
 .collapsible-container:not(.collapsed) > .collapsible-content > .osrs-disclosure-body:has(> table.infobox),
 .collapsible-container:not(.collapsed) > .collapsible-content > .osrs-disclosure-body:has(> .infobox-switch) {
-    overflow-x: hidden !important;
+    overflow-x: auto !important;
 }
 
 .collapsible-infobox:not(.collapsed) > .collapsible-content,
@@ -334,6 +334,11 @@ table.wikitable > tbody > tr > :is(th, td) {
 .collapsible-primary-infobox:not(.collapsible-bonuses-infobox):not(.collapsed) > .collapsible-content > .osrs-disclosure-body {
     margin-inline: auto !important;
     width: max-content !important;
+    max-width: 100% !important;
+}
+
+.collapsible-infobox:not(.collapsible-bonuses-infobox):not(.collapsed) > .collapsible-content > .osrs-disclosure-body:has(.mw-kartographer-map),
+.collapsible-primary-infobox:not(.collapsible-bonuses-infobox):not(.collapsed) > .collapsible-content > .osrs-disclosure-body:has(.mw-kartographer-map) {
     max-width: min(18.75rem, 100%) !important;
 }
 
@@ -341,7 +346,7 @@ table.wikitable > tbody > tr > :is(th, td) {
 .collapsible-primary-infobox:not(.collapsible-bonuses-infobox) table.infobox:not(.infobox-bonuses),
 .collapsible-infobox:not(.collapsible-bonuses-infobox) .infobox-switch,
 .collapsible-primary-infobox:not(.collapsible-bonuses-infobox) .infobox-switch {
-    width: 100% !important;
+    width: max-content !important;
     max-width: 100% !important;
     margin-inline: 0 !important;
 }

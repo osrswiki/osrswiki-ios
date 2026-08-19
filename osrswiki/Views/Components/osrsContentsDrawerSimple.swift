@@ -20,6 +20,7 @@ struct osrsContentsDrawerSimple: View {
 
     private let drawerWidth: CGFloat = osrsInteractiveArticleSwipe.contentsDrawerWidth
     @State private var isDismissTracking = false
+    @State private var suppressSectionSelection = false
 
     private var revealProgress: CGFloat {
         min(1, max(0, interactiveProgress))
@@ -92,6 +93,7 @@ struct osrsContentsDrawerSimple: View {
                     VStack(spacing: 0) {
                         ForEach(sections) { section in
                             Button(action: {
+                                guard !suppressSectionSelection, !isDismissTracking else { return }
                                 onSectionSelected(section.id)
                                 dismissContents()
                             }) {
@@ -115,6 +117,7 @@ struct osrsContentsDrawerSimple: View {
                                 .frame(minHeight: 48)
                             }
                             .buttonStyle(PlainButtonStyle())
+                            .allowsHitTesting(!isDismissTracking)
                         }
                     }
                     .padding(.bottom, 12)
@@ -128,28 +131,11 @@ struct osrsContentsDrawerSimple: View {
             }
         }
 
-        return osrsDrawerChrome(content, shape: shape, fallback: fallback)
+        return content
+            .osrsFloatingGlass(in: shape, fallback: fallback)
+            .id("osrs-contents-drawer-panel")
             .contentTransition(.identity)
             .accessibilityIdentifier("contents_drawer")
-    }
-
-    /// Glass is a rest-state material. Keep it while the drawer is still
-    /// presented so a dismiss drag does not tear down `.glassEffect` on the
-    /// first pixel of motion. Opening finger-follow keeps `isPresented` false
-    /// until settle completes, so that path stays solid.
-    @ViewBuilder
-    private func osrsDrawerChrome<Content: View>(
-        _ content: Content,
-        shape: RoundedRectangle,
-        fallback: Color
-    ) -> some View {
-        if isPresented {
-            content.osrsFloatingGlass(in: shape, fallback: fallback)
-        } else {
-            content
-                .background(fallback, in: shape)
-                .clipShape(shape)
-        }
     }
 
     private var dismissDrag: some Gesture {
@@ -162,6 +148,7 @@ struct osrsContentsDrawerSimple: View {
                 if !isDismissTracking {
                     guard abs(value.translation.width) > abs(value.translation.height) else { return }
                     isDismissTracking = true
+                    suppressSectionSelection = true
                 }
                 let next = min(1, max(0, 1 - max(0, value.translation.width) / drawerWidth))
                 var transaction = Transaction()
@@ -174,11 +161,14 @@ struct osrsContentsDrawerSimple: View {
                 }
             }
             .onEnded { value in
-                defer { isDismissTracking = false }
                 guard osrsContentsReveal.isVisuallyOpen(
                     isPresented: isPresented,
                     interactiveProgress: revealProgress
-                ) else { return }
+                ) else {
+                    isDismissTracking = false
+                    suppressSectionSelection = false
+                    return
+                }
                 let progress = min(1, max(0, 1 - max(0, value.translation.width) / drawerWidth))
                 let shouldDismiss = osrsInteractiveArticleSwipe.shouldCommitContents(
                     progress: progress,
@@ -208,6 +198,8 @@ struct osrsContentsDrawerSimple: View {
                 isPresented = true
             }
             interactiveProgress = clamped
+            isDismissTracking = false
+            suppressSectionSelection = false
         }
     }
 

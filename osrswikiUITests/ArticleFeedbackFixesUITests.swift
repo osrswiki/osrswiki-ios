@@ -107,6 +107,15 @@ final class ArticleFeedbackFixesUITests: XCTestCase {
         )
     }
 
+    func testInfoboxStateChipsDoNotShiftArticleChromeOnCombatBracelet() throws {
+        assertInfoboxStateChipsKeepChromePinned(
+            title: "Combat bracelet",
+            path: "Combat_bracelet",
+            chips: ["Uncharged", "1", "6"],
+            screenshotName: "combat-bracelet-after-state-taps"
+        )
+    }
+
     func testContentsSwipeWorksBeforeArticleFinishesLoading() throws {
         launchArticle(
             title: "Amulet of glory",
@@ -176,6 +185,96 @@ final class ArticleFeedbackFixesUITests: XCTestCase {
             "A slow down-and-right dismiss must finish sliding the drawer away, not freeze mid-gesture. \(app.debugDescription)"
         )
         attachScreenshot(named: "contents-after-slow-down-dismiss")
+    }
+
+    func testContentsDismissSwipeDoesNotJumpToTheTouchedSection() throws {
+        launchArticle(title: "Varrock", path: "Varrock")
+        let webView = articleWebView()
+        XCTAssertTrue(webView.waitForExistence(timeout: 25))
+        RunLoop.current.run(until: Date().addingTimeInterval(0.6))
+        let beforeOpeningContents = webView.screenshot().pngRepresentation
+        let heading = app.staticTexts["Varrock"].firstMatch
+        XCTAssertTrue(heading.waitForExistence(timeout: 8))
+        let titleY = heading.frame.minY
+        openContents()
+
+        let drawer = contentsDrawer()
+        let start = drawer.coordinate(withNormalizedOffset: CGVector(dx: 0.55, dy: 0.28))
+        let end = drawer.coordinate(withNormalizedOffset: CGVector(dx: 0.98, dy: 0.28))
+        start.press(forDuration: 0.08, thenDragTo: end, withVelocity: XCUIGestureVelocity(240), thenHoldForDuration: 0)
+
+        XCTAssertFalse(
+            waitForContentsDrawerVisible(timeout: 4) && drawer.frame.minX < app.frame.width - 80,
+            "A horizontal dismiss swipe must close contents without treating the press as a section tap."
+        )
+        RunLoop.current.run(until: Date().addingTimeInterval(0.6))
+        XCTAssertTrue(heading.exists)
+        XCTAssertEqual(
+            heading.frame.minY,
+            titleY,
+            accuracy: 4.0,
+            "Dismissing contents by swipe must not jump the article to another section"
+        )
+        let afterCount = webView.screenshot().pngRepresentation.count
+        XCTAssertLessThan(
+            abs(afterCount - beforeOpeningContents.count),
+            max(8192, beforeOpeningContents.count / 20),
+            "Dismissing contents by swipe must not scroll to the section under the finger"
+        )
+        attachScreenshot(named: "contents-dismiss-swipe-no-section-jump")
+    }
+
+    func testArticleScrollSurvivesBackgroundAndForeground() throws {
+        launchArticle(title: "Varrock", path: "Varrock")
+        let webView = articleWebView()
+        XCTAssertTrue(webView.waitForExistence(timeout: 25))
+        RunLoop.current.run(until: Date().addingTimeInterval(0.8))
+        let top = webView.screenshot().pngRepresentation
+        webView.swipeUp()
+        webView.swipeUp()
+        RunLoop.current.run(until: Date().addingTimeInterval(0.4))
+        let scrolled = webView.screenshot().pngRepresentation
+        XCTAssertNotEqual(scrolled, top, "The article must actually leave the top before backgrounding")
+
+        XCUIDevice.shared.press(.home)
+        RunLoop.current.run(until: Date().addingTimeInterval(2.0))
+        app.activate()
+        XCTAssertTrue(webView.waitForExistence(timeout: 8))
+        RunLoop.current.run(until: Date().addingTimeInterval(0.8))
+        XCTAssertTrue(app.staticTexts["Varrock"].exists)
+        XCTAssertNotEqual(
+            webView.screenshot().pngRepresentation,
+            top,
+            "Returning from the Home Screen must not jump back to the top of the article"
+        )
+        attachScreenshot(named: "article-after-background")
+    }
+
+    func testEmbeddedYouTubeOpensInAppPlayerWithoutError153() throws {
+        launchArticle(title: "Sailing (soundtrack)", path: "Sailing_(soundtrack)")
+        let webView = articleWebView()
+        XCTAssertTrue(webView.waitForExistence(timeout: 25))
+        RunLoop.current.run(until: Date().addingTimeInterval(1.5))
+
+        let error153 = app.staticTexts.containing(NSPredicate(format: "label CONTAINS[c] %@", "153")).firstMatch
+        let configError = app.staticTexts.containing(NSPredicate(format: "label CONTAINS[c] %@", "Video player configuration")).firstMatch
+        XCTAssertFalse(error153.exists, "YouTube embeds must not show error 153 in the article document")
+        XCTAssertFalse(configError.exists)
+
+        let play = app.descendants(matching: .any).matching(NSPredicate(format: "label ==[c] %@", "Play video")).firstMatch
+        if play.waitForExistence(timeout: 12) {
+            play.tap()
+            XCTAssertTrue(
+                app.navigationBars["Video"].waitForExistence(timeout: 8) || app.buttons["Done"].waitForExistence(timeout: 6),
+                "Tapping the in-article play control must open the in-app HTTPS player"
+            )
+            attachScreenshot(named: "youtube-in-app-player")
+            if app.buttons["Done"].exists {
+                app.buttons["Done"].tap()
+            }
+        } else {
+            attachScreenshot(named: "youtube-embed-without-error-153")
+        }
     }
 
     func testBackSwipeDuringPageAppearKeepsPreviousArticleVisible() throws {

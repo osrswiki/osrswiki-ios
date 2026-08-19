@@ -2060,6 +2060,10 @@ struct ArticleWebView: UIViewRepresentable {
                 handleLinkMessage(body)
             case "mapBridge":
                 handleMapBridgeMessage(body)
+            case "osrsYouTube":
+                if let videoId = body["videoId"] as? String {
+                    parent.viewModel.playYouTubeVideo(id: videoId)
+                }
             case "safariDebugger":
                 handleSafariDebuggerMessage(body)
             default:

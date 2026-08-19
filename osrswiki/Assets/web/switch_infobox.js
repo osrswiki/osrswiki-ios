@@ -172,9 +172,6 @@ function lockSwitcherMinBlockSize() {
         ).map((button) => button.getAttribute('data-switch-index')).filter(Boolean);
         if (indices.length === 0) return;
 
-        const hostWidth = infobox.getBoundingClientRect().width;
-        if (hostWidth < 1) return;
-
         const probe = infobox.cloneNode(true);
         probe.setAttribute('aria-hidden', 'true');
         probe.style.cssText = [
@@ -183,19 +180,39 @@ function lockSwitcherMinBlockSize() {
             'top:0',
             'visibility:hidden',
             'pointer-events:none',
-            'width:' + hostWidth + 'px'
+            'width:max-content',
+            'max-width:none',
+            'min-width:0',
+            'min-height:0',
+            'table-layout:auto'
         ].join(';');
         infobox.parentNode.appendChild(probe);
 
         let maxHeight = infobox.getBoundingClientRect().height;
+        let maxWidth = infobox.getBoundingClientRect().width;
+        let maxLabelWidth = 0;
         indices.forEach((index) => {
             populatePlaceholders(probe, resources, index);
-            maxHeight = Math.max(maxHeight, probe.getBoundingClientRect().height);
+            const rect = probe.getBoundingClientRect();
+            maxHeight = Math.max(maxHeight, rect.height);
+            maxWidth = Math.max(maxWidth, rect.width);
+            probe.querySelectorAll('th:not(.infobox-header):not([colspan])').forEach((th) => {
+                maxLabelWidth = Math.max(maxLabelWidth, th.getBoundingClientRect().width);
+            });
         });
         probe.remove();
 
         if (maxHeight > 0) {
             infobox.style.minHeight = Math.ceil(maxHeight) + 'px';
+        }
+        if (maxWidth > 0) {
+            infobox.style.minWidth = Math.ceil(maxWidth) + 'px';
+        }
+        if (maxLabelWidth > 0) {
+            const labelPx = Math.ceil(maxLabelWidth) + 'px';
+            infobox.querySelectorAll('th:not(.infobox-header):not([colspan])').forEach((th) => {
+                th.style.minWidth = labelPx;
+            });
         }
     });
 }

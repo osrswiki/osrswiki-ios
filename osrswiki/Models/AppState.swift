@@ -57,19 +57,36 @@ class AppState: ObservableObject {
     @Published internal(set) var activeSearchReturnContext: osrsSearchReturnContext?
     internal var nextSearchActivationGeneration: UInt64 = 0
     private var articleScrollOffsets: [String: CGFloat] = [:]
+    private let articleScrollDefaultsKey = "osrs.articleScrollOffsets"
 
     func captureArticleScrollOffset(_ identity: String, offsetY: CGFloat) {
         articleScrollOffsets[identity] = offsetY
+        persistArticleScrollOffsets()
     }
 
     func capturedArticleScrollOffset(_ identity: String) -> CGFloat? {
-        articleScrollOffsets[identity]
+        if let offset = articleScrollOffsets[identity] {
+            return offset
+        }
+        return persistedArticleScrollOffsets()[identity]
+    }
+
+    private func persistArticleScrollOffsets() {
+        UserDefaults.standard.set(articleScrollOffsets.mapValues { Double($0) }, forKey: articleScrollDefaultsKey)
+    }
+
+    private func persistedArticleScrollOffsets() -> [String: CGFloat] {
+        guard let stored = UserDefaults.standard.dictionary(forKey: articleScrollDefaultsKey) as? [String: Double] else {
+            return [:]
+        }
+        return stored.mapValues { CGFloat($0) }
     }
 
     init() {
         loadUserPreferences()
         handleLaunchArguments()
         observeInternalArticleLinkRequests()
+        articleScrollOffsets = persistedArticleScrollOffsets()
     }
 
     deinit {

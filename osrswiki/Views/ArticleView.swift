@@ -134,106 +134,110 @@ private struct ArticleViewContent: View {
     }
 
     var body: some View {
-        articleLayout
-        .background {
-            osrsTheme.background.ignoresSafeArea()
-        }
-        .navigationBarHidden(true)
-        .onAppear {
-            isArticleVisible = true
-            beginAppearanceLoad()
-        }
-        .onChange(of: appState.activeArticleDestination?.navigationIdentity) { _, activeIdentity in
-            if activeIdentity == articleIdentity {
-                updateArticleBottomBar()
-            } else if activeIdentity == nil {
-                overlayManager?.hideArticleBottomBar(owner: articleIdentity)
-            }
-            guard hasLoadedBefore else { return }
+        articleSessionChrome
+    }
 
-            if activeIdentity == articleIdentity {
-                guard movedOffTopOfArticleStack else { return }
-                movedOffTopOfArticleStack = false
-                restoreCapturedArticleScrollIfNeeded()
+    private var articleNavigationChrome: some View {
+        articleLayout
+            .background {
+                osrsTheme.background.ignoresSafeArea()
+            }
+            .navigationBarHidden(true)
+            .onAppear {
+                isArticleVisible = true
+                beginAppearanceLoad()
+            }
+            .onChange(of: appState.activeArticleDestination?.navigationIdentity) { _, activeIdentity in
+                if activeIdentity == articleIdentity {
+                    updateArticleBottomBar()
+                } else if activeIdentity == nil {
+                    overlayManager?.hideArticleBottomBar(owner: articleIdentity)
+                }
+                guard hasLoadedBefore else { return }
+
+                if activeIdentity == articleIdentity {
+                    guard movedOffTopOfArticleStack else { return }
+                    movedOffTopOfArticleStack = false
+                    restoreCapturedArticleScrollIfNeeded()
+                    updateArticleBottomBar()
+                } else {
+                    captureCurrentArticleScroll()
+                    movedOffTopOfArticleStack = true
+                }
+            }
+            .onChange(of: viewModel.hasTableOfContents) { _, _ in
                 updateArticleBottomBar()
-            } else {
+            }
+            .onChange(of: viewModel.isBookmarked) { _, _ in
+                updateArticleBottomBar()
+            }
+            .onChange(of: viewModel.saveState) { _, _ in
+                updateArticleBottomBar()
+            }
+            .onChange(of: themeManager.articleTextScale) { _, newScale in
+                viewModel.setArticleTextScale(CGFloat(newScale))
+            }
+            .onChange(of: themeManager.floorNumberingMode) { _, _ in
+                viewModel.applyFloorNumberingConvention(osrsArticleFloorConvention.current())
+            }
+            .onChange(of: themeManager.wrapTableCells) { _, enabled in
+                viewModel.applyWrapTableCells(enabled)
+            }
+            .onChange(of: themeManager.collapseTables) { _, shouldCollapse in
+                guard collapseTablesEnabled else { return }
+                viewModel.setCollapseTablesEnabled(shouldCollapse)
+                if hasLoadedBefore {
+                    viewModel.loadArticle(theme: osrsTheme, isReload: true)
+                }
+            }
+            .onChange(of: viewModel.isLoading) { _, isLoading in
+                if !isLoading, let onLoadingComplete {
+                    print("📊 ArticleView: Loading completed - calling preview generation callback with viewModel")
+                    onLoadingComplete(viewModel)
+                }
+                if !isLoading {
+                    consumePendingArticleScrollIfNeeded()
+                    restoreCapturedArticleScrollIfNeeded()
+#if DEBUG
+                    dumpArticleTableMetricsIfRequested()
+#endif
+                }
+#if DEBUG
+                if !isLoading,
+                   !hasStartedFindInPageForTests,
+                   ProcessInfo.processInfo.arguments.contains("-startFindInPage") {
+                    hasStartedFindInPageForTests = true
+                    startFindInPage()
+                }
+#endif
+            }
+            .onDisappear {
+                savedCachePreparationTask?.cancel()
+                savedCachePreparationTask = nil
+                isArticleVisible = false
                 captureCurrentArticleScroll()
-                movedOffTopOfArticleStack = true
+                findSession += 1
+                viewModel.hideFindInPageAction()
+                viewModel.cancelActiveWorkForNavigation()
+                if #available(iOS 17.0, *), let savedCacheSessionToken {
+                    ProxyInterceptorService.shared.disableMode(owner: savedCacheSessionToken)
+                    self.savedCacheSessionToken = nil
+                }
+                let stillShowingArticle = appState.activeArticleDestination != nil
+                if !stillShowingArticle {
+                    overlayManager?.hideArticleBottomBar(owner: articleIdentity)
+                    showMainTabBar()
+                }
             }
-        }
-        .onChange(of: viewModel.hasTableOfContents) { _, _ in
-            // Update article bottom bar overlay when table of contents availability changes
-            updateArticleBottomBar()
-        }
-        .onChange(of: viewModel.isBookmarked) { _, _ in
-            // Update article bottom bar overlay when bookmark status changes
-            updateArticleBottomBar()
-        }
-        .onChange(of: viewModel.saveState) { _, _ in
-            // Update article bottom bar overlay when save state changes
-            updateArticleBottomBar()
-        }
-        .onChange(of: themeManager.articleTextScale) { _, newScale in
-            viewModel.setArticleTextScale(CGFloat(newScale))
-        }
-        .onChange(of: themeManager.floorNumberingMode) { _, _ in
-            viewModel.applyFloorNumberingConvention(osrsArticleFloorConvention.current())
-        }
-        .onChange(of: themeManager.wrapTableCells) { _, enabled in
-            viewModel.applyWrapTableCells(enabled)
-        }
-        .onChange(of: themeManager.collapseTables) { _, shouldCollapse in
-            guard collapseTablesEnabled else { return }
-            viewModel.setCollapseTablesEnabled(shouldCollapse)
-            if hasLoadedBefore {
-                viewModel.loadArticle(theme: osrsTheme, isReload: true)
-            }
-        }
-        .onChange(of: viewModel.isLoading) { _, isLoading in
-            // Call loading complete callback for preview generation
-            if !isLoading, let onLoadingComplete = onLoadingComplete {
-                print("📊 ArticleView: Loading completed - calling preview generation callback with viewModel")
-                onLoadingComplete(viewModel)
-            }
-            if !isLoading {
-                consumePendingArticleScrollIfNeeded()
-                restoreCapturedArticleScrollIfNeeded()
-#if DEBUG
-                dumpArticleTableMetricsIfRequested()
-#endif
-            }
-#if DEBUG
-            if !isLoading,
-               !hasStartedFindInPageForTests,
-               ProcessInfo.processInfo.arguments.contains("-startFindInPage") {
-                hasStartedFindInPageForTests = true
-                startFindInPage()
-            }
-#endif
-        }
-        .onDisappear {
-            savedCachePreparationTask?.cancel()
-            savedCachePreparationTask = nil
-            isArticleVisible = false
-            captureCurrentArticleScroll()
-            findSession += 1
-            viewModel.hideFindInPageAction()
-            viewModel.cancelActiveWorkForNavigation()
-            if #available(iOS 17.0, *), let savedCacheSessionToken {
-                ProxyInterceptorService.shared.disableMode(owner: savedCacheSessionToken)
-                self.savedCacheSessionToken = nil
-            }
-            let stillShowingArticle = appState.activeArticleDestination != nil
-            if !stillShowingArticle {
-                overlayManager?.hideArticleBottomBar(owner: articleIdentity)
-                showMainTabBar()
-            }
-        }
+    }
+
+    private var articlePresentedChrome: some View {
+        articleNavigationChrome
             .sheet(isPresented: $isShowingShareSheet) {
                 ShareSheet(items: [pageUrl])
             }
-            .overlay(
-                // Enhanced contents drawer with Android-style functionality
+            .osrsYouTubePlayerSheet(url: $viewModel.pendingYouTubeEmbedURL)
+            .overlay {
                 osrsContentsDrawerSimple(
                     isPresented: $isShowingTableOfContents,
                     interactiveProgress: $contentsRevealProgress,
@@ -243,7 +247,7 @@ private struct ArticleViewContent: View {
                     }
                 )
                 .ignoresSafeArea()
-            )
+            }
             .sheet(isPresented: $isShowingAppearanceSettings, onDismiss: {
                 highlightFloorNumberingOnAppearance = false
             }) {
@@ -283,25 +287,42 @@ private struct ArticleViewContent: View {
                     Text(errorMessage)
                 }
             }
-        .onChange(of: osrsTheme as? osrsLightTheme != nil) { _, _ in
-            // Reload with new theme when theme changes - use blank overlay like other reloads
-            viewModel.loadArticle(theme: osrsTheme, isReload: true)
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .showAppearanceSettings)) { notification in
-            highlightFloorNumberingOnAppearance =
-                (notification.userInfo?["highlightFloorNumbering"] as? Bool) == true
-            isShowingAppearanceSettings = true
-        }
-        .onAppear {
-            viewModel.navigateToInternalArticle = { url in
-                appState.routeInternalArticleLink(url, sourceArticleURL: pageUrl)
+    }
+
+    private var articleSessionChrome: some View {
+        articlePresentedChrome
+            .onChange(of: osrsTheme as? osrsLightTheme != nil) { _, _ in
+                captureCurrentArticleScroll()
+                viewModel.loadArticle(theme: osrsTheme, isReload: true)
             }
-        }
-        .onDisappear {
-            // Clean up speech recognition when leaving the view
-            viewModel.navigateToInternalArticle = nil
-            appState.speechManager.cleanup()
-        }
+            .osrsArticleSceneRestore(
+                needsRecovery: $viewModel.needsContentProcessRecovery,
+                onLeaveForeground: captureCurrentArticleScroll,
+                onEnterForeground: { restoreCapturedArticleScrollIfNeeded() },
+                onRecover: {
+                    viewModel.needsContentProcessRecovery = false
+                    viewModel.loadArticle(theme: osrsTheme, isReload: true)
+                }
+            )
+            .onReceive(NotificationCenter.default.publisher(for: .osrsPlayYouTubeRequested)) { notification in
+                if let videoId = notification.userInfo?["videoId"] as? String {
+                    viewModel.playYouTubeVideo(id: videoId)
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .showAppearanceSettings)) { notification in
+                highlightFloorNumberingOnAppearance =
+                    (notification.userInfo?["highlightFloorNumbering"] as? Bool) == true
+                isShowingAppearanceSettings = true
+            }
+            .onAppear {
+                viewModel.navigateToInternalArticle = { url in
+                    appState.routeInternalArticleLink(url, sourceArticleURL: pageUrl)
+                }
+            }
+            .onDisappear {
+                viewModel.navigateToInternalArticle = nil
+                appState.speechManager.cleanup()
+            }
     }
 
     /// Saved-page cache inspection and listener binding are disk/network preparation, so they
@@ -527,8 +548,10 @@ private struct ArticleViewContent: View {
     }
 
     private func captureCurrentArticleScroll() {
-        guard let offsetY = viewModel.webView?.scrollView.contentOffset.y else { return }
-        appState.captureArticleScrollOffset(articleIdentity, offsetY: offsetY)
+        guard !viewModel.needsContentProcessRecovery else { return }
+        guard let scrollView = viewModel.webView?.scrollView else { return }
+        guard scrollView.contentSize.height >= 64 else { return }
+        appState.captureArticleScrollOffset(articleIdentity, offsetY: scrollView.contentOffset.y)
     }
 
     private func restoreCapturedArticleScrollIfNeeded(attempt: Int = 0) {

@@ -41,7 +41,16 @@ class osrsWebViewBridge: NSObject, WKScriptMessageHandler {
             if let logMessage = body["message"] as? String {
                 print("[WebViewBridge-JS] \(logMessage)")
             }
-            
+
+        case "playYouTube":
+            if let videoId = body["videoId"] as? String {
+                NotificationCenter.default.post(
+                    name: .osrsPlayYouTubeRequested,
+                    object: nil,
+                    userInfo: ["videoId": videoId]
+                )
+            }
+
         default:
             print("[WebViewBridge] Unknown method: \(method)")
         }
@@ -95,6 +104,23 @@ class osrsWebViewBridge: NSObject, WKScriptMessageHandler {
                     });
                 } catch (e) {
                     console.warn('Failed to log message:', e);
+                }
+            },
+
+            playYouTube: function(videoId) {
+                try {
+                    window.webkit.messageHandlers.osrsYouTube.postMessage({
+                        videoId: videoId
+                    });
+                } catch (e) {
+                    try {
+                        window.webkit.messageHandlers.OsrsWikiBridge.postMessage({
+                            method: 'playYouTube',
+                            videoId: videoId
+                        });
+                    } catch (ignored) {
+                        console.warn('Failed to open YouTube video:', e);
+                    }
                 }
             }
         };

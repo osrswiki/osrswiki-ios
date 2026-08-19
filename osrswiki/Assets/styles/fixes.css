@@ -691,7 +691,7 @@ img.osrs-inline-icon {
     box-sizing: border-box !important;
     max-width: 100% !important;
     min-width: 0 !important;
-    overflow-x: hidden !important;
+    overflow-x: auto !important;
     width: fit-content !important;
 }
 
@@ -706,7 +706,7 @@ img.osrs-inline-icon {
     max-width: 100% !important;
     min-width: 0 !important;
     margin-inline: 0 !important;
-    overflow-x: hidden !important;
+    overflow-x: auto !important;
     table-layout: auto !important;
 }
 
@@ -721,10 +721,13 @@ img.osrs-inline-icon {
     white-space: normal !important;
 }
 
-.collapsible-infobox table.infobox th:not(.infobox-header):not([colspan]) {
+.collapsible-infobox table.infobox th:not(.infobox-header):not([colspan]),
+.collapsible-primary-infobox table.infobox th:not(.infobox-header):not([colspan]) {
     overflow-wrap: normal !important;
     word-break: normal !important;
     white-space: nowrap !important;
+    width: max-content !important;
+    min-width: max-content;
 }
 
 /* Infobox cards: put the disclosure gutter in padding, not child margins.
@@ -736,7 +739,7 @@ img.osrs-inline-icon {
     box-sizing: border-box !important;
     padding-inline: var(--osrs-disclosure-content-inline-inset) !important;
     padding-block: 0 !important;
-    overflow-x: hidden !important;
+    overflow-x: auto !important;
 }
 
 .collapsible-infobox:not(.collapsed) > .collapsible-content > .osrs-disclosure-body,
@@ -1339,7 +1342,7 @@ table.wikitable :is(th, td) > :is(
 .collapsible-container.collapsible-primary-infobox:not(.collapsed) > .collapsible-content > .osrs-disclosure-body,
 .collapsible-container:not(.collapsed) > .collapsible-content > .osrs-disclosure-body:has(> table.infobox),
 .collapsible-container:not(.collapsed) > .collapsible-content > .osrs-disclosure-body:has(> .infobox-switch) {
-    overflow-x: hidden !important;
+    overflow-x: auto !important;
 }
 
 /* Last in this file so equal-specificity padding:0 above cannot clip the gutter. */
@@ -1348,7 +1351,7 @@ table.wikitable :is(th, td) > :is(
     box-sizing: border-box !important;
     padding-inline: var(--osrs-disclosure-content-inline-inset) !important;
     padding-block: 0 !important;
-    overflow-x: hidden !important;
+    overflow-x: auto !important;
 }
 
 .collapsible-infobox:not(.collapsed) > .collapsible-content > .osrs-disclosure-body,
@@ -1358,21 +1361,26 @@ table.wikitable :is(th, td) > :is(
     max-width: 100% !important;
 }
 
+/* Item/switcher infoboxes shrink-wrap. The 12px chrome sits around the wiki
+   table instead of being stolen from its ~300px column, so labels such as
+   Equipable stay one line. Location/map cards still cap nested media. */
 .collapsible-infobox:not(.collapsible-bonuses-infobox):not(.collapsed) > .collapsible-content > .osrs-disclosure-body,
 .collapsible-primary-infobox:not(.collapsible-bonuses-infobox):not(.collapsed) > .collapsible-content > .osrs-disclosure-body {
     margin-inline: auto !important;
     width: max-content !important;
+    max-width: 100% !important;
+}
+
+.collapsible-infobox:not(.collapsible-bonuses-infobox):not(.collapsed) > .collapsible-content > .osrs-disclosure-body:has(.mw-kartographer-map),
+.collapsible-primary-infobox:not(.collapsible-bonuses-infobox):not(.collapsed) > .collapsible-content > .osrs-disclosure-body:has(.mw-kartographer-map) {
     max-width: min(18.75rem, 100%) !important;
 }
 
-/* Compact item infoboxes already shrink-wrap. Location screenshots must not
-   stretch the table to the card; keep them inside the same chrome gutter.
-   Cap the inner column, not the table: tables ignore max-width. */
 .collapsible-infobox:not(.collapsible-bonuses-infobox) table.infobox:not(.infobox-bonuses),
 .collapsible-primary-infobox:not(.collapsible-bonuses-infobox) table.infobox:not(.infobox-bonuses),
 .collapsible-infobox:not(.collapsible-bonuses-infobox) .infobox-switch,
 .collapsible-primary-infobox:not(.collapsible-bonuses-infobox) .infobox-switch {
-    width: 100% !important;
+    width: max-content !important;
     max-width: 100% !important;
     margin-inline: 0 !important;
 }
@@ -1482,9 +1490,7 @@ body.osrs-table-cells-wrap .collapsible-container:not(.collapsible-primary-infob
 html.osrs-table-cells-wrap .osrs-local-scroll-surface > table.wikitable:not(.osrs-map-table) :is(th, td),
 body.osrs-table-cells-wrap .osrs-local-scroll-surface > table.wikitable:not(.osrs-map-table) :is(th, td),
 html.osrs-table-cells-wrap .osrs-local-scroll-surface > .osrs-disclosure-body > table.wikitable:not(.osrs-map-table) :is(th, td),
-body.osrs-table-cells-wrap .osrs-local-scroll-surface > .osrs-disclosure-body > table.wikitable:not(.osrs-map-table) :is(th, td),
-html.osrs-table-cells-wrap .collapsible-infobox table.infobox th:not(.infobox-header):not([colspan]),
-body.osrs-table-cells-wrap .collapsible-infobox table.infobox th:not(.infobox-header):not([colspan]) {
+body.osrs-table-cells-wrap .osrs-local-scroll-surface > .osrs-disclosure-body > table.wikitable:not(.osrs-map-table) :is(th, td) {
     white-space: normal !important;
     overflow-wrap: anywhere;
 }

@@ -6,14 +6,13 @@
 .infobox-buttons,
 .switch-infobox-triggers {
     text-align: center;
-    max-width: 300px;
+    max-width: 100%;
     display: flex;
     flex-wrap: wrap;
     justify-content: center;
     gap: 4px;
     padding: 4px 0;
     margin: 0 auto; /* Center the container horizontally */
-    /* Removed min-width: max-content to allow better wrapping */
 }
 
 /* When inside an infobox, give the button container the infobox's background color. */
@@ -52,9 +51,7 @@
     padding: 0.25em 0.625em;
     box-sizing: border-box;
     white-space: nowrap;
-    text-overflow: ellipsis;
-    overflow: hidden;
-    flex: 0 1 auto; /* Don't grow, can shrink, auto basis */
+    flex: 0 0 auto;
     transition: background-color 100ms, color 100ms, border-color 100ms;
     user-select: none;
 }

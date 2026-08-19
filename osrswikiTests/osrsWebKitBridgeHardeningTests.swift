@@ -510,6 +510,7 @@ final class osrsWebKitBridgeHardeningTests: XCTestCase {
         XCTAssertTrue(osrsWebKitSecurityPolicy.productionHandlerNames.contains("mapBridge"))
         XCTAssertTrue(osrsWebKitSecurityPolicy.productionHandlerNames.contains("linkHandler"))
         XCTAssertTrue(osrsWebKitSecurityPolicy.productionHandlerNames.contains("renderTimeline"))
+        XCTAssertTrue(osrsWebKitSecurityPolicy.productionHandlerNames.contains("osrsYouTube"))
 
         XCTAssertFalse(osrsWebKitSecurityPolicy.productionHandlerNames.contains("safariDebugger"))
         XCTAssertFalse(osrsWebKitSecurityPolicy.isWebViewInspectionEnabled)
@@ -517,6 +518,71 @@ final class osrsWebKitBridgeHardeningTests: XCTestCase {
         for script in osrsWebKitSecurityPolicy.productionUserScripts {
             XCTAssertTrue(script.isForMainFrameOnly, "\(script.name) must not be injected into subframes")
         }
+    }
+
+    func testYouTubeEmbedIDsParseWatchEmbedAndShortURLs() throws {
+        XCTAssertEqual(
+            osrsYouTubeEmbed.videoID(from: "https://www.youtube.com/embed/dQw4w9WgXcQ"),
+            "dQw4w9WgXcQ"
+        )
+        XCTAssertEqual(
+            osrsYouTubeEmbed.videoID(from: "https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ?start=4"),
+            "dQw4w9WgXcQ"
+        )
+        XCTAssertEqual(
+            osrsYouTubeEmbed.videoID(from: "https://youtu.be/dQw4w9WgXcQ"),
+            "dQw4w9WgXcQ"
+        )
+        XCTAssertEqual(
+            osrsYouTubeEmbed.videoID(from: "https://www.youtube.com/watch?v=dQw4w9WgXcQ"),
+            "dQw4w9WgXcQ"
+        )
+        let player = try! XCTUnwrap(osrsYouTubeEmbed.playerURL(videoID: "dQw4w9WgXcQ"))
+        XCTAssertEqual(player.host, "www.youtube.com")
+        XCTAssertTrue(player.path.contains("/embed/dQw4w9WgXcQ"))
+        XCTAssertTrue(player.query?.contains("origin=") == true)
+        XCTAssertTrue(player.query?.contains("playsinline=1") == true)
+        let request = osrsYouTubeEmbed.playerRequest(url: player)
+        XCTAssertTrue(request.value(forHTTPHeaderField: "Referer")?.contains("oldschool.runescape.wiki") == true)
+
+        let js = try String(
+            contentsOf: try repositoryRoot().appendingPathComponent("shared/js/responsive_videos.js"),
+            encoding: .utf8
+        )
+        XCTAssertTrue(js.contains("iframe.removeAttribute('src')"))
+        XCTAssertTrue(js.contains("i.ytimg.com/vi/"))
+        XCTAssertTrue(js.contains("data-osrs-youtube-id"))
+    }
+
+    func testArticleLifecyclePersistsScrollAndRecoversTerminatedWebContent() throws {
+        let root = try repositoryRoot()
+        let articleView = try String(
+            contentsOf: root.appendingPathComponent("platforms/ios/osrswiki/Views/ArticleView.swift"),
+            encoding: .utf8
+        )
+        let viewModel = try String(
+            contentsOf: root.appendingPathComponent("platforms/ios/osrswiki/ViewModels/ArticleViewModel.swift"),
+            encoding: .utf8
+        )
+        let appState = try String(
+            contentsOf: root.appendingPathComponent("platforms/ios/osrswiki/Models/AppState.swift"),
+            encoding: .utf8
+        )
+        XCTAssertTrue(articleView.contains("osrsArticleSceneRestore"))
+        XCTAssertTrue(articleView.contains("captureCurrentArticleScroll()"))
+        XCTAssertTrue(articleView.contains("needsContentProcessRecovery"))
+        XCTAssertTrue(articleView.contains("osrsYouTubePlayerSheet"))
+        let youtubePlayer = try String(
+            contentsOf: root.appendingPathComponent("platforms/ios/osrswiki/Views/osrsInAppYouTubePlayer.swift"),
+            encoding: .utf8
+        )
+        XCTAssertTrue(youtubePlayer.contains("osrsInAppYouTubePlayer"))
+        XCTAssertTrue(youtubePlayer.contains("scenePhase"))
+        XCTAssertTrue(youtubePlayer.contains("osrsYouTubeEmbed.playerRequest"))
+        XCTAssertTrue(viewModel.contains("webViewWebContentProcessDidTerminate"))
+        XCTAssertTrue(viewModel.contains("pendingYouTubeEmbedURL"))
+        XCTAssertTrue(appState.contains("osrs.articleScrollOffsets"))
+        XCTAssertTrue(appState.contains("persistArticleScrollOffsets"))
     }
 
     func testDeepNavigationFixtureAuditIsDebugOnlyAndLaunchGated() throws {

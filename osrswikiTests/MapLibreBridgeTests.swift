@@ -113,7 +113,7 @@ class MapLibreBridgeTests: XCTestCase {
         let userContentController = WKUserContentController()
         
         // Simulate the message handler registration that happens in ArticleWebView
-        let messageHandlerNames = ["clipboardBridge", "renderTimeline", "linkHandler", "mapBridge"]
+        let messageHandlerNames = ["clipboardBridge", "renderTimeline", "linkHandler", "mapBridge", "osrsYouTube"]
         
         // In real implementation, a coordinator would be added for each handler
         // Here we just verify the expected handler names
