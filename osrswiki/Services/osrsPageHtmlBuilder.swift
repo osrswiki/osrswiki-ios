@@ -357,7 +357,9 @@ class osrsPageHtmlBuilder {
         articleTextScale: CGFloat = 1.0,
         floorConvention: osrsArticleFloorConvention = .current(),
         wrapTableCellsEnabled: Bool = false,
-        canonicalTitle: String? = nil
+        canonicalTitle: String? = nil,
+        inlineFirstPaintCss: Bool = false,
+        bakeChromeInsets: Bool = true
     ) -> String {
         let startTime = CFAbsoluteTimeGetCurrent()
 
@@ -381,14 +383,14 @@ class osrsPageHtmlBuilder {
             locale: Locale(identifier: "en_US_POSIX"),
             Double(clampedArticleTextScale)
         )
-        let chromeClearance = Int(
+        let chromeClearance = bakeChromeInsets ? Int(
             (osrsSearchControlGeometry.compactHeight + osrsOverlayChromeMetrics.pairedEdgeGap + 8).rounded()
-        )
-        let bottomChrome = Int(
+        ) : 0
+        let bottomChrome = bakeChromeInsets ? Int(
             (osrsOverlayChromeMetrics.floatingBarHeight + osrsOverlayChromeMetrics.pairedEdgeGap + 24).rounded()
-        )
-        let safeAreaTop = Int(osrsOverlayChromeMetrics.topInset.rounded())
-        let safeAreaBottom = Int(osrsOverlayChromeMetrics.bottomInset.rounded())
+        ) : 0
+        let safeAreaTop = bakeChromeInsets ? Int(osrsOverlayChromeMetrics.topInset.rounded()) : 0
+        let safeAreaBottom = bakeChromeInsets ? Int(osrsOverlayChromeMetrics.bottomInset.rounded()) : 0
         let readerPreferenceStyle = """
         <style id="osrs-article-reader-preferences">
             html:root {
@@ -412,7 +414,14 @@ class osrsPageHtmlBuilder {
 
         // Generate CSS links only if requested (disabled for WKUserScript injection)
         let cssLinks: String
-        if includeAssetLinks {
+        if inlineFirstPaintCss {
+            cssLinks = styleSheetAssets.map { assetPath in
+                if let css = loadAssetText(assetPath) {
+                    return "<style data-osrs-inline-css=\"\(assetPath)\">\(css)</style>"
+                }
+                return "<link rel=\"stylesheet\" href=\"\(customScheme)://localhost/\(assetPath)\">"
+            }.joined(separator: "\n")
+        } else if includeAssetLinks {
             // Get the dynamic scheme name from UserDefaults
             print("\(logTag): 🔍 UserDefaults WKURLSchemeHandler_Scheme = '\(UserDefaults.standard.string(forKey: "WKURLSchemeHandler_Scheme") ?? "nil")'")
             print("\(logTag): 🔍 Using scheme: '\(customScheme)'")
@@ -577,6 +586,16 @@ class osrsPageHtmlBuilder {
                     html, body, .mw-parser-output, .mw-content-text {
                         line-height: 1.35 !important;
                     }
+                    html, body {
+                        background-color: var(--body-main, #e2dbc8) !important;
+                        color: var(--text-color, #000000) !important;
+                    }
+                    html.theme-osrs-dark,
+                    html.theme-osrs-dark body,
+                    body.theme-osrs-dark {
+                        background-color: var(--body-main, #28221d) !important;
+                        color: var(--text-color, #f4eaea) !important;
+                    }
                     .mw-parser-output p,
                     .mw-parser-output > ul,
                     .mw-parser-output > ol,
@@ -617,6 +636,11 @@ class osrsPageHtmlBuilder {
 
         print("\(logTag): Could not find font in bundle: \(fontName)")
         return nil
+    }
+
+    func loadAssetText(_ assetPath: String) -> String? {
+        guard let url = getBundleAssetURL(for: assetPath) else { return nil }
+        return try? String(contentsOf: url, encoding: .utf8)
     }
 
     private func extractMainTitle(_ title: String) -> String {

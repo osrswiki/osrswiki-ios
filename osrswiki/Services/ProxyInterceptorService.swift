@@ -452,6 +452,34 @@ class ProxyInterceptorService: ObservableObject {
         }
     }
 
+    func copyCachedResponse(
+        from sourcePageId: String,
+        to destinationPageId: String,
+        url: URL,
+        saveGeneration: String
+    ) async -> Data? {
+        guard let localServer else { return nil }
+        return await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .utility).async {
+                let copied = localServer.copyCachedResponse(
+                    from: sourcePageId,
+                    to: destinationPageId,
+                    url: url.absoluteString,
+                    saveGeneration: saveGeneration
+                )
+                continuation.resume(returning: copied?.data)
+            }
+        }
+    }
+
+    func readPaintHTML(pageId: String) -> String? {
+        localServer?.readPaintHTML(pageId: pageId)
+    }
+
+    func writePaintHTML(pageId: String, html: String) {
+        localServer?.writePaintHTML(pageId: pageId, html: html)
+    }
+
     func hasPersistedResponseAsync(
         pageId: String,
         url: URL,

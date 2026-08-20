@@ -245,6 +245,10 @@ struct SavedPagesView: View {
         .refreshable {
             await viewModel.refresh()
         }
+        .osrsPrewarmArticlesWhenVisible(
+            pageURLs: Array(viewModel.savedPages.prefix(8).map(\.url)),
+            isOfflineContentAvailable: true
+        )
     }
 }
 

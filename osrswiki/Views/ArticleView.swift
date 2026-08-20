@@ -430,6 +430,7 @@ private struct ArticleViewContent: View {
     }
 
     private func startPreparedArticleLoad(isReload: Bool) {
+        viewModel.bindSavedCachePageId(savedPageId)
         viewModel.setCollapseTablesEnabled(collapseTablesEnabled && themeManager.collapseTables)
         viewModel.setArticleTextScale(CGFloat(themeManager.articleTextScale))
         viewModel.applyWrapTableCells(themeManager.wrapTableCells)

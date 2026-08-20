@@ -459,6 +459,7 @@ class ArticleViewModel: NSObject, ObservableObject {
     private(set) var snippet_: String?  // Metadata for rich history display
     private(set) var thumbnailUrl_: URL?  // Metadata for rich history display
     let excludeFromHistory: Bool  // Exclude from history tracking (for preview generation)
+    private(set) var savedCachePageId: String?
 
     weak var webView: WKWebView?
     private var adoptedPreRenderedDocument = false
@@ -517,6 +518,92 @@ class ArticleViewModel: NSObject, ObservableObject {
         self.excludeFromHistory = excludeFromHistory
         super.init()
         print("🏗️ ArticleViewModel: Lightweight init completed for '\(pageTitle ?? "unknown")' - heavy loading deferred")
+    }
+
+    func bindSavedCachePageId(_ pageId: String?) {
+        savedCachePageId = pageId
+    }
+
+    private func resolvedSavedCachePageId() -> String? {
+        savedCachePageId ?? currentSavedCachePageIdForArticle()
+    }
+
+    private func readyToPaintHTML(theme: any osrsThemeProtocol) -> String? {
+        guard #available(iOS 17.0, *),
+              let pageId = resolvedSavedCachePageId(),
+              let stored = ProxyInterceptorService.shared.readPaintHTML(pageId: pageId),
+              osrsSavedPaintHtml.isFullDocument(stored)
+        else {
+            return nil
+        }
+        return applyingLivePaintPreferences(stored, theme: theme)
+    }
+
+    private func applyingLivePaintPreferences(_ html: String, theme: any osrsThemeProtocol) -> String {
+        let scale = String(
+            format: "%.3f",
+            locale: Locale(identifier: "en_US_POSIX"),
+            Double(min(max(articleTextScale, 0.85), 1.40))
+        )
+        let chromeClearance = Int(
+            (osrsSearchControlGeometry.compactHeight + osrsOverlayChromeMetrics.pairedEdgeGap + 8).rounded()
+        )
+        let bottomChrome = Int(
+            (osrsOverlayChromeMetrics.floatingBarHeight + osrsOverlayChromeMetrics.pairedEdgeGap + 24).rounded()
+        )
+        return osrsSavedPaintHtml.applyingLivePreferences(
+            html,
+            isDark: theme is osrsDarkTheme,
+            wrapEnabled: wrapTableCellsEnabled,
+            scaleCssValue: scale,
+            chromeClearancePx: chromeClearance,
+            bottomChromePx: bottomChrome,
+            safeAreaTopPx: Int(osrsOverlayChromeMetrics.topInset.rounded()),
+            safeAreaBottomPx: Int(osrsOverlayChromeMetrics.bottomInset.rounded())
+        )
+    }
+
+    private func persistPaintHTML(
+        bodyHTML: String,
+        displayTitle: String,
+        canonicalTitle: String,
+        pageId: String? = nil
+    ) {
+        guard #available(iOS 17.0, *), let pageId = pageId ?? resolvedSavedCachePageId() else { return }
+        let builder = osrsPageHtmlBuilder()
+        var html = builder.buildFullHtmlDocument(
+            title: displayTitle,
+            bodyContent: bodyHTML,
+            theme: osrsLightTheme(),
+            collapseTablesEnabled: collapseTablesEnabled,
+            includeAssetLinks: true,
+            articleTextScale: articleTextScale,
+            wrapTableCellsEnabled: wrapTableCellsEnabled,
+            canonicalTitle: canonicalTitle,
+            inlineFirstPaintCss: true,
+            bakeChromeInsets: false
+        )
+        html = osrsSavedPaintHtml.inlineLinkedFirstPaintCss(html) { path in
+            builder.loadAssetText(path)
+        }
+        ProxyInterceptorService.shared.writePaintHTML(pageId: pageId, html: html)
+    }
+
+    private func lazyMaterializePaintHTMLIfNeeded(
+        bodyHTML: String,
+        displayTitle: String,
+        canonicalTitle: String,
+        theme: any osrsThemeProtocol
+    ) {
+        guard #available(iOS 17.0, *), let pageId = resolvedSavedCachePageId() else { return }
+        if ProxyInterceptorService.shared.readPaintHTML(pageId: pageId) == nil {
+            persistPaintHTML(
+                bodyHTML: bodyHTML,
+                displayTitle: displayTitle,
+                canonicalTitle: canonicalTitle
+            )
+        }
+        _ = theme
     }
 
     func loadArticleDestination(_ destination: ArticleDestination, theme: any osrsThemeProtocol) {
@@ -1045,11 +1132,17 @@ class ArticleViewModel: NSObject, ObservableObject {
             return
         }
         let loadGeneration = beginArticleLoad()
+        let skipPaintOpen = isReload || forceNextDocumentReload
+        let paintHTML = skipPaintOpen ? nil : readyToPaintHTML(theme: theme)
+        let paintOpenStarted = CFAbsoluteTimeGetCurrent()
 
         // Android parity: Use blank overlay approach for all reloads (manual and automatic)
         if isReload {
             isRefreshing = true
             loadingProgressText = "Refreshing page..."
+        } else if paintHTML != nil {
+            isLoading = false
+            loadingProgressText = nil
         } else {
             isLoading = true
         }
@@ -1154,8 +1247,6 @@ class ArticleViewModel: NSObject, ObservableObject {
         forceNextDocumentReload = false
         articlePipelineLoads[loadGeneration] = (documentRequest.identity, Date())
 
-        // Foreground opens join any matching visible-row preparation instead of repeating
-        // fetch/decode/build work. The coordinator keeps every non-WebKit phase cancellable.
         currentLoadTask = Task { [weak self] in
             guard let self = self else { return }
             do {
@@ -1168,6 +1259,18 @@ class ArticleViewModel: NSObject, ObservableObject {
                     throw NetworkError.noConnection
                 }
 #endif
+                if !shouldForceDocumentReload,
+                   let paintHTML {
+                    let elapsedMs = Int((CFAbsoluteTimeGetCurrent() - paintOpenStarted) * 1000)
+                    print("⚡ ArticlePaintOpen: persisted snapshot chars=\(paintHTML.count) elapsedMs=\(elapsedMs)")
+                    await self.loadCustomHtml(paintHTML, theme: theme, generation: loadGeneration)
+                    await MainActor.run {
+                        if self.isCurrentLoad(loadGeneration) {
+                            self.checkIfPageIsSaved()
+                        }
+                    }
+                    return
+                }
                 if shouldForceDocumentReload {
                     await osrsArticleDocumentCoordinator.shared.invalidate(documentRequest.identity)
                 }
@@ -1193,6 +1296,12 @@ class ArticleViewModel: NSObject, ObservableObject {
                     return
                 }
                 await self.loadCustomHtml(document.html, theme: theme, generation: loadGeneration)
+                self.lazyMaterializePaintHTMLIfNeeded(
+                    bodyHTML: payload.htmlContent,
+                    displayTitle: payload.displayTitle ?? payload.title,
+                    canonicalTitle: payload.title,
+                    theme: theme
+                )
 
                 // Check if this page is already saved
                 await MainActor.run {
@@ -4105,7 +4214,9 @@ extension ArticleViewModel: WKNavigationDelegate {
                                 throw NetworkError.invalidResponse
                             }
                             print("📡 ArticleViewModel: Persisting article HTML for explicit offline save")
-                            let cachedPayload = await osrsArticleDocumentCoordinator.shared.cachedPayload(for: documentRequest)
+                            let cachedPayload = refreshExistingSnapshot
+                                ? nil
+                                : await osrsArticleDocumentCoordinator.shared.cachedPayload(for: documentRequest)
                             let response: osrsParseResponse
                             let parseData: Data
                             if let cachedPayload {
@@ -4128,6 +4239,12 @@ extension ArticleViewModel: WKNavigationDelegate {
                                 response = try JSONDecoder().decode(osrsParseResponse.self, from: parseData)
                             }
                             settledRevisionId = response.parse.revid
+                            persistPaintHTML(
+                                bodyHTML: response.parse.text,
+                                displayTitle: response.parse.displaytitle ?? cleanTitle,
+                                canonicalTitle: response.parse.title ?? cleanTitle,
+                                pageId: stagingPageId
+                            )
                             if !(await ProxyInterceptorService.shared.hasPersistedResponseAsync(
                                 pageId: stagingPageId,
                                 url: apiURL,
@@ -4161,7 +4278,8 @@ extension ArticleViewModel: WKNavigationDelegate {
                                 requiredResourceURLs = try await downloadBoundedOfflineResources(
                                     pageId: stagingPageId,
                                     htmlContent: response.parse.text,
-                                    saveGeneration: saveGeneration
+                                    saveGeneration: saveGeneration,
+                                    priorPageId: savedPage.offlineLocalPath
                                 )
                             } catch {
                                 print("⚠️ ArticleViewModel: Offline artwork settlement incomplete: \(error)")
@@ -4315,9 +4433,36 @@ extension ArticleViewModel: WKNavigationDelegate {
     private func downloadBoundedOfflineResources(
         pageId: String,
         htmlContent: String,
-        saveGeneration: String
+        saveGeneration: String,
+        priorPageId: String? = nil
     ) async throws -> [URL] {
         print("🚀 ArticleViewModel: Starting bounded offline resource download for pageId: \(pageId)")
+        final class osrsReuseCounts: @unchecked Sendable {
+            private let lock = NSLock()
+            private var reusedValue = 0
+            private var fetchedValue = 0
+            func addReused() {
+                lock.lock()
+                reusedValue += 1
+                lock.unlock()
+            }
+            func addFetched() {
+                lock.lock()
+                fetchedValue += 1
+                lock.unlock()
+            }
+            var reused: Int {
+                lock.lock()
+                defer { lock.unlock() }
+                return reusedValue
+            }
+            var fetched: Int {
+                lock.lock()
+                defer { lock.unlock() }
+                return fetchedValue
+            }
+        }
+        let reuseCounts = osrsReuseCounts()
         let settledURLs = try await osrsOfflineArticleResourceSettlement.settle(
             html: htmlContent,
             maximumConcurrency: 6
@@ -4329,10 +4474,21 @@ extension ArticleViewModel: WKNavigationDelegate {
             ) {
                 return Data()
             }
+            if let priorPageId,
+               let copied = await ProxyInterceptorService.shared.copyCachedResponse(
+                from: priorPageId,
+                to: pageId,
+                url: url,
+                saveGeneration: saveGeneration
+               ) {
+                reuseCounts.addReused()
+                return copied
+            }
             let (data, response) = try await NetworkManager.shared.performExplicitOfflineDataRequest(
                 url: url,
                 retryCount: 1
             )
+            reuseCounts.addFetched()
             if await ProxyInterceptorService.shared.hasPersistedResponseAsync(
                 pageId: pageId,
                 url: url,
@@ -4352,7 +4508,7 @@ extension ArticleViewModel: WKNavigationDelegate {
             }
             return data
         }
-        print("✅ ArticleViewModel: Settled \(settledURLs.count) required offline images")
+        print("✅ ArticleViewModel: Settled \(settledURLs.count) required offline images reused=\(reuseCounts.reused) fetched=\(reuseCounts.fetched)")
         return settledURLs
     }
 

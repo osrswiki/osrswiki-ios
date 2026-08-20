@@ -165,7 +165,10 @@ final class OfflineArticleResourceSettlementTests: XCTestCase {
 
     func testSettlementNeverExceedsTwoConcurrentDownloads() async throws {
         let probe = OfflineConcurrencyProbe()
-        _ = try await osrsOfflineArticleResourceSettlement.settle(html: html) { url in
+        _ = try await osrsOfflineArticleResourceSettlement.settle(
+            html: html,
+            maximumConcurrency: 2
+        ) { url in
             try await probe.download(url)
             return nil
         }

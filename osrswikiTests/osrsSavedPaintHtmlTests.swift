@@ -1,0 +1,119 @@
+import XCTest
+@testable import osrswiki
+
+final class osrsSavedPaintHtmlTests: XCTestCase {
+    func testDetectsFullDocumentAndExtractsBody() {
+        let html = """
+        <!DOCTYPE html>
+        <html>
+        <head><title>Varrock</title></head>
+        <body>
+        <h1 class="page-header">Varrock</h1>
+        <p>The history section.</p>
+        </body>
+        </html>
+        """
+        XCTAssertTrue(osrsSavedPaintHtml.isFullDocument(html))
+        let body = osrsSavedPaintHtml.extractBodyForToc(html)
+        XCTAssertFalse(body.contains("page-header"))
+        XCTAssertTrue(body.contains("The history section."))
+        XCTAssertFalse(osrsSavedPaintHtml.isFullDocument("<p>body only</p>"))
+    }
+
+    func testAppliesLivePreferencesAndInlinesStylesheets() {
+        let html = """
+        <html class=""><head>
+        <link rel="stylesheet" href="app-assets://localhost/styles/themes.css">
+        <style id="osrs-article-reader-preferences">html:root { --osrs-article-user-text-scale: 1.000; }</style>
+        </head><body class="">hello</body>
+        """
+        let inlined = osrsSavedPaintHtml.inlineLinkedFirstPaintCss(html) { path in
+            XCTAssertEqual(path, "styles/themes.css")
+            return "body{color:red}"
+        }
+        XCTAssertTrue(inlined.contains("data-osrs-inline-css=\"styles/themes.css\""))
+        XCTAssertTrue(inlined.contains("body{color:red}"))
+        XCTAssertFalse(inlined.contains("app-assets://localhost/styles/themes.css"))
+
+        let live = osrsSavedPaintHtml.applyingLivePreferences(
+            inlined,
+            isDark: true,
+            wrapEnabled: true,
+            scaleCssValue: "1.150",
+            chromeClearancePx: 12,
+            bottomChromePx: 24,
+            safeAreaTopPx: 8,
+            safeAreaBottomPx: 4
+        )
+        XCTAssertTrue(live.contains("theme-osrs-dark"))
+        XCTAssertTrue(live.contains("osrs-table-cells-wrap"))
+        XCTAssertTrue(live.contains("--osrs-article-user-text-scale: 1.150"))
+        XCTAssertTrue(live.contains("osrs-article-live-chrome"))
+        XCTAssertTrue(live.contains("--osrs-article-chrome-clearance: 12px"))
+    }
+
+    func testFirstPaintStyleIncludesBodyColorAndBackgroundFallbacks() {
+        let style = osrsPageHtmlBuilder.articleFirstPaintStyle(
+            chromeClearancePx: 0,
+            safeAreaTopPx: 0,
+            safeAreaBottomPx: 0
+        )
+        XCTAssertTrue(style.contains("background-color: var(--body-main, #e2dbc8)"))
+        XCTAssertTrue(style.contains("color: var(--text-color, #000000)"))
+        XCTAssertTrue(style.contains("body.theme-osrs-dark"))
+        XCTAssertTrue(style.contains("#28221d"))
+    }
+
+    func testCopyCachedResponseReusesPriorGenerationBytes() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let server = LocalHTTPServer(port: 0, cacheDirectory: directory)
+        let url = try XCTUnwrap(URL(string: "https://oldschool.runescape.wiki/images/old.png"))
+        let response = try XCTUnwrap(HTTPURLResponse(
+            url: url,
+            statusCode: 200,
+            httpVersion: "HTTP/1.1",
+            headerFields: ["Content-Type": "image/png"]
+        ))
+        let bytes = Data("prior-generation-bytes".utf8)
+        XCTAssertTrue(server.cacheResponseDirect(
+            pageId: "old-gen",
+            url: url.absoluteString,
+            data: bytes,
+            response: response
+        ))
+        let copied = server.copyCachedResponse(
+            from: "old-gen",
+            to: "new-gen",
+            url: url.absoluteString,
+            saveGeneration: "g2"
+        )
+        XCTAssertEqual(copied?.data, bytes)
+        XCTAssertEqual(
+            server.getCachedResponseForAsset(url: url.absoluteString, pageId: "new-gen")?.data,
+            bytes
+        )
+    }
+
+    func testPaintStoreRoundTripsHTML() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try osrsSavedPaintStore.write(pageId: "page-1", html: "<html>saved</html>", cacheDirectory: directory)
+        XCTAssertEqual(osrsSavedPaintStore.read(pageId: "page-1", cacheDirectory: directory), "<html>saved</html>")
+        osrsSavedPaintStore.remove(pageId: "page-1", cacheDirectory: directory)
+        XCTAssertNil(osrsSavedPaintStore.read(pageId: "page-1", cacheDirectory: directory))
+    }
+
+    func testAssetReuseKeepsUnchangedUrls() throws {
+        let old = try XCTUnwrap(URL(string: "https://wiki/old.png"))
+        let new = try XCTUnwrap(URL(string: "https://wiki/new.png"))
+        let partition = osrsSavedPageAssetReuse.partition(
+            requiredUrls: [old, new, old],
+            priorUrls: [old]
+        )
+        XCTAssertEqual(partition.reusedUrls, [old])
+        XCTAssertEqual(partition.fetchUrls, [new])
+    }
+}

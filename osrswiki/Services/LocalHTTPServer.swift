@@ -621,6 +621,46 @@ final class LocalHTTPServer: @unchecked Sendable {
         
         print("✅ LocalHTTPServer: Copied \(copiedCount) cache entries from browsing to saved page")
     }
+
+    @discardableResult
+    func copyCachedResponse(
+        from sourcePageId: String,
+        to destinationPageId: String,
+        url: String,
+        saveGeneration: String
+    ) -> CachedHTTPResponse? {
+        let sourceKey = Self.cacheKeyForRequest(pageId: sourcePageId, method: "GET", url: url)
+        guard let source = getCachedResponse(cacheKey: sourceKey) ?? loadCachedResponseFromDisk(cacheKey: sourceKey) else {
+            return nil
+        }
+        let destinationKey = Self.cacheKeyForRequest(pageId: destinationPageId, method: "GET", url: url)
+        let copied = CachedHTTPResponse(
+            url: source.url,
+            data: source.data,
+            timestamp: Date(),
+            pageId: destinationPageId,
+            statusCode: source.statusCode,
+            headers: source.headers,
+            saveGeneration: saveGeneration
+        )
+        guard saveCachedResponseToDisk(response: copied, cacheKey: destinationKey) else {
+            return nil
+        }
+        cachedResponses.set(copied, forKey: destinationKey)
+        return copied
+    }
+
+    func writePaintHTML(pageId: String, html: String) {
+        try? osrsSavedPaintStore.write(pageId: pageId, html: html, cacheDirectory: cacheDirectory)
+    }
+
+    func readPaintHTML(pageId: String) -> String? {
+        osrsSavedPaintStore.read(pageId: pageId, cacheDirectory: cacheDirectory)
+    }
+
+    func removePaintHTML(pageId: String) {
+        osrsSavedPaintStore.remove(pageId: pageId, cacheDirectory: cacheDirectory)
+    }
     
     /// Get cached response for external asset requests (used by IOSAssetHandler)
     func getCachedResponseForAsset(url: String, pageId: String) -> CachedHTTPResponse? {
@@ -888,6 +928,7 @@ final class LocalHTTPServer: @unchecked Sendable {
                     print("❌ LocalHTTPServer: Failed to remove page-scoped cache file")
                 }
             }
+            osrsSavedPaintStore.remove(pageId: pageId, cacheDirectory: cacheDirectory)
         }
     }
 
