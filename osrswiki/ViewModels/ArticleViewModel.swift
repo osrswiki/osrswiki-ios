@@ -2269,6 +2269,8 @@ class ArticleViewModel: NSObject, ObservableObject {
             "startup.js",
             "tablesort.min.js",
             "tablesort_init.js",
+            "gadget_calc_core.js",
+            "osrs_calculator_runtime.js",
             "article_tools.js",
             "collapsible_content.js",
             "infobox_switcher_bootstrap.js",
@@ -2588,6 +2590,8 @@ class ArticleViewModel: NSObject, ObservableObject {
             "startup.js",
             "js/tablesort.min.js",
             "js/tablesort_init.js",
+            "js/mediawiki/gadget_calc_core.js",
+            "web/osrs_calculator_runtime.js",
             "web/article_tools.js",
             "web/collapsible_content.js",
             "web/infobox_switcher_bootstrap.js",
@@ -3375,6 +3379,50 @@ extension ArticleViewModel: WKNavigationDelegate {
         errorMessage = nil
     }
 
+    private func osrsLogCalculatorProbe(in webView: WKWebView) {
+        let script = """
+        (function() {
+            if (!document.querySelector('pre.jcConfig')) { return null; }
+            var form = document.querySelector('[id$="Form"], #form');
+            return JSON.stringify({
+                coreImpl: !!window.__osrsCalcCoreImplemented,
+                coreRan: !!window.__osrsCalcCoreFactoryRan,
+                coreAttr: document.documentElement.getAttribute('data-osrs-calc-core'),
+                jquery: typeof (window.jQuery || window.$),
+                OO: !!(window.OO && OO.ui && OO.ui.FieldsetLayout),
+                widgets: !!(window.mw && mw.widgets && mw.widgets.TitleInputWidget),
+                rs: !!(window.rs && typeof rs.hasLocalStorage === 'function'),
+                bodyContent: !!document.getElementById('bodyContent'),
+                jc: document.querySelectorAll('pre.jcConfig').length,
+                waiting: !!(form && /please wait/i.test(form.textContent || '')),
+                formId: form ? form.id : null,
+                patched: !!(window.jQuery && jQuery.ajax && jQuery.ajax.__osrsCalculatorPatched),
+                resultLen: (function() {
+                    var node = document.querySelector('[id$="Result"]');
+                    return node ? (node.textContent || '').trim().length : 0;
+                })(),
+                resultPreview: (function() {
+                    var node = document.querySelector('[id$="Result"]');
+                    return node ? String(node.textContent || '').replace(/\\s+/g, ' ').trim().slice(0, 160) : '';
+                })(),
+                loader: (window.mw && mw.loader && mw.loader.getState) ? {
+                    jquery: mw.loader.getState('jquery'),
+                    oojs: mw.loader.getState('oojs'),
+                    ooui: mw.loader.getState('oojs-ui-core'),
+                    widgets: mw.loader.getState('mediawiki.widgets'),
+                    calc: mw.loader.getState('ext.gadget.calc-core')
+                } : null,
+                errors: window.__osrsCalcErrors || []
+            });
+        })();
+        """
+        DispatchQueue.main.asyncAfter(deadline: .now() + 4) { [weak webView] in
+            webView?.evaluateJavaScript(script) { result, error in
+                NSLog("osrsCalcProbe: %@ error=%@", String(describing: result), String(describing: error))
+            }
+        }
+    }
+
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         let timeString = DateFormatter.timeFormatter.string(from: Date())
         print("📊 [\(timeString)] 🌐 WEBKIT NAVIGATION FINISHED: Basic HTML loaded")
@@ -3392,6 +3440,7 @@ extension ArticleViewModel: WKNavigationDelegate {
             return
         }
         clearBoundWebKitNavigation(navigation)
+        osrsLogCalculatorProbe(in: webView)
         startDeferredMapPreloadAfterWebKitReady(generation: generation, webView: webView)
         if let pipeline = articlePipelineLoads.removeValue(forKey: generation) {
             let elapsed = Date().timeIntervalSince(pipeline.startedAt)
@@ -4023,11 +4072,11 @@ extension ArticleViewModel: WKNavigationDelegate {
                             }
                             explicitOfflineSaveToken = offlineSaveToken
 
-                            guard let apiURL = Self.makeParseRequestURL(pageTitle: cleanTitle) else {
+                            let documentRequest = osrsArticleDocumentRequest(pageURL: pageUrl, pageTitle: cleanTitle)
+                            guard let apiURL = documentRequest.parseRequestURL ?? Self.makeParseRequestURL(pageTitle: cleanTitle) else {
                                 throw NetworkError.invalidResponse
                             }
                             print("📡 ArticleViewModel: Persisting article HTML for explicit offline save")
-                            let documentRequest = osrsArticleDocumentRequest(pageURL: pageUrl, pageTitle: cleanTitle)
                             let cachedPayload = await osrsArticleDocumentCoordinator.shared.cachedPayload(for: documentRequest)
                             let response: osrsParseResponse
                             let parseData: Data
@@ -4072,6 +4121,11 @@ extension ArticleViewModel: WKNavigationDelegate {
                                     throw osrsOfflineResourceSettlementError.requiredResourcesFailed(count: 1)
                                 }
                             }
+
+                            await osrsCalculatorSaveWarmer.warmDefaultParse(
+                                from: response.parse.text,
+                                pageTitle: documentRequest.requestedTitle
+                            )
 
                             let requiredResourceURLs: [URL]
                             do {

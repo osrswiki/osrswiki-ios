@@ -285,7 +285,8 @@ class osrsPageContentLoader {
             theme: theme,
             collapseTablesEnabled: collapseTablesEnabled,
             articleTextScale: articleTextScale,
-            wrapTableCellsEnabled: wrapTableCellsEnabled
+            wrapTableCellsEnabled: wrapTableCellsEnabled,
+            canonicalTitle: pageContent.parseResult.title
         )
     }
 }

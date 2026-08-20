@@ -511,6 +511,7 @@ final class osrsWebKitBridgeHardeningTests: XCTestCase {
         XCTAssertTrue(osrsWebKitSecurityPolicy.productionHandlerNames.contains("linkHandler"))
         XCTAssertTrue(osrsWebKitSecurityPolicy.productionHandlerNames.contains("renderTimeline"))
         XCTAssertTrue(osrsWebKitSecurityPolicy.productionHandlerNames.contains("osrsYouTube"))
+        XCTAssertTrue(osrsWebKitSecurityPolicy.productionHandlerNames.contains("osrsCalculatorApi"))
 
         XCTAssertFalse(osrsWebKitSecurityPolicy.productionHandlerNames.contains("safariDebugger"))
         XCTAssertFalse(osrsWebKitSecurityPolicy.isWebViewInspectionEnabled)

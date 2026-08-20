@@ -144,6 +144,18 @@ class IOSAssetHandler: NSObject, WKURLSchemeHandler {
                 return
             }
 
+            if osrsWikiWebViewUrl.shouldProxy(url) {
+                let wikiURL = osrsWikiWebViewUrl.rewriteToWiki(url)
+                print("🌐 IOSAssetHandler: Proxying wiki calculator/API request: \(wikiURL.absoluteString)")
+                self.fetchAndHandleExternalResource(
+                    urlSchemeTask: urlSchemeTask,
+                    originalURL: wikiURL.absoluteString,
+                    shouldSave: false,
+                    pageId: nil
+                )
+                return
+            }
+
             if osrsArticleLinkRouter.isFloorNumberingSettingsURL(url) {
                 DispatchQueue.main.async {
                     NotificationCenter.default.post(
@@ -633,8 +645,11 @@ class IOSAssetHandler: NSObject, WKURLSchemeHandler {
             return true
         }
         
-        // MediaWiki resources (load.php, etc.)
-        if assetPath.hasSuffix(".php") || assetPath.contains("load.php") {
+        // MediaWiki resources (load.php, api.php) and wiki CORS proxy (hiscores)
+        if assetPath.hasSuffix(".php") ||
+            assetPath.contains("load.php") ||
+            assetPath.hasPrefix("cors/") ||
+            assetPath.contains("/cors/") {
             return true
         }
         
@@ -740,7 +755,9 @@ class IOSAssetHandler: NSObject, WKURLSchemeHandler {
             guard let self = self else { return }
             
             do {
-                let (data, response) = try await NetworkManager.shared.performDataRequest(url: url, retryCount: 2)
+                let fetched = try await self.osrsFetchWikiResource(urlSchemeTask: urlSchemeTask, url: url, originalURL: originalURL)
+                let data = fetched.data
+                let response = fetched.response
                 
                 guard let httpResponse = response as? HTTPURLResponse else {
                     print("❌ IOSAssetHandler: Invalid response type for \(originalURL)")
@@ -772,11 +789,30 @@ class IOSAssetHandler: NSObject, WKURLSchemeHandler {
                 // captured session token. A second handler-side write could outlive this WK task
                 // and resurrect a namespace after the article disappears.
                 print("🔍 [ENHANCED_DIAGNOSTICS] Persistence owned by request routing; handler direct write disabled (save=\(shouldSave), page=\(pageId ?? "none"))")
+
+                guard let schemeResponse = self.osrsSchemeMatchedResponse(
+                    for: urlSchemeTask,
+                    upstream: httpResponse,
+                    data: data
+                ) else {
+                    print("❌ IOSAssetHandler: Failed to wrap wiki proxy response for \(originalURL)")
+                    await MainActor.run {
+                        self.completeTask(urlSchemeTask, withError: NSError(domain: "IOSAssetHandler", code: 500, userInfo: nil))
+                    }
+                    return
+                }
                 
                 // Serve to WebView
                 await MainActor.run {
-                    self.completeTask(urlSchemeTask, withResponse: httpResponse, data: data)
+                    self.completeTask(urlSchemeTask, withResponse: schemeResponse, data: data)
                     print("📱 IOSAssetHandler: Served external resource \(originalURL) (\(data.count) bytes)")
+                    NSLog(
+                        "osrsCalcProxy: status=%d bytes=%d request=%@ wiki=%@",
+                        httpResponse.statusCode,
+                        data.count,
+                        urlSchemeTask.request.url?.absoluteString ?? "",
+                        originalURL
+                    )
                 }
                 
             } catch {
@@ -787,7 +823,100 @@ class IOSAssetHandler: NSObject, WKURLSchemeHandler {
             }
         }
     }
+
+    private func osrsSchemeMatchedResponse(
+        for urlSchemeTask: WKURLSchemeTask,
+        upstream: HTTPURLResponse,
+        data: Data
+    ) -> HTTPURLResponse? {
+        guard let requestUrl = urlSchemeTask.request.url else {
+            return nil
+        }
+        var headers: [String: String] = [:]
+        if let contentType = upstream.value(forHTTPHeaderField: "Content-Type"), !contentType.isEmpty {
+            headers["Content-Type"] = contentType
+        } else if requestUrl.path.hasSuffix("/load.php") {
+            headers["Content-Type"] = "text/javascript; charset=utf-8"
+        } else if requestUrl.path.hasSuffix("/api.php") {
+            headers["Content-Type"] = "application/json; charset=utf-8"
+        } else {
+            headers["Content-Type"] = upstream.mimeType ?? "application/octet-stream"
+        }
+        headers["Content-Length"] = "\(data.count)"
+        return HTTPURLResponse(
+            url: requestUrl,
+            statusCode: upstream.statusCode,
+            httpVersion: "HTTP/1.1",
+            headerFields: headers
+        )
+    }
     
+    private func osrsFetchWikiResource(
+        urlSchemeTask: WKURLSchemeTask,
+        url: URL,
+        originalURL: String
+    ) async throws -> (data: Data, response: URLResponse) {
+        let method = (urlSchemeTask.request.httpMethod ?? "GET").uppercased()
+        let requestBody = urlSchemeTask.request.httpBody
+        let cacheBody = String(data: requestBody ?? Data(), encoding: .utf8) ?? ""
+        let isCacheableCalculatorTraffic = originalURL.contains("/api.php")
+            || originalURL.contains("/load.php")
+        let isCalculatorTraffic = isCacheableCalculatorTraffic || originalURL.contains("/cors/")
+        if isCacheableCalculatorTraffic,
+           let cached = osrsCalculatorParseCache.read(method: method, url: originalURL, body: cacheBody),
+           !cached.isEmpty,
+           let cachedResponse = HTTPURLResponse(
+            url: url,
+            statusCode: 200,
+            httpVersion: "HTTP/1.1",
+            headerFields: ["Content-Type": Self.osrsCalculatorCachedContentType(for: originalURL)]
+           ) {
+            return (cached, cachedResponse)
+        }
+        if osrsTestEnvironment.forcesNetworkOfflineForUITests {
+            throw NSError(
+                domain: "osrsCalculatorProxy",
+                code: -1009,
+                userInfo: [NSLocalizedDescriptionKey: "Forced offline: no cached calculator resource"]
+            )
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = method
+        request.setValue("OSRSWiki-iOS-Calculator", forHTTPHeaderField: "User-Agent")
+        request.setValue("*/*", forHTTPHeaderField: "Accept")
+        if method == "POST" {
+            request.httpBody = requestBody
+            request.setValue(
+                urlSchemeTask.request.value(forHTTPHeaderField: "Content-Type")
+                    ?? "application/x-www-form-urlencoded; charset=UTF-8",
+                forHTTPHeaderField: "Content-Type"
+            )
+        }
+        let (data, response) = try await URLSession.shared.data(for: request)
+        if let http = response as? HTTPURLResponse, http.statusCode >= 400 {
+            throw NSError(
+                domain: "osrsCalculatorProxy",
+                code: http.statusCode,
+                userInfo: [NSLocalizedDescriptionKey: "Calculator proxy HTTP \(http.statusCode)"]
+            )
+        }
+        if isCacheableCalculatorTraffic, !data.isEmpty {
+            osrsCalculatorParseCache.write(method: method, url: originalURL, body: cacheBody, data: data)
+        }
+        return (data, response)
+    }
+
+    private static func osrsCalculatorCachedContentType(for url: String) -> String {
+        if url.contains("/load.php") {
+            return "text/javascript; charset=utf-8"
+        }
+        if url.contains("/api.php") {
+            return "application/json; charset=utf-8"
+        }
+        return "text/plain; charset=utf-8"
+    }
+
     /// Reconstruct original URL from asset path and request context
     private func reconstructOriginalURL(from assetPath: String, originalRequest: URLRequest) -> String {
         // If this is a query-based URL, preserve query parameters
@@ -955,7 +1084,9 @@ class IOSAssetHandler: NSObject, WKURLSchemeHandler {
             guard let self = self else { return }
             
             do {
-                let (data, response) = try await NetworkManager.shared.performDataRequest(url: url, retryCount: 2)
+                let fetched = try await self.osrsFetchWikiResource(urlSchemeTask: urlSchemeTask, url: url, originalURL: originalURL)
+                let data = fetched.data
+                let response = fetched.response
                 
                 guard let httpResponse = response as? HTTPURLResponse else {
                     print("❌ IOSAssetHandler: Invalid response type for MediaWiki resource: \(originalURL)")
@@ -2045,9 +2176,13 @@ struct ArticleWebView: UIViewRepresentable {
         func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
             guard let body = message.body as? [String: Any] else { return }
             guard osrsWebKitSecurityPolicy.canAcceptScriptMessage(name: message.name, frameInfo: message.frameInfo) else {
-#if DEBUG
-                print("⚠️ ArticleWebView.Coordinator: Rejected script message '\(message.name)' from untrusted frame or origin")
-#endif
+                NSLog(
+                    "osrsCalcApi: rejected name=%@ main=%@ proto=%@ host=%@",
+                    message.name,
+                    String(message.frameInfo.isMainFrame),
+                    message.frameInfo.securityOrigin.protocol,
+                    message.frameInfo.securityOrigin.host
+                )
                 return
             }
             
@@ -2064,11 +2199,44 @@ struct ArticleWebView: UIViewRepresentable {
                 if let videoId = body["videoId"] as? String {
                     parent.viewModel.playYouTubeVideo(id: videoId)
                 }
+            case "osrsCalculatorApi":
+                handleCalculatorApiMessage(body)
             case "safariDebugger":
                 handleSafariDebuggerMessage(body)
             default:
                 break
             }
+        }
+
+        private func handleCalculatorApiMessage(_ body: [String: Any]) {
+            let requestId = body["id"] as? String ?? ""
+            let method = body["method"] as? String ?? "GET"
+            let urlString = body["url"] as? String ?? ""
+            NSLog("osrsCalcApi: id=%@ method=%@ url=%@", requestId, method, urlString)
+            Task {
+                let result = await osrsCalculatorWikiClient.request(
+                    method: method,
+                    urlString: urlString,
+                    data: body["data"]
+                )
+                await MainActor.run {
+                    self.completeCalculatorApi(id: requestId, result: result)
+                }
+            }
+        }
+
+        private func completeCalculatorApi(id: String, result: [String: Any]) {
+            guard let webView else { return }
+            let envelope: [String: Any] = ["id": id, "result": result]
+            guard let data = try? JSONSerialization.data(withJSONObject: envelope),
+                  let json = String(data: data, encoding: .utf8) else {
+                return
+            }
+            let ok = result["ok"] as? Bool ?? false
+            let cached = result["cached"] as? Bool ?? false
+            let body = result["body"] as? String ?? ""
+            NSLog("osrsCalcApi: complete id=%@ ok=%@ cached=%@ bytes=%d", id, String(ok), String(cached), body.count)
+            webView.evaluateJavaScript("window.osrsCalculatorApiComplete(\(json));", completionHandler: nil)
         }
         
         private func handleClipboardMessage(_ body: [String: Any]) {

@@ -352,7 +352,9 @@
     }
 
     function initialize() {
-        document.querySelectorAll('pre.jcConfig').forEach(setupCalculator);
+        // Calculator forms are owned by ext.gadget.calc-core. Replacing them here
+        // broke every non-combat calculator. Layout wrapping lives in
+        // osrs_calculator_runtime.js.
         document.querySelectorAll('table.mmg-table.mmg-isperkill').forEach(setupMoneyMakingControl);
     }
 

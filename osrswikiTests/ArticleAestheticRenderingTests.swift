@@ -92,8 +92,9 @@ final class ArticleAestheticRenderingTests: XCTestCase {
         )
     }
 
-    func testJcConfigCombatCalculatorRendersUsableControls() async throws {
+    func testJcConfigCombatCalculatorLeavesWikiFormForCalcCore() async throws {
         let articleTools = try readAsset("Assets/web/article_tools.js")
+        let runtime = try readAsset("Assets/web/osrs_calculator_runtime.js")
         let html = """
         <!doctype html>
         <html>
@@ -102,18 +103,13 @@ final class ArticleAestheticRenderingTests: XCTestCase {
         template = Calculator:Combat level/Template
         form = combatCalcForm
         result = combatCalcResult
-        param  = playername|Player name||hs|attack,1,1;strength,3,1;ranged,5,1;magic,7,1;defence,2,1;hitpoints,4,1;prayer,6,1
         param = attack|Attack|1|int|1-99
         param = strength|Strength|1|int|1-99
-        param = ranged|Ranged|1|int|1-99
-        param = magic|Magic|1|int|1-99
-        param = defence|Defence|1|int|1-99
-        param = hitpoints|Hitpoints|10|int|9-99
-        param = prayer|Prayer|1|int|1-99
         autosubmit = enabled
         </pre>
         <div id="combatCalcForm">Please wait for the form to load. If it does not load, try refreshing the page.</div>
         <div id="combatCalcResult"></div>
+        <script>\(runtime)</script>
         <script>\(articleTools)</script>
         </body>
         </html>
@@ -123,19 +119,21 @@ final class ArticleAestheticRenderingTests: XCTestCase {
         let result = try await evaluate("""
         (() => {
             const form = document.getElementById('combatCalcForm');
+            const layout = document.querySelector('.osrs-calculator-layout');
+            const result = document.getElementById('combatCalcResult');
             return {
-                hasPlaceholder: document.body.innerText.includes('Please wait for the form to load'),
-                hasAttackInput: !!document.querySelector('[data-osrs-calculator-param="attack"] input'),
-                incrementButtons: document.querySelectorAll('[data-osrs-calculator-action="increment"]').length,
-                resultText: document.getElementById('combatCalcResult')?.innerText || ''
+                hasPlaceholder: (form?.innerText || '').includes('Please wait for the form to load'),
+                hijacked: !!document.querySelector('[data-osrs-calculator-param]'),
+                hasLayout: !!layout,
+                resultInsideLayout: !!(layout && result && layout.contains(result))
             };
         })()
         """)
 
-        XCTAssertEqual(result["hasPlaceholder"] as? Bool, false)
-        XCTAssertEqual(result["hasAttackInput"] as? Bool, true)
-        XCTAssertGreaterThanOrEqual(result["incrementButtons"] as? Int ?? 0, 7)
-        XCTAssertTrue((result["resultText"] as? String ?? "").contains("Combat level"))
+        XCTAssertEqual(result["hasPlaceholder"] as? Bool, true)
+        XCTAssertEqual(result["hijacked"] as? Bool, false)
+        XCTAssertEqual(result["hasLayout"] as? Bool, true)
+        XCTAssertEqual(result["resultInsideLayout"] as? Bool, true)
     }
 
     func testMoneyMakingGuideRateControlUpdatesVisibleValues() async throws {
@@ -198,7 +196,7 @@ final class ArticleAestheticRenderingTests: XCTestCase {
     }
 
     func testCalculatorTemplatesAndControlsUseResponsiveThemedLayout() async throws {
-        let articleTools = try readAsset("Assets/web/article_tools.js")
+        let runtime = try readAsset("Assets/web/osrs_calculator_runtime.js")
         let fixesCss = try readAsset("Assets/styles/fixes.css")
         let html = """
         <!doctype html>
@@ -239,7 +237,7 @@ final class ArticleAestheticRenderingTests: XCTestCase {
         param = hitpoints|Hitpoints|10|int|9-99
         </pre>
         <table class="calculator-host"><tbody><tr><td><div id="combatCalcForm">Please wait for the form to load.</div><div id="combatCalcResult"></div></td></tr></tbody></table>
-        <script>\(articleTools)</script>
+        <script>\(runtime)</script>
         </body>
         </html>
         """
@@ -250,10 +248,6 @@ final class ArticleAestheticRenderingTests: XCTestCase {
             const layout = document.querySelector('.osrs-calculator-layout');
             const templates = document.querySelector('.osrs-calculator-templates');
             const panel = document.querySelector('.osrs-calculator-panel');
-            const stepButton = document.querySelector('.osrs-stepper button');
-            const input = document.querySelector('.osrs-stepper input');
-            const buttonStyle = getComputedStyle(stepButton);
-            const inputStyle = getComputedStyle(input);
             const templateRect = templates.getBoundingClientRect();
             const panelRect = panel.getBoundingClientRect();
             return {
@@ -261,10 +255,7 @@ final class ArticleAestheticRenderingTests: XCTestCase {
                 templateFloat: getComputedStyle(templates).float,
                 templateBeforePanel: templateRect.bottom <= panelRect.top,
                 columns: getComputedStyle(layout).gridTemplateColumns,
-                buttonFontSize: parseFloat(buttonStyle.fontSize),
-                buttonBackground: buttonStyle.backgroundColor,
-                buttonBorder: buttonStyle.borderTopColor,
-                inputBackground: inputStyle.backgroundColor
+                placeholderKept: (document.getElementById('combatCalcForm')?.innerText || '').includes('Please wait for the form to load')
             };
         })()
         """)
@@ -273,10 +264,7 @@ final class ArticleAestheticRenderingTests: XCTestCase {
         XCTAssertEqual(phoneState["templateFloat"] as? String, "none")
         XCTAssertEqual(phoneState["templateBeforePanel"] as? Bool, true)
         XCTAssertEqual((phoneState["columns"] as? String ?? "").split(separator: " ").count, 1)
-        XCTAssertGreaterThanOrEqual(phoneState["buttonFontSize"] as? Double ?? 0, 18)
-        XCTAssertNotEqual(phoneState["buttonBackground"] as? String, "rgba(0, 0, 0, 0)")
-        XCTAssertNotEqual(phoneState["buttonBorder"] as? String, "rgba(0, 0, 0, 0)")
-        XCTAssertNotEqual(phoneState["inputBackground"] as? String, "rgba(0, 0, 0, 0)")
+        XCTAssertEqual(phoneState["placeholderKept"] as? Bool, true)
 
         webView.frame = CGRect(x: 0, y: 0, width: 768, height: 1024)
         let tabletState = try await evaluate("""

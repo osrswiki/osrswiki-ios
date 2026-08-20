@@ -351,6 +351,13 @@ img.osrs-inline-icon {
     gap: 0.75em;
     grid-template-columns: minmax(0, 1fr);
     margin: 0.75em 0 1em;
+    padding-bottom: calc(var(--osrs-article-safe-area-bottom, 0px) + var(--osrs-article-bottom-chrome, 96px));
+}
+
+.osrs-calculator-layout .jcSubmit,
+.osrs-calculator-layout [id$="Result"],
+.osrs-calculator-result {
+    scroll-margin-bottom: calc(var(--osrs-article-safe-area-bottom, 0px) + var(--osrs-article-bottom-chrome, 96px));
 }
 
 .osrs-calculator-templates {

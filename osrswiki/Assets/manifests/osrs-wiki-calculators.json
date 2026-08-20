@@ -1,0 +1,1178 @@
+{
+  "schema_version": 1,
+  "wiki_origin": "https://oldschool.runescape.wiki",
+  "namespace": 116,
+  "fetched_at": "2026-08-20T02:21:15Z",
+  "source": "api.php?action=query&list=allpages&apnamespace=116",
+  "calculator_count": 154,
+  "excluded_count": 79,
+  "calculators": [
+    {
+      "title": "Calculator:Abyssal pearls",
+      "pageid": 353271,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Abyssal_pearls"
+    },
+    {
+      "title": "Calculator:Agility",
+      "pageid": 253270,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Agility"
+    },
+    {
+      "title": "Calculator:Agility/Agility arena tickets",
+      "pageid": 243033,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Agility/Agility_arena_tickets"
+    },
+    {
+      "title": "Calculator:Ammo cost efficiency",
+      "pageid": 351584,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Ammo_cost_efficiency"
+    },
+    {
+      "title": "Calculator:Arceuus library book",
+      "pageid": 239932,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Arceuus_library_book"
+    },
+    {
+      "title": "Calculator:Armoury",
+      "pageid": 261429,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Armoury"
+    },
+    {
+      "title": "Calculator:Bank standing money makers",
+      "pageid": 282360,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Bank_standing_money_makers"
+    },
+    {
+      "title": "Calculator:Barrows",
+      "pageid": 236835,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Barrows"
+    },
+    {
+      "title": "Calculator:Barrows item repair",
+      "pageid": 242908,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Barrows_item_repair"
+    },
+    {
+      "title": "Calculator:Barrows item repairs",
+      "pageid": 341288,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Barrows_item_repairs"
+    },
+    {
+      "title": "Calculator:Bestiary",
+      "pageid": 272399,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Bestiary"
+    },
+    {
+      "title": "Calculator:Blackjack stun",
+      "pageid": 265328,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Blackjack_stun"
+    },
+    {
+      "title": "Calculator:Castle Wars tickets",
+      "pageid": 658253,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Castle_Wars_tickets"
+    },
+    {
+      "title": "Calculator:Chambers of Xeric loot",
+      "pageid": 237015,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Chambers_of_Xeric_loot"
+    },
+    {
+      "title": "Calculator:Combat level",
+      "pageid": 180998,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Combat_level"
+    },
+    {
+      "title": "Calculator:Construction",
+      "pageid": 253279,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Construction"
+    },
+    {
+      "title": "Calculator:Construction/Flatpacks",
+      "pageid": 82346,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Construction/Flatpacks"
+    },
+    {
+      "title": "Calculator:Construction/Materials",
+      "pageid": 82345,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Construction/Materials"
+    },
+    {
+      "title": "Calculator:Cooking",
+      "pageid": 253276,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Cooking"
+    },
+    {
+      "title": "Calculator:Cooking/Brewing",
+      "pageid": 80148,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Cooking/Brewing"
+    },
+    {
+      "title": "Calculator:Cooking/Fish",
+      "pageid": 80007,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Cooking/Fish"
+    },
+    {
+      "title": "Calculator:Cooking/Hunter meats",
+      "pageid": 564760,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Cooking/Hunter_meats"
+    },
+    {
+      "title": "Calculator:Cooking/Pies",
+      "pageid": 80244,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Cooking/Pies"
+    },
+    {
+      "title": "Calculator:Cooking/Pizza",
+      "pageid": 94030,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Cooking/Pizza"
+    },
+    {
+      "title": "Calculator:Cooking/Potatoes",
+      "pageid": 94064,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Cooking/Potatoes"
+    },
+    {
+      "title": "Calculator:Coordinates",
+      "pageid": 560406,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Coordinates"
+    },
+    {
+      "title": "Calculator:Coordinates/GeoToPlanar",
+      "pageid": 560410,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Coordinates/GeoToPlanar"
+    },
+    {
+      "title": "Calculator:Coordinates/PlanarToGeo",
+      "pageid": 560407,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Coordinates/PlanarToGeo"
+    },
+    {
+      "title": "Calculator:Crafting",
+      "pageid": 253273,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Crafting"
+    },
+    {
+      "title": "Calculator:Crafting/Battlestaves",
+      "pageid": 83014,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Crafting/Battlestaves"
+    },
+    {
+      "title": "Calculator:Crafting/Crushed gems",
+      "pageid": 242840,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Crafting/Crushed_gems"
+    },
+    {
+      "title": "Calculator:Crafting/Gem cutting",
+      "pageid": 101414,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Crafting/Gem_cutting"
+    },
+    {
+      "title": "Calculator:Crafting/Glass",
+      "pageid": 101336,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Crafting/Glass"
+    },
+    {
+      "title": "Calculator:Crafting/Jewellery",
+      "pageid": 94175,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Crafting/Jewellery"
+    },
+    {
+      "title": "Calculator:Crafting/Magic armour",
+      "pageid": 116440,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Crafting/Magic_armour"
+    },
+    {
+      "title": "Calculator:Crafting/Tanned hides",
+      "pageid": 94731,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Crafting/Tanned_hides"
+    },
+    {
+      "title": "Calculator:Crafting/Tanning hides",
+      "pageid": 214800,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Crafting/Tanning_hides"
+    },
+    {
+      "title": "Calculator:Crafting/Untanned hides",
+      "pageid": 82315,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Crafting/Untanned_hides"
+    },
+    {
+      "title": "Calculator:Cryptic clue quality calculator",
+      "pageid": 648667,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Cryptic_clue_quality_calculator"
+    },
+    {
+      "title": "Calculator:Doom of Mokhaiotl Completions Calculator",
+      "pageid": 598755,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Doom_of_Mokhaiotl_Completions_Calculator"
+    },
+    {
+      "title": "Calculator:Doom of Mokhaiotl loot",
+      "pageid": 598706,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Doom_of_Mokhaiotl_loot"
+    },
+    {
+      "title": "Calculator:Dry calc",
+      "pageid": 215775,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Dry_calc"
+    },
+    {
+      "title": "Calculator:Efficiency method comparison",
+      "pageid": 368219,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Efficiency_method_comparison"
+    },
+    {
+      "title": "Calculator:Efficiency ratio",
+      "pageid": 368217,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Efficiency_ratio"
+    },
+    {
+      "title": "Calculator:Enchantment",
+      "pageid": 104810,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Enchantment"
+    },
+    {
+      "title": "Calculator:Farming",
+      "pageid": 253271,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Farming"
+    },
+    {
+      "title": "Calculator:Farming/Herbs",
+      "pageid": 80720,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Farming/Herbs"
+    },
+    {
+      "title": "Calculator:Farming/Saplings",
+      "pageid": 242302,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Farming/Saplings"
+    },
+    {
+      "title": "Calculator:Farming/Supercompost profit",
+      "pageid": 297654,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Farming/Supercompost_profit"
+    },
+    {
+      "title": "Calculator:Farming/Trees",
+      "pageid": 110447,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Farming/Trees"
+    },
+    {
+      "title": "Calculator:Firemaking",
+      "pageid": 253267,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Firemaking"
+    },
+    {
+      "title": "Calculator:Firemaking/Logs",
+      "pageid": 198424,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Firemaking/Logs"
+    },
+    {
+      "title": "Calculator:Firemaking/Wintertodt",
+      "pageid": 243121,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Firemaking/Wintertodt"
+    },
+    {
+      "title": "Calculator:Fishing",
+      "pageid": 253265,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Fishing"
+    },
+    {
+      "title": "Calculator:Fishing/Aerial fishing",
+      "pageid": 239116,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Fishing/Aerial_fishing"
+    },
+    {
+      "title": "Calculator:Fishing/Barbarian fishing",
+      "pageid": 247859,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Fishing/Barbarian_fishing"
+    },
+    {
+      "title": "Calculator:Fishing/Clue bottles",
+      "pageid": 413561,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Fishing/Clue_bottles"
+    },
+    {
+      "title": "Calculator:Fishing/Molch pearls",
+      "pageid": 411857,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Fishing/Molch_pearls"
+    },
+    {
+      "title": "Calculator:Fletching",
+      "pageid": 253275,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Fletching"
+    },
+    {
+      "title": "Calculator:Fletching/Ammo",
+      "pageid": 83393,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Fletching/Ammo"
+    },
+    {
+      "title": "Calculator:Fletching/Weapons",
+      "pageid": 83369,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Fletching/Weapons"
+    },
+    {
+      "title": "Calculator:Flipping",
+      "pageid": 216528,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Flipping"
+    },
+    {
+      "title": "Calculator:Gauntlet resources",
+      "pageid": 656188,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Gauntlet_resources"
+    },
+    {
+      "title": "Calculator:Gear efficiency comparison",
+      "pageid": 649951,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Gear_efficiency_comparison"
+    },
+    {
+      "title": "Calculator:Genie lamps and Books of knowledge",
+      "pageid": 249088,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Genie_lamps_and_Books_of_knowledge"
+    },
+    {
+      "title": "Calculator:Giants Foundry experience calculator",
+      "pageid": 358739,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Giants_Foundry_experience_calculator"
+    },
+    {
+      "title": "Calculator:Herb run profit",
+      "pageid": 322170,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Herb_run_profit"
+    },
+    {
+      "title": "Calculator:Herblore",
+      "pageid": 253231,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Herblore"
+    },
+    {
+      "title": "Calculator:Herblore cost",
+      "pageid": 543882,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Herblore_cost"
+    },
+    {
+      "title": "Calculator:Herblore/Decanting",
+      "pageid": 81686,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Herblore/Decanting"
+    },
+    {
+      "title": "Calculator:Herblore/Herbs",
+      "pageid": 82344,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Herblore/Herbs"
+    },
+    {
+      "title": "Calculator:Herblore/Potions",
+      "pageid": 80879,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Herblore/Potions"
+    },
+    {
+      "title": "Calculator:Herblore/Unfinished potions",
+      "pageid": 93556,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Herblore/Unfinished_potions"
+    },
+    {
+      "title": "Calculator:Hunter",
+      "pageid": 253274,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Hunter"
+    },
+    {
+      "title": "Calculator:Hunter/Herbiboar",
+      "pageid": 384087,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Hunter/Herbiboar"
+    },
+    {
+      "title": "Calculator:Hunter/Rumours",
+      "pageid": 548700,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Hunter/Rumours"
+    },
+    {
+      "title": "Calculator:Lamp",
+      "pageid": 546915,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Lamp"
+    },
+    {
+      "title": "Calculator:Lamp xp",
+      "pageid": 546916,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Lamp_xp"
+    },
+    {
+      "title": "Calculator:Lamps",
+      "pageid": 546914,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Lamps"
+    },
+    {
+      "title": "Calculator:Magic",
+      "pageid": 253277,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Magic"
+    },
+    {
+      "title": "Calculator:Magic/Enchant bolts",
+      "pageid": 94099,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Magic/Enchant_bolts"
+    },
+    {
+      "title": "Calculator:Magic/Enchant jewellery",
+      "pageid": 94672,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Magic/Enchant_jewellery"
+    },
+    {
+      "title": "Calculator:Magic/High alchemy",
+      "pageid": 102004,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Magic/High_alchemy"
+    },
+    {
+      "title": "Calculator:Magic/Magic Dart",
+      "pageid": 242769,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Magic/Magic_Dart"
+    },
+    {
+      "title": "Calculator:Magic/Making tablets",
+      "pageid": 215463,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Magic/Making_tablets"
+    },
+    {
+      "title": "Calculator:Magic/Powered staves",
+      "pageid": 376594,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Magic/Powered_staves"
+    },
+    {
+      "title": "Calculator:Mining",
+      "pageid": 253269,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Mining"
+    },
+    {
+      "title": "Calculator:Mining/Clue geodes",
+      "pageid": 527854,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Mining/Clue_geodes"
+    },
+    {
+      "title": "Calculator:Miscellania",
+      "pageid": 80173,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Miscellania"
+    },
+    {
+      "title": "Calculator:Miscellania loot",
+      "pageid": 301892,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Miscellania_loot"
+    },
+    {
+      "title": "Calculator:Moonlight potion",
+      "pageid": 463193,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Moonlight_potion"
+    },
+    {
+      "title": "Calculator:Moons item repair",
+      "pageid": 641037,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Moons_item_repair"
+    },
+    {
+      "title": "Calculator:Name generator",
+      "pageid": 632938,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Name_generator"
+    },
+    {
+      "title": "Calculator:Other/Miscellania",
+      "pageid": 256185,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Other/Miscellania"
+    },
+    {
+      "title": "Calculator:Other/Miscellania dynamic",
+      "pageid": 342250,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Other/Miscellania_dynamic"
+    },
+    {
+      "title": "Calculator:Pharaohs sceptre calc",
+      "pageid": 605932,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Pharaohs_sceptre_calc"
+    },
+    {
+      "title": "Calculator:Phoenix necklace",
+      "pageid": 546840,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Phoenix_necklace"
+    },
+    {
+      "title": "Calculator:Plank making",
+      "pageid": 92708,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Plank_making"
+    },
+    {
+      "title": "Calculator:PlatinumToken",
+      "pageid": 632102,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:PlatinumToken"
+    },
+    {
+      "title": "Calculator:Potion calculator",
+      "pageid": 209355,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Potion_calculator"
+    },
+    {
+      "title": "Calculator:Prayer",
+      "pageid": 253268,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Prayer"
+    },
+    {
+      "title": "Calculator:Prayer/Blessed Bone Shards",
+      "pageid": 583533,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Prayer/Blessed_Bone_Shards"
+    },
+    {
+      "title": "Calculator:Prayer/Blessed bone shards",
+      "pageid": 541322,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Prayer/Blessed_bone_shards"
+    },
+    {
+      "title": "Calculator:Prayer/Bones",
+      "pageid": 82325,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Prayer/Bones"
+    },
+    {
+      "title": "Calculator:Prayer/Ensouled heads",
+      "pageid": 83727,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Prayer/Ensouled_heads"
+    },
+    {
+      "title": "Calculator:Prayer/Holy wrench",
+      "pageid": 666331,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Prayer/Holy_wrench"
+    },
+    {
+      "title": "Calculator:Prayer/Prayer drain",
+      "pageid": 284843,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Prayer/Prayer_drain"
+    },
+    {
+      "title": "Calculator:Prayer/Prayer point cost",
+      "pageid": 399348,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Prayer/Prayer_point_cost"
+    },
+    {
+      "title": "Calculator:Runecraft",
+      "pageid": 253278,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Runecraft"
+    },
+    {
+      "title": "Calculator:Runecrafting/Abyssal pearls",
+      "pageid": 353272,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Runecrafting/Abyssal_pearls"
+    },
+    {
+      "title": "Calculator:Sailing",
+      "pageid": 616864,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Sailing"
+    },
+    {
+      "title": "Calculator:Sailing/Cannon max hit",
+      "pageid": 632926,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Sailing/Cannon_max_hit"
+    },
+    {
+      "title": "Calculator:Sailing/Giant clam reward",
+      "pageid": 651077,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Sailing/Giant_clam_reward"
+    },
+    {
+      "title": "Calculator:Sailing/Giant clam rewards",
+      "pageid": 651078,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Sailing/Giant_clam_rewards"
+    },
+    {
+      "title": "Calculator:Sailing/Repair Kits",
+      "pageid": 616868,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Sailing/Repair_Kits"
+    },
+    {
+      "title": "Calculator:Shop calculator",
+      "pageid": 393309,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Shop_calculator"
+    },
+    {
+      "title": "Calculator:Shot put",
+      "pageid": 312169,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Shot_put"
+    },
+    {
+      "title": "Calculator:Skill pet chance",
+      "pageid": 253689,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Skill_pet_chance"
+    },
+    {
+      "title": "Calculator:Skilling success rate",
+      "pageid": 392572,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Skilling_success_rate"
+    },
+    {
+      "title": "Calculator:Slayer",
+      "pageid": 565566,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Slayer"
+    },
+    {
+      "title": "Calculator:Slayer/Imbued heart",
+      "pageid": 563084,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Slayer/Imbued_heart"
+    },
+    {
+      "title": "Calculator:Slayer/Master comparison",
+      "pageid": 269419,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Slayer/Master_comparison"
+    },
+    {
+      "title": "Calculator:Slayer/Slayer task weight",
+      "pageid": 249101,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Slayer/Slayer_task_weight"
+    },
+    {
+      "title": "Calculator:Smithing",
+      "pageid": 253280,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Smithing"
+    },
+    {
+      "title": "Calculator:Smithing & High Alchemy Calculator",
+      "pageid": 223653,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Smithing_%26_High_Alchemy_Calculator"
+    },
+    {
+      "title": "Calculator:Smithing/BarrowsRepair",
+      "pageid": 260626,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Smithing/BarrowsRepair"
+    },
+    {
+      "title": "Calculator:Smithing/Bars",
+      "pageid": 66824,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Smithing/Bars"
+    },
+    {
+      "title": "Calculator:Smithing/Giants' Foundry",
+      "pageid": 382997,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Smithing/Giants%27_Foundry"
+    },
+    {
+      "title": "Calculator:Smithing/Smelting",
+      "pageid": 93966,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Smithing/Smelting"
+    },
+    {
+      "title": "Calculator:Soul Wars rewards",
+      "pageid": 303748,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Soul_Wars_rewards"
+    },
+    {
+      "title": "Calculator:Swimming",
+      "pageid": 551031,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Swimming"
+    },
+    {
+      "title": "Calculator:Teleportation jewellery",
+      "pageid": 120274,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Teleportation_jewellery"
+    },
+    {
+      "title": "Calculator:Tempoross experience calculator",
+      "pageid": 376484,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Tempoross_experience_calculator"
+    },
+    {
+      "title": "Calculator:Tempoross reward pool",
+      "pageid": 338953,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Tempoross_reward_pool"
+    },
+    {
+      "title": "Calculator:Theatre of Blood loot",
+      "pageid": 217601,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Theatre_of_Blood_loot"
+    },
+    {
+      "title": "Calculator:Thieving",
+      "pageid": 253272,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Thieving"
+    },
+    {
+      "title": "Calculator:Thieving/Dungeon door success",
+      "pageid": 249273,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Thieving/Dungeon_door_success"
+    },
+    {
+      "title": "Calculator:Thieving/Master farmer special seed table",
+      "pageid": 370379,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Thieving/Master_farmer_special_seed_table"
+    },
+    {
+      "title": "Calculator:Thieving/Master farmer success",
+      "pageid": 242950,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Thieving/Master_farmer_success"
+    },
+    {
+      "title": "Calculator:Thieving/Pickpocket rates/",
+      "pageid": 262772,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Thieving/Pickpocket_rates/"
+    },
+    {
+      "title": "Calculator:Title generator",
+      "pageid": 632857,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Title_generator"
+    },
+    {
+      "title": "Calculator:Tombs of Amascut loot",
+      "pageid": 368697,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Tombs_of_Amascut_loot"
+    },
+    {
+      "title": "Calculator:Training manuals",
+      "pageid": 392636,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Training_manuals"
+    },
+    {
+      "title": "Calculator:Twisted bow",
+      "pageid": 243407,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Twisted_bow"
+    },
+    {
+      "title": "Calculator:Underwater Thieving",
+      "pageid": 272276,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Underwater_Thieving"
+    },
+    {
+      "title": "Calculator:Vale totems",
+      "pageid": 670838,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Vale_totems"
+    },
+    {
+      "title": "Calculator:Wilderness agility loot",
+      "pageid": 507117,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Wilderness_agility_loot"
+    },
+    {
+      "title": "Calculator:Wintertodt Reward Cart",
+      "pageid": 266817,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Wintertodt_Reward_Cart"
+    },
+    {
+      "title": "Calculator:Wintertodt supply crate",
+      "pageid": 542369,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Wintertodt_supply_crate"
+    },
+    {
+      "title": "Calculator:Woodcutting",
+      "pageid": 253266,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Woodcutting"
+    },
+    {
+      "title": "Calculator:Woodcutting/Clue nests",
+      "pageid": 527862,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Woodcutting/Clue_nests"
+    },
+    {
+      "title": "Calculator:Woodcutting/Making Forester's rations",
+      "pageid": 546331,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Woodcutting/Making_Forester%27s_rations"
+    },
+    {
+      "title": "Calculator:Yama rewards",
+      "pageid": 581704,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Yama_rewards"
+    },
+    {
+      "title": "Calculator:ZMI",
+      "pageid": 338162,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:ZMI"
+    }
+  ],
+  "excluded": [
+    {
+      "title": "Calculator:Abyssal pearls/Template",
+      "pageid": 353268,
+      "reason": "template"
+    },
+    {
+      "title": "Calculator:Agility/Agility arena tickets/Template",
+      "pageid": 243034,
+      "reason": "template"
+    },
+    {
+      "title": "Calculator:Arceuus library book/Template",
+      "pageid": 239935,
+      "reason": "template"
+    },
+    {
+      "title": "Calculator:Bank standing money makers/Template",
+      "pageid": 282358,
+      "reason": "template"
+    },
+    {
+      "title": "Calculator:Barrows/Template",
+      "pageid": 236836,
+      "reason": "template"
+    },
+    {
+      "title": "Calculator:Barrows item repair/Template",
+      "pageid": 242885,
+      "reason": "template"
+    },
+    {
+      "title": "Calculator:Blackjack stun/Template",
+      "pageid": 265327,
+      "reason": "template"
+    },
+    {
+      "title": "Calculator:Castle Wars tickets/Template",
+      "pageid": 658252,
+      "reason": "template"
+    },
+    {
+      "title": "Calculator:Chambers of Xeric/Template",
+      "pageid": 237016,
+      "reason": "template"
+    },
+    {
+      "title": "Calculator:Combat level/Template",
+      "pageid": 180997,
+      "reason": "template"
+    },
+    {
+      "title": "Calculator:Crafting/Crushed gems/Template",
+      "pageid": 242844,
+      "reason": "template"
+    },
+    {
+      "title": "Calculator:Cryptic clue quality calculator/Template",
+      "pageid": 648697,
+      "reason": "template"
+    },
+    {
+      "title": "Calculator:Efficiency method comparison/Template",
+      "pageid": 368211,
+      "reason": "template"
+    },
+    {
+      "title": "Calculator:Efficiency ratio/Template",
+      "pageid": 368214,
+      "reason": "template"
+    },
+    {
+      "title": "Calculator:Experience Until/Template",
+      "pageid": 574930,
+      "reason": "template"
+    },
+    {
+      "title": "Calculator:Farming/Herbs/Template",
+      "pageid": 213638,
+      "reason": "template"
+    },
+    {
+      "title": "Calculator:Farming/Supercompost profit/Template",
+      "pageid": 297653,
+      "reason": "template"
+    },
+    {
+      "title": "Calculator:Fishing/Aerial fishing/Template",
+      "pageid": 239115,
+      "reason": "template"
+    },
+    {
+      "title": "Calculator:Fishing/Barbarian fishing/Template",
+      "pageid": 247856,
+      "reason": "template"
+    },
+    {
+      "title": "Calculator:Fishing/Clue bottles/Template",
+      "pageid": 413562,
+      "reason": "template"
+    },
+    {
+      "title": "Calculator:Fishing/Clue bottles/Template/doc",
+      "pageid": 658058,
+      "reason": "template"
+    },
+    {
+      "title": "Calculator:Fishing/Molch pearls/Template",
+      "pageid": 411856,
+      "reason": "template"
+    },
+    {
+      "title": "Calculator:Fletching/Ammo/Template1",
+      "pageid": 83394,
+      "reason": "template"
+    },
+    {
+      "title": "Calculator:Fletching/Ammo/Template3",
+      "pageid": 83404,
+      "reason": "template"
+    },
+    {
+      "title": "Calculator:Fletching/Ammo/Template4",
+      "pageid": 83413,
+      "reason": "template"
+    },
+    {
+      "title": "Calculator:Fletching/Ammo/Template5",
+      "pageid": 94692,
+      "reason": "template"
+    },
+    {
+      "title": "Calculator:Fletching/Ammo/Template6",
+      "pageid": 268053,
+      "reason": "template"
+    },
+    {
+      "title": "Calculator:Fletching/Weapons/Template1",
+      "pageid": 83371,
+      "reason": "template"
+    },
+    {
+      "title": "Calculator:Fletching/Weapons/Template2",
+      "pageid": 83373,
+      "reason": "template"
+    },
+    {
+      "title": "Calculator:Fletching/Weapons/Template3",
+      "pageid": 83375,
+      "reason": "template"
+    },
+    {
+      "title": "Calculator:Fletching/Weapons/Template4",
+      "pageid": 83376,
+      "reason": "template"
+    },
+    {
+      "title": "Calculator:Fletching/Weapons/Template6",
+      "pageid": 83388,
+      "reason": "template"
+    },
+    {
+      "title": "Calculator:Fletching/Weapons/Template7",
+      "pageid": 83389,
+      "reason": "template"
+    },
+    {
+      "title": "Calculator:Flipping/Template",
+      "pageid": 216529,
+      "reason": "template"
+    },
+    {
+      "title": "Calculator:Gear efficiency comparison/Template",
+      "pageid": 649944,
+      "reason": "template"
+    },
+    {
+      "title": "Calculator:Genie lamps and Books of knowledge/Template",
+      "pageid": 248986,
+      "reason": "template"
+    },
+    {
+      "title": "Calculator:Giants Foundry experience calculator/Template",
+      "pageid": 358737,
+      "reason": "template"
+    },
+    {
+      "title": "Calculator:Herblore/Herbs/Template",
+      "pageid": 82342,
+      "reason": "template"
+    },
+    {
+      "title": "Calculator:Herblore/Potions/Template:Clean",
+      "pageid": 93693,
+      "reason": "template"
+    },
+    {
+      "title": "Calculator:Herblore/Potions/Template:Grimy",
+      "pageid": 93557,
+      "reason": "template"
+    },
+    {
+      "title": "Calculator:Herblore/Potions/Template:Unfinished",
+      "pageid": 93694,
+      "reason": "template"
+    },
+    {
+      "title": "Calculator:Hunter/Rumours/Template",
+      "pageid": 548699,
+      "reason": "template"
+    },
+    {
+      "title": "Calculator:Magic/Magic Dart/Template",
+      "pageid": 242770,
+      "reason": "template"
+    },
+    {
+      "title": "Calculator:Magic/Powered staves/Template",
+      "pageid": 376593,
+      "reason": "template"
+    },
+    {
+      "title": "Calculator:Mining/Clue geodes/Template",
+      "pageid": 527855,
+      "reason": "template"
+    },
+    {
+      "title": "Calculator:Miscellania loot/Template",
+      "pageid": 301891,
+      "reason": "template"
+    },
+    {
+      "title": "Calculator:Moonlight potion/Template",
+      "pageid": 463192,
+      "reason": "template"
+    },
+    {
+      "title": "Calculator:Moons item repair/Template",
+      "pageid": 641034,
+      "reason": "template"
+    },
+    {
+      "title": "Calculator:Phoenix necklace/Template",
+      "pageid": 546839,
+      "reason": "template"
+    },
+    {
+      "title": "Calculator:PlatinumToken/Template",
+      "pageid": 632101,
+      "reason": "template"
+    },
+    {
+      "title": "Calculator:Prayer/Holy wrench/Template",
+      "pageid": 666330,
+      "reason": "template"
+    },
+    {
+      "title": "Calculator:Prayer/Prayer drain/Template",
+      "pageid": 284842,
+      "reason": "template"
+    },
+    {
+      "title": "Calculator:Prayer/Prayer point cost/Template",
+      "pageid": 399347,
+      "reason": "template"
+    },
+    {
+      "title": "Calculator:Runecrafting/Abyssal pearls/Template",
+      "pageid": 353273,
+      "reason": "template"
+    },
+    {
+      "title": "Calculator:Sandbox/Slayer block fix",
+      "pageid": 647637,
+      "reason": "sandbox"
+    },
+    {
+      "title": "Calculator:Sandbox/User:Dr. C-Dawg/AvgKillCalc",
+      "pageid": 592608,
+      "reason": "sandbox"
+    },
+    {
+      "title": "Calculator:Sandbox/User:SuqAtaLancer/Slayer block fix",
+      "pageid": 647636,
+      "reason": "sandbox"
+    },
+    {
+      "title": "Calculator:Sandbox/User:Willf95/Moons item repair",
+      "pageid": 641035,
+      "reason": "sandbox"
+    },
+    {
+      "title": "Calculator:Shop calc/Template",
+      "pageid": 309932,
+      "reason": "template"
+    },
+    {
+      "title": "Calculator:Shot put/Template",
+      "pageid": 312174,
+      "reason": "template"
+    },
+    {
+      "title": "Calculator:Skill calc/Template",
+      "pageid": 253213,
+      "reason": "template"
+    },
+    {
+      "title": "Calculator:Skill calc Gar onn1 Sandbox/Template",
+      "pageid": 651191,
+      "reason": "sandbox"
+    },
+    {
+      "title": "Calculator:Skill pet calc/Template",
+      "pageid": 253687,
+      "reason": "template"
+    },
+    {
+      "title": "Calculator:Slayer/Imbued heart/Template",
+      "pageid": 563083,
+      "reason": "template"
+    },
+    {
+      "title": "Calculator:Slayer/Imbued heart chance/Template",
+      "pageid": 563085,
+      "reason": "template"
+    },
+    {
+      "title": "Calculator:Slayer/Master comparison/Template",
+      "pageid": 269420,
+      "reason": "template"
+    },
+    {
+      "title": "Calculator:Slayer/Slayer task weight/Template",
+      "pageid": 249092,
+      "reason": "template"
+    },
+    {
+      "title": "Calculator:Smithing/Blast Furnace/Gold/Template",
+      "pageid": 264870,
+      "reason": "template"
+    },
+    {
+      "title": "Calculator:Swimming/Template",
+      "pageid": 551030,
+      "reason": "template"
+    },
+    {
+      "title": "Calculator:Template/Cooking/Pizza",
+      "pageid": 242796,
+      "reason": "implementation"
+    },
+    {
+      "title": "Calculator:Template/Farming/Herbs2",
+      "pageid": 213639,
+      "reason": "implementation"
+    },
+    {
+      "title": "Calculator:Template/Others/Twistedbow",
+      "pageid": 243409,
+      "reason": "implementation"
+    },
+    {
+      "title": "Calculator:Theatre of Blood/Template",
+      "pageid": 223445,
+      "reason": "template"
+    },
+    {
+      "title": "Calculator:Thieving/Dungeon door success/Template",
+      "pageid": 249271,
+      "reason": "template"
+    },
+    {
+      "title": "Calculator:Thieving/Master farmer success/Template",
+      "pageid": 242949,
+      "reason": "template"
+    },
+    {
+      "title": "Calculator:Underwater Thieving/Template",
+      "pageid": 272278,
+      "reason": "template"
+    },
+    {
+      "title": "Calculator:Woodcutting/Clue nests/Template",
+      "pageid": 527861,
+      "reason": "template"
+    },
+    {
+      "title": "Calculator:ZMI/Module",
+      "pageid": 338164,
+      "reason": "module"
+    },
+    {
+      "title": "Calculator:ZMI/Template",
+      "pageid": 338163,
+      "reason": "template"
+    }
+  ]
+}

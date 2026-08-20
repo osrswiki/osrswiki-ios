@@ -100,6 +100,10 @@ enum osrsTestEnvironment {
         ProcessInfo.processInfo.arguments.contains("-useTestShareReceiverActivityForUITests")
     }
 
+    static var osrsCalculatorSmokeSubmit: Bool {
+        ProcessInfo.processInfo.arguments.contains("-osrsCalculatorSmokeSubmit")
+    }
+
     static var forcesArticleRefreshFailureForUITests: Bool {
         ProcessInfo.processInfo.arguments.contains("-forceArticleRefreshFailureForUITests")
     }

@@ -1531,7 +1531,7 @@ if ( !isCompatible() ) {
 		var reqBase = {
     "lang": "en-gb",
     "skin": "vector",
-    "debug": "1"
+    "debug": "0"
 };
 
 		// Split module list by source and by group.
@@ -2434,7 +2434,7 @@ if ( !isCompatible() ) {
 				var query = Object.create( {
     "lang": "en-gb",
     "skin": "vector",
-    "debug": "1"
+    "debug": "0"
 } );
 				query.modules = module;
 				query.version = getCombinedVersion( [ module ] );

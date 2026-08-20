@@ -1335,7 +1335,8 @@ actor osrsArticleDocumentCoordinator {
                 floorConvention: options.floorNumberingBodyClass == osrsArticleFloorConvention.us.bodyClass
                     ? .us
                     : .gb,
-                wrapTableCellsEnabled: options.wrapTableCellsEnabled
+                wrapTableCellsEnabled: options.wrapTableCellsEnabled,
+                canonicalTitle: payload.payload.title
             )
             try Task.checkCancellation()
             return html

@@ -82,9 +82,9 @@ html {
    headings land below the overlay instead of under it. */
 html {
     padding-top: calc(var(--osrs-article-safe-area-top, 0px) + var(--osrs-article-chrome-clearance, 56px)) !important;
-    padding-bottom: calc(var(--osrs-article-safe-area-bottom, 0px) + var(--osrs-article-chrome-clearance, 56px)) !important;
+    padding-bottom: calc(var(--osrs-article-safe-area-bottom, 0px) + var(--osrs-article-bottom-chrome, var(--osrs-article-chrome-clearance, 56px))) !important;
     scroll-padding-top: calc(var(--osrs-article-safe-area-top, 0px) + var(--osrs-article-chrome-clearance, 56px)) !important;
-    scroll-padding-bottom: calc(var(--osrs-article-safe-area-bottom, 0px) + var(--osrs-article-chrome-clearance, 56px)) !important;
+    scroll-padding-bottom: calc(var(--osrs-article-safe-area-bottom, 0px) + var(--osrs-article-bottom-chrome, var(--osrs-article-chrome-clearance, 56px))) !important;
 }
 
 :is(h1, h2, h3, h4, h5, h6, .mw-headline, .mw-heading, caption) {

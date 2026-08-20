@@ -24,12 +24,14 @@ class osrsPageHtmlBuilder {
         "web/collapsible_sections.css",
         "web/switch_infobox_styles.css",
         "styles/fixes.css",
+        "styles/gadget_calc.css",
         "styles/ios-article-aesthetics.css"
     ]
 
     // MediaWiki ResourceLoader artifacts
     private let mediawikiArtifacts = [
-        "startup.js"
+        "startup.js",
+        "gadget_calc_core.js"
     ]
 
     private let articleTransformJsAssetPaths = [
@@ -46,6 +48,7 @@ class osrsPageHtmlBuilder {
         "js/tablesort.min.js",
         "js/tablesort_init.js",
         "web/article_tools.js",
+        "web/osrs_calculator_runtime.js",
         "web/tabber_init.js",
         "web/responsive_videos.js",
         "web/clipboard_bridge.js",
@@ -219,19 +222,27 @@ class osrsPageHtmlBuilder {
         """
     }
 
-    private func generateMediaWikiVariables(title: String, bodyContent: String) -> String {
+    private func generateMediaWikiVariables(title: String, bodyContent: String, canonicalTitle: String? = nil) -> String {
         // Generate smart RLPAGEMODULES based on content analysis
-        let detectedModules = osrsWikiModuleRegistry.generateRLPAGEMODULES(bodyContent: bodyContent, title: title)
+        let detectedModules = osrsWikiModuleRegistry.generateRLPAGEMODULES(
+            bodyContent: bodyContent,
+            title: canonicalTitle ?? title
+        )
         let modulesList = detectedModules.map { "\"\($0)\"" }.joined(separator: ", ")
-
-        // Use page title for MediaWiki variables
-        let safeTitle = title.replacingOccurrences(of: "\"", with: "\\\"")
+        let pageConfig = osrsWikiWebViewUrl.mediaWikiPageConfig(
+            canonicalTitle: canonicalTitle ?? title,
+            displayTitle: title
+        )
+        let safePageName = pageConfig.pageName.replacingOccurrences(of: "\"", with: "\\\"")
+        let safeTitle = pageConfig.title.replacingOccurrences(of: "\"", with: "\\\"")
+        let namespaceNumber = pageConfig.namespaceNumber
+        let canonicalNamespace = pageConfig.canonicalNamespace
 
         return """
         <script>
             // Smart MediaWiki variables generated based on page content
             // Module detection via osrsWikiModuleRegistry for scalable maintenance
-            var RLCONF = {"wgBreakFrames": false, "wgSeparatorTransformTable": ["", ""], "wgDigitTransformTable": ["", ""], "wgDefaultDateFormat": "dmy", "wgMonthNames": ["", "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"], "wgRequestId": "smart-module-loader", "wgCanonicalNamespace": "", "wgCanonicalSpecialPageName": false, "wgNamespaceNumber": 0, "wgPageName": "\(safeTitle)", "wgTitle": "\(safeTitle)", "wgCurRevisionId": 0, "wgRevisionId": 0, "wgArticleId": 1, "wgIsArticle": true, "wgIsRedirect": false, "wgAction": "view", "wgUserName": null, "wgUserGroups": ["*"], "wgPageViewLanguage": "en-gb", "wgPageContentLanguage": "en-gb", "wgPageContentModel": "wikitext", "wgRelevantPageName": "\(safeTitle)", "wgRelevantArticleId": 1, "wgIsProbablyEditable": true, "wgRelevantPageIsProbablyEditable": true, "wgRestrictionEdit": [], "wgRestrictionMove": [], "wgServer": "https://oldschool.runescape.wiki", "wgServerName": "oldschool.runescape.wiki", "wgScriptPath": "", "wgScript": "/load.php"};
+            var RLCONF = {"wgBreakFrames": false, "wgSeparatorTransformTable": ["", ""], "wgDigitTransformTable": ["", ""], "wgDefaultDateFormat": "dmy", "wgMonthNames": ["", "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"], "wgRequestId": "smart-module-loader", "wgCanonicalNamespace": "\(canonicalNamespace)", "wgCanonicalSpecialPageName": false, "wgNamespaceNumber": \(namespaceNumber), "wgPageName": "\(safePageName)", "wgTitle": "\(safeTitle)", "wgCurRevisionId": 0, "wgRevisionId": 0, "wgArticleId": 1, "wgIsArticle": true, "wgIsRedirect": false, "wgAction": "view", "wgUserName": null, "wgUserGroups": ["*"], "wgPageViewLanguage": "en-gb", "wgPageContentLanguage": "en-gb", "wgPageContentModel": "wikitext", "wgRelevantPageName": "\(safePageName)", "wgRelevantArticleId": 1, "wgIsProbablyEditable": true, "wgRelevantPageIsProbablyEditable": true, "wgRestrictionEdit": [], "wgRestrictionMove": [], "wgServer": "https://oldschool.runescape.wiki", "wgServerName": "oldschool.runescape.wiki", "wgScriptPath": "", "wgScript": "/index.php", "wgLoadScript": "/load.php"};
             var RLSTATE = {"ext.gadget.switch-infobox-styles": "ready", "ext.gadget.articlefeedback-styles": "ready", "ext.gadget.falseSubpage": "ready", "ext.gadget.headerTargetHighlight": "ready", "site.styles": "ready", "user.styles": "ready", "user": "ready", "user.options": "loading", "ext.cite.styles": "ready", "ext.kartographer.style": "ready", "skins.minerva.base.styles": "ready", "skins.minerva.content.styles.images": "ready", "mediawiki.hlist": "ready", "skins.minerva.codex.styles": "ready", "skins.minerva.icons.wikimedia": "ready", "skins.minerva.mainMenu.icons": "ready", "skins.minerva.mainMenu.styles": "ready", "jquery.tablesorter.styles": "ready", "ext.embedVideo.styles": "ready", "mobile.init.styles": "ready"};
             var RLPAGEMODULES = [\(modulesList)];
 
@@ -353,7 +364,8 @@ class osrsPageHtmlBuilder {
         includeAssetLinks: Bool = false,
         articleTextScale: CGFloat = 1.0,
         floorConvention: osrsArticleFloorConvention = .current(),
-        wrapTableCellsEnabled: Bool = false
+        wrapTableCellsEnabled: Bool = false,
+        canonicalTitle: String? = nil
     ) -> String {
         let startTime = CFAbsoluteTimeGetCurrent()
 
@@ -380,6 +392,9 @@ class osrsPageHtmlBuilder {
         let chromeClearance = Int(
             (osrsSearchControlGeometry.compactHeight + osrsOverlayChromeMetrics.pairedEdgeGap + 8).rounded()
         )
+        let bottomChrome = Int(
+            (osrsOverlayChromeMetrics.floatingBarHeight + osrsOverlayChromeMetrics.pairedEdgeGap + 24).rounded()
+        )
         let safeAreaTop = Int(osrsOverlayChromeMetrics.topInset.rounded())
         let safeAreaBottom = Int(osrsOverlayChromeMetrics.bottomInset.rounded())
         let readerPreferenceStyle = """
@@ -387,6 +402,7 @@ class osrsPageHtmlBuilder {
             html:root {
                 --osrs-article-user-text-scale: \(articleTextScaleLiteral);
                 --osrs-article-chrome-clearance: \(chromeClearance)px;
+                --osrs-article-bottom-chrome: \(bottomChrome)px;
                 --osrs-article-safe-area-top: \(safeAreaTop)px;
                 --osrs-article-safe-area-bottom: \(safeAreaBottom)px;
             }
@@ -467,7 +483,11 @@ class osrsPageHtmlBuilder {
         }
 
         // Generate smart MediaWiki variables
-        let smartMediawikiVariables = generateMediaWikiVariables(title: cleanedTitle, bodyContent: cleanedBodyContent)
+        let smartMediawikiVariables = generateMediaWikiVariables(
+            title: cleanedTitle,
+            bodyContent: cleanedBodyContent,
+            canonicalTitle: canonicalTitle ?? title
+        )
 
         // Create table collapse preference script
         let tableCollapseScript = createTableCollapseScript(collapseTablesEnabled: collapseTablesEnabled)
@@ -486,7 +506,8 @@ class osrsPageHtmlBuilder {
         let articleFirstPaintStyle = osrsPageHtmlBuilder.articleFirstPaintStyle(
             chromeClearancePx: chromeClearance,
             safeAreaTopPx: safeAreaTop,
-            safeAreaBottomPx: safeAreaBottom
+            safeAreaBottomPx: safeAreaBottom,
+            bottomChromePx: bottomChrome
         )
 
         // Build final HTML document
@@ -497,6 +518,7 @@ class osrsPageHtmlBuilder {
             <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
             <title>\(documentTitle)</title>
             \(articleFirstPaintStyle)
+            <meta name="ResourceLoaderDynamicStyles" content="">
             \(fontPreloadLink)
             \(cssLinks)
             \(readerPreferenceStyle)
@@ -509,6 +531,7 @@ class osrsPageHtmlBuilder {
             \(createInternalArticleLinkNormalizationScript(customScheme: customScheme))
             \(transformScripts)
             \(mediawikiScripts)
+            \(osrsTestEnvironment.osrsCalculatorSmokeSubmit ? "<script>window.__osrsCalculatorSmokeSubmit=true;</script>" : "")
             \(jsScripts)
         </body>
         </html>
@@ -523,19 +546,22 @@ class osrsPageHtmlBuilder {
     static func articleFirstPaintStyle(
         chromeClearancePx: Int,
         safeAreaTopPx: Int = 0,
-        safeAreaBottomPx: Int = 0
+        safeAreaBottomPx: Int = 0,
+        bottomChromePx: Int? = nil
     ) -> String {
+        let resolvedBottomChrome = bottomChromePx ?? chromeClearancePx
         let chromePadding: String
-        if chromeClearancePx > 0 || safeAreaTopPx > 0 || safeAreaBottomPx > 0 {
+        if chromeClearancePx > 0 || safeAreaTopPx > 0 || safeAreaBottomPx > 0 || resolvedBottomChrome > 0 {
             chromePadding = """
                     html:root {
                         --osrs-article-safe-area-top: \(safeAreaTopPx)px;
                         --osrs-article-safe-area-bottom: \(safeAreaBottomPx)px;
                         --osrs-article-chrome-clearance: \(chromeClearancePx)px;
+                        --osrs-article-bottom-chrome: \(resolvedBottomChrome)px;
                     }
                     html {
                         padding-top: calc(var(--osrs-article-safe-area-top) + var(--osrs-article-chrome-clearance)) !important;
-                        padding-bottom: calc(var(--osrs-article-safe-area-bottom) + var(--osrs-article-chrome-clearance)) !important;
+                        padding-bottom: calc(var(--osrs-article-safe-area-bottom) + var(--osrs-article-bottom-chrome)) !important;
                     }
             """
         } else {
@@ -609,10 +635,10 @@ class osrsPageHtmlBuilder {
     }
 
     private func wrapArticleBodyContent(_ htmlContent: String) -> String {
-        if htmlContent.contains("mw-body-content") {
+        if htmlContent.contains("id=\"bodyContent\"") || htmlContent.contains("id='bodyContent'") {
             return htmlContent
         }
-        return "<div class=\"mw-body-content\">\(htmlContent)</div>"
+        return "<div id=\"bodyContent\" class=\"mw-body-content\">\(htmlContent)</div>"
     }
 
     private func normalizeInternalArticleLinks(in htmlContent: String, customScheme: String) -> String {
