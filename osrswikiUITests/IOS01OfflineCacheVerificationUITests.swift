@@ -59,8 +59,9 @@ final class IOS01OfflineCacheVerificationUITests: XCTestCase {
             app.webViews["article_web_view"].waitForExistence(timeout: articleLoadTimeout) ||
                 app.webViews.firstMatch.waitForExistence(timeout: 1)
         )
-        // Let live-view artwork land in the browsing cache before measuring first save.
-        RunLoop.current.run(until: Date().addingTimeInterval(8))
+        // Idle first-screen + remaining-artwork warm writes the save-required set
+        // into the browsing cache after first paint. Wait until that queue can drain.
+        RunLoop.current.run(until: Date().addingTimeInterval(25))
         let saveButton = app.buttons["Save"].firstMatch
         XCTAssertTrue(saveButton.waitForExistence(timeout: 8))
         let saveStarted = Date()

@@ -111,7 +111,37 @@ enum osrsOfflineArticleResourceSettlement {
     /// allowlist covers images (including deferred/responsive forms), picture sources, video
     /// posters, SVG images, image-typed objects, and authored CSS artwork/imports.
     nonisolated static func requiredImageURLs(from html: String) -> [URL] {
-        initialResourcePlan(from: html).map(\.url).sorted { $0.absoluteString < $1.absoluteString }
+        requiredImageURLsInDocumentOrder(from: html).sorted { $0.absoluteString < $1.absoluteString }
+    }
+
+    nonisolated static func requiredImageURLsInDocumentOrder(from html: String) -> [URL] {
+        initialResourcePlan(from: html).map(\.url)
+    }
+
+    nonisolated static func infoboxImageURLs(from html: String) -> [URL] {
+        var seen: Set<URL> = []
+        var urls: [URL] = []
+        for fragment in infoboxFragments(from: html) {
+            for url in initialResourcePlan(from: fragment).map(\.url) where seen.insert(url).inserted {
+                urls.append(url)
+            }
+        }
+        return urls
+    }
+
+    nonisolated static func networkURL(from raw: String) -> URL? {
+        normalizedNetworkURL(raw, relativeTo: URL(string: "https://oldschool.runescape.wiki/")!)
+    }
+
+    private nonisolated static func infoboxFragments(from html: String) -> [String] {
+        let pattern = #"<table\b[^>]*class=["'][^"']*infobox[^"']*["'][^>]*>[\s\S]*?</table>"#
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
+            return []
+        }
+        return regex.matches(in: html, range: NSRange(html.startIndex..., in: html)).compactMap {
+            guard let range = Range($0.range, in: html) else { return nil }
+            return String(html[range])
+        }
     }
 
     private nonisolated static func initialResourcePlan(from html: String) -> [PlannedResource] {
@@ -492,6 +522,7 @@ class ArticleViewModel: NSObject, ObservableObject {
     private var accessibilityTextScale: CGFloat = 1.0
     private var articleTextScale: CGFloat = 1.0
     private var lastTableOfContentsHTML: String?
+    private var lastLoadedArticleHTML: String?
     private var forceNextDocumentReload = false
     private var articlePipelineLoads: [Int: (identity: osrsArticleDocumentIdentity, startedAt: Date)] = [:]
     private var resolvedPageTitleForHistory: String?
@@ -502,6 +533,9 @@ class ArticleViewModel: NSObject, ObservableObject {
     private var renderedArticleIdentityProbeAttempts = 0
     private var deferredMapPreloadState = osrsDeferredMapPreloadState()
     private var deferredMapPreloadTask: Task<Void, Never>?
+    private var liveAssetWarmer: osrsLiveArticleAssetWarmer?
+    private var liveAssetWarmTask: Task<Void, Never>?
+    private var articleRevealedForWarm = false
 
     // TIMING MEASUREMENT: Track progress completion vs page visibility delay
     var progressCompletionTime: Date?
@@ -912,10 +946,12 @@ class ArticleViewModel: NSObject, ObservableObject {
                 assetHandler.enableOfflineSaveMode(pageId: pageId)
             }
             print("✅ ArticleViewModel: Visible-article passive cache session enabled for \(pageId)")
+            self.startLiveArticleAssetWarmIfNeeded()
         }
     }
 
     private func suspendPassiveCachingSession(removingPassiveCache: Bool = true) {
+        stopLiveArticleAssetWarm()
         passiveCachePreparationGeneration &+= 1
         passiveCachePreparationTask?.cancel()
         passiveCachePreparationTask = nil
@@ -953,6 +989,45 @@ class ArticleViewModel: NSObject, ObservableObject {
             .map { String(format: "%02x", $0) }
             .joined()
         return "browsing_\(digest)"
+    }
+
+    func promoteLiveArticleAssets(_ rawValues: [String]) {
+        let urls = rawValues.compactMap(osrsOfflineArticleResourceSettlement.networkURL(from:))
+        guard !urls.isEmpty else { return }
+        liveAssetWarmer?.promote(urls)
+    }
+
+    private func startLiveArticleAssetWarmIfNeeded() {
+        guard articleRevealedForWarm,
+              passiveCachingAllowedWhileVisible,
+              let pageId = proxyCacheSessionToken?.pageId,
+              liveAssetWarmTask == nil else { return }
+        let html = lastLoadedArticleHTML ?? lastTableOfContentsHTML ?? ""
+        guard !html.isEmpty else { return }
+        let warmer = osrsLiveArticleAssetWarmer(
+            pageId: pageId,
+            isCached: { url in
+                await ProxyInterceptorService.shared.hasPersistedResponseAsync(pageId: pageId, url: url)
+            },
+            fetch: { url in
+                _ = try? await NetworkManager.shared.performDataRequest(url: url, retryCount: 0)
+            }
+        )
+        liveAssetWarmer = warmer
+        liveAssetWarmTask = Task.detached(priority: .utility) { [weak self] in
+            await warmer.warm(html: html)
+            await MainActor.run {
+                guard let self, self.liveAssetWarmer === warmer else { return }
+                self.liveAssetWarmTask = nil
+            }
+        }
+    }
+
+    private func stopLiveArticleAssetWarm() {
+        liveAssetWarmTask?.cancel()
+        liveAssetWarmTask = nil
+        liveAssetWarmer?.cancel()
+        liveAssetWarmer = nil
     }
 
     private func setupWebViewObservers() {
@@ -1027,6 +1102,8 @@ class ArticleViewModel: NSObject, ObservableObject {
         }
         currentLoadTask?.cancel()
         currentLoadTask = nil
+        articleRevealedForWarm = false
+        stopLiveArticleAssetWarm()
         readinessTimeoutWorkItem?.cancel()
         reloadTimeoutWorkItem?.cancel()
         refreshTimeoutWorkItem?.cancel()
@@ -1060,6 +1137,8 @@ class ArticleViewModel: NSObject, ObservableObject {
     /// Navigation-away must not leave parsing, WebKit, or readiness callbacks competing with Home.
     func cancelActiveWorkForNavigation() {
         articleIsVisible = false
+        articleRevealedForWarm = false
+        stopLiveArticleAssetWarm()
         suspendPassiveCachingSession()
         if let activePipeline = articlePipelineLoads.removeValue(forKey: currentLoadGeneration) {
             Task {
@@ -1296,6 +1375,11 @@ class ArticleViewModel: NSObject, ObservableObject {
                     return
                 }
                 await self.loadCustomHtml(document.html, theme: theme, generation: loadGeneration)
+                await MainActor.run {
+                    if self.isCurrentLoad(loadGeneration) {
+                        self.lastLoadedArticleHTML = payload.htmlContent
+                    }
+                }
                 self.lazyMaterializePaintHTMLIfNeeded(
                     bodyHTML: payload.htmlContent,
                     displayTitle: payload.displayTitle ?? payload.title,
@@ -2394,6 +2478,7 @@ class ArticleViewModel: NSObject, ObservableObject {
             "osrs_calculator_runtime.js",
             "article_tools.js",
             "collapsible_content.js",
+            "live_article_asset_warm.js",
             "infobox_switcher_bootstrap.js",
             "switch_infobox.js",
             "map_bridge.js",
@@ -2728,6 +2813,7 @@ class ArticleViewModel: NSObject, ObservableObject {
             "web/osrs_calculator_runtime.js",
             "web/article_tools.js",
             "web/collapsible_content.js",
+            "web/live_article_asset_warm.js",
             "web/infobox_switcher_bootstrap.js",
             "web/switch_infobox.js",
             "web/map_bridge.js",
@@ -3007,6 +3093,8 @@ class ArticleViewModel: NSObject, ObservableObject {
                     print("✅ ArticleViewModel: Loading completed for generation \(generation)!")
                     self.addToHistory(generation: generation)
                     self.startRenderedArticleIdentityProbe(for: generation)
+                    self.articleRevealedForWarm = true
+                    self.startLiveArticleAssetWarmIfNeeded()
                 }
             }
         }
@@ -3237,6 +3325,7 @@ class ArticleViewModel: NSObject, ObservableObject {
         convention: osrsArticleFloorConvention = .current()
     ) {
         lastTableOfContentsHTML = html
+        lastLoadedArticleHTML = html
         let sections = osrsArticleTableOfContentsExtractor.extract(
             displayTitle: pageTitle,
             html: html,

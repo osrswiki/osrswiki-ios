@@ -1560,6 +1560,10 @@ final class ArticleDocumentCoordinatorTests: XCTestCase {
         XCTAssertTrue(networkManager.contains("proxyAllowsDirectFallback"))
         XCTAssertTrue(articleViewModel.contains("if pageUrl.scheme == \"app-assets\""))
         XCTAssertTrue(articleViewModel.contains("loadUrlDirectlyInWebView"))
+        XCTAssertTrue(articleViewModel.contains("startLiveArticleAssetWarmIfNeeded"))
+        XCTAssertTrue(articleViewModel.contains("finishLoadingWithBodyReveal"))
+        XCTAssertFalse(coordinator.contains("osrsLiveArticleAssetWarmer"))
+        XCTAssertFalse(coordinator.contains("startLiveArticleAssetWarmIfNeeded"))
     }
 
     func testMapDiscoveryCannotRunBeforeWebKitReadyBoundary() throws {

@@ -2289,6 +2289,10 @@ struct ArticleWebView: UIViewRepresentable {
                 }
             case "osrsCalculatorApi":
                 handleCalculatorApiMessage(body)
+            case "osrsLiveAssetWarm":
+                if let urls = body["urls"] as? [String] {
+                    parent.viewModel.promoteLiveArticleAssets(urls)
+                }
             case "safariDebugger":
                 handleSafariDebuggerMessage(body)
             default:
