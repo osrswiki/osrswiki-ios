@@ -429,6 +429,32 @@ class ProxyInterceptorService: ObservableObject {
         ) ?? false
     }
 
+    func persistSpeculativeBrowsingResponse(
+        pageId: String,
+        url: URL,
+        data: Data,
+        response: URLResponse
+    ) async -> Bool {
+        do {
+            try await prepareLocalServerIfNeeded()
+        } catch {
+            return false
+        }
+        guard let localServer, let httpResponse = response as? HTTPURLResponse else {
+            return false
+        }
+        return await withCheckedContinuation { continuation in
+            localServer.cacheResponseDirectAsync(
+                pageId: pageId,
+                url: url.absoluteString,
+                data: data,
+                response: httpResponse
+            ) { persisted in
+                continuation.resume(returning: persisted)
+            }
+        }
+    }
+
     func persistExplicitSaveResponse(
         pageId: String,
         url: URL,

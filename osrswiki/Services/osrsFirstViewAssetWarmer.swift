@@ -1,25 +1,22 @@
 import Foundation
 
-final class osrsLiveArticleAssetWarmer: @unchecked Sendable {
+final class osrsFirstViewAssetWarmer: @unchecked Sendable {
     let queue = osrsLiveArticleAssetQueue()
     private let isCached: (URL) async -> Bool
     private let fetch: (URL) async -> Void
-    private let highConcurrency: Int
-    private let lowConcurrency: Int
+    private let concurrency: Int
     private let pageId: String
 
     init(
         pageId: String,
         isCached: @escaping (URL) async -> Bool,
         fetch: @escaping (URL) async -> Void,
-        highConcurrency: Int = 4,
-        lowConcurrency: Int = 2
+        concurrency: Int = 4
     ) {
         self.pageId = pageId
         self.isCached = isCached
         self.fetch = fetch
-        self.highConcurrency = max(highConcurrency, 0)
-        self.lowConcurrency = max(lowConcurrency, 0)
+        self.concurrency = max(concurrency, 0)
     }
 
     func promote(_ urls: [URL]) {
@@ -35,46 +32,33 @@ final class osrsLiveArticleAssetWarmer: @unchecked Sendable {
         let required = osrsOfflineArticleResourceSettlement.requiredImageURLsInDocumentOrder(from: html)
         let firstView = osrsOfflineArticleResourceSettlement.firstViewSlotURLs(from: html)
         let plan = osrsLiveArticleAssetPlan.partition(required: required, firstView: firstView)
-        queue.load(high: plan.high, low: plan.low)
-        NSLog(
-            "osrsLiveAssetWarm: start page=%@ required=%d high=%d low=%d",
-            pageId,
-            required.count,
-            plan.high.count,
-            plan.low.count
-        )
+        queue.load(high: plan.high, low: [])
+        NSLog("osrsFirstViewWarm: start page=%@ count=%d", pageId, plan.high.count)
         await withTaskGroup(of: Void.self) { group in
-            for _ in 0..<highConcurrency {
-                group.addTask { await self.drain(preferHigh: true) }
-            }
-            for _ in 0..<lowConcurrency {
-                group.addTask { await self.drain(preferHigh: false) }
+            for _ in 0..<concurrency {
+                group.addTask { await self.drain() }
             }
         }
-        NSLog("osrsLiveAssetWarm: done page=%@", pageId)
+        NSLog("osrsFirstViewWarm: done page=%@ count=%d", pageId, plan.high.count)
     }
 
-    private func drain(preferHigh: Bool) async {
+    private func drain() async {
         while !Task.isCancelled {
-            let url: URL?
-            if preferHigh {
-                url = queue.takeHigh() ?? queue.takeLow()
-            } else {
-                url = queue.takeLow()
-            }
-            guard let url else {
+            let url = queue.takeHigh()
+            if url == nil {
                 if queue.isIdle {
                     return
                 }
                 try? await Task.sleep(nanoseconds: 50_000_000)
                 continue
             }
-            defer { queue.complete(url) }
+            guard let url else { continue }
             if await isCached(url) {
+                queue.complete(url)
                 continue
             }
-            guard !Task.isCancelled else { return }
             await fetch(url)
+            queue.complete(url)
         }
     }
 }

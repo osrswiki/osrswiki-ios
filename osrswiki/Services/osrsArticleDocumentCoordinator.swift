@@ -430,6 +430,14 @@ actor osrsArticleDocumentCoordinator {
 
         if let cached = cachedDocument(for: key) {
             emit(.cacheHit, request.identity, since: lookupStart, detail: "document")
+            if purpose == .foreground {
+                osrsFirstViewPrewarmStore.shared.pin(identity: request.identity.value)
+            }
+            osrsFirstViewPrewarmStore.shared.start(
+                identity: request.identity.value,
+                pageURL: request.pageURL,
+                html: cached.html
+            )
             return cached
         }
 
@@ -460,6 +468,14 @@ actor osrsArticleDocumentCoordinator {
             }
             try Task.checkCancellation()
             completeDocumentFlight(key: key, flightID: handle.flightID, document: document)
+            if purpose == .foreground {
+                osrsFirstViewPrewarmStore.shared.pin(identity: request.identity.value)
+            }
+            osrsFirstViewPrewarmStore.shared.start(
+                identity: request.identity.value,
+                pageURL: request.pageURL,
+                html: document.html
+            )
             return document
         } catch {
             if Task.isCancelled {
@@ -515,6 +531,11 @@ actor osrsArticleDocumentCoordinator {
                     for: request,
                     renderOptions: renderOptions,
                     purpose: .prewarm
+                )
+                osrsFirstViewPrewarmStore.shared.start(
+                    identity: document.request.identity.value,
+                    pageURL: document.request.pageURL,
+                    html: document.html
                 )
                 await MainActor.run {
                     osrsPreparedArticleWebViewStore.shared.preload(
@@ -964,6 +985,7 @@ actor osrsArticleDocumentCoordinator {
             task: active.task
         )
         active.task.cancel()
+        osrsFirstViewPrewarmStore.shared.cancel(identity: active.identity.value)
     }
 
     /// Foreground opens may use one temporary lane over exactly one canceling speculative key.

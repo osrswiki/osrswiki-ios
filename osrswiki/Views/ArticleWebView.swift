@@ -2293,6 +2293,8 @@ struct ArticleWebView: UIViewRepresentable {
                 if let urls = body["urls"] as? [String] {
                     parent.viewModel.promoteLiveArticleAssets(urls)
                 }
+            case "osrsFirstViewComplete":
+                parent.viewModel.markFirstViewComplete()
             case "safariDebugger":
                 handleSafariDebuggerMessage(body)
             default:

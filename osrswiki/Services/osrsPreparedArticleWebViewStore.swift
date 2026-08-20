@@ -84,6 +84,14 @@ final class osrsPreparedArticleWebViewStore: NSObject, WKNavigationDelegate {
         }
         entries[index].isReady = true
         print("✅ PreparedArticleWebView: ready \(entries[index].key.identity.value)")
+        let identity = entries[index].key.identity.value
+        webView.evaluateJavaScript(
+            "window.osrsCollectFirstViewportUrls && window.osrsCollectFirstViewportUrls()"
+        ) { result, _ in
+            let raw = result as? [String] ?? []
+            let urls = raw.compactMap(osrsOfflineArticleResourceSettlement.networkURL(from:))
+            osrsFirstViewPrewarmStore.shared.promote(identity: identity, urls: urls)
+        }
     }
 
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {

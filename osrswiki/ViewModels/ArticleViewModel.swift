@@ -129,6 +129,21 @@ enum osrsOfflineArticleResourceSettlement {
         return urls
     }
 
+    nonisolated static func firstViewSlotURLs(from html: String) -> [URL] {
+        var seen: Set<URL> = []
+        var urls: [URL] = []
+        let chunks = infoboxFragments(from: html) + resourcePoolFragments(from: html) + [leadPrefix(from: html)]
+        for fragment in chunks {
+            for url in initialResourcePlan(from: fragment).map(\.url) where seen.insert(url).inserted {
+                urls.append(url)
+                if urls.count >= osrsLiveArticleAssetPlan.firstViewCap {
+                    return urls
+                }
+            }
+        }
+        return urls
+    }
+
     nonisolated static func networkURL(from raw: String) -> URL? {
         normalizedNetworkURL(raw, relativeTo: URL(string: "https://oldschool.runescape.wiki/")!)
     }
@@ -142,6 +157,111 @@ enum osrsOfflineArticleResourceSettlement {
             guard let range = Range($0.range, in: html) else { return nil }
             return String(html[range])
         }
+    }
+
+    private nonisolated static func leadPrefix(from html: String) -> String {
+        let pattern = #"(?i)<h2\b|<[^>]*class=["'][^"']*mw-heading"#
+        guard let regex = try? NSRegularExpression(pattern: pattern),
+              let match = regex.firstMatch(in: html, range: NSRange(html.startIndex..., in: html)),
+              let range = Range(match.range, in: html) else {
+            return html
+        }
+        return String(html[..<range.lowerBound])
+    }
+
+    private nonisolated static func dataResourceClassNeedles(from html: String) -> [String] {
+        let pattern = #"data-resource-class=["']([^"']+)["']"#
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
+            return []
+        }
+        return regex.matches(in: html, range: NSRange(html.startIndex..., in: html)).compactMap {
+            guard let range = Range($0.range(at: 1), in: html) else { return nil }
+            var selector = String(html[range]).trimmingCharacters(in: .whitespacesAndNewlines)
+            if selector.hasPrefix(".") {
+                selector.removeFirst()
+            }
+            return selector.isEmpty ? nil : selector
+        }
+    }
+
+    private nonisolated static func resourcePoolFragments(from html: String) -> [String] {
+        let needleOptions: String.CompareOptions = [.caseInsensitive]
+        var fragments: [String] = []
+        var searchStart = html.startIndex
+        let needles = ["infobox-switch-resources", "infobox-resources-", "switch-infobox"]
+            + dataResourceClassNeedles(from: html)
+        while searchStart < html.endIndex {
+            var classRange: Range<String.Index>?
+            for needle in needles {
+                guard let found = html.range(
+                    of: needle,
+                    options: needleOptions,
+                    range: searchStart..<html.endIndex
+                ) else { continue }
+                if classRange == nil || found.lowerBound < classRange!.lowerBound {
+                    classRange = found
+                }
+            }
+            guard let classRange else { break }
+            let prefix = html[..<classRange.lowerBound]
+            let divStart = prefix.range(of: "<div", options: [.backwards, .caseInsensitive])
+            let tableStart = prefix.range(of: "<table", options: [.backwards, .caseInsensitive])
+            let start = [divStart, tableStart].compactMap { $0 }.max(by: { $0.lowerBound < $1.lowerBound })
+            guard let start else {
+                searchStart = classRange.upperBound
+                continue
+            }
+            if html[start].lowercased().hasPrefix("<table"),
+               let fragment = tableFragment(in: html, from: start.lowerBound) {
+                fragments.append(fragment)
+                searchStart = html.index(start.lowerBound, offsetBy: fragment.count, limitedBy: html.endIndex)
+                    ?? html.endIndex
+            } else if let fragment = balancedDivFragment(in: html, from: start.lowerBound) {
+                fragments.append(fragment)
+                searchStart = html.index(start.lowerBound, offsetBy: fragment.count, limitedBy: html.endIndex)
+                    ?? html.endIndex
+            } else {
+                searchStart = classRange.upperBound
+            }
+        }
+        return fragments
+    }
+
+    private nonisolated static func tableFragment(in html: String, from start: String.Index) -> String? {
+        let remaining = String(html[start...])
+        let pattern = #"(?is)^<table\b[\s\S]*?</table>"#
+        guard let regex = try? NSRegularExpression(pattern: pattern),
+              let match = regex.firstMatch(in: remaining, range: NSRange(remaining.startIndex..., in: remaining)),
+              let range = Range(match.range, in: remaining) else {
+            return nil
+        }
+        return String(remaining[range])
+    }
+
+    private nonisolated static func balancedDivFragment(in html: String, from start: String.Index) -> String? {
+        var depth = 0
+        var index = start
+        let open = "<div"
+        let close = "</div"
+        while index < html.endIndex {
+            let remaining = html[index...]
+            if remaining.lowercased().hasPrefix(open) {
+                depth += 1
+                index = html.index(index, offsetBy: open.count, limitedBy: html.endIndex) ?? html.endIndex
+                continue
+            }
+            if remaining.lowercased().hasPrefix(close) {
+                depth -= 1
+                guard let closeEnd = remaining.range(of: ">") else { return nil }
+                index = closeEnd.upperBound
+                if depth == 0 {
+                    return String(html[start..<index])
+                }
+                continue
+            }
+            index = html.index(after: index)
+        }
+        return nil
     }
 
     private nonisolated static func initialResourcePlan(from html: String) -> [PlannedResource] {
@@ -169,10 +289,10 @@ enum osrsOfflineArticleResourceSettlement {
         }
 
         func appendImageAttributes(from tag: String) {
-            for name in ["src", "data-src", "data-original", "data-lazy-src"] {
+            for name in ["src", "data-src", "data-osrs-deferred-src", "data-original", "data-lazy-src"] {
                 if let value = attribute(name, in: tag) { rawValues.append(value) }
             }
-            for name in ["srcset", "data-srcset", "data-lazy-srcset"] {
+            for name in ["srcset", "data-srcset", "data-osrs-deferred-srcset", "data-lazy-srcset"] {
                 if let value = attribute(name, in: tag) {
                     rawValues.append(contentsOf: srcsetURLs(from: value))
                 }
@@ -184,7 +304,7 @@ enum osrsOfflineArticleResourceSettlement {
         }
         for picture in tagMatches(#"<picture\b[^>]*>[\s\S]*?</picture\s*>"#, in: html) {
             for source in tagMatches(#"<source\b[^>]*>"#, in: picture) {
-                for name in ["srcset", "data-srcset", "data-lazy-srcset"] {
+                for name in ["srcset", "data-srcset", "data-osrs-deferred-srcset", "data-lazy-srcset"] {
                     if let value = attribute(name, in: source) {
                         rawValues.append(contentsOf: srcsetURLs(from: value))
                     }
@@ -535,6 +655,7 @@ class ArticleViewModel: NSObject, ObservableObject {
     private var deferredMapPreloadTask: Task<Void, Never>?
     private var liveAssetWarmer: osrsLiveArticleAssetWarmer?
     private var liveAssetWarmTask: Task<Void, Never>?
+    private var firstViewOpenAt: CFAbsoluteTime?
     private var articleRevealedForWarm = false
 
     // TIMING MEASUREMENT: Track progress completion vs page visibility delay
@@ -997,6 +1118,13 @@ class ArticleViewModel: NSObject, ObservableObject {
         liveAssetWarmer?.promote(urls)
     }
 
+    func markFirstViewComplete() {
+        guard let started = firstViewOpenAt else { return }
+        firstViewOpenAt = nil
+        let elapsedMs = Int((CFAbsoluteTimeGetCurrent() - started) * 1000)
+        NSLog("osrsFirstViewComplete elapsedMs=%d", elapsedMs)
+    }
+
     private func startLiveArticleAssetWarmIfNeeded() {
         guard articleRevealedForWarm,
               passiveCachingAllowedWhileVisible,
@@ -1116,6 +1244,10 @@ class ArticleViewModel: NSObject, ObservableObject {
         renderedArticleIdentityProbeAttempts = 0
 
         currentLoadGeneration += 1
+        firstViewOpenAt = CFAbsoluteTimeGetCurrent()
+        osrsFirstViewPrewarmStore.shared.pin(
+            identity: osrsArticleDocumentIdentity(pageURL: pageUrl, pageTitle: pageTitle).value
+        )
         webKitReadyGeneration = nil
         javaScriptReadyGeneration = nil
         completedLoadGeneration = nil
@@ -2478,6 +2610,7 @@ class ArticleViewModel: NSObject, ObservableObject {
             "osrs_calculator_runtime.js",
             "article_tools.js",
             "collapsible_content.js",
+            "first_viewport_assets.js",
             "live_article_asset_warm.js",
             "infobox_switcher_bootstrap.js",
             "switch_infobox.js",
@@ -2813,6 +2946,7 @@ class ArticleViewModel: NSObject, ObservableObject {
             "web/osrs_calculator_runtime.js",
             "web/article_tools.js",
             "web/collapsible_content.js",
+            "web/first_viewport_assets.js",
             "web/live_article_asset_warm.js",
             "web/infobox_switcher_bootstrap.js",
             "web/switch_infobox.js",

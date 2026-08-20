@@ -38,6 +38,7 @@ class osrsPageHtmlBuilder {
         "web/infobox_switcher_bootstrap.js",
         "web/switch_infobox.js",
         "web/collapsible_content.js",
+        "web/first_viewport_assets.js",
         "web/live_article_asset_warm.js",
         "web/mobile_article_polish.js",
         "web/horizontal_scroll_interceptor.js"

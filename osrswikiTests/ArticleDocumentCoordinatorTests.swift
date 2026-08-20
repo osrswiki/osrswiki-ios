@@ -1564,6 +1564,19 @@ final class ArticleDocumentCoordinatorTests: XCTestCase {
         XCTAssertTrue(articleViewModel.contains("finishLoadingWithBodyReveal"))
         XCTAssertFalse(coordinator.contains("osrsLiveArticleAssetWarmer"))
         XCTAssertFalse(coordinator.contains("startLiveArticleAssetWarmIfNeeded"))
+        XCTAssertTrue(coordinator.contains("osrsFirstViewPrewarmStore"))
+        XCTAssertFalse(coordinator.contains("enablePassiveCachingMode"))
+        XCTAssertFalse(articleViewModel.contains("FIRST_SCREEN_LIMIT"))
+        XCTAssertTrue(articleViewModel.contains("osrsFirstViewComplete"))
+
+        let firstViewStore = try String(
+            contentsOf: root.appendingPathComponent("platforms/ios/osrswiki/Services/osrsFirstViewPrewarmStore.swift"),
+            encoding: .utf8
+        )
+        XCTAssertTrue(firstViewStore.contains("routingPolicy: .configured"))
+        XCTAssertTrue(firstViewStore.contains("persistSpeculativeBrowsingResponse"))
+        XCTAssertFalse(firstViewStore.contains("enablePassiveCachingMode"))
+        XCTAssertFalse(firstViewStore.contains("proxyCacheSessionToken"))
     }
 
     func testMapDiscoveryCannotRunBeforeWebKitReadyBoundary() throws {
