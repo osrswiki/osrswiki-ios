@@ -47,6 +47,33 @@ final class IOS01OfflineCacheVerificationUITests: XCTestCase {
         attachDebugDescription(from: offlineApp, name: "ios01-varrock-offline-after-relaunch")
     }
 
+    func testFirstSaveTimingAfterImagesHavePainted() throws {
+        let app = makeApp(
+            startTab: "search",
+            extraArguments: articleArguments(title: "Varrock", path: "Varrock")
+        )
+        app.launch()
+        XCTAssertTrue(app.wait(for: .runningForeground, timeout: launchTimeout))
+        XCTAssertTrue(app.staticTexts["Varrock"].waitForExistence(timeout: 10))
+        XCTAssertTrue(
+            app.webViews["article_web_view"].waitForExistence(timeout: articleLoadTimeout) ||
+                app.webViews.firstMatch.waitForExistence(timeout: 1)
+        )
+        // Let live-view artwork land in the browsing cache before measuring first save.
+        RunLoop.current.run(until: Date().addingTimeInterval(8))
+        let saveButton = app.buttons["Save"].firstMatch
+        XCTAssertTrue(saveButton.waitForExistence(timeout: 8))
+        let saveStarted = Date()
+        saveButton.tap()
+        let savedButton = app.buttons["Saved"].firstMatch
+        XCTAssertTrue(
+            savedButton.waitForExistence(timeout: 180),
+            "Varrock first save should complete after live artwork has painted"
+        )
+        let elapsedMs = Int(Date().timeIntervalSince(saveStarted) * 1000)
+        print("osrsSnapshotSaveUI: title=Varrock phase=button elapsedMs=\(elapsedMs)")
+    }
+
     func testRapidArticleABSaveIsolationKeepsBothSavedRowsAvailableAfterRelaunch() throws {
         let varrockApp = makeApp(
             startTab: "search",

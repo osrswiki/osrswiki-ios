@@ -41,4 +41,15 @@ struct osrsSavedPageAssetReuse {
         }
         return Partition(reusedUrls: reused, fetchUrls: fetch)
     }
+
+    static func copySourcePageIds(priorPageId: String?, sessionPageId: String?) -> [String] {
+        var ids: [String] = []
+        if let priorPageId, !priorPageId.isEmpty {
+            ids.append(priorPageId)
+        }
+        if let sessionPageId, !sessionPageId.isEmpty, sessionPageId != priorPageId {
+            ids.append(sessionPageId)
+        }
+        return ids
+    }
 }

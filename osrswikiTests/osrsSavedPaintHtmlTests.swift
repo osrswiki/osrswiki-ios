@@ -116,4 +116,52 @@ final class osrsSavedPaintHtmlTests: XCTestCase {
         XCTAssertEqual(partition.reusedUrls, [old])
         XCTAssertEqual(partition.fetchUrls, [new])
     }
+
+    func testCopySourcePageIdsPreferPriorThenSession() {
+        XCTAssertEqual(
+            osrsSavedPageAssetReuse.copySourcePageIds(priorPageId: "durable", sessionPageId: "browsing"),
+            ["durable", "browsing"]
+        )
+        XCTAssertEqual(
+            osrsSavedPageAssetReuse.copySourcePageIds(priorPageId: nil, sessionPageId: "browsing"),
+            ["browsing"]
+        )
+        XCTAssertEqual(
+            osrsSavedPageAssetReuse.copySourcePageIds(priorPageId: "same", sessionPageId: "same"),
+            ["same"]
+        )
+    }
+
+    func testCopyCachedResponseRejectsHtmlSessionAsset() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let server = LocalHTTPServer(port: 0, cacheDirectory: directory)
+        let url = try XCTUnwrap(URL(string: "https://oldschool.runescape.wiki/images/old.png"))
+        let cacheKey = LocalHTTPServer.cacheKeyForRequest(
+            pageId: "browsing",
+            method: "GET",
+            url: url.absoluteString
+        )
+        let cached = CachedHTTPResponse(
+            url: url.absoluteString,
+            data: Data("<html>captive portal</html>".utf8),
+            timestamp: Date(),
+            pageId: "browsing",
+            statusCode: 200,
+            headers: ["Content-Type": "text/html"]
+        )
+        try JSONEncoder().encode(cached).write(
+            to: directory.appendingPathComponent("\(cacheKey).cache"),
+            options: .atomic
+        )
+        XCTAssertNil(
+            server.copyCachedResponse(
+                from: "browsing",
+                to: "staging",
+                url: url.absoluteString,
+                saveGeneration: "g1"
+            )
+        )
+    }
 }

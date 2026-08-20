@@ -633,6 +633,23 @@ final class LocalHTTPServer: @unchecked Sendable {
         guard let source = getCachedResponse(cacheKey: sourceKey) ?? loadCachedResponseFromDisk(cacheKey: sourceKey) else {
             return nil
         }
+        guard let sourceURL = URL(string: source.url),
+              let httpResponse = HTTPURLResponse(
+                url: sourceURL,
+                statusCode: source.statusCode,
+                httpVersion: "HTTP/1.1",
+                headerFields: source.headers
+              ),
+              Self.shouldCacheResponse(
+                httpResponse: httpResponse,
+                url: source.url,
+                data: source.data,
+                expectsNonHTMLResource: false
+              )
+        else {
+            print("🚫 LocalHTTPServer: Refusing to copy invalid session asset \(url)")
+            return nil
+        }
         let destinationKey = Self.cacheKeyForRequest(pageId: destinationPageId, method: "GET", url: url)
         let copied = CachedHTTPResponse(
             url: source.url,

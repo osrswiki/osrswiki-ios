@@ -4081,6 +4081,8 @@ extension ArticleViewModel: WKNavigationDelegate {
             // Save for offline reading - matches Android saving logic
             saveState = .downloading
             saveProgress = 0.0
+            let saveStartedAt = CFAbsoluteTimeGetCurrent()
+            var browsingSessionPageId: String?
 
             var explicitSaveReservation = preReservedExplicitSaveLease
             var explicitOfflineSaveToken: ProxyCacheSessionToken?
@@ -4088,7 +4090,8 @@ extension ArticleViewModel: WKNavigationDelegate {
             if #available(iOS 17.0, *) {
                 // This is intentionally synchronous on MainActor and precedes metadata/network
                 // awaits. New article presentation owners will wait behind the reservation.
-                suspendPassiveCachingSession()
+                browsingSessionPageId = passiveCachePageId
+                suspendPassiveCachingSession(removingPassiveCache: false)
                 if explicitSaveReservation == nil {
                     guard let reservation = ProxyInterceptorService.shared.reserveExplicitSaveLease() else {
                         saveState = .error
@@ -4187,9 +4190,10 @@ extension ArticleViewModel: WKNavigationDelegate {
                         if #available(iOS 17.0, *) {
                             print("🚀 ArticleViewModel: Lazy caching implementation - instant save")
 
-                            // Explicit saves authoritatively refresh every exact required URL.
-                            // Passive browsing bytes are not copied into the durable namespace;
-                            // doing so would add large main-thread I/O without proving freshness.
+                            // First save copies exact required URLs from this-view browsing
+                            // bytes, then GETs the rest. Refresh still prefers the prior
+                            // durable generation. Completeness is the required URL set, not
+                            // the browsing namespace.
 
                             let stagingPageId = Self.offlineSaveStagingPageID(
                                 recordID: savedPage.id,
@@ -4279,7 +4283,8 @@ extension ArticleViewModel: WKNavigationDelegate {
                                     pageId: stagingPageId,
                                     htmlContent: response.parse.text,
                                     saveGeneration: saveGeneration,
-                                    priorPageId: savedPage.offlineLocalPath
+                                    priorPageId: savedPage.offlineLocalPath,
+                                    sessionPageId: browsingSessionPageId
                                 )
                             } catch {
                                 print("⚠️ ArticleViewModel: Offline artwork settlement incomplete: \(error)")
@@ -4395,6 +4400,8 @@ extension ArticleViewModel: WKNavigationDelegate {
                         self.isBookmarked = true
                         self.saveState = .saved
                         self.saveProgress = 1.0
+                        let elapsedMs = Int((CFAbsoluteTimeGetCurrent() - saveStartedAt) * 1000)
+                        NSLog("osrsSnapshotSave: title=%@ phase=total elapsedMs=%d", cleanTitle, elapsedMs)
                         print("✅ ArticleViewModel: Successfully saved page")
                     }
 
@@ -4434,9 +4441,11 @@ extension ArticleViewModel: WKNavigationDelegate {
         pageId: String,
         htmlContent: String,
         saveGeneration: String,
-        priorPageId: String? = nil
+        priorPageId: String? = nil,
+        sessionPageId: String? = nil
     ) async throws -> [URL] {
         print("🚀 ArticleViewModel: Starting bounded offline resource download for pageId: \(pageId)")
+        let artworkStartedAt = CFAbsoluteTimeGetCurrent()
         final class osrsReuseCounts: @unchecked Sendable {
             private let lock = NSLock()
             private var reusedValue = 0
@@ -4474,15 +4483,19 @@ extension ArticleViewModel: WKNavigationDelegate {
             ) {
                 return Data()
             }
-            if let priorPageId,
-               let copied = await ProxyInterceptorService.shared.copyCachedResponse(
-                from: priorPageId,
-                to: pageId,
-                url: url,
-                saveGeneration: saveGeneration
-               ) {
-                reuseCounts.addReused()
-                return copied
+            for sourcePageId in osrsSavedPageAssetReuse.copySourcePageIds(
+                priorPageId: priorPageId,
+                sessionPageId: sessionPageId
+            ) where sourcePageId != pageId {
+                if let copied = await ProxyInterceptorService.shared.copyCachedResponse(
+                    from: sourcePageId,
+                    to: pageId,
+                    url: url,
+                    saveGeneration: saveGeneration
+                ) {
+                    reuseCounts.addReused()
+                    return copied
+                }
             }
             let (data, response) = try await NetworkManager.shared.performExplicitOfflineDataRequest(
                 url: url,
@@ -4509,6 +4522,8 @@ extension ArticleViewModel: WKNavigationDelegate {
             return data
         }
         print("✅ ArticleViewModel: Settled \(settledURLs.count) required offline images reused=\(reuseCounts.reused) fetched=\(reuseCounts.fetched)")
+        let artworkElapsedMs = Int((CFAbsoluteTimeGetCurrent() - artworkStartedAt) * 1000)
+        NSLog("osrsSnapshotSave: phase=artwork elapsedMs=%d reused=%d fetched=%d required=%d", artworkElapsedMs, reuseCounts.reused, reuseCounts.fetched, settledURLs.count)
         return settledURLs
     }
 
