@@ -14,6 +14,7 @@ class GlobalOverlayManager: ObservableObject {
     @Published private(set) var articleBottomBarOwner: String?
     @Published private(set) var mainTabBarHiddenOwner: String?
     @Published private(set) var articleBottomBarExitProgress: CGFloat = 0
+    @Published private(set) var articleBottomBarCovered: Bool = false
     
     /// Show article bottom bar overlay at exact same coordinates as main tab bar
     func showArticleBottomBar<Content: View>(owner: String, @ViewBuilder content: () -> Content) {
@@ -27,6 +28,7 @@ class GlobalOverlayManager: ObservableObject {
         articleBottomBarOwner = nil
         articleBottomBar = nil
         articleBottomBarExitProgress = 0
+        articleBottomBarCovered = false
     }
 
     func hideMainTabBar(owner: String) {
@@ -40,5 +42,9 @@ class GlobalOverlayManager: ObservableObject {
 
     func setArticleBottomBarExitProgress(_ progress: CGFloat) {
         articleBottomBarExitProgress = min(1, max(0, progress))
+    }
+
+    func setArticleBottomBarCovered(_ covered: Bool) {
+        articleBottomBarCovered = covered
     }
 }

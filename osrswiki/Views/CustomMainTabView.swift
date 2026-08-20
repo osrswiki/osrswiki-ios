@@ -165,6 +165,7 @@ struct CustomMainTabView: View {
                         .ignoresSafeArea(.all, edges: .bottom)
                 }
                 .offset(x: overlayManager.articleBottomBarExitProgress * UIScreen.main.bounds.width)
+                .opacity(overlayManager.articleBottomBarCovered ? 0 : 1)
             }
         }
     }
@@ -186,15 +187,30 @@ struct CustomMainTabView: View {
         // Minimize retints the glass as it settles, which snaps the map-tab bar
         // at the end of the darkening. Keep a stable floating bar.
         .tabBarMinimizeBehavior(.never)
+        .toolbarBackground(
+            (appState.selectedTab == .map && themeManager.currentTheme is osrsLightTheme)
+                ? Color(themeManager.currentTheme.surface)
+                : Color.clear,
+            for: .tabBar
+        )
+        .toolbarBackground(
+            (appState.selectedTab == .map && themeManager.currentTheme is osrsLightTheme)
+                ? .visible
+                : .automatic,
+            for: .tabBar
+        )
         .onAppear {
-            UIApplication.applyStableTabBarAppearance()
+            refreshTabBarChrome()
             UIApplication.setFloatingTabBarHidden(overlayManager.mainTabBarHiddenOwner != nil)
         }
         .onChange(of: overlayManager.mainTabBarHiddenOwner) { _, owner in
             UIApplication.setFloatingTabBarHidden(owner != nil)
         }
         .onChange(of: appState.selectedTab) { _, _ in
-            UIApplication.refreshFloatingTabBarMaterial()
+            refreshTabBarChrome()
+        }
+        .onChange(of: themeManager.currentColorScheme) { _, _ in
+            refreshTabBarChrome()
         }
         .overlay {
             if let articleBottomBar = overlayManager.articleBottomBar {
@@ -206,6 +222,7 @@ struct CustomMainTabView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
                 .ignoresSafeArea(edges: .bottom)
                 .offset(x: overlayManager.articleBottomBarExitProgress * UIScreen.main.bounds.width)
+                .opacity(overlayManager.articleBottomBarCovered ? 0 : 1)
             }
         }
     }
@@ -231,6 +248,17 @@ struct CustomMainTabView: View {
         Binding(
             get: { appState.selectedTab },
             set: appState.setSelectedTab
+        )
+    }
+
+    private func refreshTabBarChrome() {
+        UIApplication.refreshFloatingTabBarMaterial(
+            opaqueFill: osrsReadableChromePolicy.tabBarOpaqueFill(
+                selectedTab: appState.selectedTab,
+                isLightTheme: themeManager.currentTheme is osrsLightTheme,
+                surface: UIColor(themeManager.currentTheme.surface)
+            ),
+            replaceFill: true
         )
     }
 

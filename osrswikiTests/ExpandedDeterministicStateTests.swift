@@ -207,8 +207,8 @@ final class ExpandedDeterministicStateTests: XCTestCase {
         )
         XCTAssertEqual(
             ArticleView.savedCacheRoutingMode(hasPersistedMainResponse: true, isOffline: false),
-            .cacheFirst,
-            "Only the exact persisted-main probe may activate best-effort legacy cache reading"
+            .cacheOnly,
+            "A persisted snapshot must render immediately even while online; origin refresh is a background policy"
         )
 
         let firstMigrationData = try XCTUnwrap(defaults.data(forKey: "saved_pages"))
@@ -254,8 +254,8 @@ final class ExpandedDeterministicStateTests: XCTestCase {
         )
         XCTAssertEqual(
             ArticleView.savedCacheRoutingMode(hasPersistedMainResponse: true, isOffline: false),
-            .cacheFirst,
-            "Online viewing must prefer preserved bytes and retain direct origin fallback"
+            .cacheOnly,
+            "Online viewing must still render the persisted snapshot immediately"
         )
         XCTAssertFalse(outdated.isAvailableOffline, "Readability must not falsely restore the durable Saved state")
     }

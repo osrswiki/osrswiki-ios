@@ -26,6 +26,16 @@ struct MoreView: View {
                     }
                     .listRowBackground(Color(osrsTheme.surfaceVariant))
                     .accessibilityIdentifier("more_appearance")
+
+                    NavigationLink(destination: osrsDownloadSettingsView()) {
+                        MoreRowView(
+                            iconName: "arrow.down.circle.fill",
+                            iconColor: Color(osrsTheme.primary),
+                            title: "Downloads"
+                        )
+                    }
+                    .listRowBackground(Color(osrsTheme.surfaceVariant))
+                    .accessibilityIdentifier("more_downloads")
                     
                     NavigationLink(destination: DonateView()) {
                         MoreRowView(
@@ -73,6 +83,8 @@ struct MoreView: View {
                 switch destination {
                 case .appearance:
                     AppearanceSettingsView()
+                case .downloads:
+                    osrsDownloadSettingsView()
                 case .donate:
                     DonateView()
                 case .about:

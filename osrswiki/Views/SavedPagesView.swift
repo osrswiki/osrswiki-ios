@@ -227,6 +227,10 @@ struct SavedPagesView: View {
                     }
                     .background(Color(osrsTheme.surface))
                     .contextMenu {
+                        Button("Update") {
+                            osrsDownloadSettings.markPendingManualUpdate(id: savedPage.offlineCachePageId)
+                            viewModel.navigateToPage(savedPage, appState: appState)
+                        }
                         Button("Share") { viewModel.sharePage(savedPage) }
                         Button("Delete", role: .destructive) {
                             viewModel.removeSavedPage(savedPage)

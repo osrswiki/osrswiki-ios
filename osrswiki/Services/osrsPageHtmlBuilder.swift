@@ -62,20 +62,12 @@ class osrsPageHtmlBuilder {
             window.OSRSWikiTheme = {
                 switchTheme: function(isDark) {
                     var body = document.body;
-                    if (!body) return;
-
-                    // Remove existing theme classes
-                    body.classList.remove('theme-osrs-dark');
-
-                    // Add dark theme class if needed
-                    if (isDark) {
-                        body.classList.add('theme-osrs-dark');
-                    }
-
-                    // Force immediate style recalculation
+                    var root = document.documentElement;
+                    if (!body || !root) return;
+                    body.classList.toggle('theme-osrs-dark', !!isDark);
+                    root.classList.toggle('theme-osrs-dark', !!isDark);
+                    root.style.colorScheme = isDark ? 'dark' : 'light';
                     body.offsetHeight;
-
-                    // Ensure page remains visible after theme change
                     if (body.style.visibility !== 'visible') {
                         body.style.visibility = 'visible';
                     }
@@ -581,6 +573,16 @@ class osrsPageHtmlBuilder {
                         min-height: 1.3em;
                         border-bottom: 1px solid var(--sidebar-color, currentColor);
                         box-sizing: border-box;
+                    }
+                    html, body, .mw-parser-output, .mw-content-text {
+                        line-height: 1.35 !important;
+                    }
+                    .mw-parser-output p,
+                    .mw-parser-output > ul,
+                    .mw-parser-output > ol,
+                    .mw-parser-output > dl,
+                    .mw-content-text p {
+                        line-height: 1.35 !important;
                     }
         </style>
         """

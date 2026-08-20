@@ -314,4 +314,26 @@ final class ArticleGestureOwnershipTests: XCTestCase {
         XCTAssertTrue(source.contains("parent.onSidebarGesture?()"))
         XCTAssertTrue(source.contains("isLocalOwnerAtStartPoint: false"))
     }
+
+    func testHorizontalOverflowClaimsTheWholePointerSequence() throws {
+        var root = URL(fileURLWithPath: #filePath)
+        while root.pathComponents.count > 1,
+              !FileManager.default.fileExists(atPath: root.appendingPathComponent("AGENTS.md").path) {
+            root.deleteLastPathComponent()
+        }
+        let source = try String(
+            contentsOf: root.appendingPathComponent("shared/js/horizontal_scroll_interceptor.js"),
+            encoding: .utf8
+        )
+        XCTAssertTrue(source.contains("if (owner && capacity.hasOverflow)"))
+        XCTAssertTrue(source.contains("claimLocalSequence(owner)"))
+        XCTAssertTrue(source.contains("A horizontally scrollable surface owns the whole pointer sequence"))
+        XCTAssertFalse(source.contains("handoffAtEdge"))
+        let overflowWalk = try XCTUnwrap(source.range(of: "isOverflowingHorizontalScroller(current)"))
+        let protectedReturn = try XCTUnwrap(source.range(of: "if (isInProtectedNonlocalTableRole(target)) return null"))
+        XCTAssertTrue(
+            overflowWalk.lowerBound < protectedReturn.lowerBound,
+            "Overflowing infobox maps and similar surfaces must claim the pointer before the protected-role skip"
+        )
+    }
 }

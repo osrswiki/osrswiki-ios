@@ -1399,7 +1399,7 @@ final class ArticleDocumentCoordinatorTests: XCTestCase {
                 isApplicationActive: true,
                 isOfflineContentAvailable: true
             ).maximumConcurrentPrewarms,
-            0
+            1
         )
     }
 

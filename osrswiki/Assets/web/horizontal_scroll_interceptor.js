@@ -430,7 +430,6 @@
     }
 
     function scrollOwnerForTarget(target) {
-        if (isInProtectedNonlocalTableRole(target)) return null;
         let current = target;
         while (current && current !== document.body) {
             const markedOwner = current.classList && current.classList.contains('osrs-local-scroll-surface');
@@ -440,10 +439,12 @@
             }
             current = current.parentElement;
         }
+        // Infoboxes, recipes, and map tables are not treated as one giant scroller, but a
+        // real overflow:auto/scroll descendant still owns this pointer sequence.
+        if (isInProtectedNonlocalTableRole(target)) return null;
         // The disclosure is one interaction region. A horizontal drag that begins on its
         // header/padding must not become article navigation when the disclosed content owns a
-        // real local horizontal viewport (for example Combat stats). Do not apply this to
-        // primary infoboxes, recipes, or map tables because those are deliberately nonlocal.
+        // real local horizontal viewport (for example Combat stats).
         const disclosure = target?.closest?.('.collapsible-container');
         return overflowingHorizontalOwner(disclosure);
     }
@@ -557,16 +558,10 @@
         startCanScrollPositive = capacity.canPositive;
         startCanScrollNegative = capacity.canNegative;
         notifyTouchSequence(activeTouchSequence);
-        if (capacity.hasOverflow && capacity.canPositive && capacity.canNegative) {
-            // Interior of a scroller: this whole pointer sequence stays local,
-            // including rubber-band/momentum into an edge.
+        if (owner && capacity.hasOverflow) {
+            // A horizontally scrollable surface owns the whole pointer sequence,
+            // including terminal edges. Back/contents swipes must start outside it.
             claimLocalSequence(owner);
-        } else if (capacity.hasOverflow) {
-            // Already at a terminal edge. Wait for the first horizontal move:
-            // into the table stays local; off the edge may become article swipe.
-            beginNavigationSequence();
-            sequenceAxisLock = null;
-            log('Scrollable at terminal edge; waiting for direction');
         } else {
             beginNavigationSequence();
         }
@@ -582,14 +577,7 @@
         if (!owner || !event.touches || !event.touches.length) return;
         const deltaX = event.touches[0].clientX - activeTouchStartX;
         if (Math.abs(deltaX) < 10) return;
-        const canConsume = deltaX > 0 ? startCanScrollPositive : startCanScrollNegative;
-        if (canConsume) {
-            claimLocalSequence(owner);
-        } else {
-            sequenceAxisLock = 'navigation';
-            latestTouchOwnedByLocalHorizontalContent = false;
-            rememberTouchOwnership(activeTouchSequence, false);
-        }
+        claimLocalSequence(owner);
     }, { passive: true });
 
     function resetScrollState() {

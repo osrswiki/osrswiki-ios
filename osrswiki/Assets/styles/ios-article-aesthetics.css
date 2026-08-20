@@ -11,6 +11,20 @@ html {
     text-size-adjust: 100%;
 }
 
+/* Keep the tighter first-paint leading. Later wiki sheets must not loosen
+   prose after the article is already on screen. */
+html,
+body,
+.mw-parser-output,
+.mw-content-text,
+.mw-parser-output p,
+.mw-parser-output > ul,
+.mw-parser-output > ol,
+.mw-parser-output > dl,
+.mw-content-text p {
+    line-height: 1.35 !important;
+}
+
 :is(td, th) .scp,
 :is(td, th) .scp[style] {
     display: inline-flex !important;

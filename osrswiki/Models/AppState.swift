@@ -326,6 +326,8 @@ class AppState: ObservableObject {
         switch arguments[moreDestinationIndex + 1].lowercased() {
         case "appearance":
             moreNavigationStack = [.appearance]
+        case "downloads":
+            moreNavigationStack = [.downloads]
         case "donate":
             moreNavigationStack = [.donate]
         case "about":
@@ -448,6 +450,7 @@ enum MapNavigationDestination: Hashable {
 
 enum MoreNavigationDestination: Hashable {
     case appearance
+    case downloads
     case donate
     case about
     case feedback

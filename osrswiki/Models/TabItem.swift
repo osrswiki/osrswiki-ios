@@ -5,7 +5,7 @@
 //  Created on iOS development session
 //
 
-import SwiftUI
+import UIKit
 
 enum TabItem: String, CaseIterable {
     case news = "news"
@@ -77,5 +77,18 @@ enum TabItem: String, CaseIterable {
         case .more:
             return "more_tab"
         }
+    }
+}
+
+enum osrsReadableChromePolicy {
+    /// Light-theme Liquid Glass over the map samples terrain, so tab labels lose contrast.
+    /// Use an opaque parchment fill only for that pairing; other tabs keep glass.
+    static func tabBarOpaqueFill(
+        selectedTab: TabItem,
+        isLightTheme: Bool,
+        surface: UIColor
+    ) -> UIColor? {
+        guard selectedTab == .map, isLightTheme else { return nil }
+        return surface
     }
 }

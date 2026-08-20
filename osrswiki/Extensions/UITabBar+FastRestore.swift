@@ -7,6 +7,10 @@
 
 import UIKit
 
+private enum osrsTabBarFillCache {
+    static var opaqueFill: UIColor?
+}
+
 extension UIApplication {
     /// iOS 26 Liquid Glass TabView keeps the system tab bar composited even
     /// when `.toolbarVisibility(.hidden)` is set. Hide it by alpha so the
@@ -32,9 +36,12 @@ extension UIApplication {
         }
     }
 
-    static func refreshFloatingTabBarMaterial() {
+    static func refreshFloatingTabBarMaterial(opaqueFill: UIColor? = nil, replaceFill: Bool = false) {
         DispatchQueue.main.async {
-            applyStableTabBarAppearance()
+            if replaceFill {
+                osrsTabBarFillCache.opaqueFill = opaqueFill
+            }
+            applyStableTabBarAppearance(opaqueFill: osrsTabBarFillCache.opaqueFill)
             for bar in floatingTabBarViews() {
                 bar.setNeedsLayout()
                 bar.layoutIfNeeded()
@@ -49,21 +56,27 @@ extension UIApplication {
         }
     }
 
-    static func applyStableTabBarAppearance() {
-        // Pin scroll-edge and standard appearances to the same clear glass so
+    static func applyStableTabBarAppearance(opaqueFill: UIColor? = nil) {
+        // Pin scroll-edge and standard appearances to the same material so
         // iOS 26 cannot rematerialize from clear → frosted when the sampled
         // background crosses a luminance threshold (the map-tab snap).
         let appearance = UITabBarAppearance()
-        appearance.configureWithTransparentBackground()
-        appearance.backgroundEffect = nil
-        appearance.backgroundColor = .clear
+        if let opaqueFill {
+            appearance.configureWithOpaqueBackground()
+            appearance.backgroundEffect = nil
+            appearance.backgroundColor = opaqueFill
+        } else {
+            appearance.configureWithTransparentBackground()
+            appearance.backgroundEffect = nil
+            appearance.backgroundColor = .clear
+        }
         appearance.shadowColor = .clear
         UITabBar.appearance().standardAppearance = appearance
         UITabBar.appearance().scrollEdgeAppearance = appearance
         for bar in floatingTabBars() {
             bar.standardAppearance = appearance
             bar.scrollEdgeAppearance = appearance
-            bar.isTranslucent = true
+            bar.isTranslucent = opaqueFill == nil
         }
     }
 

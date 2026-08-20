@@ -448,42 +448,54 @@ extension View {
         modifier(osrsTabGlassAccessoryBarModifier(accessory: accessory))
     }
 
-    @ViewBuilder
     func osrsFloatingGlass(in shape: Capsule, fallback: Color) -> some View {
-        if #available(iOS 26.0, *) {
-            self
-                .containerShape(shape)
-                .glassEffect(.regular, in: shape)
-                .clipShape(shape)
-        } else {
-            self
-                .background(fallback, in: shape)
-                .clipShape(shape)
-        }
+        modifier(osrsThemedContainerFloatingGlass(shape: shape, fallback: fallback))
     }
 
-    @ViewBuilder
     func osrsFloatingGlass(in shape: RoundedRectangle, fallback: Color) -> some View {
+        modifier(osrsThemedContainerFloatingGlass(shape: shape, fallback: fallback))
+    }
+
+    func osrsFloatingGlass<S: Shape>(in shape: S, fallback: Color) -> some View {
+        modifier(osrsThemedFloatingGlass(shape: shape, fallback: fallback))
+    }
+}
+
+private struct osrsThemedFloatingGlass<ChromeShape: Shape>: ViewModifier {
+    @Environment(\.colorScheme) private var colorScheme
+    let shape: ChromeShape
+    let fallback: Color
+
+    func body(content: Content) -> some View {
         if #available(iOS 26.0, *) {
-            self
-                .containerShape(shape)
+            content
                 .glassEffect(.regular, in: shape)
+                .background(fallback.opacity(colorScheme == .light ? 0.88 : 0.0), in: shape)
                 .clipShape(shape)
+                .id("osrs-floating-glass-\(colorScheme == .dark ? "dark" : "light")")
         } else {
-            self
+            content
                 .background(fallback, in: shape)
                 .clipShape(shape)
         }
     }
+}
 
-    @ViewBuilder
-    func osrsFloatingGlass<S: Shape>(in shape: S, fallback: Color) -> some View {
+private struct osrsThemedContainerFloatingGlass<ChromeShape: InsettableShape>: ViewModifier {
+    @Environment(\.colorScheme) private var colorScheme
+    let shape: ChromeShape
+    let fallback: Color
+
+    func body(content: Content) -> some View {
         if #available(iOS 26.0, *) {
-            self
+            content
+                .containerShape(shape)
                 .glassEffect(.regular, in: shape)
+                .background(fallback.opacity(colorScheme == .light ? 0.88 : 0.0), in: shape)
                 .clipShape(shape)
+                .id("osrs-floating-glass-\(colorScheme == .dark ? "dark" : "light")")
         } else {
-            self
+            content
                 .background(fallback, in: shape)
                 .clipShape(shape)
         }

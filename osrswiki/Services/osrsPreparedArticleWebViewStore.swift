@@ -69,6 +69,14 @@ final class osrsPreparedArticleWebViewStore: NSObject, WKNavigationDelegate {
         return entry.webView
     }
 
+    func removeAll() {
+        for entry in entries {
+            entry.webView.stopLoading()
+            entry.webView.removeFromSuperview()
+        }
+        entries.removeAll()
+    }
+
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         guard let token = webView.osrsPreparedDocumentKey,
               let index = entries.firstIndex(where: { $0.webView === webView && $0.key.token == token }) else {

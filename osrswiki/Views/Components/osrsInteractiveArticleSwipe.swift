@@ -500,9 +500,12 @@ final class osrsInteractiveArticleSwipe {
         dimming.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         dimming.isUserInteractionEnabled = false
 
+        // Snapshot the article page only. The live overlay bottom bar translates
+        // with the swipe; a window snapshot cannot capture iOS 26 Liquid Glass
+        // and hiding that bar made it vanish on the first pixel of movement.
         var currentFrame = sliding.convert(sliding.bounds, to: window)
-        currentFrame.origin.x += sliding.transform.tx
-        currentFrame.origin.y += sliding.transform.ty
+        currentFrame.origin.x -= sliding.transform.tx
+        currentFrame.origin.y -= sliding.transform.ty
         let current = sliding.snapshotView(afterScreenUpdates: false) ?? {
             let fallback = UIView(frame: currentFrame)
             fallback.backgroundColor = sliding.backgroundColor ?? Self.parchmentColor()

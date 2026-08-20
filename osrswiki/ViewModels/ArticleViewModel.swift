@@ -426,6 +426,18 @@ class ArticleViewModel: NSObject, ObservableObject {
     @Published var isLoading: Bool = false
     @Published var pendingYouTubeEmbedURL: URL?
     @Published var needsContentProcessRecovery: Bool = false
+
+    /// True when this view model still owns a rendered article document. Returning
+    /// from background must not start a new network load just because SwiftUI
+    /// re-ran `onAppear`.
+    var hasReusableRenderedArticle: Bool {
+        !isLoading &&
+            !isRefreshing &&
+            !needsContentProcessRecovery &&
+            webView != nil &&
+            webView?.url != nil &&
+            webView?.url?.absoluteString != "about:blank"
+    }
     @Published var loadingProgress: Double = 0.0
     @Published var loadingProgressText: String? = nil
     @Published var errorMessage: String?
@@ -2314,6 +2326,19 @@ class ArticleViewModel: NSObject, ObservableObject {
         }
     }
 
+    func applyLiveTheme(_ theme: any osrsThemeProtocol, themeManager: osrsThemeManager) {
+        injectThemeColors(themeManager)
+        let isDark = theme is osrsDarkTheme
+        let pageColor = UIColor(theme.background)
+        webView?.underPageBackgroundColor = pageColor
+        webView?.backgroundColor = pageColor
+        webView?.scrollView.backgroundColor = pageColor
+        webView?.evaluateJavaScript(
+            "if (window.OSRSWikiTheme) { window.OSRSWikiTheme.switchTheme(\(isDark)); }"
+        )
+        osrsPreparedArticleWebViewStore.shared.removeAll()
+    }
+
     /// Apply iOS theme colors as CSS variables to match Android behavior
     private func applyThemeColors(webView: WKWebView, themeManager: osrsThemeManager, completion: @escaping () -> Void) {
         print("🎨 ArticleViewModel: Applying iOS theme colors as CSS variables")
@@ -3876,13 +3901,15 @@ extension ArticleViewModel: WKNavigationDelegate {
             offlineFileSize: savedPage.offlineFileSize,
             offlineLocalPath: savedPage.offlineLocalPath,
             durableSettlementVersion: nil,
-            pendingSettlementGeneration: nil
+            pendingSettlementGeneration: nil,
+            revisionId: savedPage.revisionId
         )
     }
 
     /// Save/bookmark toggle action - matches Android PageReadingListManager functionality
     func performSaveAction(
-        explicitSaveReservation preReservedExplicitSaveLease: ProxyExplicitSaveReservation? = nil
+        explicitSaveReservation preReservedExplicitSaveLease: ProxyExplicitSaveReservation? = nil,
+        refreshExistingSnapshot: Bool = false
     ) async {
         guard saveState != .downloading else {
             if #available(iOS 17.0, *), let preReservedExplicitSaveLease {
@@ -3893,7 +3920,7 @@ extension ArticleViewModel: WKNavigationDelegate {
 
         print("🔖 ArticleViewModel: Save action triggered - current state: \(saveState), bookmarked: \(isBookmarked)")
 
-        if isBookmarked {
+        if isBookmarked && !refreshExistingSnapshot {
             if #available(iOS 17.0, *), let preReservedExplicitSaveLease {
                 // Defensive only: ArticleView never transfers a lease for an unsave, but do not
                 // strand the singleton if a future caller violates that contract.
@@ -3948,6 +3975,7 @@ extension ArticleViewModel: WKNavigationDelegate {
 
             var explicitSaveReservation = preReservedExplicitSaveLease
             var explicitOfflineSaveToken: ProxyCacheSessionToken?
+            var settledRevisionId: Int?
             if #available(iOS 17.0, *) {
                 // This is intentionally synchronous on MainActor and precedes metadata/network
                 // awaits. New article presentation owners will wait behind the reservation.
@@ -4099,6 +4127,7 @@ extension ArticleViewModel: WKNavigationDelegate {
                                 parseData = fetched.0
                                 response = try JSONDecoder().decode(osrsParseResponse.self, from: parseData)
                             }
+                            settledRevisionId = response.parse.revid
                             if !(await ProxyInterceptorService.shared.hasPersistedResponseAsync(
                                 pageId: stagingPageId,
                                 url: apiURL,
@@ -4191,7 +4220,8 @@ extension ArticleViewModel: WKNavigationDelegate {
                         let updatedSavedPage = savedPage.markingCurrentDurableSettlementAvailable(
                             at: Date(),
                             offlineLocalPath: publishedCachePageId,
-                            offlineFileSize: durableOfflineByteCount
+                            offlineFileSize: durableOfflineByteCount,
+                            revisionId: settledRevisionId
                         )
 
                         // This one metadata update is the publish point. Until it succeeds,

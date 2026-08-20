@@ -170,6 +170,10 @@ final class ArticleNavigationIdentityTests: XCTestCase {
         XCTAssertTrue(source.contains("restoreCapturedArticleScrollIfNeeded"))
         XCTAssertTrue(source.contains("restoreCapturedArticleScrollIfNeeded(attempt:"))
         XCTAssertTrue(source.contains("captureCurrentArticleScroll"))
+        XCTAssertTrue(source.contains("window.scrollTo(0, \\(offsetY))"))
+        XCTAssertTrue(source.contains("hasReusableRenderedArticle"))
+        XCTAssertTrue(source.contains("setArticleBottomBarCovered(false)"))
+        XCTAssertTrue(source.contains("setArticleBottomBarExitProgress(progress)"))
         XCTAssertFalse(source.contains("Returned to top article destination - reloading expected page"))
         XCTAssertFalse(source.contains("Detected return navigation - using reload with blank overlay"))
         XCTAssertFalse(navigationSource.contains("bumpTopArticleNavigationRevision"))
@@ -179,14 +183,15 @@ final class ArticleNavigationIdentityTests: XCTestCase {
         XCTAssertTrue(source.contains("viewModel.recoverRenderedArticleMismatchIfNeeded(theme: osrsTheme"))
         XCTAssertTrue(source.contains("appState.navigateBack(animated: animated)"))
         XCTAssertTrue(source.contains("onBackProgress:"))
-        XCTAssertTrue(source.contains("canNavigateBackWithinActiveArticleStack"))
         XCTAssertTrue(source.contains("appState.activeArticleDestination != nil"))
         if let progressStart = source.range(of: "onBackProgress: { progress in"),
            let progressEnd = source.range(of: "isContentsOpen:", range: progressStart.upperBound..<source.endIndex) {
             let backProgress = String(source[progressStart.lowerBound..<progressEnd.lowerBound])
-            XCTAssertTrue(backProgress.contains("setArticleBottomBarExitProgress"))
+            XCTAssertTrue(backProgress.contains("setArticleBottomBarExitProgress(progress)"))
+            XCTAssertTrue(backProgress.contains("setArticleBottomBarCovered(false)"))
             XCTAssertFalse(backProgress.contains("showMainTabBar()"))
             XCTAssertFalse(backProgress.contains("hideMainTabBar()"))
+            XCTAssertFalse(backProgress.contains("canNavigateBackWithinActiveArticleStack"))
         } else {
             XCTFail("onBackProgress is missing")
         }

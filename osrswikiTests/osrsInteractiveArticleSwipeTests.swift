@@ -186,4 +186,21 @@ final class osrsInteractiveArticleSwipeTests: XCTestCase {
             )
         )
     }
+
+    func testBackSwipeSnapshotsTheArticlePageInsteadOfTheKeyWindow() throws {
+        var root = URL(fileURLWithPath: #filePath)
+        while root.pathComponents.count > 1,
+              !FileManager.default.fileExists(atPath: root.appendingPathComponent("AGENTS.md").path) {
+            root.deleteLastPathComponent()
+        }
+        let source = try String(
+            contentsOf: root.appendingPathComponent(
+                "platforms/ios/osrswiki/Views/Components/osrsInteractiveArticleSwipe.swift"
+            ),
+            encoding: .utf8
+        )
+        XCTAssertTrue(source.contains("sliding.snapshotView(afterScreenUpdates: false)"))
+        XCTAssertFalse(source.contains("window.snapshotView(afterScreenUpdates: false)"))
+        XCTAssertTrue(source.contains("Liquid Glass"))
+    }
 }

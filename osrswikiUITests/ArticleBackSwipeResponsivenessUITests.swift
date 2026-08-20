@@ -100,6 +100,58 @@ final class ArticleBackSwipeResponsivenessUITests: XCTestCase {
         attachScreenshot(named: "vertical-after-scroll")
     }
 
+    func testLeadingEdgeBackSwipeKeepsArticleBottomBarAttachedMidGesture() throws {
+        let article = articleWebView()
+        XCTAssertTrue(article.waitForExistence(timeout: 25), "Expected Blood Moon article to open from launch arguments")
+        let saveButton = app.buttons["Save"].firstMatch
+        let findButton = app.buttons["Find"].firstMatch
+        XCTAssertTrue(saveButton.waitForExistence(timeout: 20), "Article Save action should be on screen before a back swipe")
+        XCTAssertTrue(findButton.waitForExistence(timeout: 5), "Article Find action should be on screen before a back swipe")
+        attachScreenshot(named: "bottom-bar-before-back-swipe")
+
+        // Start below the infobox so a wide table cannot claim the pan.
+        let start = article.coordinate(withNormalizedOffset: CGVector(dx: 0.02, dy: 0.72))
+        let mid = article.coordinate(withNormalizedOffset: CGVector(dx: 0.28, dy: 0.72))
+
+        var midSwipeScreenshot: XCUIScreenshot?
+        let captured = expectation(description: "mid-swipe screenshot")
+        DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 4.0) {
+            midSwipeScreenshot = XCUIScreen.main.screenshot()
+            captured.fulfill()
+        }
+
+        start.press(
+            forDuration: 0.08,
+            thenDragTo: mid,
+            withVelocity: XCUIGestureVelocity(45),
+            thenHoldForDuration: 2.0
+        )
+        wait(for: [captured], timeout: 3)
+
+        if let midSwipeScreenshot {
+            let attachment = XCTAttachment(screenshot: midSwipeScreenshot)
+            attachment.name = "bottom-bar-mid-back-swipe"
+            attachment.lifetime = .keepAlways
+            add(attachment)
+            if let evidenceDir = ProcessInfo.processInfo.environment["OSRS_QA_EVIDENCE_DIR"],
+               !evidenceDir.isEmpty {
+                let url = URL(fileURLWithPath: evidenceDir)
+                    .appendingPathComponent("ios-swipe-mid-bar.png")
+                try? midSwipeScreenshot.pngRepresentation.write(to: url)
+            }
+        }
+
+        XCTAssertTrue(
+            saveButton.exists && findButton.exists,
+            "The live article bottom bar must stay attached during an interactive back swipe instead of vanishing"
+        )
+        XCTAssertTrue(
+            app.staticTexts["The Blood Moon Rises"].waitForExistence(timeout: 2),
+            "A sub-commit back swipe should keep the current article after the finger lifts"
+        )
+        attachScreenshot(named: "bottom-bar-after-cancelled-back-swipe")
+    }
+
     func testHomeArticleBackButtonReturnsToHome() throws {
         try launchHomeRootArticle()
 

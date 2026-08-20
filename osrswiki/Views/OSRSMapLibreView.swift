@@ -214,8 +214,7 @@ private struct osrsMapCapsuleGlassChromeModifier: ViewModifier {
     @Environment(\.osrsTheme) private var osrsTheme
 
     func body(content: Content) -> some View {
-        content
-            .osrsFloatingGlass(in: Capsule(), fallback: Color(osrsTheme.mapControlBackgroundColor).opacity(0.92))
+        content.osrsMapReadableGlass(in: Capsule(), theme: osrsTheme)
     }
 }
 
@@ -224,8 +223,7 @@ private struct osrsMapPillGlassChromeModifier: ViewModifier {
     let shape: RoundedRectangle
 
     func body(content: Content) -> some View {
-        content
-            .osrsFloatingGlass(in: shape, fallback: Color(osrsTheme.mapControlBackgroundColor).opacity(0.92))
+        content.osrsMapReadableGlass(in: shape, theme: osrsTheme)
     }
 }
 
@@ -234,8 +232,24 @@ private struct osrsMapGlassChromeModifier<ChromeShape: Shape>: ViewModifier {
     let shape: ChromeShape
 
     func body(content: Content) -> some View {
-        content
-            .osrsFloatingGlass(in: shape, fallback: Color(osrsTheme.mapControlBackgroundColor).opacity(0.92))
+        content.osrsMapReadableGlass(in: shape, theme: osrsTheme)
+    }
+}
+
+private extension View {
+    @ViewBuilder
+    func osrsMapReadableGlass<ChromeShape: Shape>(
+        in shape: ChromeShape,
+        theme: any osrsThemeProtocol
+    ) -> some View {
+        let fallback = Color(theme.mapControlBackgroundColor)
+        if theme is osrsLightTheme {
+            self
+                .background(fallback, in: shape)
+                .clipShape(shape)
+        } else {
+            self.osrsFloatingGlass(in: shape, fallback: fallback.opacity(0.92))
+        }
     }
 }
 

@@ -192,16 +192,18 @@ struct osrsArticlePrewarmConditions: Equatable, Sendable {
         if UserDefaults.standard.bool(forKey: "osrs_disable_article_prewarm") {
             return 0
         }
-        guard hasNetworkConnection,
+        guard hasNetworkConnection || isOfflineContentAvailable,
               !isLowPowerModeEnabled,
-              isApplicationActive,
-              !isOfflineContentAvailable else {
+              isApplicationActive else {
             return 0
         }
         switch thermalState {
         case .serious, .critical:
             return 0
         case .nominal, .fair:
+            if isOfflineContentAvailable {
+                return 1
+            }
             return isConstrained ? 1 : 2
         @unknown default:
             return 0
@@ -1560,7 +1562,7 @@ private struct osrsArticleVisibleRowPrewarmModifier: ViewModifier {
         let pageURLs = ([pageURL].compactMap { $0 } + additionalPageURLs).reduce(into: [URL]()) {
             if !$0.contains($1) { $0.append($1) }
         }
-        guard !pageURLs.isEmpty, !isOfflineContentAvailable else { return }
+        guard !pageURLs.isEmpty else { return }
         let newOwners = pageURLs.map { _ in UUID() }
         owners = newOwners
         let renderOptions = osrsArticleRenderOptions(

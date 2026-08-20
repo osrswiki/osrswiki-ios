@@ -1375,6 +1375,7 @@ struct ArticleWebView: UIViewRepresentable {
         // not reliably observe its touch stream. It recognizes simultaneously and never
         // cancels WebKit scrolling; DOM/native-map ownership still makes navigation fail closed.
         context.coordinator.installArticleNavigationGesture(on: webView)
+        context.coordinator.installArticleRefreshControl(on: webView)
         
         // map_bridge.js is the single article bridge and the HTML loads the shared interceptor
         // once. Do not also install the legacy document-end interceptor here.
@@ -1386,10 +1387,11 @@ struct ArticleWebView: UIViewRepresentable {
         
         // Connect webView to viewModel
         viewModel.setWebView(webView)
-        applyDynamicTypeScale(to: webView)
+        applyDynamicTypeScale(to: webView, coordinator: context.coordinator)
         
         // Initialize map handler with the webView
         context.coordinator.setupMapHandler(webView: webView)
+        context.coordinator.lastInjectedThemeIsDark = themeManager.currentTheme is osrsDarkTheme
         
         return webView
     }
@@ -1418,26 +1420,38 @@ struct ArticleWebView: UIViewRepresentable {
             webView.isInspectable = osrsWebKitSecurityPolicy.isWebViewInspectionEnabled
         }
         context.coordinator.installArticleNavigationGesture(on: webView)
+        context.coordinator.installArticleRefreshControl(on: webView)
         if #available(iOS 16.0, *) {
             webView.isFindInteractionEnabled = true
         }
         viewModel.adoptPreRenderedWebView(webView)
-        applyDynamicTypeScale(to: webView)
+        applyDynamicTypeScale(to: webView, coordinator: context.coordinator)
         context.coordinator.setupMapHandler(webView: webView)
+        context.coordinator.lastInjectedThemeIsDark = themeManager.currentTheme is osrsDarkTheme
         return webView
     }
     
     func updateUIView(_ webView: WKWebView, context: Context) {
         context.coordinator.parent = self
-        applyDynamicTypeScale(to: webView)
-        // Apply modern OSRS theme changes
-        viewModel.injectThemeColors(themeManager)
+        applyDynamicTypeScale(to: webView, coordinator: context.coordinator)
+        let isDark = themeManager.currentTheme is osrsDarkTheme
+        if context.coordinator.lastInjectedThemeIsDark != isDark {
+            context.coordinator.lastInjectedThemeIsDark = isDark
+            viewModel.applyLiveTheme(themeManager.currentTheme, themeManager: themeManager)
+        }
+        if !viewModel.isRefreshing {
+            webView.scrollView.refreshControl?.endRefreshing()
+        }
     }
 
-    private func applyDynamicTypeScale(to webView: WKWebView) {
+    private func applyDynamicTypeScale(to webView: WKWebView, coordinator: Coordinator? = nil) {
         let scale = osrsArticleDynamicTypeScaling.scale(for: dynamicTypeSize)
         let requiresWebReflow = osrsArticleDynamicTypeScaling.requiresWebReflow(for: dynamicTypeSize)
-        webView.pageZoom = requiresWebReflow ? 1.0 : scale
+        let pageZoom = requiresWebReflow ? 1.0 : scale
+        if coordinator?.lastAppliedPageZoom != pageZoom {
+            coordinator?.lastAppliedPageZoom = pageZoom
+            webView.pageZoom = pageZoom
+        }
         viewModel.setAccessibilityReflowEnabled(requiresWebReflow, textScale: requiresWebReflow ? scale : 1.0)
 #if DEBUG
         let existing = (webView.accessibilityValue as? String) ?? ""
@@ -1633,7 +1647,7 @@ struct ArticleWebView: UIViewRepresentable {
                 
                 /* Improve readability */
                 .mw-parser-output {
-                    line-height: 1.6;
+                    line-height: 1.35;
                     font-size: 16px;
                 }
             `;
@@ -1782,6 +1796,10 @@ struct ArticleWebView: UIViewRepresentable {
         private var pendingBackCommitAuthorized: Bool?
         private var pendingBackCommitAnimationDone = false
         private var pendingBackCommitGeneration: UInt64?
+        private var articleChromeBlockedForSequence = false
+        private var articleChromeClassificationPending = false
+        fileprivate var lastAppliedPageZoom: CGFloat?
+        fileprivate var lastInjectedThemeIsDark: Bool?
         
         init(_ parent: ArticleWebView) {
             self.parent = parent
@@ -1804,6 +1822,16 @@ struct ArticleWebView: UIViewRepresentable {
             articleNavigationRecognizer = recognizer
             osrsInteractiveArticleSwipe.navigationController(from: webView)?
                 .interactivePopGestureRecognizer?.isEnabled = false
+        }
+
+        func installArticleRefreshControl(on webView: WKWebView) {
+            let refreshControl = webView.scrollView.refreshControl ?? UIRefreshControl()
+            refreshControl.addTarget(self, action: #selector(handleArticlePullToRefresh), for: .valueChanged)
+            webView.scrollView.refreshControl = refreshControl
+        }
+
+        @objc private func handleArticlePullToRefresh() {
+            parent.viewModel.refreshPage(theme: parent.themeManager.currentTheme)
         }
 
         func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
@@ -1854,11 +1882,25 @@ struct ArticleWebView: UIViewRepresentable {
             case .began:
                 articleGestureGeneration = osrsGestureState.shared.beginArticleGesture()
                 articleGestureStartPoint = recognizer.location(in: view)
-                if let webView {
-                    interactiveSwipe.begin(from: webView, contentsOpen: parent.isContentsOpen())
+                articleChromeBlockedForSequence = false
+                articleChromeClassificationPending = true
+                if let webView, let startPoint = articleGestureStartPoint {
+                    if mapHandler?.ownsArticleGesture(at: startPoint, in: webView) == true {
+                        articleChromeBlockedForSequence = true
+                        articleChromeClassificationPending = false
+                    } else {
+                        classifyArticleChromeStartPoint(
+                            startPoint,
+                            in: webView,
+                            generation: articleGestureGeneration
+                        )
+                    }
                 }
             case .changed:
                 guard let webView else { return }
+                if articleChromeBlockedForSequence || articleChromeClassificationPending {
+                    return
+                }
                 // A late map overlay attaching during an already-committed chrome swipe
                 // must not abort it. A local table/chart that claims before chrome is
                 // locked still wins so the table can scroll.
@@ -1886,6 +1928,13 @@ struct ArticleWebView: UIViewRepresentable {
                 defer {
                     articleGestureGeneration = nil
                     articleGestureStartPoint = nil
+                    articleChromeBlockedForSequence = false
+                    articleChromeClassificationPending = false
+                }
+                if articleChromeBlockedForSequence {
+                    osrsGestureState.shared.cancelArticleGesture(generation: articleGestureGeneration)
+                    cancelInteractiveSwipe(restoreScroll: true)
+                    return
                 }
                 guard let generation = articleGestureGeneration else {
                     osrsGestureState.shared.cancelArticleGesture()
@@ -1965,6 +2014,8 @@ struct ArticleWebView: UIViewRepresentable {
                 osrsGestureState.shared.cancelArticleGesture(generation: articleGestureGeneration)
                 articleGestureGeneration = nil
                 articleGestureStartPoint = nil
+                articleChromeBlockedForSequence = false
+                articleChromeClassificationPending = false
                 cancelInteractiveSwipe(restoreScroll: true)
             default:
                 break
@@ -2091,6 +2142,43 @@ struct ArticleWebView: UIViewRepresentable {
             )
         }
 #endif
+
+        private func classifyArticleChromeStartPoint(
+            _ point: CGPoint,
+            in webView: WKWebView,
+            generation: UInt64?
+        ) {
+            let x = String(format: "%.3f", locale: Locale(identifier: "en_US_POSIX"), point.x)
+            let y = String(format: "%.3f", locale: Locale(identifier: "en_US_POSIX"), point.y)
+            let script = "window.OSRSArticleGestureOwnership && window.OSRSArticleGestureOwnership.classifyPoint(\(x), \(y))"
+            webView.evaluateJavaScript(script) { [weak self] result, error in
+                DispatchQueue.main.async {
+                    guard let self,
+                          self.articleGestureGeneration == generation,
+                          self.articleChromeClassificationPending else { return }
+                    let isLocalOwner: Bool
+                    if error == nil,
+                       let classification = result as? [String: Any],
+                       let classified = classification["isLocalOwner"] as? Bool {
+                        isLocalOwner = classified
+                    } else {
+                        isLocalOwner = false
+                    }
+                    self.articleChromeClassificationPending = false
+                    if isLocalOwner {
+                        self.articleChromeBlockedForSequence = true
+                        return
+                    }
+                    self.interactiveSwipe.begin(from: webView, contentsOpen: self.parent.isContentsOpen())
+                    if let recognizer = self.articleNavigationRecognizer {
+                        self.interactiveSwipe.update(
+                            translation: recognizer.translation(in: recognizer.view?.window ?? recognizer.view ?? webView),
+                            from: webView
+                        )
+                    }
+                }
+            }
+        }
 
         private func classifyArticleGestureStartPoint(
             _ point: CGPoint,

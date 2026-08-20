@@ -37,4 +37,46 @@ final class MapPresentationContractTests: XCTestCase {
         XCTAssertEqual(UIColor(dark.mapControlBackgroundColor), UIColor(dark.surface))
         XCTAssertEqual(UIColor(dark.mapControlTextColor), UIColor(dark.onSurface))
     }
+
+    func testLightMapTabBarUsesOpaqueParchmentFill() throws {
+        let surface = UIColor(osrsLightTheme().surface)
+        let mapLight = osrsReadableChromePolicy.tabBarOpaqueFill(
+            selectedTab: .map,
+            isLightTheme: true,
+            surface: surface
+        )
+        XCTAssertNotNil(mapLight)
+        XCTAssertEqual(mapLight, surface)
+        XCTAssertNil(
+            osrsReadableChromePolicy.tabBarOpaqueFill(
+                selectedTab: .map,
+                isLightTheme: false,
+                surface: surface
+            )
+        )
+        XCTAssertNil(
+            osrsReadableChromePolicy.tabBarOpaqueFill(
+                selectedTab: .news,
+                isLightTheme: true,
+                surface: surface
+            )
+        )
+        let tabSource = try String(
+            contentsOf: repositoryRoot().appendingPathComponent(
+                "platforms/ios/osrswiki/Views/CustomMainTabView.swift"
+            ),
+            encoding: .utf8
+        )
+        XCTAssertTrue(tabSource.contains("toolbarBackground"))
+        XCTAssertTrue(tabSource.contains("selectedTab == .map && themeManager.currentTheme is osrsLightTheme"))
+    }
+
+    private func repositoryRoot() throws -> URL {
+        var root = URL(fileURLWithPath: #filePath)
+        while root.pathComponents.count > 1,
+              !FileManager.default.fileExists(atPath: root.appendingPathComponent("AGENTS.md").path) {
+            root.deleteLastPathComponent()
+        }
+        return root
+    }
 }

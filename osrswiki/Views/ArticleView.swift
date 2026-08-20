@@ -23,10 +23,10 @@ struct ArticleView: View {
         hasPersistedMainResponse: Bool,
         isOffline: Bool
     ) -> SavedCacheRoutingMode {
-        if isOffline {
+        if hasPersistedMainResponse {
             return .cacheOnly
         }
-        return hasPersistedMainResponse ? .cacheFirst : .saveWhileServing
+        return isOffline ? .cacheOnly : .saveWhileServing
     }
 
     let pageTitle: String?
@@ -212,6 +212,7 @@ private struct ArticleViewContent: View {
 #endif
             }
             .onDisappear {
+                overlayManager?.setArticleBottomBarCovered(false)
                 savedCachePreparationTask?.cancel()
                 savedCachePreparationTask = nil
                 isArticleVisible = false
@@ -292,13 +293,15 @@ private struct ArticleViewContent: View {
     private var articleSessionChrome: some View {
         articlePresentedChrome
             .onChange(of: osrsTheme as? osrsLightTheme != nil) { _, _ in
-                captureCurrentArticleScroll()
-                viewModel.loadArticle(theme: osrsTheme, isReload: true)
+                viewModel.applyLiveTheme(osrsTheme, themeManager: themeManager)
+                UIApplication.refreshFloatingTabBarMaterial()
             }
             .osrsArticleSceneRestore(
                 needsRecovery: $viewModel.needsContentProcessRecovery,
                 onLeaveForeground: captureCurrentArticleScroll,
-                onEnterForeground: { restoreCapturedArticleScrollIfNeeded() },
+                onEnterForeground: {
+                    restoreCapturedArticleScrollIfNeeded()
+                },
                 onRecover: {
                     viewModel.needsContentProcessRecovery = false
                     viewModel.loadArticle(theme: osrsTheme, isReload: true)
@@ -335,7 +338,8 @@ private struct ArticleViewContent: View {
         isArticleVisible = true
         viewModel.setArticleVisibility(true, allowsPassiveCaching: savedPageId == nil)
 
-        if hasLoadedBefore {
+        if hasLoadedBefore || viewModel.hasReusableRenderedArticle {
+            hasLoadedBefore = true
             restoreCapturedArticleScrollIfNeeded()
             updateArticleBottomBar()
             return
@@ -432,6 +436,55 @@ private struct ArticleViewContent: View {
         viewModel.loadArticle(theme: osrsTheme, isReload: isReload)
         movedOffTopOfArticleStack = false
         updateArticleBottomBar()
+        scheduleSavedSnapshotRefreshIfNeeded()
+    }
+
+    private func scheduleSavedSnapshotRefreshIfNeeded() {
+        guard let savedPageId else { return }
+        let settings = osrsDownloadSettings.load()
+        let network = NetworkManager.shared
+        let isUnmetered = network.connectionType == .wifi || network.connectionType == .wiredEthernet
+        let pendingManual = osrsDownloadSettings.consumePendingManualUpdate(id: savedPageId)
+        let trigger: osrsSavedPageUpdateTrigger = pendingManual ? .manual : .access
+        guard settings.shouldRefreshSnapshot(
+            trigger: trigger,
+            isOnline: network.isConnected,
+            isUnmetered: isUnmetered
+        ) else {
+            return
+        }
+        Task { @MainActor in
+            await refreshSavedSnapshotIfRemoteRevisionChanged()
+        }
+    }
+
+    private func refreshSavedSnapshotIfRemoteRevisionChanged() async {
+        let requestedTitle = osrsArticleDocumentIdentity.requestedTitle(
+            pageURL: pageUrl,
+            fallbackTitle: pageTitle
+        )
+        let probeURL = osrsSavedPageRevisionProbe.queryURL(forPageTitle: requestedTitle)
+        do {
+            let (data, _) = try await URLSession.shared.data(from: probeURL)
+            guard let remote = osrsSavedPageRevisionProbe.remoteRevision(
+                in: data,
+                requestedTitle: requestedTitle
+            ) else {
+                return
+            }
+            let localRevision = SavedPagesRepository().getSavedPages().first {
+                $0.offlineCachePageId == savedPageId || $0.url == pageUrl
+            }?.revisionId
+            guard osrsSavedPageRevisionProbe.snapshotNeedsRefresh(
+                localRevisionId: localRevision,
+                remoteRevisionId: remote.revisionId
+            ) else {
+                return
+            }
+            await viewModel.performSaveAction(refreshExistingSnapshot: true)
+        } catch {
+            return
+        }
     }
 
     @ViewBuilder
@@ -548,7 +601,6 @@ private struct ArticleViewContent: View {
     }
 
     private func captureCurrentArticleScroll() {
-        guard !viewModel.needsContentProcessRecovery else { return }
         guard let scrollView = viewModel.webView?.scrollView else { return }
         guard scrollView.contentSize.height >= 64 else { return }
         appState.captureArticleScrollOffset(articleIdentity, offsetY: scrollView.contentOffset.y)
@@ -556,11 +608,15 @@ private struct ArticleViewContent: View {
 
     private func restoreCapturedArticleScrollIfNeeded(attempt: Int = 0) {
         guard let offsetY = appState.capturedArticleScrollOffset(articleIdentity),
+              offsetY > 1,
               let webView = viewModel.webView else { return }
         let scrollView = webView.scrollView
         scrollView.setContentOffset(CGPoint(x: 0, y: offsetY), animated: false)
+        webView.evaluateJavaScript("window.scrollTo(0, \(offsetY));")
         let maxOffset = max(scrollView.contentSize.height - scrollView.bounds.height, 0)
-        if maxOffset + 24 >= offsetY || attempt >= 40 {
+        if abs(scrollView.contentOffset.y - offsetY) <= 8 ||
+            maxOffset + 24 >= offsetY ||
+            attempt >= 80 {
             return
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.032) {
@@ -897,7 +953,6 @@ private struct ArticleViewContent: View {
     }
 
     private func refreshPage() {
-        // Use Android-parity refresh that shows progress bar over blank page
         viewModel.refreshPage(theme: osrsTheme)
     }
 
@@ -948,9 +1003,11 @@ private struct ArticleViewContent: View {
                 var transaction = Transaction()
                 transaction.disablesAnimations = true
                 withTransaction(transaction) {
-                    overlayManager?.setArticleBottomBarExitProgress(
-                        appState.canNavigateBackWithinActiveArticleStack ? 0 : progress
-                    )
+                    // Keep the live overlay bar visible and translate it with the
+                    // article. Liquid Glass is not captured by window snapshots, so
+                    // covering the bar made it vanish at the first pixel of a swipe.
+                    overlayManager?.setArticleBottomBarCovered(false)
+                    overlayManager?.setArticleBottomBarExitProgress(progress)
                 }
             },
             isContentsOpen: {

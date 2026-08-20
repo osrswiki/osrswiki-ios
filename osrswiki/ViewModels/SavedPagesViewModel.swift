@@ -436,6 +436,9 @@ struct SavedPage: Identifiable, Codable {
     /// A persisted compare-and-swap token for one explicit refresh attempt. It prevents a stale
     /// completion from publishing over a newer retry or resurrecting a deleted record.
     let pendingSettlementGeneration: String?
+    /// MediaWiki revid for the persisted snapshot. Cheap remote probes compare this
+    /// integer instead of re-downloading the article.
+    let revisionId: Int?
 
     static let currentDurableSettlementVersion = 1
 
@@ -452,7 +455,8 @@ struct SavedPage: Identifiable, Codable {
         offlineFileSize: Int64?,
         offlineLocalPath: String?,
         durableSettlementVersion: Int? = nil,
-        pendingSettlementGeneration: String? = nil
+        pendingSettlementGeneration: String? = nil,
+        revisionId: Int? = nil
     ) {
         self.id = id
         self.title = title
@@ -467,6 +471,7 @@ struct SavedPage: Identifiable, Codable {
         self.offlineLocalPath = offlineLocalPath
         self.durableSettlementVersion = durableSettlementVersion
         self.pendingSettlementGeneration = pendingSettlementGeneration
+        self.revisionId = revisionId
     }
 
     var hasCurrentDurableSettlement: Bool {
@@ -513,14 +518,16 @@ struct SavedPage: Identifiable, Codable {
             offlineFileSize: offlineFileSize,
             offlineLocalPath: offlineLocalPath,
             durableSettlementVersion: nil,
-            pendingSettlementGeneration: nil
+            pendingSettlementGeneration: nil,
+            revisionId: revisionId
         )
     }
 
     func markingCurrentDurableSettlementAvailable(
         at downloadDate: Date,
         offlineLocalPath: String? = nil,
-        offlineFileSize: Int64? = nil
+        offlineFileSize: Int64? = nil,
+        revisionId: Int? = nil
     ) -> SavedPage {
         SavedPage(
             id: id,
@@ -535,7 +542,8 @@ struct SavedPage: Identifiable, Codable {
             offlineFileSize: offlineFileSize,
             offlineLocalPath: offlineLocalPath ?? id,
             durableSettlementVersion: Self.currentDurableSettlementVersion,
-            pendingSettlementGeneration: nil
+            pendingSettlementGeneration: nil,
+            revisionId: revisionId ?? self.revisionId
         )
     }
     
@@ -557,7 +565,8 @@ struct SavedPage: Identifiable, Codable {
             offlineFileSize: offlineFileSize,
             offlineLocalPath: offlineLocalPath,
             durableSettlementVersion: durableSettlementVersion,
-            pendingSettlementGeneration: pendingSettlementGeneration
+            pendingSettlementGeneration: pendingSettlementGeneration,
+            revisionId: revisionId
         )
     }
     

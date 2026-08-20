@@ -8,6 +8,7 @@
 
 import SwiftUI
 import Combine
+import UIKit
 
 // MARK: - Theme Selection
 
@@ -311,8 +312,14 @@ class osrsThemeManager: ObservableObject {
         let resolvedColorScheme = selectedTheme == .automatic ? systemColorScheme : nil
         currentTheme = selectedTheme.theme(for: resolvedColorScheme)
         currentColorScheme = selectedTheme.colorScheme ?? systemColorScheme
-        
-        // Note: Global theming is now handled in osrswikiApp.swift to avoid duplication
+        osrsPreparedArticleWebViewStore.shared.removeAll()
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap(\.windows)
+            .forEach { window in
+                window.overrideUserInterfaceStyle = currentColorScheme == .dark ? .dark : .light
+            }
+        UIApplication.refreshFloatingTabBarMaterial()
         print("🎨 [THEME MANAGER] Theme updated: \(selectedTheme.displayName)")
     }
     
