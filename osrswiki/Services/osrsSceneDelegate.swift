@@ -1,17 +1,19 @@
 import SwiftUI
 import UIKit
 
-/// Owns the scene's one UIWindow. iOS 26 can keep SpringBoard's background
-/// snapshot on screen after a Settings round-trip even when extra windows
-/// become key. Replacing the primary window's root (not stacking a second
-/// UIWindow, not detaching the scene window) is the resume path.
+/// Owns the scene's one UIWindow. The content host is `osrsAppSceneViewController`
+/// with a single `UIHostingController(CustomMainTabView)` child for the process
+/// lifetime. iOS 26 can leave SpringBoard's parchment snapshot on screen after
+/// a background; resume restores that same window through `osrsSceneCompositor`.
+/// Substituting a parallel wiki `WKWebView` is not a resume strategy.
 final class osrsSceneDelegate: UIResponder, UIWindowSceneDelegate {
     var window: UIWindow?
-    private var needsResumeReplace = false
+    private var needsResumeRestore = false
     private var resumeDisplayLink: CADisplayLink?
-    private var isReplacing = false
+    private var isAttaching = false
     private var finishedFirstActivation = false
     private var appObservers: [NSObjectProtocol] = []
+    private var appHost: UIViewController?
 
     func scene(
         _ scene: UIScene,
@@ -22,7 +24,7 @@ final class osrsSceneDelegate: UIResponder, UIWindowSceneDelegate {
         print("🪟 osrsSceneDelegate willConnect session=\(session.persistentIdentifier)")
         NSLog("osrsSceneDelegate willConnect session=%@", session.persistentIdentifier)
         observeApplicationLifecycle()
-        attachPrimaryWindow(to: windowScene, resumeArticle: false, isResume: false, reason: "connect")
+        attachPrimaryWindow(to: windowScene, reason: "connect")
     }
 
     func stateRestorationActivity(for scene: UIScene) -> NSUserActivity? {
@@ -33,11 +35,11 @@ final class osrsSceneDelegate: UIResponder, UIWindowSceneDelegate {
     }
 
     func sceneWillResignActive(_ scene: UIScene) {
-        markNeedsResumeReplace(reason: "sceneWillResignActive")
+        markNeedsResumeRestore(reason: "sceneWillResignActive")
     }
 
     func sceneDidEnterBackground(_ scene: UIScene) {
-        markNeedsResumeReplace(reason: "sceneDidEnterBackground")
+        markNeedsResumeRestore(reason: "sceneDidEnterBackground")
     }
 
     func sceneDidBecomeActive(_ scene: UIScene) {
@@ -61,14 +63,14 @@ final class osrsSceneDelegate: UIResponder, UIWindowSceneDelegate {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            self?.markNeedsResumeReplace(reason: "applicationWillResignActive")
+            self?.markNeedsResumeRestore(reason: "applicationWillResignActive")
         })
         appObservers.append(center.addObserver(
             forName: UIApplication.didEnterBackgroundNotification,
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            self?.markNeedsResumeReplace(reason: "applicationDidEnterBackground")
+            self?.markNeedsResumeRestore(reason: "applicationDidEnterBackground")
         })
         appObservers.append(center.addObserver(
             forName: UIApplication.didBecomeActiveNotification,
@@ -80,57 +82,31 @@ final class osrsSceneDelegate: UIResponder, UIWindowSceneDelegate {
             }
             self?.handleBecameActive(scene, reason: "applicationDidBecomeActive")
         })
-        appObservers.append(center.addObserver(
-            forName: .osrsResumableArticleDidChange,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            guard let windowScene = self?.window?.windowScene else { return }
-            self?.installForegroundArticleHostIfNeeded(on: windowScene, reason: "foreground-article")
-        })
     }
 
-    private func markNeedsResumeReplace(reason: String) {
-        needsResumeReplace = true
+    private func markNeedsResumeRestore(reason: String) {
+        needsResumeRestore = true
         osrsAppRoot.appState.noteApplicationDidEnterBackground()
         osrsAppRoot.appState.rememberResumableArticle()
         print("🪟 osrsSceneDelegate mark resume reason=\(reason)")
         NSLog("osrsSceneDelegate mark resume reason=%@", reason)
-        // A UIHostingController window root that backgrounds on iOS 26 keeps
-        // SpringBoard's parchment snapshot even after a later root replace.
-        // Switching to the UIKit article host before the snapshot is taken
-        // is the resume path that actually reaches the LCD.
-        guard !(sceneContainer?.osrsContent is osrsResumedArticleViewController),
-              osrsAppRoot.appState.resumableArticleURL != nil,
-              let windowScene = window?.windowScene else {
-            return
-        }
-        replacePrimaryWindow(on: windowScene, reason: "resign-\(reason)")
     }
 
     private func handleBecameActive(_ scene: UIScene, reason: String) {
         osrsAppRoot.themeManager.applyPersistedThemeToWindows()
         osrsAppRoot.applyGlobalTheming()
         guard let windowScene = scene as? UIWindowScene else { return }
-        if !needsResumeReplace {
-            if !finishedFirstActivation {
-                finishedFirstActivation = true
-                print("🪟 osrsSceneDelegate first activation skip replace trigger=\(reason)")
-                NSLog("osrsSceneDelegate first activation skip replace trigger=%@", reason)
-                // UIHostingController as the window root poisons iOS 26 resume.
-                // Install the UIKit article host while still foregrounded so
-                // SpringBoard snapshots UIKit, not SwiftUI.
-                DispatchQueue.main.async { [weak self] in
-                    self?.installForegroundArticleHostIfNeeded(on: windowScene, reason: "foreground-article")
-                }
-            }
+        if !finishedFirstActivation {
+            finishedFirstActivation = true
+            print("🪟 osrsSceneDelegate first activation skip replace trigger=\(reason)")
+            NSLog("osrsSceneDelegate first activation skip replace trigger=%@", reason)
             return
         }
-        finishedFirstActivation = true
-        needsResumeReplace = false
-        print("🪟 osrsSceneDelegate resume replace trigger=\(reason)")
-        NSLog("osrsSceneDelegate resume replace trigger=%@", reason)
-        replacePrimaryWindow(on: windowScene, reason: reason)
+        guard needsResumeRestore else { return }
+        needsResumeRestore = false
+        print("🪟 osrsSceneDelegate resume compositor trigger=\(reason)")
+        NSLog("osrsSceneDelegate resume compositor trigger=%@", reason)
+        restoreResumedScene(on: windowScene, reason: reason)
         osrsAppRoot.appState.noteApplicationDidBecomeActive()
         DispatchQueue.main.async { [weak self] in
             self?.nudgeCompositor(on: windowScene)
@@ -144,34 +120,17 @@ final class osrsSceneDelegate: UIResponder, UIWindowSceneDelegate {
         window?.rootViewController as? osrsAppSceneViewController
     }
 
-    private func installForegroundArticleHostIfNeeded(on windowScene: UIWindowScene, reason: String) {
-        guard osrsAppRoot.appState.resumableArticleURL != nil else { return }
-        if sceneContainer?.osrsContent is osrsResumedArticleViewController { return }
-        if window?.rootViewController is osrsResumedArticleViewController { return }
-        print("🪟 osrsSceneDelegate foreground article host reason=\(reason)")
-        NSLog("osrsSceneDelegate foreground article host reason=%@", reason)
-        replacePrimaryWindow(on: windowScene, reason: reason)
-    }
-
     func replacePrimaryWindow(on windowScene: UIWindowScene, reason: String) {
-        let isResume = reason != "connect"
-        attachPrimaryWindow(
-            to: windowScene,
-            resumeArticle: osrsAppRoot.appState.resumableArticleURL != nil,
-            isResume: isResume,
-            reason: reason
-        )
+        attachPrimaryWindow(to: windowScene, reason: reason)
     }
 
     private func attachPrimaryWindow(
         to windowScene: UIWindowScene,
-        resumeArticle: Bool,
-        isResume: Bool,
         reason: String
     ) {
-        guard !isReplacing else { return }
-        isReplacing = true
-        defer { isReplacing = false }
+        guard !isAttaching else { return }
+        isAttaching = true
+        defer { isAttaching = false }
 
         let theme = osrsAppRoot.themeManager.currentTheme
         let bounds = windowScene.coordinateSpace.bounds
@@ -187,52 +146,47 @@ final class osrsSceneDelegate: UIResponder, UIWindowSceneDelegate {
         sceneWindow.layer.contents = nil
         sceneWindow.layer.shouldRasterize = false
 
-        let articleURL = osrsAppRoot.appState.resumableArticleURL
-        let root: UIViewController
-        if isResume {
-            // Remounting CustomMainTabView after background freezes the LCD on
-            // the parchment snapshot. Always replace with the UIKit article host.
-            root = osrsResumedArticleViewController(
-                appState: osrsAppRoot.appState,
-                themeManager: osrsAppRoot.themeManager,
-                articleURL: articleURL,
-                webView: nil
-            )
-        } else if resumeArticle {
-            root = osrsResumedArticleViewController(
-                appState: osrsAppRoot.appState,
-                themeManager: osrsAppRoot.themeManager,
-                articleURL: articleURL,
-                webView: nil
-            )
-        } else {
-            let host = UIHostingController(rootView: osrsAppRoot.rootView)
-            host.view.backgroundColor = UIColor(theme.background)
-            root = host
-        }
-
         let container = sceneContainer ?? osrsAppSceneViewController()
         container.view.backgroundColor = UIColor(theme.background)
         if sceneWindow.rootViewController !== container {
             replaceRootViewController(on: sceneWindow, with: container)
         }
-        container.osrsInstall(root)
+        if container.osrsContent == nil {
+            let host = appHost ?? UIHostingController(rootView: osrsAppRoot.rootView)
+            host.view.backgroundColor = UIColor(theme.background)
+            appHost = host
+            container.osrsInstall(host)
+        }
         sceneWindow.makeKeyAndVisible()
         window = sceneWindow
 
         UIApplication.shared.requestSceneSessionRefresh(windowScene.session)
         print(
-            "🪟 osrsSceneDelegate attach reason=\(reason) resumeArticle=\(resumeArticle) url=\(articleURL?.absoluteString ?? "none") sceneWindows=\(windowScene.windows.count) key=\(sceneWindow.isKeyWindow) frame=\(Int(sceneWindow.frame.width))x\(Int(sceneWindow.frame.height))"
+            "🪟 osrsSceneDelegate attach reason=\(reason) host=CustomMainTabView sceneWindows=\(windowScene.windows.count) key=\(sceneWindow.isKeyWindow) frame=\(Int(sceneWindow.frame.width))x\(Int(sceneWindow.frame.height))"
         )
         NSLog(
-            "osrsSceneDelegate attach reason=%@ resumeArticle=%d url=%@ key=%d",
+            "osrsSceneDelegate attach reason=%@ host=CustomMainTabView key=%d",
             reason,
-            resumeArticle ? 1 : 0,
-            articleURL?.absoluteString ?? "none",
             sceneWindow.isKeyWindow ? 1 : 0
         )
         osrsSceneCompositor.restore(sceneWindow)
         startResumeDisplayLink()
+    }
+
+    private func restoreResumedScene(on windowScene: UIWindowScene, reason: String) {
+        guard let window, window.windowScene === windowScene else {
+            attachPrimaryWindow(to: windowScene, reason: reason)
+            return
+        }
+        window.backgroundColor = UIColor(osrsAppRoot.themeManager.currentTheme.background)
+        window.overrideUserInterfaceStyle = osrsAppRoot.themeManager.currentColorScheme == .dark ? .dark : .light
+        window.layer.contents = nil
+        window.makeKeyAndVisible()
+        UIApplication.shared.requestSceneSessionRefresh(windowScene.session)
+        osrsSceneCompositor.restore(window)
+        startResumeDisplayLink()
+        print("🪟 osrsSceneDelegate restore same SwiftUI host reason=\(reason)")
+        NSLog("osrsSceneDelegate restore same SwiftUI host reason=%@", reason)
     }
 
     private func existingSceneWindow(on windowScene: UIWindowScene) -> UIWindow? {
@@ -301,9 +255,9 @@ final class osrsSceneDelegate: UIResponder, UIWindowSceneDelegate {
     }
 }
 
-/// Permanent UIKit window root. UIHostingController as the scene window's
-/// rootViewController poisons iOS 26 resume; this container keeps the
-/// window's compositor target UIKit for the process lifetime.
+/// Permanent UIKit window root. The SwiftUI app lives as a child so the
+/// window's compositor target stays UIKit while `CustomMainTabView` remains
+/// the only content host.
 final class osrsAppSceneViewController: UIViewController {
     private(set) var osrsContent: UIViewController?
 

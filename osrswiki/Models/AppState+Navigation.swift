@@ -183,6 +183,11 @@ extension AppState {
         navigateToActiveSearch(startsVoiceRecognition: false)
     }
 
+    func navigateToScopedSearch(_ scope: osrsSearchScope) {
+        setSelectedTab(.news)
+        newsNavigationStack.append(.scopedSearch(scope))
+    }
+
     /// Routes an article toolbar action to the one canonical, active Search surface regardless
     /// of which tab owns the article. The SearchView acknowledges this generation exactly once;
     /// voice recognition is deliberately not started here because its result callbacks are

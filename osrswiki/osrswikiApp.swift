@@ -5,8 +5,9 @@
 //  Created by Osamu Miyawaki on 7/29/25.
 //
 //  Root UI factory. The process entry point is osrsAppDelegate / osrsSceneDelegate
-//  so resume can replace the scene's one UIWindow. SwiftUI scene hosts are not
-//  used: iOS 26 can freeze that host's framebuffer after a real background.
+//  so the scene keeps one UIWindow and one CustomMainTabView host. SwiftUI
+//  scene window groups are not used: iOS 26 can freeze that host's framebuffer after a
+//  real background. Resume restores the same window through the compositor.
 //
 
 import SwiftUI

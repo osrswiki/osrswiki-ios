@@ -25,14 +25,17 @@ class SearchViewModel: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     private var currentSearchTask: Task<Void, Never>?
     private var searchOffset = 0
+    private var browseContinueToken: String?
     private let searchLimit = 20
     private let recentSearchesKey = "recent_searches"
     private var searchGeneration = 0
+    let scope: osrsSearchScope
     
     // Navigation callback - will be set by the view
     var navigateToArticle: ((String, URL, SearchResult?) -> Void)?
     
-    init() {
+    init(scope: osrsSearchScope = .all) {
+        self.scope = scope
         PerformanceTimer.shared.start("SearchViewModel.init")
         
         PerformanceTimer.shared.start("loadRecentSearches")
@@ -62,7 +65,7 @@ class SearchViewModel: ObservableObject {
     
     func performSearch(query: String, isNewSearch: Bool = true) async {
         let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedQuery.isEmpty else {
+        if trimmedQuery.isEmpty && !scope.emptyQueryBrowsesNewest {
             currentSearchTask?.cancel()
             searchGeneration += 1
             isSearching = false
@@ -78,6 +81,7 @@ class SearchViewModel: ObservableObject {
         // CRASH FIX: Atomic state updates to prevent race conditions during list rendering
         if isNewSearch {
             searchOffset = 0
+            browseContinueToken = nil
             errorMessage = nil
             hasMoreResults = false
             totalResultCount = 0
@@ -91,7 +95,9 @@ class SearchViewModel: ObservableObject {
                 let response = try await searchRepository.search(
                     query: trimmedQuery,
                     limit: searchLimit,
-                    offset: searchOffset
+                    offset: searchOffset,
+                    scope: scope,
+                    continueToken: isNewSearch ? nil : browseContinueToken
                 )
 
                 guard !Task.isCancelled, generation == searchGeneration else { return }
@@ -147,6 +153,7 @@ class SearchViewModel: ObservableObject {
         if isNewSearch {
             searchResults = response.results
             themedSearchResults = processedResults
+            browseContinueToken = response.continueToken
             if completed {
                 searchOffset = response.results.count
             }
@@ -158,6 +165,7 @@ class SearchViewModel: ObservableObject {
             searchResults = updatedResults
             themedSearchResults = updatedThemedResults
             searchOffset += response.results.count
+            browseContinueToken = response.continueToken
         }
         totalResultCount = response.totalCount
         hasMoreResults = response.hasMore
@@ -165,7 +173,8 @@ class SearchViewModel: ObservableObject {
     }
     
     func loadMoreResults() async {
-        guard hasMoreResults && !isSearching && !currentQuery.isEmpty else { return }
+        guard hasMoreResults && !isSearching else { return }
+        if currentQuery.isEmpty && !scope.emptyQueryBrowsesNewest { return }
         await performSearch(query: currentQuery, isNewSearch: false)
     }
     
@@ -216,6 +225,7 @@ class SearchViewModel: ObservableObject {
         hasMoreResults = false
         totalResultCount = 0
         searchOffset = 0
+        browseContinueToken = nil
         errorMessage = nil
         hasCompletedCurrentQuery = false
     }

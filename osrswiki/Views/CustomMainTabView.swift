@@ -22,6 +22,11 @@ struct CustomMainTabView: View {
             Color(themeManager.currentTheme.background)
                 .ignoresSafeArea()
 
+            osrsAccessibilityMarker(
+                identifier: "osrs_app_root_tab_host",
+                label: "App tab host"
+            )
+
             rootTabContent
 
 #if DEBUG

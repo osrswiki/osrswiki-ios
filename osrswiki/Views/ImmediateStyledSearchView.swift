@@ -83,21 +83,24 @@ struct ImmediateStyledSearchView: View {
     let themeManager: osrsThemeManager
     let theme: any osrsThemeProtocol
     let customNavigationClosure: ((String, URL, String?, URL?) -> Void)?
+    let scope: osrsSearchScope
     
     // Convenience initializer for backwards compatibility (default navigation)
-    init(appState: AppState, themeManager: osrsThemeManager, theme: any osrsThemeProtocol) {
+    init(appState: AppState, themeManager: osrsThemeManager, theme: any osrsThemeProtocol, scope: osrsSearchScope = .all) {
         self.appState = appState
         self.themeManager = themeManager
         self.theme = theme
         self.customNavigationClosure = nil
+        self.scope = scope
     }
     
     // Full initializer with custom navigation closure
-    init(appState: AppState, themeManager: osrsThemeManager, theme: any osrsThemeProtocol, customNavigationClosure: ((String, URL, String?, URL?) -> Void)?) {
+    init(appState: AppState, themeManager: osrsThemeManager, theme: any osrsThemeProtocol, customNavigationClosure: ((String, URL, String?, URL?) -> Void)?, scope: osrsSearchScope = .all) {
         self.appState = appState
         self.themeManager = themeManager
         self.theme = theme
         self.customNavigationClosure = customNavigationClosure
+        self.scope = scope
     }
     
     var body: some View {
@@ -112,9 +115,10 @@ struct ImmediateStyledSearchView: View {
                         viewModel: vm,
                         searchText: $searchText,
                         theme: theme,
-                        appState: appState
+                        appState: appState,
+                        showsBrowseResultsWhenEmpty: scope.emptyQueryBrowsesNewest
                     )
-                } else if !searchText.isEmpty {
+                } else if !searchText.isEmpty || scope.emptyQueryBrowsesNewest {
                     Color(theme.background)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
@@ -142,7 +146,7 @@ struct ImmediateStyledSearchView: View {
                 let timestamp = DateFormatter.timeFormatter.string(from: Date())
                 print("🔍 [\(timestamp)] IMMEDIATESTYLED: Setting up SearchViewModel with customNavigationClosure: \(customNavigationClosure != nil ? "✅ YES" : "❌ NO")")
                 
-                let vm = SearchViewModel()
+                let vm = SearchViewModel(scope: scope)
                 vm.navigateToArticle = { [weak appState, customNavigationClosure] title, url, searchResult in
                     // DEBUG: Track which navigation path is taken
                     let navTimestamp = DateFormatter.timeFormatter.string(from: Date())
@@ -205,7 +209,7 @@ struct ImmediateStyledSearchView: View {
             osrsActiveSearchToolbar(
                 text: $searchText,
                 isFocused: $isSearchFocused,
-                placeholder: "Search OSRS Wiki",
+                placeholder: scope.placeholder,
                 backAccessibilityLabel: "Back",
                 backAccessibilityIdentifier: "immediate_search_back_button",
                 inputAccessibilityIdentifier: "immediate_search_input",
@@ -218,7 +222,7 @@ struct ImmediateStyledSearchView: View {
                 onSubmit: performSearch
             )
 
-            if searchText.isEmpty, let vm = viewModel, !vm.recentSearches.isEmpty {
+            if searchText.isEmpty, !scope.emptyQueryBrowsesNewest, let vm = viewModel, !vm.recentSearches.isEmpty {
                 recentSearchesSection(viewModel: vm)
                     .background(Color(theme.background))
             }
@@ -287,7 +291,9 @@ struct ImmediateStyledSearchView: View {
     private func clearSearch() {
         searchText = ""
         viewModel?.currentQuery = ""
-        viewModel?.clearSearchResults()
+        if !scope.emptyQueryBrowsesNewest {
+            viewModel?.clearSearchResults()
+        }
     }
 
     private func configureVoiceSearch() {
@@ -313,10 +319,11 @@ private struct SearchContentSection: View {
     @Binding var searchText: String
     let theme: any osrsThemeProtocol
     let appState: AppState
+    var showsBrowseResultsWhenEmpty = false
     
     var body: some View {
         Group {
-            if searchText.isEmpty {
+            if searchText.isEmpty && !showsBrowseResultsWhenEmpty {
                 // Empty state when no search text
                 Spacer()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -379,6 +386,7 @@ private struct SearchContentSection: View {
                             }
                         }
                         .foregroundStyle(Color(theme.primary))
+                        .accessibilityIdentifier("search_load_more")
                     }
                     Spacer()
                 }
@@ -395,5 +403,6 @@ private struct SearchContentSection: View {
         .osrsHidesListSeparators()
         .scrollContentBackground(.hidden)
         .background(Color(theme.background))
+        .accessibilityIdentifier("search_results")
     }
 }

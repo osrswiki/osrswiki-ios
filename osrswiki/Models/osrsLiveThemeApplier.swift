@@ -62,7 +62,7 @@ enum osrsLiveThemeApplier {
         switch control {
         case let toggle as UISwitch:
             toggle.onTintColor = primary
-            toggle.thumbTintColor = surface
+            toggle.thumbTintColor = switchThumbColor()
         case let slider as UISlider:
             slider.minimumTrackTintColor = primary
             slider.thumbTintColor = primary
@@ -123,7 +123,7 @@ enum osrsLiveThemeApplier {
         UIProgressView.appearance().trackTintColor = UIColor(theme.surfaceVariant)
         UIActivityIndicatorView.appearance().color = primary
         UISwitch.appearance().onTintColor = primary
-        UISwitch.appearance().thumbTintColor = UIColor(theme.surface)
+        UISwitch.appearance().thumbTintColor = switchThumbColor()
         UISlider.appearance().tintColor = primary
         UISlider.appearance().thumbTintColor = primary
         UISegmentedControl.appearance().selectedSegmentTintColor = primary
@@ -157,6 +157,13 @@ enum osrsLiveThemeApplier {
             UITabBar.appearance().standardAppearance = tabAppearance
             UITabBar.appearance().scrollEdgeAppearance = tabAppearance
         }
+    }
+
+    /// Android `switch_thumb_tint` uses `osrs_brown_deep` for the checked thumb
+    /// in both themes so the gold track stays legible. Parchment-as-thumb reads
+    /// as a white pill on light appearance.
+    static func switchThumbColor() -> UIColor {
+        UIColor(red: 76.0 / 255.0, green: 61.0 / 255.0, blue: 42.0 / 255.0, alpha: 1)
     }
 
     @MainActor

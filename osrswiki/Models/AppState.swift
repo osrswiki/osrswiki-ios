@@ -455,6 +455,7 @@ class AppState: ObservableObject {
 
 enum NewsNavigationDestination: Hashable {
     case search
+    case scopedSearch(osrsSearchScope)
     case article(ArticleDestination)
 }
 

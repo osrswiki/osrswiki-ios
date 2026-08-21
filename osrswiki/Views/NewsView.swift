@@ -240,6 +240,14 @@ struct NewsView: View {
                         print("🎯 NEWSVIEW: Creating ImmediateStyledSearchView")
                         print("✅ NEWSVIEW: ImmediateStyledSearchView.onAppear - Search view successfully created!")
                     }
+                case .scopedSearch(let scope):
+                    ImmediateStyledSearchView(
+                        appState: appState,
+                        themeManager: themeManager,
+                        theme: osrsTheme,
+                        scope: scope
+                    )
+                    .accessibilityIdentifier("scoped_search_updates")
                 case .article(let articleDestination):
                     ArticleView(
                         pageTitle: articleDestination.title, 
@@ -409,6 +417,19 @@ struct WikiFeedContentView: View {
                         .padding(.horizontal, 16)
                     }
                     .accessibilityIdentifier("home_updates_carousel")
+
+                    Button {
+                        appState.navigateToScopedSearch(.updates)
+                    } label: {
+                        Text("View more")
+                            .font(.osrsBody)
+                            .foregroundStyle(.osrsPrimary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.horizontal, 16)
+                    .accessibilityIdentifier("home_updates_view_more")
+                    .accessibilityLabel("View more updates")
                 }
                 .padding(.vertical, 8)
             }

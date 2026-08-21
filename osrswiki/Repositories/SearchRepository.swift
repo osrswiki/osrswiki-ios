@@ -15,11 +15,67 @@ class SearchRepository {
         query: String,
         limit: Int = 50,
         offset: Int = 0,
+        scope: osrsSearchScope = .all,
+        continueToken: String? = nil,
         onPartialResults: ((SearchResponse) -> Void)? = nil
     ) async throws -> SearchResponse {
-        guard !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            if scope.emptyQueryBrowsesNewest, let namespace = scope.namespace {
+                return try await browseNewestPages(
+                    namespace: namespace,
+                    limit: limit,
+                    continueToken: continueToken
+                )
+            }
             return SearchResponse(results: [], hasMore: false, totalCount: 0)
         }
+
+        if let namespace = scope.namespace {
+            do {
+                let fetch = try await fetchGeneratedPages(
+                    generator: "search",
+                    searchItemName: "gsrsearch",
+                    searchValue: SearchQueryPolicy.networkQuery(trimmed),
+                    limitItemName: "gsrlimit",
+                    limit: limit,
+                    offsetItemName: "gsroffset",
+                    offset: offset,
+                    extraItems: [
+                        URLQueryItem(name: "gsrnamespace", value: String(namespace)),
+                        URLQueryItem(name: "gsrprop", value: "snippet|size|wordcount|timestamp"),
+                        URLQueryItem(name: "gsrsort", value: "relevance")
+                    ],
+                    includeExtracts: true,
+                    followRedirects: false
+                )
+                return makeSearchResponse(
+                    pages: fetch.pages
+                        .filter { $0.ns == namespace }
+                        .map { $0.withPreviewFallback() },
+                    offset: offset,
+                    hasMore: fetch.hasMore,
+                    continueToken: fetch.continueToken
+                )
+            } catch let error as SearchError {
+                throw error
+            } catch let error as NetworkError {
+                throw searchError(from: error)
+            } catch {
+                if let urlError = error as? URLError {
+                    switch urlError.code {
+                    case .notConnectedToInternet, .networkConnectionLost:
+                        throw SearchError.networkUnavailable
+                    case .timedOut:
+                        throw SearchError.timeout
+                    default:
+                        throw SearchError.networkError(urlError)
+                    }
+                }
+                throw SearchError.unknown(error)
+            }
+        }
+
         
         // Fulltext search misses title-prefix hits such as "earth ru" → Earth rune
         // (Cirrus ranks popular *rune* pages instead). OpenSearch/prefixsearch is
@@ -72,7 +128,8 @@ class SearchRepository {
                 pages: fillOpenSearchPreviews(pages: rankedPages, openSearchPages: openSearchPages)
                     .map { $0.withPreviewFallback() },
                 offset: offset,
-                hasMore: fulltextFetch.hasMore
+                hasMore: fulltextFetch.hasMore,
+                continueToken: fulltextFetch.continueToken
             )
             
         } catch let error as SearchError {
@@ -98,12 +155,20 @@ class SearchRepository {
     private struct SearchGeneratorPageFetch {
         let pages: [WikiGeneratedSearchPage]
         let hasMore: Bool
+        let continueToken: String?
+
+        init(pages: [WikiGeneratedSearchPage], hasMore: Bool, continueToken: String? = nil) {
+            self.pages = pages
+            self.hasMore = hasMore
+            self.continueToken = continueToken
+        }
     }
 
     private func makeSearchResponse(
         pages: [WikiGeneratedSearchPage],
         offset: Int,
-        hasMore: Bool
+        hasMore: Bool,
+        continueToken: String? = nil
     ) -> SearchResponse {
         let searchResults = pages.map { apiResult in
             let preview = firstNonBlank(apiResult.snippet, apiResult.extract)
@@ -124,7 +189,12 @@ class SearchRepository {
             )
         }
         let totalHits = offset + searchResults.count + (hasMore ? 1 : 0)
-        return SearchResponse(results: searchResults, hasMore: hasMore, totalCount: totalHits)
+        return SearchResponse(
+            results: searchResults,
+            hasMore: hasMore,
+            totalCount: totalHits,
+            continueToken: continueToken
+        )
     }
 
     private func fillOpenSearchPreviews(
@@ -196,14 +266,14 @@ class SearchRepository {
         offsetItemName: String?,
         offset: Int,
         extraItems: [URLQueryItem],
-        includeExtracts: Bool
+        includeExtracts: Bool,
+        followRedirects: Bool = true
     ) async throws -> SearchGeneratorPageFetch {
         var components = URLComponents(string: baseURL)!
         var items: [URLQueryItem] = [
             URLQueryItem(name: "action", value: "query"),
             URLQueryItem(name: "format", value: "json"),
             URLQueryItem(name: "formatversion", value: "2"),
-            URLQueryItem(name: "redirects", value: "true"),
             URLQueryItem(name: "generator", value: generator),
             URLQueryItem(name: searchItemName, value: searchValue),
             URLQueryItem(name: limitItemName, value: String(limit)),
@@ -212,6 +282,9 @@ class SearchRepository {
             URLQueryItem(name: "pilicense", value: "any"),
             URLQueryItem(name: "pithumbsize", value: "240")
         ]
+        if followRedirects {
+            items.append(URLQueryItem(name: "redirects", value: "true"))
+        }
         if includeExtracts {
             items.append(contentsOf: [
                 URLQueryItem(name: "exintro", value: "1"),
@@ -245,10 +318,66 @@ class SearchRepository {
         }
 
         let decoded = try JSONDecoder().decode(WikiGeneratedSearchResponse.self, from: data)
+        let continueToken = decoded.continuation?.gsroffset.map(String.init)
+            ?? decoded.continuation?.grccontinue
         return SearchGeneratorPageFetch(
             pages: decoded.query?.pages ?? [],
-            hasMore: decoded.continuation?.gsroffset != nil
+            hasMore: continueToken != nil,
+            continueToken: continueToken
         )
+    }
+
+    private func browseNewestPages(
+        namespace: Int,
+        limit: Int,
+        continueToken: String?
+    ) async throws -> SearchResponse {
+        do {
+            var extraItems = [
+                URLQueryItem(name: "grctype", value: "new"),
+                URLQueryItem(name: "grcdir", value: "older")
+            ]
+            if let continueToken, !continueToken.isEmpty {
+                extraItems.append(URLQueryItem(name: "grccontinue", value: continueToken))
+            }
+            let fetch = try await fetchGeneratedPages(
+                generator: "recentchanges",
+                searchItemName: "grcnamespace",
+                searchValue: String(namespace),
+                limitItemName: "grclimit",
+                limit: limit,
+                offsetItemName: nil,
+                offset: 0,
+                extraItems: extraItems,
+                includeExtracts: true,
+                followRedirects: false
+            )
+            return makeSearchResponse(
+                pages: fetch.pages
+                    .filter { $0.ns == namespace }
+                    .map { $0.withPreviewFallback() },
+                offset: 0,
+                hasMore: fetch.hasMore,
+                continueToken: fetch.continueToken
+            )
+        } catch let error as SearchError {
+            throw error
+        } catch let error as NetworkError {
+            throw searchError(from: error)
+        } catch {
+            if let urlError = error as? URLError {
+                switch urlError.code {
+                case .notConnectedToInternet, .networkConnectionLost:
+                    throw SearchError.networkUnavailable
+                case .timedOut:
+                    throw SearchError.timeout
+                default:
+                    throw SearchError.networkError(urlError)
+                }
+            } else {
+                throw SearchError.unknown(error)
+            }
+        }
     }
 
     private func searchError(from error: NetworkError) -> SearchError {
@@ -294,6 +423,7 @@ class SearchRepository {
         case 13: return "Help talk"
         case 14: return "Category"
         case 15: return "Category talk"
+        case 112: return "Update"
         default: return "Namespace \(namespaceId)"
         }
     }
@@ -304,6 +434,14 @@ struct SearchResponse {
     let results: [SearchResult]
     let hasMore: Bool
     let totalCount: Int
+    let continueToken: String?
+
+    init(results: [SearchResult], hasMore: Bool, totalCount: Int, continueToken: String? = nil) {
+        self.results = results
+        self.hasMore = hasMore
+        self.totalCount = totalCount
+        self.continueToken = continueToken
+    }
 }
 
 enum SearchError: LocalizedError {
@@ -374,6 +512,7 @@ struct WikiGeneratedSearchResponse: Codable {
 
 struct WikiGeneratedSearchContinuation: Codable {
     let gsroffset: Int?
+    let grccontinue: String?
 }
 
 struct WikiGeneratedSearchQuery: Codable {
