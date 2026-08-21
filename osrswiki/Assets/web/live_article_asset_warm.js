@@ -8,6 +8,26 @@
     var notified = Object.create(null);
     var pending = [];
     var flushScheduled = false;
+    var interactionHoldMs = 750;
+    var interactionUntil = 0;
+
+    function interactionActive() {
+        return Date.now() < interactionUntil;
+    }
+
+    function noteInteraction() {
+        interactionUntil = Date.now() + interactionHoldMs;
+        try {
+            if (window.OsrsWikiBridge && typeof window.OsrsWikiBridge.noteUserInteraction === 'function') {
+                window.OsrsWikiBridge.noteUserInteraction();
+            }
+        } catch (ignore) {}
+        try {
+            if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.osrsLiveAssetWarm) {
+                window.webkit.messageHandlers.osrsLiveAssetWarm.postMessage({ pause: true });
+            }
+        } catch (ignore) {}
+    }
 
     function srcsetUrls(value) {
         if (!value) {
@@ -62,6 +82,11 @@
 
     function flush() {
         flushScheduled = false;
+        if (interactionActive()) {
+            flushScheduled = true;
+            setTimeout(flush, Math.max(16, interactionUntil - Date.now()));
+            return;
+        }
         if (!pending.length) {
             return;
         }
@@ -110,6 +135,9 @@
     }
 
     function start() {
+        ['pointerdown', 'touchstart', 'touchmove', 'keydown', 'click', 'scroll', 'wheel'].forEach(function (type) {
+            document.addEventListener(type, noteInteraction, { capture: true, passive: true });
+        });
         scan(document);
         if (typeof MutationObserver === 'undefined' || !document.documentElement) {
             return;

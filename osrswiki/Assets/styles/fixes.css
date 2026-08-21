@@ -360,21 +360,55 @@ img.osrs-inline-icon {
     scroll-margin-bottom: calc(var(--osrs-article-safe-area-bottom, 0px) + var(--osrs-article-bottom-chrome, 96px));
 }
 
-.osrs-calculator-templates {
+.osrs-calculator-templates,
+.archivelist,
+table.archivelist,
+table.archivelist > tbody,
+table.archivelist > thead,
+table.archivelist > tfoot,
+table.archivelist tr {
+    box-sizing: border-box !important;
+    display: block !important;
     float: none !important;
-    margin: 0 !important;
-    max-width: 100%;
+    max-width: 100% !important;
+    text-align: start !important;
     width: 100% !important;
 }
 
-@media (min-width: 560px) {
-    .osrs-calculator-layout {
-        grid-template-columns: minmax(8rem, 14rem) minmax(0, 1fr);
-    }
+html body table.archivelist,
+html body .archivelist,
+html body .osrs-calculator-templates {
+    float: none !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    text-align: start !important;
+}
 
-    .osrs-calculator-templates {
-        width: auto !important;
-    }
+.osrs-calculator-templates,
+.archivelist,
+table.archivelist {
+    margin: 0.75em 0 !important;
+}
+
+/* Wiki template-used boxes center a 120px column. On mobile, keep the icon
+   on the start edge like other prose banners. */
+table.archivelist .mw-halign-center,
+.archivelist .mw-halign-center {
+    display: inline-block !important;
+    float: none !important;
+    margin-inline: 0 auto !important;
+}
+
+.archivelist td,
+.archivelist th,
+table.archivelist td,
+table.archivelist th,
+.osrs-calculator-templates td,
+.osrs-calculator-templates th {
+    display: block !important;
+    text-align: start !important;
+    width: 100% !important;
+    white-space: normal !important;
 }
 
 .osrs-calculator-panel,
@@ -387,7 +421,63 @@ img.osrs-inline-icon {
 
 .osrs-calculator-panel {
     margin: 0;
+    max-width: 100%;
+    min-width: 0;
     padding: 0.75em;
+}
+
+/* Wiki calc-core uses desktop OOUI left-aligned field layouts (~200px
+   label + field). On a phone that min-content width gets wrapped as a
+   horizontal scrollport, which clips Submit and dropdowns to the right
+   half. Stack the controls like other mobile forms. */
+.osrs-calculator-layout,
+.osrs-calculator-panel,
+.osrs-calculator-panel table,
+.osrs-calculator-panel tbody,
+.osrs-calculator-panel tr,
+.osrs-calculator-panel td,
+.osrs-calculator-panel .jcTable,
+.osrs-calculator-panel [id$="Form"],
+.jcTable {
+    box-sizing: border-box !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    width: 100% !important;
+}
+
+.osrs-calculator-panel table,
+.osrs-calculator-panel tbody,
+.osrs-calculator-panel tr,
+.osrs-calculator-panel td {
+    display: block !important;
+    float: none !important;
+}
+
+.osrs-calculator-panel .oo-ui-fieldLayout-body,
+.jcTable .oo-ui-fieldLayout-body {
+    align-items: stretch !important;
+    display: flex !important;
+    flex-direction: column !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    width: 100% !important;
+}
+
+.osrs-calculator-panel .oo-ui-fieldLayout-header,
+.osrs-calculator-panel .oo-ui-fieldLayout-field,
+.jcTable .oo-ui-fieldLayout-header,
+.jcTable .oo-ui-fieldLayout-field {
+    margin-inline: 0 !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    width: 100% !important;
+}
+
+.osrs-calculator-layout .osrs-article-scroll-region,
+.osrs-calculator-panel .osrs-article-scroll-region {
+    max-width: 100% !important;
+    overflow-x: hidden !important;
+    width: 100% !important;
 }
 
 .osrs-calculator-panel h2 {
@@ -656,6 +746,7 @@ img.osrs-inline-icon {
 
 .collapsible-label {
     font-weight: 700;
+    text-align: start !important;
 }
 
 .collapsible-state {
@@ -878,8 +969,10 @@ table.osrs-map-table > :is(thead, tbody, tfoot) > tr > :is(th, td):has(.mw-karto
     --osrs-table-cell-padding-inline: 0.48em;
     --osrs-infobox-cell-padding-block: 0.24em;
     --osrs-infobox-cell-padding-inline: 0.42em;
-    --osrs-disclosure-control-padding-block: 6px;
-    --osrs-disclosure-control-padding-inline: 10px;
+    /* Match the Close footer: equal block padding so headers do not start short
+       then grow, and iOS/Android share one control height. */
+    --osrs-disclosure-control-padding-block: 12px;
+    --osrs-disclosure-control-padding-inline: 12px;
     --osrs-disclosure-content-inline-inset: 12px;
     --osrs-disclosure-content-block-inset: 8px;
     --osrs-disclosure-label-gap: 0.35em;
@@ -930,9 +1023,14 @@ body.osrs-accessibility-reflow .messagebox {
     align-items: center;
     box-sizing: border-box;
     column-gap: var(--osrs-disclosure-label-gap);
-    min-height: 0;
+    display: flex !important;
+    justify-content: flex-start;
+    min-height: calc(
+        20px + (2 * var(--osrs-disclosure-control-padding-block))
+    );
     padding: var(--osrs-disclosure-control-padding-block)
         var(--osrs-disclosure-control-padding-inline) !important;
+    text-align: start !important;
 }
 
 .collapsible-header .title-wrapper,
@@ -940,9 +1038,12 @@ body.osrs-accessibility-reflow .messagebox {
     align-items: center;
     column-gap: var(--osrs-disclosure-label-gap);
     display: flex;
+    flex: 1 1 auto;
     flex-wrap: nowrap;
+    justify-content: flex-start;
     min-width: 0;
     overflow: hidden;
+    text-align: start !important;
 }
 
 .collapsible-header .collapsible-label,
@@ -952,15 +1053,18 @@ body.osrs-accessibility-reflow .messagebox {
 
 .collapsible-label {
     display: block;
-    flex: 1 1 auto;
+    flex: 0 1 auto;
     min-width: 0;
     overflow: hidden;
+    text-align: start !important;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
 .collapsible-state {
     flex: 0 0 auto;
+    margin-inline-start: auto !important;
+    text-align: end !important;
 }
 
 .collapsible-header {
@@ -1758,6 +1862,75 @@ html body a.external.text {
     color: var(--link-color, inherit);
 }
 
+/* Wiki calculator/skill pages often put Contents in a sibling table cell of a
+   floated infobox. Collapse that layout table so Contents is a full-width
+   banner instead of a half-width column overlapping the skills card.
+   The Calculators index (and similar list pages) float #toctemplate to the
+   right with width:auto; treat that host the same way. */
+.osrs-toc-layout-table,
+.osrs-toc-layout-table > tbody,
+.osrs-toc-layout-table > thead,
+.osrs-toc-layout-table > tfoot,
+.osrs-toc-layout-table > tr,
+.osrs-toc-layout-table > :is(tbody, thead, tfoot) > tr,
+.osrs-toc-layout-table > tr > :is(th, td),
+.osrs-toc-layout-table > :is(tbody, thead, tfoot) > tr > :is(th, td),
+.osrs-toc-layout-host,
+#toctemplate,
+#toctemplate #toc,
+#toctemplate .toc {
+    box-sizing: border-box !important;
+    display: block !important;
+    float: none !important;
+    clear: both !important;
+    max-width: 100% !important;
+    width: 100% !important;
+    margin-inline: 0 !important;
+}
+
+.osrs-toc-layout-table #toc,
+.osrs-toc-layout-table .toc,
+.osrs-toc-layout-host #toc,
+.osrs-toc-layout-host .toc {
+    margin-inline: 0 !important;
+}
+
+/* Inline MediaWiki math stays in the sentence. Chromium MathML otherwise
+   lays the inner mrow out as "block math" and stretches it to 100% width,
+   which looks like a line break. Display math may still scroll. */
+.mwe-math-element-inline,
+math.mwe-math-element-inline,
+math.mwe-math-element:not([display="block"]) {
+    display: inline !important;
+    max-width: none !important;
+    overflow: visible !important;
+    vertical-align: middle;
+    width: auto !important;
+}
+
+.mwe-math-element-inline > mrow,
+math.mwe-math-element-inline > mrow,
+math.mwe-math-element:not([display="block"]) > mrow {
+    display: inline math !important;
+    max-width: 100%;
+    width: max-content !important;
+}
+
+.mwe-math-fallback-image-inline,
+img.mwe-math-fallback-image-inline {
+    display: inline !important;
+    vertical-align: middle;
+}
+
+.mwe-math-fallback-image-display,
+.mwe-math-element:has(.mwe-math-fallback-image-display),
+math.mwe-math-element[display="block"] {
+    display: inline-block !important;
+    max-width: 100%;
+    overflow-x: auto;
+    vertical-align: middle;
+}
+
 /* Prose banners (quest hatnotes, ambox, dialogue notices) are not data tables.
    Force wrapping so they never become horizontal scrollports. */
 table.messagebox,
@@ -1768,7 +1941,8 @@ table.tmbox,
 table.cmbox,
 table.ombox,
 table.imbox,
-table.fmbox {
+table.fmbox,
+table.archivelist {
     table-layout: fixed !important;
     width: 100% !important;
     max-width: 100% !important;

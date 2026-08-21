@@ -51,8 +51,9 @@
         '.mw-parser-output > table.filterable',
         '.mw-parser-output > table.item-drops',
         '.mw-parser-output > table.navbox',
-        '.mwe-math-element',
-        'math.mwe-math-element'
+        '.mwe-math-fallback-image-display',
+        'math.mwe-math-element[display="block"]',
+        '.mwe-math-element:has(.mwe-math-fallback-image-display)'
     ].join(',');
     
     // Helper function to log to Android
@@ -69,11 +70,20 @@
         ));
     }
 
+    function isCalculatorHostTable(table) {
+        return !!(table && table.matches && (
+            table.matches('table.calculator, .osrs-calculator-panel') ||
+            table.closest('.osrs-calculator-layout, .osrs-calculator-panel') ||
+            table.querySelector('[id$="Form"], .jcTable, .jsCalc-field, .oo-ui-fieldsetLayout')
+        ));
+    }
+
     function getScrollSurfaceForTable(table) {
         if (!table || !table.closest) {
             return null;
         }
         if (isProseBannerTable(table) ||
+            isCalculatorHostTable(table) ||
             table.matches('.main-infobox, .osrs-map-table') ||
             table.closest('.collapsible-primary-infobox, .collapsible-map-table, .osrs-recipe-unit')) {
             return null;

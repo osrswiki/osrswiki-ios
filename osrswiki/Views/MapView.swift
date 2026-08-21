@@ -17,6 +17,7 @@ struct MapView: View {
                 .accessibilityIdentifier("map_screen")
                 .ignoresSafeArea(edges: .bottom)
         }
+        .osrsResumedNavigationHost(appState.navigationHostGeneration)
         .ignoresSafeArea(edges: .bottom)
     }
 }

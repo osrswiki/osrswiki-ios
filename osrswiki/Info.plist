@@ -4,6 +4,23 @@
 <dict>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
+	<key>UIApplicationSceneManifest</key>
+	<dict>
+		<key>UIApplicationSupportsMultipleScenes</key>
+		<false/>
+		<key>UISceneConfigurations</key>
+		<dict>
+			<key>UIWindowSceneSessionRoleApplication</key>
+			<array>
+				<dict>
+					<key>UISceneConfigurationName</key>
+					<string>osrs.default.scene.v2</string>
+					<key>UISceneDelegateClassName</key>
+					<string>osrswiki.osrsSceneDelegate</string>
+				</dict>
+			</array>
+		</dict>
+	</dict>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>OSRS Wiki needs microphone access to provide voice search functionality.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>

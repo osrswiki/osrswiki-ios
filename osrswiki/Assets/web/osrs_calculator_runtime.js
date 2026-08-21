@@ -65,6 +65,12 @@
             }
             previous = previous.previousElementSibling;
         }
+        var nearby = document.querySelectorAll('table.archivelist, .archivelist');
+        for (var i = 0; i < nearby.length; i++) {
+            if (/templates used/i.test(nearby[i].textContent || '')) {
+                return nearby[i];
+            }
+        }
         return null;
     }
 
@@ -85,6 +91,15 @@
 
     function prepareCalculatorLayout(pre, formTarget, resultTarget) {
         var formHost = formTarget.closest('table') || formTarget;
+        var scrollWrap = formHost && formHost.closest &&
+            formHost.closest('.osrs-scroll-generated-surface');
+        if (scrollWrap && scrollWrap.parentNode) {
+            while (scrollWrap.firstChild) {
+                scrollWrap.parentNode.insertBefore(scrollWrap.firstChild, scrollWrap);
+            }
+            scrollWrap.parentNode.removeChild(scrollWrap);
+            formHost = formTarget.closest('table') || formTarget;
+        }
         var existing = formHost.closest('.osrs-calculator-layout');
         if (existing) {
             if (resultTarget && !resultTarget.closest('.osrs-calculator-layout')) {
@@ -199,13 +214,29 @@
         jQuery.ajax.__osrsCalculatorPatched = true;
     }
 
+    function osrsHideCalculatorJsPlaceholder() {
+        var live = !!document.querySelector(
+            '.jcTable .jsCalc-field, .jcTable .oo-ui-buttonElement, .oo-ui-fieldsetLayout .oo-ui-widget'
+        );
+        if (!live) {
+            return;
+        }
+        document.documentElement.setAttribute('data-osrs-calc-live', '1');
+        document.querySelectorAll('.messagebox, .ambox, .mbox, table.messagebox').forEach(function(node) {
+            if (/dynamic calculator requires JavaScript/i.test(node.textContent || '')) {
+                node.setAttribute('hidden', '');
+                node.style.setProperty('display', 'none', 'important');
+            }
+        });
+    }
+
     function loadCalcCore(attempt) {
         var tries = typeof attempt === 'number' ? attempt : 0;
         if (!document.querySelector('pre.jcConfig')) {
             return;
         }
         if (!window.mw || !mw.loader) {
-            if (tries < 40) {
+            if (tries < 80) {
                 setTimeout(function() { loadCalcCore(tries + 1); }, 50);
             }
             return;
@@ -216,29 +247,82 @@
                 window.__osrsKickCalcCore();
             }
             mw.loader.load('ext.gadget.calc-core');
+            if (typeof window.__osrsRebuildCalcs === 'function' &&
+                !document.querySelector('.jcTable .jsCalc-field, .oo-ui-fieldsetLayout .oo-ui-widget')) {
+                try { window.__osrsRebuildCalcs(); } catch (ignore) {}
+            }
+            osrsHideCalculatorJsPlaceholder();
         };
-        function injectOOUIThenStart() {
-            if (window.OO && OO.ui && typeof OO.ui.ButtonOptionWidget === 'function') {
+        function osrsCalcOOUIReady() {
+            var cfg = '';
+            try {
+                var pre = document.querySelector('pre.jcConfig');
+                cfg = pre && pre.textContent ? String(pre.textContent) : '';
+            } catch (ignore) {}
+            if (!(window.OO && OO.ui && typeof OO.ui.ButtonOptionWidget === 'function')) {
+                return false;
+            }
+            if (/toggleswitch/i.test(cfg) && typeof OO.ui.ToggleSwitchWidget !== 'function') {
+                return false;
+            }
+            if (/\|\s*hs\s*\|/i.test(cfg) && typeof OO.ui.ActionFieldLayout !== 'function') {
+                return false;
+            }
+            return true;
+        }
+        function osrsLoadModuleScript(src, done) {
+            var script = document.createElement('script');
+            script.setAttribute('data-osrs-ooui-loader', '1');
+            script.src = src;
+            script.onload = done;
+            script.onerror = done;
+            (document.head || document.documentElement).appendChild(script);
+        }
+        function injectSequential(index) {
+            if (osrsCalcOOUIReady()) {
+                start();
+                return;
+            }
+            var steps = [
+                '/load.php?modules=oojs-ui-core',
+                '/load.php?modules=oojs-ui-widgets',
+                '/load.php?modules=mediawiki.widgets',
+                '/load.php?modules=ext.gadget.rsw-util'
+            ];
+            if (index >= steps.length) {
+                start();
+                return;
+            }
+            osrsLoadModuleScript(steps[index], function() {
+                setTimeout(function() { injectSequential(index + 1); }, 40);
+            });
+        }
+        function injectOOUIThenStart(pollTries) {
+            pollTries = typeof pollTries === 'number' ? pollTries : 0;
+            if (osrsCalcOOUIReady()) {
                 start();
                 return;
             }
             if (document.querySelector('script[data-osrs-ooui-loader]')) {
+                if (pollTries < 60) {
+                    setTimeout(function() { injectOOUIThenStart(pollTries + 1); }, 100);
+                    return;
+                }
                 start();
                 return;
             }
-            var script = document.createElement('script');
-            script.setAttribute('data-osrs-ooui-loader', '1');
-            script.src = '/load.php?modules=ext.gadget.rsw-util%7Coojs-ui-core%7Coojs-ui-widgets%7Cmediawiki.widgets';
-            script.onload = start;
-            script.onerror = start;
-            (document.head || document.documentElement).appendChild(script);
+            injectSequential(0);
         }
         if (typeof mw.loader.using === 'function') {
             mw.loader.using(
                 ['ext.gadget.rsw-util', 'oojs-ui-core', 'oojs-ui-widgets', 'mediawiki.widgets'],
-                start
+                function() { injectOOUIThenStart(0); }
             );
-            setTimeout(injectOOUIThenStart, 1200);
+            setTimeout(function() {
+                if (!osrsCalcOOUIReady()) {
+                    injectOOUIThenStart(0);
+                }
+            }, 1500);
         } else {
             injectOOUIThenStart();
         }
@@ -262,9 +346,11 @@
                         'bodyContent=' + !!document.getElementById('bodyContent')
                     ].join(' ')
                 );
-                if (waiting) {
+                if (waiting || !osrsCalcOOUIReady()) {
+                    window.__osrsCalcCoreFactoryRan = false;
                     start();
                 }
+                osrsHideCalculatorJsPlaceholder();
             }, 2500);
         }
     }
@@ -372,6 +458,12 @@
             mw.hook('rscalc.submit').add(osrsPublishCalculatorResult);
         }
         osrsArmSmokeSubmit();
+        (function osrsPollCalculatorLive(attempt) {
+            osrsHideCalculatorJsPlaceholder();
+            if (!document.documentElement.getAttribute('data-osrs-calc-live') && attempt < 24) {
+                setTimeout(function() { osrsPollCalculatorLive(attempt + 1); }, 250);
+            }
+        })(0);
     }
 
     function boot() {
@@ -390,6 +482,7 @@
         if (window.mw && mw.hook && mw.hook('rscalc.setupComplete')) {
             mw.hook('rscalc.setupComplete').add(function() {
                 patchAjax();
+                osrsHideCalculatorJsPlaceholder();
             });
         }
     }

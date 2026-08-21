@@ -198,6 +198,18 @@ final class osrsLiveArticleAssetQueueTests: XCTestCase {
         XCTAssertFalse(shared.contains("setAttribute('src'"))
     }
 
+    func testLiveAssetWarmScriptYieldsToUserInteraction() throws {
+        let root = try repositoryRoot()
+        let shared = try String(contentsOf: root.appendingPathComponent("shared/js/live_article_asset_warm.js"))
+        let ios = try String(contentsOf: root.appendingPathComponent("platforms/ios/osrswiki/Assets/web/live_article_asset_warm.js"))
+        XCTAssertEqual(shared, ios)
+        XCTAssertTrue(shared.contains("noteUserInteraction"))
+        XCTAssertTrue(shared.contains("pointerdown"))
+        XCTAssertTrue(shared.contains("touchmove"))
+        XCTAssertTrue(shared.contains("interactionHoldMs = 750"))
+        XCTAssertTrue(shared.contains("pause: true"))
+    }
+
     private func repositoryRoot() throws -> URL {
         var url = URL(fileURLWithPath: #filePath)
         while url.pathComponents.count > 1 {

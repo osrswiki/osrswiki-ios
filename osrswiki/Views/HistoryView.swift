@@ -105,6 +105,7 @@ struct HistoryView: View {
                 }
             }
         }
+        .osrsResumedNavigationHost(appState.navigationHostGeneration)
     }
     
     private var emptyStateView: some View {

@@ -112,6 +112,8 @@ extension AppState {
         case .more:
             moreNavigationStack.append(.article(articleDestination))
         }
+        UserDefaults.standard.set(articleDestination.url.absoluteString, forKey: "osrs.lastResumableArticleURL")
+        NotificationCenter.default.post(name: .osrsResumableArticleDidChange, object: articleDestination.url)
     }
 
     private func shouldAppendArticle(_ articleDestination: ArticleDestination, to tab: TabItem) -> Bool {

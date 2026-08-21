@@ -126,6 +126,7 @@ final class StaticSettingsPreviewSourceGuardTest: XCTestCase {
         XCTAssertTrue(articleWebView.contains("collapseTablesEnabled: themeManager.collapseTables"))
         XCTAssertFalse(articleWebView.contains("collapseTablesEnabled: viewModel.collapseTablesEnabled"))
         XCTAssertTrue(articleWebView.contains("webView.scrollView.contentInset.bottom = 0"))
+        XCTAssertTrue(app.contains("enum osrsAppRoot"))
         XCTAssertTrue(app.contains("if #available(iOS 26.0, *)"))
 
         let htmlBuilder = try source(root, "platforms/ios/osrswiki/Services/osrsPageHtmlBuilder.swift")

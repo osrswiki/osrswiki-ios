@@ -164,8 +164,66 @@
   function isProseBannerTable(table) {
     return !!(table && table.matches && table.matches(
       'table.messagebox, table.ambox, table.mbox, table.notebox, ' +
-      'table.tmbox, table.cmbox, table.ombox, table.imbox, table.fmbox'
+      'table.tmbox, table.cmbox, table.ombox, table.imbox, table.fmbox, ' +
+      'table.archivelist'
     ));
+  }
+
+  function markTocLayoutTables(root) {
+    const scope = root && root.querySelectorAll ? root : document;
+    scope.querySelectorAll('table').forEach((table) => {
+      if (table.classList.contains('wikitable') ||
+          table.classList.contains('infobox') ||
+          table.classList.contains('navbox') ||
+          table.classList.contains('archivelist') ||
+          isProseBannerTable(table)) {
+        return;
+      }
+      const toc = table.querySelector('#toc, .toc');
+      if (!toc) return;
+      const tocCell = toc.closest('td, th');
+      if (!tocCell || !table.contains(tocCell)) return;
+      const hasSiblingContent = Array.from(table.querySelectorAll('td, th')).some((cell) => {
+        return cell !== tocCell &&
+          !tocCell.contains(cell) &&
+          !cell.contains(toc) &&
+          String(cell.textContent || '').trim().length > 0;
+      });
+      if (hasSiblingContent) {
+        table.classList.add('osrs-toc-layout-table');
+      }
+    });
+    scope.querySelectorAll('#toc, .toc').forEach((toc) => {
+      const host = toc.closest('#toctemplate, [style*="float"]') || toc.parentElement;
+      if (!host || host === document.body || host === document.documentElement) return;
+      if (host.classList.contains('osrs-toc-layout-table')) return;
+      const style = host.getAttribute('style') || '';
+      const computed = window.getComputedStyle(host);
+      const floated = /float\s*:\s*(right|left)/i.test(style) ||
+        computed.float === 'right' ||
+        computed.float === 'left';
+      if (floated || host.id === 'toctemplate') {
+        host.classList.add('osrs-toc-layout-host');
+        host.style.setProperty('float', 'none', 'important');
+        host.style.setProperty('width', '100%', 'important');
+        host.style.setProperty('max-width', '100%', 'important');
+        host.style.setProperty('margin-inline', '0', 'important');
+      }
+    });
+  }
+
+  function expandProseBanners(root) {
+    const scope = root && root.querySelectorAll ? root : document;
+    scope.querySelectorAll(
+      'table.messagebox, table.ambox, table.mbox, table.notebox, ' +
+      'table.tmbox, table.cmbox, table.ombox, table.imbox, table.fmbox, ' +
+      'table.archivelist, .osrs-calculator-templates'
+    ).forEach((table) => {
+      table.style.setProperty('float', 'none', 'important');
+      table.style.setProperty('width', '100%', 'important');
+      table.style.setProperty('max-width', '100%', 'important');
+      table.style.setProperty('text-align', 'start', 'important');
+    });
   }
 
   function unwrapGeneratedScrollSurface(table) {
@@ -399,6 +457,8 @@
     markInlineImages(document);
     markBalancedImages(document);
     markSemanticTableRoles(document);
+    markTocLayoutTables(document);
+    expandProseBanners(document);
     markScrollableTables(document);
     document.documentElement.dataset.osrsArticlePolished = 'true';
   }

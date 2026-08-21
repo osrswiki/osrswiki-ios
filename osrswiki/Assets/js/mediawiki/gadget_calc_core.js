@@ -16,13 +16,95 @@
             return;
         }
         var orig = mw.loader.impl;
+        function osrsMakeModuleRequire(files) {
+            var cache = {};
+            return function osrsRequire(name) {
+                var key = String(name || '').replace(/^\.\//, '');
+                if (Object.prototype.hasOwnProperty.call(cache, key)) {
+                    return cache[key];
+                }
+                if (files && files[key]) {
+                    var file = files[key];
+                    var moduleObj = { exports: {} };
+                    if (typeof file === 'function') {
+                        file(osrsRequire, moduleObj);
+                        cache[key] = moduleObj.exports;
+                        return cache[key];
+                    }
+                    cache[key] = file;
+                    return file;
+                }
+                try {
+                    return mw.loader.require(name);
+                } catch (ignore) {
+                    return undefined;
+                }
+            };
+        }
+        function osrsRunModuleScript(script) {
+            var $ = window.jQuery || window.$;
+            if (typeof script === 'function') {
+                try {
+                    script($, $, osrsMakeModuleRequire(null), { exports: {} });
+                    return true;
+                } catch (first) {
+                    try {
+                        script($, window.OO);
+                        return true;
+                    } catch (second) {
+                        try {
+                            script();
+                            return true;
+                        } catch (third) {
+                            window.__osrsCalcErrors.push(String((third && third.message) || third));
+                            return false;
+                        }
+                    }
+                }
+            }
+            if (script && typeof script === 'object' && script.files && script.main) {
+                var req = osrsMakeModuleRequire(script.files);
+                var main = script.files[script.main];
+                if (typeof main === 'function') {
+                    try {
+                        var moduleObj = { exports: {} };
+                        main(req, moduleObj);
+                        return true;
+                    } catch (packaged) {
+                        window.__osrsCalcErrors.push(String((packaged && packaged.message) || packaged));
+                    }
+                }
+            }
+            return false;
+        }
         mw.loader.impl = function (declarator) {
             try {
                 return orig.apply(this, arguments);
             } catch (err) {
                 var msg = String((err && err.message) || err);
+                if (msg.indexOf('already implemented') !== -1) {
+                    if (osrsCalcCoreDepsReady()) {
+                        return;
+                    }
+                    try {
+                        var payload = typeof declarator === 'function' ? declarator() : null;
+                        var rawName = payload && payload[0];
+                        var name = String(rawName || msg.replace(/^.*already implemented:\s*/, '')).split('@')[0].trim();
+                        var hasOO = !!(window.OO && OO.ui);
+                        var isCore = name.indexOf('oojs-ui-core') !== -1 || name === 'oojs';
+                        var isWidgets = name.indexOf('oojs-ui-widgets') !== -1 ||
+                            name.indexOf('mediawiki.widgets') !== -1 ||
+                            name.indexOf('oojs-ui-windows') !== -1;
+                        var missingToggle = !(window.OO && OO.ui && typeof OO.ui.ToggleSwitchWidget === 'function');
+                        var missingButton = !(window.OO && OO.ui && typeof OO.ui.ButtonOptionWidget === 'function');
+                        if ((isCore && !hasOO) || (isWidgets && hasOO && (missingButton || missingToggle))) {
+                            osrsRunModuleScript(payload && payload[1]);
+                        }
+                    } catch (ignore) {}
+                    return;
+                }
                 window.__osrsCalcErrors.push(msg);
-                if (msg.indexOf('already implemented') === -1 && msg.indexOf('NotFoundError') === -1) {
+                if (msg.indexOf('NotFoundError') === -1) {
                     throw err;
                 }
             }
@@ -58,13 +140,30 @@
     }
     function osrsCalcCoreDepsReady() {
         var $ = window.jQuery || window.$;
-        return !!( $ && window.OO && OO.ui &&
+        var cfg = '';
+        try {
+            var pre = document.querySelector('pre.jcConfig');
+            cfg = pre && pre.textContent ? String(pre.textContent) : '';
+        } catch (ignore) {}
+        var base = !!( $ && window.OO && OO.ui &&
             typeof OO.ui.FieldsetLayout === 'function' &&
             typeof OO.ui.ButtonInputWidget === 'function' &&
             typeof OO.ui.ButtonOptionWidget === 'function' &&
-            typeof OO.ui.ButtonSelectWidget === 'function' &&
             typeof OO.ui.DropdownInputWidget === 'function' &&
-            typeof OO.ui.ComboBoxInputWidget === 'function');
+            typeof OO.ui.CheckboxInputWidget === 'function');
+        if (!base) {
+            return false;
+        }
+        if (/toggleswitch/i.test(cfg) && typeof OO.ui.ToggleSwitchWidget !== 'function') {
+            return false;
+        }
+        if (/\|\s*group\s*\|/i.test(cfg) && typeof OO.ui.HorizontalLayout !== 'function') {
+            return false;
+        }
+        if (/\|\s*hs\s*\|/i.test(cfg) && typeof OO.ui.ActionFieldLayout !== 'function') {
+            return false;
+        }
+        return true;
     }
     function osrsMarkCalcCoreRegistered() {
         if (!window.mw || !mw.loader) {
@@ -2106,19 +2205,23 @@ function init() {
     helper.initClasses();
 
     $('.jcConfig').each(function () {
-        var c = new Calc(this);
-        c.setupCalc();
-        
-        calcStore[c.form] = c;
-
-        if (c.autosubmit === 'only') {
-             helper.submitForm.call(c);
+        try {
+            var c = new Calc(this);
+            c.setupCalc();
+            calcStore[c.form] = c;
+            if (c.autosubmit === 'only') {
+                helper.submitForm.call(c);
+            }
+        } catch (setupErr) {
+            window.__osrsCalcErrors = window.__osrsCalcErrors || [];
+            window.__osrsCalcErrors.push('setupCalc: ' + String((setupErr && setupErr.message) || setupErr));
         }
     });
     
     // allow scripts to hook into calc setup completion
     mw.hook('rscalc.setupComplete').fire();
 }
+window.__osrsRebuildCalcs = init;
 
 $(init);
 

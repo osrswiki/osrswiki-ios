@@ -371,7 +371,14 @@ class osrsThemeManager: ObservableObject {
             .forEach { window in
                 window.overrideUserInterfaceStyle = style
                 window.backgroundColor = background
+                if osrsSceneCompositor.isAppContentWindow(window) {
+                    osrsSceneCompositor.restore(window)
+                }
             }
+    }
+
+    static func osrsUnhideResumedHostViews(in window: UIWindow) {
+        osrsSceneCompositor.restore(window)
     }
     
     private func setupSystemColorSchemeObserver() {

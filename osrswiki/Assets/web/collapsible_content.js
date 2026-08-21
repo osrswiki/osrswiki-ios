@@ -608,8 +608,11 @@
         // Recipe units are stacked full-width cards. Wiki float classes must not shrink
         // their headers, padding, or close footers to the table's intrinsic width.
         if (kind !== 'recipe') {
-            if (elementToWrap.matches('[class*="floatright"], [class*="-right"]') ||
-                elementToWrap.classList.contains('archivelist') ||
+            if (elementToWrap.classList.contains('archivelist') ||
+                elementToWrap.classList.contains('osrs-toc-layout-table') ||
+                elementToWrap.classList.contains('osrs-toc-layout-host')) {
+                // Prose banners and infobox+TOC layout tables stay full width.
+            } else if (elementToWrap.matches('[class*="floatright"], [class*="-right"]') ||
                 elementToWrap.classList.contains('shortcut') ||
                 elementToWrap.classList.contains('mw-halign-right') ||
                 elementToWrap.classList.contains('multi-infobox')) {
@@ -697,7 +700,8 @@
         if (!table || !table.matches('table.mw-collapsible') || table.closest('.collapsible-container')) return false;
         return !table.matches(
             'table.infobox, table.wikitable, table.navbox, table.messagebox, table.ambox, ' +
-            'table.mbox, table.notebox, table.gallery, table[role="presentation"]'
+            'table.mbox, table.notebox, table.gallery, table[role="presentation"], ' +
+            'table.archivelist, .osrs-toc-layout-table, .osrs-toc-layout-host, #toctemplate'
         );
     }
 
@@ -892,10 +896,9 @@
             }
         });
         document.querySelectorAll('table.wikitable').forEach(function(table) {
-            if (!table.closest('.recipe-table, .collapsible-container') &&
-                !table.matches('.navbox, .questdetails')) {
-                transformElement({ kind: 'wikitable', defaultTitle: 'Table', table: table });
-            }
+            if (table.closest('.recipe-table, .collapsible-container')) return;
+            if (table.matches('.navbox, .questdetails, .archivelist, .osrs-toc-layout-table')) return;
+            transformElement({ kind: 'wikitable', defaultTitle: 'Table', table: table });
         });
         transformSections();
 

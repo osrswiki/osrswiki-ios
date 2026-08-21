@@ -269,10 +269,13 @@ final class ArticleAestheticRenderingTests: XCTestCase {
         webView.frame = CGRect(x: 0, y: 0, width: 768, height: 1024)
         let tabletState = try await evaluate("""
         (() => ({
-            columns: getComputedStyle(document.querySelector('.osrs-calculator-layout')).gridTemplateColumns
+            columns: getComputedStyle(document.querySelector('.osrs-calculator-layout')).gridTemplateColumns,
+            templateWidth: document.querySelector('.osrs-calculator-templates')?.getBoundingClientRect().width || 0,
+            viewportWidth: document.documentElement.clientWidth
         }))()
         """)
-        XCTAssertGreaterThanOrEqual((tabletState["columns"] as? String ?? "").split(separator: " ").count, 2)
+        XCTAssertEqual((tabletState["columns"] as? String ?? "").split(separator: " ").count, 1)
+        XCTAssertGreaterThan(tabletState["templateWidth"] as? Double ?? 0, (tabletState["viewportWidth"] as? Double ?? 768) * 0.7)
     }
 
     func testMoneyMakingControlUsesInlineThemedIconControls() async throws {
@@ -1111,7 +1114,7 @@ final class ArticleAestheticRenderingTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(state["scrollMetricsCount"] as? Int ?? 0, 1)
         XCTAssertEqual(state["cueCount"] as? Int, 0)
         XCTAssertEqual(state["primaryScrollable"] as? Bool, false)
-        XCTAssertEqual(state["primaryOverflow"] as? String, "hidden")
+        XCTAssertEqual(state["primaryOverflow"] as? String, "auto")
         XCTAssertEqual(state["switchFloat"] as? String, "none")
         XCTAssertLessThanOrEqual(state["switchWidth"] as? Double ?? 999, (state["primaryWidth"] as? Double ?? 0) + 0.5)
         XCTAssertGreaterThan(state["stateControlGap"] as? Double ?? 0, 0)
@@ -1478,7 +1481,7 @@ final class ArticleAestheticRenderingTests: XCTestCase {
         })()
         """)
 
-        XCTAssertEqual(firstMeasurementState["label"] as? String, "Teleportation options")
+        XCTAssertEqual(firstMeasurementState["label"] as? String, "Map table")
         XCTAssertEqual(firstMeasurementState["mapCount"] as? Int, 4)
         XCTAssertEqual(firstMeasurementState["uniqueIds"] as? Int, 4)
         XCTAssertEqual(firstMeasurementState["zeroSizedMapCount"] as? Int, 0, "\(firstMeasurementState)")
@@ -1798,7 +1801,7 @@ final class ArticleAestheticRenderingTests: XCTestCase {
         let before = try await evaluate("""
         (() => {
             const box = document.querySelector('.infobox-switch');
-            return { height: box.getBoundingClientRect().height, ready: box.dataset.osrsSwitcherReady || '' };
+            return { height: box.getBoundingClientRect().height, widthPx: box.getBoundingClientRect().width, ready: box.dataset.osrsSwitcherReady || '' };
         })()
         """)
         _ = try await evaluate("(() => { performSwitch('2'); return { ok: true }; })()")
@@ -1808,15 +1811,18 @@ final class ArticleAestheticRenderingTests: XCTestCase {
             const selected = document.querySelector('.button-selected');
             return {
                 height: box.getBoundingClientRect().height,
+                widthPx: box.getBoundingClientRect().width,
                 selected: (selected && selected.textContent) || '',
+                width: box.style.width,
                 minHeight: box.style.minHeight
             };
         })()
         """)
         XCTAssertEqual(before["ready"] as? String, "true")
         XCTAssertEqual(after["selected"] as? String, "B")
-        XCTAssertFalse((after["minHeight"] as? String ?? "").isEmpty)
-        XCTAssertEqual(before["height"] as? Double ?? 0, after["height"] as? Double ?? -1, accuracy: 2.0)
+        XCTAssertFalse((after["width"] as? String ?? "").isEmpty)
+        // Image state B is taller; width is locked so the column does not reflow.
+        XCTAssertEqual(before["widthPx"] as? Double ?? 0, after["widthPx"] as? Double ?? -1, accuracy: 2.0)
     }
 
     func testBuilderAppliesUserArticleTextScaleExactlyOnce() async throws {
@@ -1919,8 +1925,13 @@ final class ArticleAestheticRenderingTests: XCTestCase {
         let tablesCss = try readAsset("Assets/web/collapsible_tables.css")
         let collapsible = try readAsset("Assets/web/collapsible_content.js")
         XCTAssertTrue(collapsible.contains("osrsMeasureDisclosureHeaderGaps"))
-        XCTAssertTrue(fixesCss.contains("--osrs-disclosure-control-padding-block: 6px;"))
+        XCTAssertTrue(fixesCss.contains("--osrs-disclosure-control-padding-block: 12px;"))
         XCTAssertTrue(fixesCss.contains("html.osrs-table-cells-wrap"))
+        XCTAssertTrue(fixesCss.contains(".osrs-toc-layout-table"))
+        XCTAssertTrue(fixesCss.contains("#toctemplate"))
+        XCTAssertTrue(fixesCss.contains("osrs-toc-layout-host"))
+        XCTAssertTrue(fixesCss.contains(".collapsible-label"))
+        XCTAssertTrue(collapsible.contains(".archivelist, .osrs-toc-layout-table"))
 
         func disclosure(
             kind: String,
@@ -2011,6 +2022,133 @@ final class ArticleAestheticRenderingTests: XCTestCase {
         )
         XCTAssertLessThanOrEqual(number(state, "kindSpread"), 2.0)
         XCTAssertEqual(state["kinds"] as? String, "infobox,section,wikitable")
+    }
+
+    func testDisclosureHeaderMatchesCloseHeightAndKeepsLabelOnTheStartEdge() async throws {
+        let fixesCss = try readAsset("Assets/styles/fixes.css")
+        let tablesCss = try readAsset("Assets/web/collapsible_tables.css")
+        let html = """
+        <!doctype html>
+        <html>
+        <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <style>
+        html, body { margin: 0; font: 16px/1.3 -apple-system, sans-serif; }
+        table.wikitable { text-align: center; width: 100%; }
+        \(fixesCss)
+        \(tablesCss)
+        </style>
+        </head>
+        <body>
+        <table class="wikitable">
+          <tr>
+            <td>
+              <div class="collapsible-container collapsible-wikitable">
+                <div class="collapsible-header">
+                  <div class="title-wrapper">
+                    <span class="collapsible-label">Table</span>
+                    <span class="collapsible-state">Tap to collapse</span>
+                  </div>
+                  <div class="icon"></div>
+                </div>
+                <div class="collapsible-content">
+                  <div class="osrs-disclosure-body"><p>Loot</p></div>
+                </div>
+                <div class="collapsible-close-button">
+                  <div class="title-wrapper"><span class="collapsible-label">Close</span></div>
+                </div>
+              </div>
+            </td>
+          </tr>
+        </table>
+        <p>Inline <math class="mwe-math-element mwe-math-element-inline"><mrow><mi>E</mi></mrow></math> math.</p>
+        <table>
+          <tr>
+            <td><table class="infobox"><tr><td>Agility</td></tr></table></td>
+            <td><div id="toc" class="toc"><ul><li>Contents</li></ul></div></td>
+          </tr>
+        </table>
+        <div id="toctemplate" style="clear:left; float:right; margin:0 0 1.5em 1.5em; width:auto;" class="nomobile">
+          <div class="toc"><ul><li>Skills</li></ul></div>
+        </div>
+        <p class="skills-prose">Skills section text that must keep the full line measure.</p>
+        <table class="archivelist"><tr><td>Templates used</td></tr></table>
+        <script>
+        \(try readAsset("Assets/web/mobile_article_polish.js"))
+        </script>
+        </body>
+        </html>
+        """
+        try await load(html)
+        try await Task.sleep(nanoseconds: 150_000_000)
+        let state = try await evaluate("""
+        (() => {
+            const header = document.querySelector('.collapsible-header');
+            const close = document.querySelector('.collapsible-close-button');
+            const label = document.querySelector('.collapsible-header .collapsible-label');
+            const math = document.querySelector('p > .mwe-math-element');
+            const paragraph = math && math.closest('p');
+            const tocTable = document.querySelector('.osrs-toc-layout-table');
+            const tocHost = document.querySelector('#toctemplate');
+            const archive = document.querySelector('table.archivelist');
+            const headerRect = header.getBoundingClientRect();
+            const closeRect = close.getBoundingClientRect();
+            const labelRect = label.getBoundingClientRect();
+            const mathRect = math ? math.getBoundingClientRect() : null;
+            const paragraphRect = paragraph ? paragraph.getBoundingClientRect() : null;
+            const headerStyle = getComputedStyle(header);
+            const tocHostRect = tocHost ? tocHost.getBoundingClientRect() : null;
+            const archiveRect = archive ? archive.getBoundingClientRect() : null;
+            return {
+                headerHeight: headerRect.height,
+                closeHeight: closeRect.height,
+                labelLeft: labelRect.left,
+                headerContentLeft: headerRect.left + parseFloat(headerStyle.paddingLeft),
+                headerTextAlign: getComputedStyle(label).textAlign,
+                mathDisplay: math ? getComputedStyle(math).display : '',
+                mathWidth: mathRect ? mathRect.width : 0,
+                paragraphWidth: paragraphRect ? paragraphRect.width : 0,
+                tocMarked: !!tocTable,
+                tocDisplay: tocTable ? getComputedStyle(tocTable).display : '',
+                tocHostClass: tocHost ? tocHost.className : '',
+                tocHostFloat: tocHost ? getComputedStyle(tocHost).float : '',
+                tocHostWidth: tocHostRect ? tocHostRect.width : 0,
+                archiveFloat: archive ? getComputedStyle(archive).float : '',
+                archiveWidth: archiveRect ? archiveRect.width : 0,
+                viewportWidth: document.documentElement.clientWidth
+            };
+        })()
+        """)
+        XCTAssertEqual(number(state, "headerHeight"), number(state, "closeHeight"), accuracy: 2.0)
+        XCTAssertEqual(
+            number(state, "labelLeft"),
+            number(state, "headerContentLeft"),
+            accuracy: 2.0,
+            "Collapsible header text must sit on the start edge, not centered in leftover space"
+        )
+        let align = state["headerTextAlign"] as? String ?? ""
+        XCTAssertTrue(align == "start" || align == "left", "label text-align was \(align)")
+        XCTAssertTrue((state["mathDisplay"] as? String ?? "").contains("inline"))
+        XCTAssertLessThan(
+            number(state, "mathWidth"),
+            number(state, "paragraphWidth") * 0.5,
+            "Inline math must shrink-wrap instead of stretching to the paragraph width"
+        )
+        XCTAssertEqual(state["tocMarked"] as? Bool, true)
+        XCTAssertEqual(state["tocDisplay"] as? String, "block")
+        XCTAssertTrue((state["tocHostClass"] as? String ?? "").contains("osrs-toc-layout-host"))
+        XCTAssertEqual(state["tocHostFloat"] as? String, "none")
+        XCTAssertGreaterThan(
+            number(state, "tocHostWidth"),
+            number(state, "viewportWidth") * 0.85,
+            "Floated Contents hosts must use the full article width"
+        )
+        XCTAssertEqual(state["archiveFloat"] as? String, "none")
+        XCTAssertGreaterThan(
+            number(state, "archiveWidth"),
+            number(state, "viewportWidth") * 0.85,
+            "Template-used banners must use the full article width"
+        )
     }
 
     func testArticleWebViewTogglesAccessibilityReflowClass() throws {

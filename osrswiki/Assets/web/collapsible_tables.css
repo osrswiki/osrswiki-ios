@@ -143,7 +143,7 @@
 /* True transparent wrapper behavior - containers inherit exact child positioning */
 
 /* Float Right: Match child's right-floating behavior exactly */
-.collapsible-container:has([class*="floatright"], [class*="-right"], .archivelist, .shortcut, .mw-halign-right, .infobox:not(.skill-info):not(.infobox-skill):not(.infobox-bonuses), .multi-infobox) {
+.collapsible-container:has([class*="floatright"], [class*="-right"], .shortcut, .mw-halign-right, .infobox:not(.skill-info):not(.infobox-skill):not(.infobox-bonuses), .multi-infobox) {
         float: right;
         margin: 0.5em 0 1em 1em; /* Match typical right-floating margin */
         width: fit-content; /* Wrap around child exactly */
@@ -193,7 +193,7 @@
    ========================================================================*/
 @media screen and (max-width: 768px) {
         /* Override all floating containers to be non-floating on mobile */
-        .collapsible-container:has([class*="floatright"], [class*="-right"], .archivelist, .shortcut, .mw-halign-right, .infobox:not(.skill-info):not(.infobox-skill):not(.infobox-bonuses), .multi-infobox),
+        .collapsible-container:has([class*="floatright"], [class*="-right"], .shortcut, .mw-halign-right, .infobox:not(.skill-info):not(.infobox-skill):not(.infobox-bonuses), .multi-infobox),
         .collapsible-container:has([class*="floatleft"], [class*="-left"], .mw-halign-left) {
                 float: none !important;
                 clear: both !important;
@@ -225,23 +225,31 @@
 .collapsible-header {
         display: flex;
         align-items: center;
-        padding: 6px 10px;
+        justify-content: flex-start;
+        padding: 12px;
         cursor: pointer;
         -webkit-user-select: none;
         -ms-user-select: none;
         user-select: none;
+        text-align: start;
 }
 
 .collapsible-header .title-wrapper {
+        display: flex;
+        align-items: center;
+        justify-content: flex-start;
         flex-grow: 1;
         font-weight: bold;
         min-width: 0;
         overflow: hidden;
+        text-align: left;
 }
 
 .collapsible-header .collapsible-label {
         display: block;
+        flex: 0 1 auto;
         overflow: hidden;
+        text-align: start;
         text-overflow: ellipsis;
         white-space: nowrap;
 }

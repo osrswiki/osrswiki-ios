@@ -7,6 +7,7 @@
 //
 
 import SwiftUI
+import UIKit
 import WebKit
 import Combine
 import CryptoKit
@@ -576,6 +577,10 @@ class ArticleViewModel: NSObject, ObservableObject {
     @Published var isLoading: Bool = false
     @Published var pendingYouTubeEmbedURL: URL?
     @Published var needsContentProcessRecovery: Bool = false
+    /// Incremented when the on-screen WKWebView must be rebuilt after a compositor-blank resume.
+    @Published var webViewRenderGeneration: Int = 0
+    /// Cancels a stale delayed foreground probe when another foreground cycle starts.
+    private var foregroundDocumentProbeGeneration = 0
 
     /// True when this view model still owns a rendered article document. Returning
     /// from background must not start a new network load just because SwiftUI
@@ -592,13 +597,177 @@ class ArticleViewModel: NSObject, ObservableObject {
     /// Reappear must reload a terminated or empty document, including after a
     /// prewarm adopt onto a dead WKWebView, without skipping a healthy page.
     var shouldReloadArticleOnReappear: Bool {
+        if needsContentProcessRecovery {
+            return true
+        }
         if isLoading || isRefreshing {
             return false
         }
-        return needsContentProcessRecovery
-            || webView == nil
+        return webView == nil
             || webView?.url == nil
             || webView?.url?.absoluteString == "about:blank"
+    }
+
+    private static let osrsRenderedDocumentHealthScript = """
+    (function() {
+        try {
+            var body = document.body;
+            if (!body) return { ok: false, reason: 'nobody' };
+            var htmlLen = (body.innerHTML || '').length;
+            var textLen = ((body.innerText || body.textContent || '').replace(/\\s+/g, '')).length;
+            var hasArticle = !!(
+                document.getElementById('mw-content-text') ||
+                document.getElementById('bodyContent') ||
+                document.getElementById('content')
+            );
+            var style = window.getComputedStyle(body);
+            var hidden = style.visibility === 'hidden' || style.display === 'none';
+            return {
+                ok: !hidden && htmlLen > 32 && (textLen > 0 || hasArticle || !!body.querySelector('img, table, p')),
+                htmlLen: htmlLen,
+                textLen: textLen
+            };
+        } catch (e) {
+            return { ok: false, reason: String(e) };
+        }
+    })()
+    """
+
+    private var lastForegroundRecoveryAt: TimeInterval = 0
+
+    func recoverRenderedDocumentAfterBackground() {
+        let now = Date().timeIntervalSince1970
+        if now - lastForegroundRecoveryAt < 1 {
+            wakeRenderedDocumentAfterBackground()
+            return
+        }
+        lastForegroundRecoveryAt = now
+        // A healthy DOM can still sit behind a blank window compositor.
+        // Rebuild WebKit only when the document probe says the page is gone.
+        wakeRenderedDocumentAfterBackground()
+    }
+
+    func markNeedsContentProcessRecovery(rebuildWebView: Bool = false) {
+        if rebuildWebView {
+            webViewRenderGeneration += 1
+        }
+        isRefreshing = false
+        needsContentProcessRecovery = true
+    }
+
+    /// WKWebView can go blank after backgrounding without firing the terminate callback.
+    /// Probe the live document on foreground and recover when it is empty.
+    func wakeRenderedDocumentAfterBackground() {
+        guard let webView else {
+            markNeedsContentProcessRecovery(rebuildWebView: true)
+            return
+        }
+        webView.isHidden = false
+        webView.alpha = 1
+        webView.scrollView.isHidden = false
+        webView.scrollView.alpha = 1
+        webView.scrollView.layer.setNeedsDisplay()
+        webView.setNeedsLayout()
+        webView.layoutIfNeeded()
+        let offset = webView.scrollView.contentOffset
+        webView.scrollView.setContentOffset(
+            CGPoint(x: offset.x, y: offset.y + 1),
+            animated: false
+        )
+        webView.scrollView.setContentOffset(offset, animated: false)
+        webView.evaluateJavaScript(
+            "void(document.body && (document.body.style.visibility = 'visible')); window.scrollBy(0,1); window.scrollBy(0,-1);"
+        )
+        probeRenderedDocumentHealthOnForeground(force: true)
+    }
+
+    func probeRenderedDocumentHealthOnForeground(force: Bool = false) {
+        if !force, isLoading || isRefreshing {
+            return
+        }
+        if shouldReloadArticleOnReappear {
+            markNeedsContentProcessRecovery()
+            return
+        }
+        guard let webView else {
+            markNeedsContentProcessRecovery(rebuildWebView: true)
+            return
+        }
+        foregroundDocumentProbeGeneration += 1
+        let generation = foregroundDocumentProbeGeneration
+        webView.evaluateJavaScript(Self.osrsRenderedDocumentHealthScript) { [weak self] result, error in
+            Task { @MainActor in
+                guard let self else { return }
+                guard generation == self.foregroundDocumentProbeGeneration else { return }
+                if error != nil {
+                    self.markNeedsContentProcessRecovery(rebuildWebView: true)
+                    return
+                }
+                let ok: Bool
+                if let dict = result as? [String: Any] {
+                    ok = (dict["ok"] as? NSNumber)?.boolValue ?? (dict["ok"] as? Bool) ?? false
+                } else if let flag = result as? Bool {
+                    ok = flag
+                } else if let number = result as? NSNumber {
+                    ok = number.boolValue
+                } else {
+                    ok = false
+                }
+                if !ok {
+                    print("⚠️ ArticleViewModel: Foreground document probe found a blank article; recovering")
+                    self.markNeedsContentProcessRecovery(rebuildWebView: true)
+                    return
+                }
+                self.probeRenderedSnapshotIfNeeded(webView, generation: generation)
+            }
+        }
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+            guard generation == self.foregroundDocumentProbeGeneration else { return }
+            guard !self.needsContentProcessRecovery else { return }
+            self.probeRenderedSnapshotIfNeeded(webView, generation: generation)
+        }
+    }
+
+    /// DOM can stay healthy while WKWebView's compositor is a uniform theme color.
+    private func probeRenderedSnapshotIfNeeded(_ webView: WKWebView, generation: Int) {
+        webView.takeSnapshot(with: nil) { [weak self] image, error in
+            Task { @MainActor in
+                guard let self else { return }
+                guard generation == self.foregroundDocumentProbeGeneration else { return }
+                if error != nil || image == nil || Self.osrsSnapshotLooksCompositorBlank(image) {
+                    if self.isLoading && !self.articleRevealedForWarm {
+                        return
+                    }
+                    print("⚠️ ArticleViewModel: Foreground snapshot found a compositor-blank article; recovering")
+                    self.markNeedsContentProcessRecovery(rebuildWebView: true)
+                }
+            }
+        }
+    }
+
+    static func osrsSnapshotLooksCompositorBlank(_ image: UIImage?) -> Bool {
+        guard let image else { return true }
+        let sample = CGSize(width: 16, height: 16)
+        UIGraphicsBeginImageContextWithOptions(sample, true, 1)
+        defer { UIGraphicsEndImageContext() }
+        image.draw(in: CGRect(origin: .zero, size: sample))
+        guard let tiny = UIGraphicsGetImageFromCurrentImageContext()?.cgImage,
+              let data = tiny.dataProvider?.data,
+              let bytes = CFDataGetBytePtr(data) else {
+            return true
+        }
+        let count = tiny.width * tiny.height
+        guard count > 0 else { return true }
+        var minLuminance = 255
+        var maxLuminance = 0
+        for index in 0..<count {
+            let offset = index * 4
+            let luminance = (Int(bytes[offset]) + Int(bytes[offset + 1]) + Int(bytes[offset + 2])) / 3
+            minLuminance = min(minLuminance, luminance)
+            maxLuminance = max(maxLuminance, luminance)
+        }
+        return (maxLuminance - minLuminance) < 10
     }
     @Published var loadingProgress: Double = 0.0
     @Published var loadingProgressText: String? = nil
@@ -692,6 +861,12 @@ class ArticleViewModel: NSObject, ObservableObject {
             identity: osrsArticleDocumentIdentity(pageURL: pageUrl, pageTitle: pageTitle).value,
             foreground: true
         )
+        NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.recoverRenderedDocumentAfterBackground()
+            }
+            .store(in: &cancellables)
         print("🏗️ ArticleViewModel: Lightweight init completed for '\(pageTitle ?? "unknown")' - heavy loading deferred")
     }
 
@@ -1139,6 +1314,10 @@ class ArticleViewModel: NSObject, ObservableObject {
         let urls = rawValues.compactMap(osrsOfflineArticleResourceSettlement.networkURL(from:))
         guard !urls.isEmpty else { return }
         liveAssetWarmer?.promote(urls)
+    }
+
+    func noteBackgroundWorkUserInteraction() {
+        osrsBackgroundWorkGate.shared.noteUserInteraction()
     }
 
     func markFirstViewComplete() {
@@ -1879,6 +2058,8 @@ class ArticleViewModel: NSObject, ObservableObject {
                     parsingTask.cancel()
                 }
                 guard let self, self.isCurrentLoad(generation), !Task.isCancelled else { return }
+                await osrsBackgroundWorkGate.shared.waitWhilePaused()
+                guard self.isCurrentLoad(generation), !Task.isCancelled else { return }
                 osrsMapPreloadService.shared.setParentView(parentView)
                 osrsMapPreloadService.shared.preloadMaps(maps)
             } catch {

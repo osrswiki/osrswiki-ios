@@ -73,8 +73,8 @@ class osrsWikiModuleRegistry {
         // Experience tables and wiki calculators
         ("exptable", ["ext.osrs.exp-calculator"]),
         ("calc-table", ["ext.osrs.exp-calculator"]),
-        ("jcConfig", ["oojs-ui-core", "mediawiki.widgets", "ext.gadget.rsw-util"]),
-        ("class=\"jcConfig", ["oojs-ui-core", "mediawiki.widgets", "ext.gadget.rsw-util"])
+        ("jcConfig", ["oojs-ui-core", "oojs-ui-widgets", "mediawiki.widgets", "ext.gadget.rsw-util"]),
+        ("class=\"jcConfig", ["oojs-ui-core", "oojs-ui-widgets", "mediawiki.widgets", "ext.gadget.rsw-util"])
     ]
     
     // Page-specific modules for certain article types
@@ -101,7 +101,7 @@ class osrsWikiModuleRegistry {
         "update": ["ext.osrs.update-diff"],
         
         // Calculator pages
-        "calculator": ["oojs-ui-core", "mediawiki.widgets", "ext.gadget.rsw-util"]
+        "calculator": ["oojs-ui-core", "oojs-ui-widgets", "mediawiki.widgets", "ext.gadget.rsw-util"]
     ]
     
     static func generateRLPAGEMODULES(bodyContent: String, title: String) -> [String] {

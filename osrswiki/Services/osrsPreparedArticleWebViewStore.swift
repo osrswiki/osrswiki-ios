@@ -98,6 +98,13 @@ final class osrsPreparedArticleWebViewStore: NSObject, WKNavigationDelegate, WKS
     }
 
     func preload(document: osrsPreparedArticleDocument, options: osrsArticleRenderOptions) {
+        if osrsBackgroundWorkGate.shared.isPaused {
+            Task { @MainActor in
+                await osrsBackgroundWorkGate.shared.waitWhilePaused()
+                self.preload(document: document, options: options)
+            }
+            return
+        }
         let key = Key(identity: document.request.identity, options: options)
         if entries.contains(where: { $0.key == key }) {
             return

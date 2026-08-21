@@ -12,8 +12,8 @@ final class osrsLiveArticleAssetWarmer: @unchecked Sendable {
         pageId: String,
         isCached: @escaping (URL) async -> Bool,
         fetch: @escaping (URL) async -> Void,
-        highConcurrency: Int = 4,
-        lowConcurrency: Int = 2
+        highConcurrency: Int = 2,
+        lowConcurrency: Int = 1
     ) {
         self.pageId = pageId
         self.isCached = isCached
@@ -56,6 +56,8 @@ final class osrsLiveArticleAssetWarmer: @unchecked Sendable {
 
     private func drain(preferHigh: Bool) async {
         while !Task.isCancelled {
+            await osrsBackgroundWorkGate.shared.waitWhilePaused()
+            guard !Task.isCancelled else { return }
             let url: URL?
             if preferHigh {
                 url = queue.takeHigh() ?? queue.takeLow()
@@ -73,6 +75,8 @@ final class osrsLiveArticleAssetWarmer: @unchecked Sendable {
             if await isCached(url) {
                 continue
             }
+            guard !Task.isCancelled else { return }
+            await osrsBackgroundWorkGate.shared.waitWhilePaused()
             guard !Task.isCancelled else { return }
             await fetch(url)
         }

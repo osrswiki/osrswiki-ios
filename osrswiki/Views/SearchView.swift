@@ -136,6 +136,7 @@ struct SearchView: View {
                 }
             }
         }
+        .osrsResumedNavigationHost(appState.navigationHostGeneration)
     }
 
     private var searchLauncher: some View {

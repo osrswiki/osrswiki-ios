@@ -13,9 +13,11 @@ private enum osrsTabBarFillCache {
 
 extension UIApplication {
     /// iOS 26 Liquid Glass TabView keeps the system tab bar composited even
-    /// when `.toolbarVisibility(.hidden)` is set. Hide it by alpha so the
-    /// layer stays warm for an instant restore, but cannot show through the
-    /// article glass overlay.
+    /// when `.toolbarVisibility(.hidden)` is set. Hide the 62pt capsule by
+    /// alpha so the layer stays warm, but never alpha-hide the full-screen
+    /// bar samplers (`_UITabBarContainerView`, `_UIFloatingBarContainerView`):
+    /// those layers paint tab/article content. Send them behind the content
+    /// instead so a stale resume snapshot cannot cover the article.
     static func setFloatingTabBarHidden(_ hidden: Bool) {
         let apply = {
             for bar in floatingTabBarViews() {
@@ -28,6 +30,7 @@ extension UIApplication {
                     bar.transform = .identity
                 }
             }
+            sendFloatingTabBarCoversBehindContent(hidden)
         }
         if Thread.isMainThread {
             apply()
@@ -89,35 +92,107 @@ extension UIApplication {
         }
     }
 
-    private static func keyWindow() -> UIWindow? {
+    private static func contentWindow() -> UIWindow? {
         UIApplication.shared.connectedScenes
             .compactMap { $0 as? UIWindowScene }
             .flatMap(\.windows)
-            .first { $0.isKeyWindow } ?? UIApplication.shared.connectedScenes
+            .first { isAppLikeWindow($0) && $0.rootViewController != nil }
+    }
+
+    private static func keyWindow() -> UIWindow? {
+        contentWindow() ?? UIApplication.shared.connectedScenes
             .compactMap { $0 as? UIWindowScene }
             .flatMap(\.windows)
-            .first
+            .first { $0.isKeyWindow }
     }
 
     private static func floatingTabBars() -> [UITabBar] {
         floatingTabBarViews().compactMap { $0 as? UITabBar }
     }
 
+    private static func appContentWindows() -> [UIWindow] {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap(\.windows)
+            .filter(isAppLikeWindow)
+    }
+
     private static func floatingTabBarViews() -> [UIView] {
-        guard let window = keyWindow() else { return [] }
         var bars: [UIView] = []
         func visit(_ view: UIView) {
             let name = NSStringFromClass(type(of: view))
             if view is UITabBar ||
                 (name.localizedCaseInsensitiveContains("TabBar") &&
+                 !name.contains("Container") &&
                  view.bounds.height > 20 && view.bounds.height < 140 &&
                  view.bounds.width > 160) {
                 bars.append(view)
             }
             view.subviews.forEach(visit)
         }
-        visit(window)
+        appContentWindows().forEach { visit($0) }
         return bars
+    }
+
+    private static func floatingTabBarCoverViews() -> [UIView] {
+        var covers: [UIView] = []
+        func visit(_ view: UIView) {
+            let name = NSStringFromClass(type(of: view))
+            if name.contains("_UITabBarContainerView") ||
+                name.contains("_UITabBarContainerWrapperView") ||
+                name.contains("_UIFloatingBarContainerView") ||
+                name.contains("FloatingBarContainer") {
+                covers.append(view)
+            }
+            view.subviews.forEach(visit)
+        }
+        appContentWindows().forEach { visit($0) }
+        return covers
+    }
+
+    /// The iOS 26 tab container is a later sibling of tab content and a
+    /// full-screen sampling layer. After a scene resume it can freeze as an
+    /// opaque theme fill over the still-alive article tree. Keep it in the
+    /// hierarchy at alpha 1 so Liquid Glass can resample, but park it behind
+    /// the content while an article owns the chrome.
+    private static func sendFloatingTabBarCoversBehindContent(_ behind: Bool) {
+        var parents: Set<ObjectIdentifier> = []
+        for cover in floatingTabBarCoverViews() {
+            cover.isUserInteractionEnabled = !behind
+            cover.layer.zPosition = behind ? -1 : 0
+            if behind {
+                cover.layer.contents = nil
+                cover.setNeedsLayout()
+                cover.layer.setNeedsDisplay()
+            }
+            if let parent = cover.superview {
+                parents.insert(ObjectIdentifier(parent))
+                for sibling in parent.subviews {
+                    let name = NSStringFromClass(type(of: sibling))
+                    let isCover = name.contains("_UITabBarContainerView")
+                        || name.contains("_UITabBarContainerWrapperView")
+                        || name.contains("_UIFloatingBarContainerView")
+                        || name.contains("FloatingBarContainer")
+                    if isCover { continue }
+                    sibling.layer.zPosition = behind ? 1 : 0
+                }
+            }
+        }
+        print("🪟 tabBar covers=\(floatingTabBarCoverViews().count) behind=\(behind) parents=\(parents.count)")
+        let coverDump = floatingTabBarCoverViews().map { view in
+            let name = NSStringFromClass(type(of: view))
+            return "COVER \(name) alpha=\(String(format: "%.2f", view.alpha)) hidden=\(view.isHidden) z=\(Int(view.layer.zPosition)) frame=\(Int(view.frame.minX)),\(Int(view.frame.minY)) \(Int(view.frame.width))x\(Int(view.frame.height))"
+        }.joined(separator: "\n")
+        if let url = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first?
+            .appendingPathComponent("osrs-scene-dump.txt") {
+            let existing = (try? String(contentsOf: url, encoding: .utf8)) ?? ""
+            try? (existing + "\n" + coverDump + "\n").write(to: url, atomically: true, encoding: .utf8)
+        }
+    }
+
+    private static func isAppLikeWindow(_ window: UIWindow) -> Bool {
+        let name = NSStringFromClass(type(of: window))
+        return !name.contains("TextEffects") && !name.contains("Keyboard")
     }
     
     private static func findTabBarController(in viewController: UIViewController?) -> UITabBarController? {

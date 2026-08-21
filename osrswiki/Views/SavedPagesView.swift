@@ -144,6 +144,7 @@ struct SavedPagesView: View {
                 }
             }
         }
+        .osrsResumedNavigationHost(appState.navigationHostGeneration)
         .task {
             await viewModel.loadSavedPages()
         }

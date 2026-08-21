@@ -54,10 +54,38 @@ class AppState: ObservableObject {
     @Published internal(set) var pendingSearchActivationIntent: osrsSearchActivationIntent?
     @Published internal(set) var pendingSearchQuery: String?
     @Published var pendingArticleScrollSection: String?
+    @Published var articleForegroundEpoch: UInt64 = 0
+    @Published var navigationHostGeneration: UInt64 = 0
+    private var applicationWasBackgrounded = false
     @Published internal(set) var activeSearchReturnContext: osrsSearchReturnContext?
     internal var nextSearchActivationGeneration: UInt64 = 0
     private var articleScrollOffsets: [String: CGFloat] = [:]
     private let articleScrollDefaultsKey = "osrs.articleScrollOffsets"
+
+    private let lastResumableArticleKey = "osrs.lastResumableArticleURL"
+
+    func noteApplicationDidEnterBackground() {
+        applicationWasBackgrounded = true
+        rememberResumableArticle()
+    }
+
+    func rememberResumableArticle() {
+        if let url = activeArticleDestination?.url {
+            UserDefaults.standard.set(url.absoluteString, forKey: lastResumableArticleKey)
+            NotificationCenter.default.post(name: .osrsResumableArticleDidChange, object: url)
+        }
+    }
+
+    var resumableArticleURL: URL? {
+        activeArticleDestination?.url
+            ?? UserDefaults.standard.string(forKey: lastResumableArticleKey).flatMap(URL.init(string:))
+    }
+
+    func noteApplicationDidBecomeActive() {
+        guard applicationWasBackgrounded else { return }
+        applicationWasBackgrounded = false
+        osrsSceneCompositor.restoreResumedScenes()
+    }
 
     func captureArticleScrollOffset(_ identity: String, offsetY: CGFloat) {
         articleScrollOffsets[identity] = offsetY
@@ -547,4 +575,8 @@ enum osrsWikiURL {
             .replacingOccurrences(of: " ", with: "%20")
         return URL(string: encoded)
     }
+}
+
+extension Notification.Name {
+    static let osrsResumableArticleDidChange = Notification.Name("osrs.resumableArticleDidChange")
 }

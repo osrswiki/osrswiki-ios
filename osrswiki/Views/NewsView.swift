@@ -266,6 +266,7 @@ struct NewsView: View {
                 }
             }
         }
+        .osrsResumedNavigationHost(appState.navigationHostGeneration)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .task {
             // Only load if we don't have any cached data available

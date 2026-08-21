@@ -9,7 +9,7 @@
 import SwiftUI
 
 struct CustomMainTabView: View {
-    @StateObject private var appState = AppState()
+    @EnvironmentObject var appState: AppState
     @StateObject private var overlayManager = GlobalOverlayManager()
     @EnvironmentObject var themeManager: osrsThemeManager
     @Environment(\.colorScheme) private var environmentColorScheme
@@ -61,6 +61,7 @@ struct CustomMainTabView: View {
             // Signal that theme has been applied
             AppLaunchCoordinator.shared.markThemeApplied()
             osrsWebViewProcessWarmer.warmIfNeeded()
+            osrsResumedSceneWindow.bindRuntime(appState: appState, themeManager: themeManager)
 
             // DEBUG: Log theme information
             print("🎨 [MAIN TAB] onAppear - Selected theme: \(themeManager.selectedTheme)")
@@ -112,8 +113,23 @@ struct CustomMainTabView: View {
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
             themeManager.applyPersistedThemeToWindows()
         }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)) { _ in
+            appState.noteApplicationDidEnterBackground()
+        }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
             themeManager.applyPersistedThemeToWindows()
+            appState.noteApplicationDidBecomeActive()
+            osrsSceneCompositor.restoreResumedScenes()
+            applyArticleTabBarVisibility()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                applyArticleTabBarVisibility()
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                applyArticleTabBarVisibility()
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.80) {
+                applyArticleTabBarVisibility()
+            }
             let currentSystemScheme: ColorScheme = UITraitCollection.current.userInterfaceStyle == .dark ? .dark : .light
             if themeManager.selectedTheme == .automatic {
                 themeManager.updateSystemColorScheme(currentSystemScheme)
@@ -252,6 +268,10 @@ struct CustomMainTabView: View {
         )
     }
 
+    private func applyArticleTabBarVisibility() {
+        UIApplication.setFloatingTabBarHidden(overlayManager.mainTabBarHiddenOwner != nil)
+    }
+
     private func refreshTabBarChrome() {
         UIApplication.refreshFloatingTabBarMaterial(
             opaqueFill: osrsReadableChromePolicy.tabBarOpaqueFill(
@@ -283,4 +303,5 @@ struct CustomMainTabView: View {
 #Preview {
     CustomMainTabView()
         .environmentObject(osrsThemeManager.preview)
+        .environmentObject(AppState())
 }

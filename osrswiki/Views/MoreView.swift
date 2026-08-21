@@ -115,6 +115,7 @@ struct MoreView: View {
                 updateNavigationBarAppearance()
             }
         }
+        .osrsResumedNavigationHost(appState.navigationHostGeneration)
         // No view recreation - maintains navigation state
     }
     

@@ -1257,6 +1257,13 @@ struct ArticleWebView: UIViewRepresentable {
     }
     
     func makeUIView(context: Context) -> WKWebView {
+        if let existing = viewModel.webView,
+           existing.superview == nil,
+           !viewModel.needsContentProcessRecovery,
+           existing.url != nil,
+           existing.url?.absoluteString != "about:blank" {
+            return configureAdoptedWebView(existing, context: context)
+        }
         let renderOptions = osrsArticleRenderOptions(
             usesDarkTheme: themeManager.currentTheme is osrsDarkTheme,
             collapseTablesEnabled: themeManager.collapseTables,
@@ -1435,6 +1442,9 @@ struct ArticleWebView: UIViewRepresentable {
     
     func updateUIView(_ webView: WKWebView, context: Context) {
         context.coordinator.parent = self
+        if viewModel.webView !== webView {
+            viewModel.setWebView(webView)
+        }
         applyDynamicTypeScale(to: webView, coordinator: context.coordinator)
         let isDark = themeManager.currentTheme is osrsDarkTheme
         context.coordinator.interactiveSwipe.chromeColor = UIColor(themeManager.currentTheme.background)
@@ -2293,6 +2303,10 @@ struct ArticleWebView: UIViewRepresentable {
             case "osrsCalculatorApi":
                 handleCalculatorApiMessage(body)
             case "osrsLiveAssetWarm":
+                if body["pause"] as? Bool == true {
+                    osrsBackgroundWorkGate.shared.noteUserInteraction()
+                    parent.viewModel.noteBackgroundWorkUserInteraction()
+                }
                 if let urls = body["urls"] as? [String] {
                     parent.viewModel.promoteLiveArticleAssets(urls)
                 }

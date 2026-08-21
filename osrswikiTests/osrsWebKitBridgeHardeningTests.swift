@@ -575,6 +575,8 @@ final class osrsWebKitBridgeHardeningTests: XCTestCase {
         XCTAssertTrue(articleView.contains("captureCurrentArticleScroll()"))
         XCTAssertTrue(articleView.contains("needsContentProcessRecovery"))
         XCTAssertTrue(articleView.contains("shouldReloadArticleOnReappear"))
+        XCTAssertTrue(articleView.contains("isArticleVisible = true"))
+        XCTAssertTrue(viewModel.contains("document.body.style.visibility = 'visible'"))
         XCTAssertTrue(articleView.contains("osrsYouTubePlayerSheet"))
         let youtubePlayer = try String(
             contentsOf: root.appendingPathComponent("platforms/ios/osrswiki/Views/osrsInAppYouTubePlayer.swift"),
@@ -589,6 +591,112 @@ final class osrsWebKitBridgeHardeningTests: XCTestCase {
         XCTAssertTrue(viewModel.contains("pendingYouTubeEmbedURL"))
         XCTAssertTrue(appState.contains("osrs.articleScrollOffsets"))
         XCTAssertTrue(appState.contains("persistArticleScrollOffsets"))
+        XCTAssertTrue(appState.contains("articleForegroundEpoch"))
+        XCTAssertTrue(appState.contains("noteApplicationDidBecomeActive"))
+        XCTAssertFalse(appState.contains("osrsResumedSceneWindow.reconnectAfterBackground"))
+        XCTAssertTrue(appState.contains("osrsSceneCompositor.restoreResumedScenes"))
+        XCTAssertTrue(appState.contains("osrsResumableArticleDidChange"))
+        XCTAssertFalse(appState.contains("articleForegroundEpoch += 1"))
+        let newsView = try String(
+            contentsOf: root.appendingPathComponent("platforms/ios/osrswiki/Views/NewsView.swift"),
+            encoding: .utf8
+        )
+        XCTAssertTrue(newsView.contains("osrsResumedNavigationHost"))
+        XCTAssertFalse(newsView.contains("articleForegroundEpoch"))
+        let compositor = try String(
+            contentsOf: root.appendingPathComponent("platforms/ios/osrswiki/Services/osrsSceneCompositor.swift"),
+            encoding: .utf8
+        )
+        XCTAssertTrue(compositor.contains("isAppContentWindow"))
+        XCTAssertTrue(compositor.contains("TextEffects"))
+        XCTAssertTrue(compositor.contains("removeStaleSnapshotOverlays"))
+        XCTAssertTrue(compositor.contains("clearFrozenHostSnapshots"))
+        XCTAssertTrue(compositor.contains("layer.contents = nil"))
+        let tabBar = try String(
+            contentsOf: root.appendingPathComponent("platforms/ios/osrswiki/Extensions/UITabBar+FastRestore.swift"),
+            encoding: .utf8
+        )
+        XCTAssertTrue(tabBar.contains("floatingTabBarCoverViews"))
+        XCTAssertTrue(tabBar.contains("_UITabBarContainerView"))
+        XCTAssertFalse(tabBar.contains("_UIGraphicsView"))
+        XCTAssertTrue(tabBar.contains("sendFloatingTabBarCoversBehindContent"))
+        XCTAssertTrue(tabBar.contains("layer.zPosition"))
+        XCTAssertFalse(tabBar.contains("container.alpha = hidden ? 0"))
+        let themeManager = try String(
+            contentsOf: root.appendingPathComponent("platforms/ios/osrswiki/Models/OSRSThemeManager.swift"),
+            encoding: .utf8
+        )
+        XCTAssertTrue(themeManager.contains("osrsUnhideResumedHostViews"))
+        XCTAssertTrue(themeManager.contains("osrsSceneCompositor.restore"))
+        XCTAssertFalse(themeManager.contains("removeFromSuperview"))
+        let app = try String(
+            contentsOf: root.appendingPathComponent("platforms/ios/osrswiki/osrswikiApp.swift"),
+            encoding: .utf8
+        )
+        XCTAssertTrue(app.contains("enum osrsAppRoot"))
+        XCTAssertFalse(app.contains("WindowGroup"))
+        XCTAssertFalse(app.contains("@main"))
+        XCTAssertFalse(app.contains("SWIFTUI_DISABLE_MIXED_VIEW_HIERARCHY"))
+        let appDelegate = try String(
+            contentsOf: root.appendingPathComponent("platforms/ios/osrswiki/Services/osrsAppDelegate.swift"),
+            encoding: .utf8
+        )
+        XCTAssertTrue(appDelegate.contains("@main"))
+        XCTAssertTrue(appDelegate.contains("configuration.delegateClass = osrsSceneDelegate.self"))
+        let sceneDelegate = try String(
+            contentsOf: root.appendingPathComponent("platforms/ios/osrswiki/Services/osrsSceneDelegate.swift"),
+            encoding: .utf8
+        )
+        XCTAssertTrue(sceneDelegate.contains("replacePrimaryWindow"))
+        XCTAssertTrue(sceneDelegate.contains("requestSceneSessionRefresh"))
+        XCTAssertTrue(sceneDelegate.contains("resumeArticle: osrsAppRoot.appState.resumableArticleURL != nil"))
+        XCTAssertTrue(sceneDelegate.contains("Always replace with the UIKit article host"))
+        XCTAssertTrue(sceneDelegate.contains("if isResume"))
+        XCTAssertTrue(sceneDelegate.contains("replaceRootViewController"))
+        XCTAssertTrue(sceneDelegate.contains("existingSceneWindow"))
+        XCTAssertTrue(sceneDelegate.contains("osrsAppSceneViewController"))
+        XCTAssertTrue(sceneDelegate.contains("osrsInstall"))
+        XCTAssertTrue(sceneDelegate.contains("foreground-article"))
+        XCTAssertTrue(sceneDelegate.contains("sceneWillResignActive"))
+        XCTAssertTrue(sceneDelegate.contains("finishedFirstActivation"))
+        XCTAssertTrue(sceneDelegate.contains("first activation skip replace"))
+        XCTAssertTrue(sceneDelegate.contains("resign-\\(reason)"))
+        XCTAssertFalse(sceneDelegate.contains("WindowGroup"))
+        XCTAssertFalse(sceneDelegate.contains("windowLevel = isResume ? .alert"))
+        XCTAssertFalse(sceneDelegate.contains("other.windowScene = nil"))
+        let resumedWindow = try String(
+            contentsOf: root.appendingPathComponent("platforms/ios/osrswiki/Services/osrsResumedSceneWindow.swift"),
+            encoding: .utf8
+        )
+        XCTAssertTrue(resumedWindow.contains("appState.resumableArticleURL"))
+        XCTAssertTrue(resumedWindow.contains("articleURL"))
+        XCTAssertTrue(resumedWindow.contains("deferred to osrsSceneDelegate.replacePrimaryWindow"))
+        XCTAssertFalse(resumedWindow.contains("isHidden = true"))
+        XCTAssertFalse(resumedWindow.contains("promoteArticleSessionIfNeeded"))
+        XCTAssertFalse(resumedWindow.contains("windowLevel = UIWindow.Level.normal + 1"))
+        let tabView = try String(
+            contentsOf: root.appendingPathComponent("platforms/ios/osrswiki/Views/CustomMainTabView.swift"),
+            encoding: .utf8
+        )
+        XCTAssertTrue(tabView.contains("osrsResumedSceneWindow.bindRuntime"))
+        XCTAssertTrue(tabView.contains("nativeTabContent"))
+        XCTAssertFalse(tabView.contains("sceneRestoreNudge"))
+        XCTAssertFalse(tabView.contains("articleForegroundEpoch"))
+        XCTAssertFalse(tabView.contains("promoteArticleSessionIfNeeded"))
+        let infoPlist = try String(
+            contentsOf: root.appendingPathComponent("platforms/ios/osrswiki/Info.plist"),
+            encoding: .utf8
+        )
+        XCTAssertTrue(infoPlist.contains("UIApplicationSupportsMultipleScenes"))
+        XCTAssertTrue(infoPlist.contains("<false/>"))
+        XCTAssertTrue(infoPlist.contains("osrswiki.osrsSceneDelegate"))
+        XCTAssertTrue(infoPlist.contains("osrs.default.scene.v2"))
+        let pbxproj = try String(
+            contentsOf: root.appendingPathComponent("platforms/ios/osrswiki.xcodeproj/project.pbxproj"),
+            encoding: .utf8
+        )
+        XCTAssertTrue(pbxproj.contains("INFOPLIST_KEY_UIApplicationSupportsMultipleScenes = NO"))
+        XCTAssertTrue(pbxproj.contains("INFOPLIST_KEY_UIApplicationSceneManifest_Generation = NO"))
     }
 
     func testDeepNavigationFixtureAuditIsDebugOnlyAndLaunchGated() throws {

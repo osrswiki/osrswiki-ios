@@ -4,15 +4,19 @@
 //
 //  Created by Osamu Miyawaki on 7/29/25.
 //
+//  Root UI factory. The process entry point is osrsAppDelegate / osrsSceneDelegate
+//  so resume can replace the scene's one UIWindow. SwiftUI scene hosts are not
+//  used: iOS 26 can freeze that host's framebuffer after a real background.
+//
 
 import SwiftUI
 
-@main
-struct osrswikiApp: App {
-    @StateObject private var themeManager = osrsThemeManager()
-    
-    init() {
-        // Register custom fonts when app starts
+@MainActor
+enum osrsAppRoot {
+    static let themeManager = osrsThemeManager()
+    static let appState = AppState()
+
+    static func start() {
         print("🚀 App starting...")
 #if DEBUG
         if osrsTestEnvironment.isRunningHostedXCTest {
@@ -25,8 +29,7 @@ struct osrswikiApp: App {
         osrsFontRegistrar.registerFonts()
         print("✅ Font registration completed")
 #endif
-        
-        // Initialize proxy service for offline functionality (iOS 17+ only)
+
         if #available(iOS 17.0, *) {
 #if DEBUG
             if osrsTestEnvironment.isRunningHostedXCTest &&
@@ -35,7 +38,6 @@ struct osrswikiApp: App {
             } else {
                 Task { @MainActor in
                     print("🔧 App: Initializing proxy service for offline functionality...")
-                    // Access the shared instance to trigger initialization
                     _ = ProxyInterceptorService.shared
                     print("✅ App: Proxy service initialized and ready")
                 }
@@ -43,25 +45,15 @@ struct osrswikiApp: App {
 #else
             Task { @MainActor in
                 print("🔧 App: Initializing proxy service for offline functionality...")
-                // Access the shared instance to trigger initialization
                 _ = ProxyInterceptorService.shared
                 print("✅ App: Proxy service initialized and ready")
             }
 #endif
         }
-        
-        // Note: Removed complex tile pre-warming service
-        // Simple loading state approach is more effective and less jarring
-    }
-    
-    var body: some Scene {
-        WindowGroup {
-            rootView
-        }
     }
 
     @ViewBuilder
-    private var rootView: some View {
+    static var rootView: some View {
 #if DEBUG
         if let exportRequest = osrsSettingsPreviewExportRequest.current {
             osrsSettingsPreviewTableExportView(request: exportRequest)
@@ -70,7 +62,7 @@ struct osrswikiApp: App {
                 .tint(Color(exportRequest.theme.primary))
                 .accentColor(Color(exportRequest.theme.primary))
                 .onAppear {
-                    updateGlobalTheming()
+                    applyGlobalTheming()
                 }
         } else {
             mainView
@@ -80,43 +72,35 @@ struct osrswikiApp: App {
 #endif
     }
 
-    private var mainView: some View {
+    static var mainView: some View {
         CustomMainTabView()
             .environmentObject(themeManager)
-            // Set background immediately to prevent flash
+            .environmentObject(appState)
             .background(Color(themeManager.currentTheme.background))
-            // GLOBAL APP THEMING - This cascades to ALL UI components
             .tint(Color(themeManager.currentTheme.primary))
             .accentColor(Color(themeManager.currentTheme.primary))
-            // Update global theming when theme changes
             .onChange(of: themeManager.currentTheme.primary) { _, _ in
-                updateGlobalTheming()
+                applyGlobalTheming()
             }
             .onAppear {
                 themeManager.applyPersistedThemeToWindows()
-                // Initialize global theming when app starts
-                updateGlobalTheming()
+                applyGlobalTheming()
 #if DEBUG
                 guard !osrsTestEnvironment.disablesStartupSideEffects else {
                     print("🧪 App: Skipping keyboard prewarming for deterministic test launch")
                     return
                 }
 #endif
-                // Pre-warm keyboard only after UI is fully ready to prevent animations
                 AppLaunchCoordinator.shared.performKeyboardPrewarmingWhenReady()
             }
     }
-    
-    /// Configure comprehensive global theming that applies to ALL UI components
-    private func updateGlobalTheming() {
+
+    static func applyGlobalTheming() {
         let primaryColor = UIColor(themeManager.currentTheme.primary)
-        
+
         print("🎨 [GLOBAL THEMING] Applying comprehensive app-wide theming")
         print("🎨 [GLOBAL THEMING] Primary color: \(primaryColor)")
-        
-        // COMPREHENSIVE UI COMPONENT THEMING
-        // This ensures EVERY component uses our theme colors by default
-        
+
         UINavigationBar.appearance().tintColor = primaryColor
         UITabBar.appearance().tintColor = primaryColor
         UITableView.appearance().backgroundColor = UIColor(themeManager.currentTheme.background)
@@ -129,7 +113,6 @@ struct osrswikiApp: App {
             // into a frosted capsule at the end of the adaptive tint.
             UIApplication.applyStableTabBarAppearance()
         } else {
-            // The compatibility path keeps the exact opaque surfaces used on iOS 18.5–25.
             let navAppearance = UINavigationBarAppearance()
             navAppearance.configureWithOpaqueBackground()
             navAppearance.backgroundColor = UIColor(themeManager.currentTheme.surface)
@@ -146,44 +129,27 @@ struct osrswikiApp: App {
             UITabBar.appearance().standardAppearance = tabAppearance
             UITabBar.appearance().scrollEdgeAppearance = tabAppearance
         }
-        
-        // Progress Views - Global styling
+
         UIProgressView.appearance().tintColor = primaryColor
         UIProgressView.appearance().trackTintColor = UIColor(themeManager.currentTheme.surfaceVariant)
-        
-        // Activity Indicators
         UIActivityIndicatorView.appearance().color = primaryColor
-        
-        // Switches (Toggles)  
         UISwitch.appearance().onTintColor = primaryColor
         UISwitch.appearance().thumbTintColor = UIColor(themeManager.currentTheme.surface)
-        
-        // Sliders
         UISlider.appearance().tintColor = primaryColor
         UISlider.appearance().thumbTintColor = primaryColor
-        
-        // Segmented Controls (Pickers)
         UISegmentedControl.appearance().selectedSegmentTintColor = primaryColor
         UISegmentedControl.appearance().setTitleTextAttributes([
             .foregroundColor: UIColor(themeManager.currentTheme.onPrimary)
         ], for: .selected)
         UISegmentedControl.appearance().setTitleTextAttributes([
-            .foregroundColor: UIColor(themeManager.currentTheme.onSurface)  
+            .foregroundColor: UIColor(themeManager.currentTheme.onSurface)
         ], for: .normal)
-        
-        // Steppers
         UIStepper.appearance().tintColor = primaryColor
-        
-        // Page Controls  
         UIPageControl.appearance().currentPageIndicatorTintColor = primaryColor
         UIPageControl.appearance().pageIndicatorTintColor = UIColor(themeManager.currentTheme.surfaceVariant)
-        
-        // Search Bars
         UISearchBar.appearance().tintColor = primaryColor
-        
-        // Refresh Controls
         UIRefreshControl.appearance().tintColor = primaryColor
-        
+
         print("🎨 [GLOBAL THEMING] Comprehensive theming applied to all UI components")
     }
 }

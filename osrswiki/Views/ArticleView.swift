@@ -82,6 +82,7 @@ struct ArticleView: View {
 
 private struct ArticleViewContent: View {
     @Environment(\.osrsTheme) var osrsTheme
+    @Environment(\.scenePhase) private var scenePhase
     @EnvironmentObject var themeManager: osrsThemeManager
     @EnvironmentObject var appState: AppState
     // Make overlayManager optional to handle preview rendering
@@ -216,20 +217,34 @@ private struct ArticleViewContent: View {
                 overlayManager?.setArticleBottomBarCovered(false)
                 savedCachePreparationTask?.cancel()
                 savedCachePreparationTask = nil
-                isArticleVisible = false
                 captureCurrentArticleScroll()
                 findSession += 1
                 viewModel.hideFindInPageAction()
-                viewModel.cancelActiveWorkForNavigation()
                 if #available(iOS 17.0, *), let savedCacheSessionToken {
                     ProxyInterceptorService.shared.disableMode(owner: savedCacheSessionToken)
                     self.savedCacheSessionToken = nil
                 }
+                let stillThisArticle = appState.activeArticleDestination?.navigationIdentity == articleIdentity
                 let stillShowingArticle = appState.activeArticleDestination != nil
+                let sceneIsBackgrounded = scenePhase != .active
+                if sceneIsBackgrounded || stillThisArticle {
+                    // Scene background can fire onDisappear without leaving the article.
+                    // Keep SwiftUI chrome claimed so resume is not a cream empty shell.
+                    return
+                }
+                isArticleVisible = false
+                viewModel.setArticleVisibility(false, allowsPassiveCaching: savedPageId == nil)
+                viewModel.cancelActiveWorkForNavigation()
                 if !stillShowingArticle {
                     overlayManager?.hideArticleBottomBar(owner: articleIdentity)
                     showMainTabBar()
                 }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
+                restoreArticleAfterBackground()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+                restoreArticleAfterBackground()
             }
     }
 
@@ -303,9 +318,7 @@ private struct ArticleViewContent: View {
             .osrsArticleSceneRestore(
                 needsRecovery: $viewModel.needsContentProcessRecovery,
                 onLeaveForeground: captureCurrentArticleScroll,
-                onEnterForeground: {
-                    restoreCapturedArticleScrollIfNeeded()
-                },
+                onEnterForeground: restoreArticleAfterBackground,
                 onRecover: {
                     viewModel.needsContentProcessRecovery = false
                     if let webView = viewModel.webView {
@@ -345,6 +358,18 @@ private struct ArticleViewContent: View {
     /// Saved-page cache inspection and listener binding are disk/network preparation, so they
     /// suspend without occupying MainActor. The article request starts only after its selected
     /// routing mode is fully installed; a disappeared view cannot resume a stale load or owner.
+    private func restoreArticleAfterBackground() {
+        isArticleVisible = true
+        hideMainTabBar()
+        viewModel.setArticleVisibility(true, allowsPassiveCaching: savedPageId == nil)
+        restoreCapturedArticleScrollIfNeeded()
+        updateArticleBottomBar()
+        viewModel.recoverRenderedDocumentAfterBackground()
+        if viewModel.shouldReloadArticleOnReappear {
+            viewModel.loadArticle(theme: osrsTheme, isReload: true)
+        }
+    }
+
     private func beginAppearanceLoad() {
         let timestamp = DateFormatter.timeFormatter.string(from: Date())
         print("🟢 [\(timestamp)] ARTICLEVIEW: onAppear called - hasLoadedBefore: \(hasLoadedBefore)")
@@ -1044,6 +1069,7 @@ private struct ArticleViewContent: View {
                 )
             }
         )
+            .id(viewModel.webViewRenderGeneration)
             .background(Color.osrsBackground)
     }
 
