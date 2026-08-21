@@ -114,12 +114,18 @@ struct SearchResultRowView: View {
         .buttonStyle(PlainButtonStyle())
         .frame(height: dynamicTypeSize.isAccessibilitySize ? nil : 84)
         .clipped()
-        .accessibilityIdentifier("search_result_row_\(result.id)")
+        .accessibilityElement(children: .ignore)
+        .accessibilityIdentifier("search_result_row_\(result.title)")
+        .accessibilityLabel(result.title)
+        .accessibilityAddTraits(.isButton)
         .listRowBackground(osrsTheme.surface)
         .listRowSeparator(.hidden)
         .osrsPrewarmArticleWhenVisible(
             pageURL: URL(string: result.url),
-            pageTitle: result.processedTitle
+            pageTitle: result.title,
+            retainWhileAppeared: result.searchQuery.map {
+                $0.compare(result.title, options: [.caseInsensitive, .diacriticInsensitive]) == .orderedSame
+            } ?? false
         )
     }
 }

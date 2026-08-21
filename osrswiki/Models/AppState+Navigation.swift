@@ -167,6 +167,10 @@ extension AppState {
         }
 
         print("🟢 [\(timestamp)] [FRAME:\(frameId)] APPSTATE: Adding article to \(targetTab.rawValue) stack")
+        osrsPreparedArticleWebViewStore.shared.pin(
+            identity: osrsArticleDocumentIdentity(pageURL: url, pageTitle: title).value,
+            foreground: true
+        )
         appendArticleDestination(articleDestination, to: targetTab)
 
         print("🟢 [\(timestamp)] [FRAME:\(frameId)] APPSTATE: Tab-specific navigation completed")
@@ -273,6 +277,10 @@ extension AppState {
         }
 
         print("🟢 [\(timestamp)] [FRAME:\(frameId)] APPSTATE: Adding to historyNavigationStack with unique destination type")
+        osrsPreparedArticleWebViewStore.shared.pin(
+            identity: osrsArticleDocumentIdentity(pageURL: url, pageTitle: title).value,
+            foreground: true
+        )
         osrsInteractiveArticleSwipe.captureVisibleBackPreview()
         historyNavigationStack.append(.article(articleDestination))
         print("🟢 [\(timestamp)] [FRAME:\(frameId)] APPSTATE: History navigation completed - only HistoryView handler will respond")

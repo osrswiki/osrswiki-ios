@@ -338,7 +338,7 @@ private struct ArticleViewContent: View {
         isArticleVisible = true
         viewModel.setArticleVisibility(true, allowsPassiveCaching: savedPageId == nil)
 
-        if hasLoadedBefore || viewModel.hasReusableRenderedArticle {
+        if hasLoadedBefore {
             hasLoadedBefore = true
             restoreCapturedArticleScrollIfNeeded()
             updateArticleBottomBar()

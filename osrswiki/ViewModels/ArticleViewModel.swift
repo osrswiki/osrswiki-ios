@@ -656,6 +656,10 @@ class ArticleViewModel: NSObject, ObservableObject {
     private var liveAssetWarmer: osrsLiveArticleAssetWarmer?
     private var liveAssetWarmTask: Task<Void, Never>?
     private var firstViewOpenAt: CFAbsoluteTime?
+    private var pendingFirstViewComplete = false
+    private var firstViewCompletePosted = false
+    private var pendingArticleLoadTheme: (any osrsThemeProtocol)?
+    private var pendingArticleLoadIsReload = false
     private var articleRevealedForWarm = false
 
     // TIMING MEASUREMENT: Track progress completion vs page visibility delay
@@ -672,6 +676,10 @@ class ArticleViewModel: NSObject, ObservableObject {
         self.thumbnailUrl_ = thumbnailUrl
         self.excludeFromHistory = excludeFromHistory
         super.init()
+        osrsPreparedArticleWebViewStore.shared.pin(
+            identity: osrsArticleDocumentIdentity(pageURL: pageUrl, pageTitle: pageTitle).value,
+            foreground: true
+        )
         print("🏗️ ArticleViewModel: Lightweight init completed for '\(pageTitle ?? "unknown")' - heavy loading deferred")
     }
 
@@ -1013,6 +1021,9 @@ class ArticleViewModel: NSObject, ObservableObject {
         beginPassiveCachingSessionIfNeeded()
 
         checkIfPageIsSaved()
+        if let theme = pendingArticleLoadTheme {
+            loadArticle(theme: theme, isReload: pendingArticleLoadIsReload)
+        }
     }
 
     func adoptPreRenderedWebView(_ webView: WKWebView) {
@@ -1119,10 +1130,25 @@ class ArticleViewModel: NSObject, ObservableObject {
     }
 
     func markFirstViewComplete() {
-        guard let started = firstViewOpenAt else { return }
+        if firstViewCompletePosted {
+            return
+        }
+        guard let started = firstViewOpenAt else {
+            pendingFirstViewComplete = true
+            return
+        }
+        firstViewCompletePosted = true
         firstViewOpenAt = nil
+        pendingFirstViewComplete = false
         let elapsedMs = Int((CFAbsoluteTimeGetCurrent() - started) * 1000)
         NSLog("osrsFirstViewComplete elapsedMs=%d", elapsedMs)
+    }
+
+    private func notifyAdoptedFirstViewComplete(_ webView: WKWebView) {
+        markFirstViewComplete()
+        webView.evaluateJavaScript(
+            "window.osrsNotifyFirstViewComplete && window.osrsNotifyFirstViewComplete()"
+        )
     }
 
     private func startLiveArticleAssetWarmIfNeeded() {
@@ -1244,7 +1270,11 @@ class ArticleViewModel: NSObject, ObservableObject {
         renderedArticleIdentityProbeAttempts = 0
 
         currentLoadGeneration += 1
+        firstViewCompletePosted = false
         firstViewOpenAt = CFAbsoluteTimeGetCurrent()
+        if pendingFirstViewComplete {
+            markFirstViewComplete()
+        }
         osrsFirstViewPrewarmStore.shared.pin(
             identity: osrsArticleDocumentIdentity(pageURL: pageUrl, pageTitle: pageTitle).value
         )
@@ -1294,6 +1324,9 @@ class ArticleViewModel: NSObject, ObservableObject {
         webView?.stopLoading()
         isLoading = false
         isRefreshing = false
+        pendingFirstViewComplete = false
+        firstViewCompletePosted = false
+        firstViewOpenAt = nil
     }
 
     private func bindWebKitNavigation(_ navigation: WKNavigation?, to generation: Int) {
@@ -1339,10 +1372,16 @@ class ArticleViewModel: NSObject, ObservableObject {
 
     func loadArticle(theme: any osrsThemeProtocol = osrsLightTheme(), isReload: Bool = false) {
         guard webView != nil else {
+            pendingArticleLoadTheme = theme
+            pendingArticleLoadIsReload = isReload
             print("❌ ArticleViewModel: WebView not set")
             return
         }
+        pendingArticleLoadTheme = nil
         let loadGeneration = beginArticleLoad()
+        if adoptedPreRenderedDocument, let webView {
+            notifyAdoptedFirstViewComplete(webView)
+        }
         let skipPaintOpen = isReload || forceNextDocumentReload
         let paintHTML = skipPaintOpen ? nil : readyToPaintHTML(theme: theme)
         let paintOpenStarted = CFAbsoluteTimeGetCurrent()
@@ -1778,6 +1817,7 @@ class ArticleViewModel: NSObject, ObservableObject {
             )
             markWebKitReady(for: generation)
             markJavaScriptReady(for: generation)
+            notifyAdoptedFirstViewComplete(webView)
             startDeferredMapPreloadAfterWebKitReady(generation: generation, webView: webView)
             return
         }

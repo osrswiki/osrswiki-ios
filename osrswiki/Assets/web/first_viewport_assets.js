@@ -4,6 +4,7 @@
         return;
     }
     window.__osrsFirstViewportAssets = true;
+    window.__osrsFirstViewPainted = false;
 
     var reportedComplete = false;
 
@@ -99,7 +100,7 @@
             if (node.matches && (node.matches('h2') || node.matches('.mw-heading'))) {
                 break;
             }
-            if (node.matches && node.matches('img, picture > source, video[poster]')) {
+            if (node.matches && (node.matches('img, picture > source, video[poster]'))) {
                 Array.prototype.push.apply(urls, elementUrls(node));
             }
         }
@@ -142,11 +143,7 @@
         } catch (ignore) {}
     }
 
-    function reportComplete() {
-        if (reportedComplete) {
-            return;
-        }
-        reportedComplete = true;
+    function postComplete() {
         try {
             if (window.OsrsWikiBridge && typeof window.OsrsWikiBridge.firstViewComplete === 'function') {
                 window.OsrsWikiBridge.firstViewComplete();
@@ -160,7 +157,51 @@
         console.log('osrsFirstViewComplete');
     }
 
+    function reportComplete() {
+        window.__osrsFirstViewPainted = true;
+        if (reportedComplete) {
+            return;
+        }
+        reportedComplete = true;
+        postComplete();
+    }
+
+    function elementHasDecodedUrl(el, url) {
+        if (!el || el.tagName !== 'IMG' || !url) {
+            return false;
+        }
+        if (!(el.complete && el.naturalWidth > 0)) {
+            return false;
+        }
+        var candidates = [el.currentSrc, el.src];
+        ['src', 'data-src', 'data-osrs-deferred-src', 'data-original', 'data-lazy-src'].forEach(function (name) {
+            candidates.push(el.getAttribute(name));
+        });
+        for (var i = 0; i < candidates.length; i++) {
+            if (candidates[i] && candidates[i] === url) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function domImageAlreadyDecoded(url) {
+        if (!url) {
+            return true;
+        }
+        var nodes = document.querySelectorAll('img');
+        for (var i = 0; i < nodes.length; i++) {
+            if (elementHasDecodedUrl(nodes[i], url)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     function decodeUrl(url) {
+        if (domImageAlreadyDecoded(url)) {
+            return Promise.resolve();
+        }
         return new Promise(function (resolve) {
             var img = new Image();
             var settled = false;
@@ -193,6 +234,13 @@
     window.osrsCollectFirstViewportUrls = function () {
         return unique(slotUrls().concat(collectIntersecting()));
     };
+
+    window.osrsNotifyFirstViewComplete = function () {
+        window.__osrsFirstViewPainted = true;
+        postComplete();
+    };
+
+    window.osrsWatchFirstViewComplete = watchComplete;
 
     function start() {
         notify(unique(collectIntersecting()));

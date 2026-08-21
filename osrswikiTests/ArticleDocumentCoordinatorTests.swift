@@ -1568,6 +1568,53 @@ final class ArticleDocumentCoordinatorTests: XCTestCase {
         XCTAssertFalse(coordinator.contains("enablePassiveCachingMode"))
         XCTAssertFalse(articleViewModel.contains("FIRST_SCREEN_LIMIT"))
         XCTAssertTrue(articleViewModel.contains("osrsFirstViewComplete"))
+        XCTAssertTrue(articleViewModel.contains("osrsNotifyFirstViewComplete"))
+        XCTAssertTrue(articleViewModel.contains("notifyAdoptedFirstViewComplete"))
+        XCTAssertTrue(articleViewModel.contains("if adoptedPreRenderedDocument, let webView"))
+        XCTAssertTrue(articleViewModel.contains("skipping loadHTMLString"))
+        XCTAssertTrue(articleViewModel.contains("pendingFirstViewComplete"))
+        XCTAssertTrue(articleViewModel.contains("firstViewCompletePosted"))
+        XCTAssertTrue(articleViewModel.contains("osrsPreparedArticleWebViewStore.shared.pin"))
+        XCTAssertTrue(coordinator.contains("preferred: retainWhileAppeared"))
+        let searchRow = try String(
+            contentsOf: root.appendingPathComponent("platforms/ios/osrswiki/Views/Components/SearchResultRowView.swift"),
+            encoding: .utf8
+        )
+        XCTAssertTrue(searchRow.contains("retainWhileAppeared: result.searchQuery"))
+        XCTAssertTrue(searchRow.contains("pageTitle: result.title"))
+        XCTAssertTrue(articleViewModel.contains("pendingArticleLoadTheme"))
+        let articleView = try String(
+            contentsOf: root.appendingPathComponent("platforms/ios/osrswiki/Views/ArticleView.swift"),
+            encoding: .utf8
+        )
+        XCTAssertFalse(articleView.contains("hasLoadedBefore || viewModel.hasReusableRenderedArticle"))
+
+        let appStateNavigation = try String(
+            contentsOf: root.appendingPathComponent("platforms/ios/osrswiki/Models/AppState+Navigation.swift"),
+            encoding: .utf8
+        )
+        XCTAssertTrue(appStateNavigation.contains("osrsPreparedArticleWebViewStore.shared.pin"))
+        XCTAssertTrue(appStateNavigation.contains("foreground: true"))
+
+        let preparedStore = try String(
+            contentsOf: root.appendingPathComponent("platforms/ios/osrswiki/Services/osrsPreparedArticleWebViewStore.swift"),
+            encoding: .utf8
+        )
+        XCTAssertTrue(preparedStore.contains("osrsDisableFirstViewPaintPrewarm"))
+        XCTAssertTrue(preparedStore.contains("isPainted"))
+        XCTAssertTrue(preparedStore.contains("osrsFirstViewPaintWarm: done"))
+        XCTAssertTrue(preparedStore.contains("add(self, contentWorld: .page, name: \"osrsFirstViewComplete\")"))
+        XCTAssertTrue(preparedStore.contains("$0.isReady && $0.isPainted"))
+        XCTAssertTrue(preparedStore.contains("func pin(identity: String, foreground: Bool = false, preferred: Bool = false)"))
+        XCTAssertTrue(preparedStore.contains("func cancel(identity: String)"))
+        XCTAssertTrue(preparedStore.contains("evictIfNeeded(admitting:"))
+        XCTAssertTrue(preparedStore.contains("preferredPins"))
+        XCTAssertTrue(preparedStore.contains("isPreferred(identity)"))
+        XCTAssertTrue(preparedStore.contains("cap is full of pinned"))
+        XCTAssertTrue(preparedStore.contains("!$0.isPainted"))
+        XCTAssertTrue(preparedStore.contains("osrsWatchFirstViewComplete"))
+        XCTAssertTrue(preparedStore.contains("pollPainted"))
+        XCTAssertTrue(preparedStore.contains("unpinForeground"))
 
         let firstViewStore = try String(
             contentsOf: root.appendingPathComponent("platforms/ios/osrswiki/Services/osrsFirstViewPrewarmStore.swift"),

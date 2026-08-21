@@ -1257,7 +1257,7 @@ struct ArticleWebView: UIViewRepresentable {
     func makeUIView(context: Context) -> WKWebView {
         let renderOptions = osrsArticleRenderOptions(
             usesDarkTheme: themeManager.currentTheme is osrsDarkTheme,
-            collapseTablesEnabled: viewModel.collapseTablesEnabled,
+            collapseTablesEnabled: themeManager.collapseTables,
             wrapTableCellsEnabled: themeManager.wrapTableCells,
             articleTextScale: Double(themeManager.articleTextScale)
         )

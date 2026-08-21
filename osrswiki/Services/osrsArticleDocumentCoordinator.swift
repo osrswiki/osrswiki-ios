@@ -382,6 +382,7 @@ actor osrsArticleDocumentCoordinator {
     private var payloadFlights: [osrsArticleDocumentIdentity: PayloadFlight] = [:]
     private var documentFlights: [DocumentKey: DocumentFlight] = [:]
     private var activePrewarms: [UUID: ActivePrewarm] = [:]
+    private var prewarmOwnerIdentities: [UUID: osrsArticleDocumentIdentity] = [:]
     /// Cancellation is advisory. Keep canceled wrapper runs here until their shared document task
     /// physically returns so slow/non-cooperative transports continue consuming scheduler space.
     private var retiringPrewarms: [UUID: RetiringPrewarm] = [:]
@@ -492,7 +493,8 @@ actor osrsArticleDocumentCoordinator {
         owner: UUID,
         request: osrsArticleDocumentRequest,
         renderOptions: osrsArticleRenderOptions,
-        conditions: osrsArticlePrewarmConditions
+        conditions: osrsArticlePrewarmConditions,
+        preferred: Bool = false
     ) -> Bool {
         pendingPrewarms.removeValue(forKey: owner)
         let limit = conditions.maximumConcurrentPrewarms
@@ -524,6 +526,7 @@ actor osrsArticleDocumentCoordinator {
         }
 
         let runID = UUID()
+        retainPreparedWebView(owner: owner, identity: request.identity, preferred: preferred)
         let task = Task(priority: .utility) { [weak self] in
             guard let self else { return }
             do {
@@ -565,6 +568,7 @@ actor osrsArticleDocumentCoordinator {
             retirePrewarm(owner: owner)
             signalSchedulerChange()
         }
+        releasePreparedWebView(owner: owner)
         startQueuedPrewarmsIfPossible()
     }
 
@@ -986,6 +990,25 @@ actor osrsArticleDocumentCoordinator {
         )
         active.task.cancel()
         osrsFirstViewPrewarmStore.shared.cancel(identity: active.identity.value)
+        releasePreparedWebView(owner: owner)
+    }
+
+    private func retainPreparedWebView(owner: UUID, identity: osrsArticleDocumentIdentity, preferred: Bool = false) {
+        releasePreparedWebView(owner: owner)
+        prewarmOwnerIdentities[owner] = identity
+        let value = identity.value
+        Task { @MainActor in
+            osrsPreparedArticleWebViewStore.shared.pin(identity: value, preferred: preferred)
+        }
+    }
+
+    private func releasePreparedWebView(owner: UUID) {
+        guard let identity = prewarmOwnerIdentities.removeValue(forKey: owner) else { return }
+        let value = identity.value
+        Task { @MainActor in
+            osrsPreparedArticleWebViewStore.shared.unpin(identity: value)
+            osrsPreparedArticleWebViewStore.shared.cancel(identity: value)
+        }
     }
 
     /// Foreground opens may use one temporary lane over exactly one canceling speculative key.
@@ -1513,6 +1536,7 @@ private struct osrsArticleVisibleRowPrewarmModifier: ViewModifier {
     let pageTitle: String?
     let additionalPageURLs: [URL]
     let isOfflineContentAvailable: Bool
+    let retainWhileAppeared: Bool
     @State private var owners: [UUID] = []
     @State private var dwellTask: Task<Void, Never>?
     @State private var visibilityGate = osrsArticlePrewarmVisibilityGate()
@@ -1529,8 +1553,14 @@ private struct osrsArticleVisibleRowPrewarmModifier: ViewModifier {
                         )
                     )
                 )
+                if retainWhileAppeared {
+                    handleVisibilityAction(visibilityGate.transition(.visibilityChanged(true)))
+                }
             }
             .onScrollVisibilityChange(threshold: 0.1) { isVisible in
+                if retainWhileAppeared && !isVisible {
+                    return
+                }
                 visibilityRelay.enqueue(isVisible) { deferredVisibility in
                     handleVisibilityAction(
                         visibilityGate.transition(.visibilityChanged(deferredVisibility))
@@ -1595,7 +1625,9 @@ private struct osrsArticleVisibleRowPrewarmModifier: ViewModifier {
         )
         dwellTask = Task { @MainActor in
             do {
-                try await Task.sleep(nanoseconds: 80_000_000)
+                if !retainWhileAppeared {
+                    try await Task.sleep(nanoseconds: 80_000_000)
+                }
                 try Task.checkCancellation()
                 let conditions = osrsArticlePrewarmConditions.current(
                     isOfflineContentAvailable: isOfflineContentAvailable
@@ -1617,7 +1649,8 @@ private struct osrsArticleVisibleRowPrewarmModifier: ViewModifier {
                                 pageTitle: request.pageTitle
                             ),
                             renderOptions: renderOptions,
-                            conditions: conditions
+                            conditions: conditions,
+                            preferred: retainWhileAppeared && request.pageTitle != nil
                         )
                     },
                     cancel: { owner in
@@ -1667,13 +1700,15 @@ extension View {
     func osrsPrewarmArticleWhenVisible(
         pageURL: URL?,
         pageTitle: String?,
-        isOfflineContentAvailable: Bool = false
+        isOfflineContentAvailable: Bool = false,
+        retainWhileAppeared: Bool = false
     ) -> some View {
         modifier(osrsArticleVisibleRowPrewarmModifier(
             pageURL: pageURL,
             pageTitle: pageTitle,
             additionalPageURLs: [],
-            isOfflineContentAvailable: isOfflineContentAvailable
+            isOfflineContentAvailable: isOfflineContentAvailable,
+            retainWhileAppeared: retainWhileAppeared
         ))
     }
 
@@ -1686,7 +1721,8 @@ extension View {
             pageURL: nil,
             pageTitle: nil,
             additionalPageURLs: pageURLs,
-            isOfflineContentAvailable: isOfflineContentAvailable
+            isOfflineContentAvailable: isOfflineContentAvailable,
+            retainWhileAppeared: false
         ))
     }
 }

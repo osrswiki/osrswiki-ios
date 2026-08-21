@@ -123,6 +123,8 @@ final class StaticSettingsPreviewSourceGuardTest: XCTestCase {
         XCTAssertFalse(bottomBar.contains("osrsOverlayChromeMetrics.bottomInset"))
         XCTAssertTrue(bottomBar.contains("osrsFloatingGlass"))
         XCTAssertTrue(articleWebView.contains("osrsPreparedArticleWebViewStore.shared.take"))
+        XCTAssertTrue(articleWebView.contains("collapseTablesEnabled: themeManager.collapseTables"))
+        XCTAssertFalse(articleWebView.contains("collapseTablesEnabled: viewModel.collapseTablesEnabled"))
         XCTAssertTrue(articleWebView.contains("webView.scrollView.contentInset.bottom = 0"))
         XCTAssertTrue(app.contains("if #available(iOS 26.0, *)"))
 
