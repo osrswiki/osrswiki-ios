@@ -197,7 +197,10 @@
 }
 
 
-/* Theme: OSRS Dark */
+/* Theme: OSRS Dark.
+   Apply on html as well as body: html keeps light :root tokens, and body
+   margin reveals that as a parchment frame around the article. */
+html.theme-osrs-dark,
 body.theme-osrs-dark {
     color-scheme: dark;
     --body-background-image: url(https://oldschool.runescape.wiki/images/Old_School_RuneScape_Wiki_background_brown_darkmode.jpg?8dc38);

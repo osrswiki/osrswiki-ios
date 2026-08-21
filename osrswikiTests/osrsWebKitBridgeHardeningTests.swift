@@ -574,6 +574,7 @@ final class osrsWebKitBridgeHardeningTests: XCTestCase {
         XCTAssertTrue(articleView.contains("osrsArticleSceneRestore"))
         XCTAssertTrue(articleView.contains("captureCurrentArticleScroll()"))
         XCTAssertTrue(articleView.contains("needsContentProcessRecovery"))
+        XCTAssertTrue(articleView.contains("shouldReloadArticleOnReappear"))
         XCTAssertTrue(articleView.contains("osrsYouTubePlayerSheet"))
         let youtubePlayer = try String(
             contentsOf: root.appendingPathComponent("platforms/ios/osrswiki/Views/osrsInAppYouTubePlayer.swift"),

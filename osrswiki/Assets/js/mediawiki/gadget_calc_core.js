@@ -60,7 +60,11 @@
         var $ = window.jQuery || window.$;
         return !!( $ && window.OO && OO.ui &&
             typeof OO.ui.FieldsetLayout === 'function' &&
-            typeof OO.ui.ButtonInputWidget === 'function');
+            typeof OO.ui.ButtonInputWidget === 'function' &&
+            typeof OO.ui.ButtonOptionWidget === 'function' &&
+            typeof OO.ui.ButtonSelectWidget === 'function' &&
+            typeof OO.ui.DropdownInputWidget === 'function' &&
+            typeof OO.ui.ComboBoxInputWidget === 'function');
     }
     function osrsMarkCalcCoreRegistered() {
         if (!window.mw || !mw.loader) {

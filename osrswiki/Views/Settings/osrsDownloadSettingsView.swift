@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct osrsDownloadSettingsView: View {
+    @EnvironmentObject private var themeManager: osrsThemeManager
     @Environment(\.osrsTheme) private var osrsTheme
     @State private var settings = osrsDownloadSettings.load()
 
@@ -49,6 +50,7 @@ struct osrsDownloadSettingsView: View {
         .overlay(alignment: .topLeading) {
             osrsAccessibilityMarker(identifier: "downloads_screen", label: "Downloads settings")
         }
+        .osrsInteractiveBackSwipe()
         .onAppear {
             settings = osrsDownloadSettings.load()
         }

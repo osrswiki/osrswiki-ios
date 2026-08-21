@@ -175,6 +175,76 @@ final class ArticleBackSwipeResponsivenessUITests: XCTestCase {
         attachScreenshot(named: "home-after-root-article-edge-swipe")
     }
 
+    func testFailedLoadOverlayFullWidthSwipePops() throws {
+        app.terminate()
+        app = XCUIApplication()
+        app.launchArguments = [
+            "-disableBackgroundPreloading",
+            "-disableSearchAutofocusForUITests",
+            "-startTab",
+            "search",
+            "-startArticleTitle",
+            "UncachedSwipeProbeXYZ",
+            "-startArticleURL",
+            "https://oldschool.runescape.wiki/w/UncachedSwipeProbeXYZ",
+            "-forceNetworkOfflineForUITests",
+            "-allowProxyStartupDuringTests"
+        ]
+        app.launch()
+
+        let failed = app.staticTexts["Failed to Load Page"]
+        XCTAssertTrue(failed.waitForExistence(timeout: 12), "Forced offline uncached article should show the failed-load overlay")
+        attachScreenshot(named: "failed-overlay-before-swipe")
+
+        let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.06, dy: 0.58))
+        let end = app.coordinate(withNormalizedOffset: CGVector(dx: 0.78, dy: 0.58))
+        start.press(forDuration: 0.05, thenDragTo: end)
+
+        XCTAssertTrue(
+            failed.waitForNonExistence(timeout: 4),
+            "A full-width right swipe on the failed-load canvas should pop back instead of staying on Retry"
+        )
+        attachScreenshot(named: "failed-overlay-after-swipe")
+    }
+
+    func testAppearanceScreenFullWidthSwipePopsToMore() throws {
+        app.terminate()
+        app = XCUIApplication()
+        app.launchArguments = [
+            "-disableBackgroundPreloading",
+            "-disableSearchAutofocusForUITests",
+            "-startTab",
+            "more"
+        ]
+        app.launch()
+
+        let appearanceRow = app.descendants(matching: .any)["more_appearance"].firstMatch
+        XCTAssertTrue(appearanceRow.waitForExistence(timeout: 8), app.debugDescription)
+        appearanceRow.tap()
+
+        let appearanceBar = app.navigationBars["Appearance"]
+        XCTAssertTrue(
+            appearanceBar.waitForExistence(timeout: 8),
+            "Appearance should push from More. \(app.debugDescription)"
+        )
+        attachScreenshot(named: "appearance-before-swipe")
+
+        let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.06, dy: 0.58))
+        let end = app.coordinate(withNormalizedOffset: CGVector(dx: 0.78, dy: 0.58))
+        start.press(forDuration: 0.05, thenDragTo: end)
+
+        XCTAssertTrue(
+            appearanceBar.waitForNonExistence(timeout: 4),
+            "A full-width right swipe on Appearance should pop the pushed settings canvas"
+        )
+        XCTAssertTrue(
+            app.otherElements["more_screen"].waitForExistence(timeout: 4)
+                || app.descendants(matching: .any)["more_appearance"].firstMatch.waitForExistence(timeout: 2),
+            "More list should be visible after swiping back from Appearance"
+        )
+        attachScreenshot(named: "appearance-after-swipe")
+    }
+
     private func launchHomeRootArticle() throws {
         app.terminate()
         app = XCUIApplication()

@@ -46,6 +46,7 @@ final class osrsSavedPaintHtmlTests: XCTestCase {
             safeAreaBottomPx: 4
         )
         XCTAssertTrue(live.contains("theme-osrs-dark"))
+        XCTAssertTrue(live.contains("<html class=\"theme-osrs-dark") || live.contains("<html class=\"theme-osrs-dark "))
         XCTAssertTrue(live.contains("osrs-table-cells-wrap"))
         XCTAssertTrue(live.contains("--osrs-article-user-text-scale: 1.150"))
         XCTAssertTrue(live.contains("osrs-article-live-chrome"))
@@ -60,6 +61,7 @@ final class osrsSavedPaintHtmlTests: XCTestCase {
         )
         XCTAssertTrue(style.contains("background-color: var(--body-main, #e2dbc8)"))
         XCTAssertTrue(style.contains("color: var(--text-color, #000000)"))
+        XCTAssertTrue(style.contains("html.theme-osrs-dark"))
         XCTAssertTrue(style.contains("body.theme-osrs-dark"))
         XCTAssertTrue(style.contains("#28221d"))
     }

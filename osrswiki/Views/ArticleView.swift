@@ -339,8 +339,12 @@ private struct ArticleViewContent: View {
         viewModel.setArticleVisibility(true, allowsPassiveCaching: savedPageId == nil)
 
         if hasLoadedBefore {
-            hasLoadedBefore = true
-            restoreCapturedArticleScrollIfNeeded()
+            if viewModel.shouldReloadArticleOnReappear {
+                print("🔄 ARTICLEVIEW: Reloading terminated or empty article document")
+                viewModel.loadArticle(theme: osrsTheme, isReload: true)
+            } else {
+                restoreCapturedArticleScrollIfNeeded()
+            }
             updateArticleBottomBar()
             return
         }
@@ -1054,6 +1058,10 @@ private struct ArticleViewContent: View {
             .padding(40)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(Color.osrsBackground)
+            .osrsInteractiveBackSwipe(
+                enabled: themeManager.swipeRightToGoBackEnabled,
+                onBack: { navigateBackFromArticle(animated: false) }
+            )
             .transition(.opacity)
             .zIndex(3)  // Highest priority over progress and content
         }

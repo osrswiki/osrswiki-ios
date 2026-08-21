@@ -141,6 +141,7 @@ struct AppearanceSettingsView: View {
             .navigationTitle("Appearance")
             .navigationBarTitleDisplayMode(.inline)
             .accessibilityIdentifier("appearance_screen")
+            .osrsInteractiveBackSwipe()
             .onAppear {
                 guard highlightFloorNumbering else { return }
                 proxy.scrollTo("floor_numbering", anchor: .center)

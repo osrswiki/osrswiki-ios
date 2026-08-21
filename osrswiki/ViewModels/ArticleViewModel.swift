@@ -588,6 +588,18 @@ class ArticleViewModel: NSObject, ObservableObject {
             webView?.url != nil &&
             webView?.url?.absoluteString != "about:blank"
     }
+
+    /// Reappear must reload a terminated or empty document, including after a
+    /// prewarm adopt onto a dead WKWebView, without skipping a healthy page.
+    var shouldReloadArticleOnReappear: Bool {
+        if isLoading || isRefreshing {
+            return false
+        }
+        return needsContentProcessRecovery
+            || webView == nil
+            || webView?.url == nil
+            || webView?.url?.absoluteString == "about:blank"
+    }
     @Published var loadingProgress: Double = 0.0
     @Published var loadingProgressText: String? = nil
     @Published var errorMessage: String?
@@ -1807,7 +1819,10 @@ class ArticleViewModel: NSObject, ObservableObject {
         print("🌐 ArticleViewModel: Loading custom HTML in WebView")
         print("🌐 ArticleViewModel: HTML content length: \(html.count) characters")
 
-        if adoptedPreRenderedDocument, webView.osrsPreparedDocumentKey != nil {
+        if adoptedPreRenderedDocument, webView.osrsPreparedDocumentKey != nil,
+           !needsContentProcessRecovery,
+           webView.url != nil,
+           webView.url?.absoluteString != "about:blank" {
             adoptedPreRenderedDocument = false
             print("⚡ ArticleViewModel: Using pre-rendered WKWebView; skipping loadHTMLString")
             deferredMapPreloadState.stage(html, generation: generation)
@@ -3898,6 +3913,8 @@ extension ArticleViewModel: WKNavigationDelegate {
 
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
         print("⚠️ ArticleViewModel: Web content process terminated; requesting article recovery")
+        adoptedPreRenderedDocument = false
+        forceNextDocumentReload = true
         needsContentProcessRecovery = true
     }
 

@@ -51,6 +51,7 @@ struct DonateView: View {
         .navigationTitle("Donate")
         .navigationBarTitleDisplayMode(.inline)
         .background(.osrsBackground)
+        .osrsInteractiveBackSwipe()
         .onAppear {
             updateNavigationBarAppearance()
             donationManager.loadProducts()

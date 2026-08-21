@@ -24,19 +24,12 @@
     }
 
     function osrsUsesAndroidDisclosureChrome() {
-        return window.OSRS_ANDROID_DISCLOSURE_CHROME === true ||
-            !!(document.getElementById('osrs-android-disclosure-chrome') ||
-                document.querySelector('link[href*="android-article-aesthetics"]'));
+        return false;
     }
 
     function osrsApplyAndroidDisclosureChrome(element) {
+        // Height lives in android-article-aesthetics.css so it cannot triple-apply.
         if (!element || !osrsUsesAndroidDisclosureChrome()) return;
-        element.style.setProperty('box-sizing', 'border-box', 'important');
-        element.style.setProperty('flex-shrink', '0', 'important');
-        element.style.setProperty('height', 'auto', 'important');
-        element.style.setProperty('min-height', '64px', 'important');
-        element.style.setProperty('padding', '16px 16px', 'important');
-        element.style.setProperty('background-color', 'var(--body-mid, #d0bd97)', 'important');
     }
 
     function osrsApplyAndroidDisclosureChromeAll() {

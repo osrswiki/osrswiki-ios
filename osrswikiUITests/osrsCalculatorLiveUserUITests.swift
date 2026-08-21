@@ -152,9 +152,12 @@ final class osrsCalculatorLiveUserUITests: XCTestCase {
             appeared,
             "Wiki calculator form did not render \(expectedControl) on \(title). \(app.debugDescription)"
         )
+        let leftoverPlaceholder = app.staticTexts["Please wait for the form to load"].exists
+            || app.staticTexts["This calculator requires JavaScript to run"].exists
+            || app.staticTexts.matching(NSPredicate(format: "label == %@", "This calculator requires JavaScript to run")).firstMatch.exists
         XCTAssertFalse(
-            app.staticTexts["Please wait for the form to load"].exists,
-            "Calculator still showing the wiki JS fallback on \(title)"
+            leftoverPlaceholder,
+            "Calculator still showing an app leftover JS placeholder on \(title); wiki 'requires JavaScript' disclaimer above a live form is ignored"
         )
         return app
     }

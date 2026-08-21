@@ -36,6 +36,7 @@ struct FeedbackView: View {
         .navigationTitle("Send Feedback")
         .navigationBarTitleDisplayMode(.inline)
         .background(.osrsBackground)
+        .osrsInteractiveBackSwipe()
         .onAppear {
             updateNavigationBarAppearance()
         }

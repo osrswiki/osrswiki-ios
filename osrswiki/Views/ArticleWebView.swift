@@ -71,6 +71,8 @@ class IOSAssetHandler: NSObject, WKURLSchemeHandler {
             return "web/collapsible_tables.css"
         case "styles/infobox_switcher.css":
             return "web/switch_infobox_styles.css"
+        case "gadget_calc_core.js":
+            return "js/mediawiki/gadget_calc_core.js"
         default:
             return path
         }
@@ -1376,6 +1378,7 @@ struct ArticleWebView: UIViewRepresentable {
         // cancels WebKit scrolling; DOM/native-map ownership still makes navigation fail closed.
         context.coordinator.installArticleNavigationGesture(on: webView)
         context.coordinator.installArticleRefreshControl(on: webView)
+        context.coordinator.interactiveSwipe.chromeColor = UIColor(themeManager.currentTheme.background)
         
         // map_bridge.js is the single article bridge and the HTML loads the shared interceptor
         // once. Do not also install the legacy document-end interceptor here.
@@ -1421,6 +1424,7 @@ struct ArticleWebView: UIViewRepresentable {
         }
         context.coordinator.installArticleNavigationGesture(on: webView)
         context.coordinator.installArticleRefreshControl(on: webView)
+        context.coordinator.interactiveSwipe.chromeColor = UIColor(themeManager.currentTheme.background)
         if #available(iOS 16.0, *) {
             webView.isFindInteractionEnabled = true
         }
@@ -1435,6 +1439,7 @@ struct ArticleWebView: UIViewRepresentable {
         context.coordinator.parent = self
         applyDynamicTypeScale(to: webView, coordinator: context.coordinator)
         let isDark = themeManager.currentTheme is osrsDarkTheme
+        context.coordinator.interactiveSwipe.chromeColor = UIColor(themeManager.currentTheme.background)
         if context.coordinator.lastInjectedThemeIsDark != isDark {
             context.coordinator.lastInjectedThemeIsDark = isDark
             viewModel.applyLiveTheme(themeManager.currentTheme, themeManager: themeManager)
@@ -1791,7 +1796,7 @@ struct ArticleWebView: UIViewRepresentable {
         private weak var articleNavigationRecognizer: UIPanGestureRecognizer?
         private var articleGestureGeneration: UInt64?
         private var articleGestureStartPoint: CGPoint?
-        private let interactiveSwipe = osrsInteractiveArticleSwipe()
+        fileprivate let interactiveSwipe = osrsInteractiveArticleSwipe()
         private var restoredWebScrollEnabled: Bool?
         private var pendingBackCommitAuthorized: Bool?
         private var pendingBackCommitAnimationDone = false

@@ -53,8 +53,11 @@ final class osrsCalculatorParityTests: XCTestCase {
                 title: entry.title,
                 bodyContent: "<pre class=\"jcConfig\">template = \(entry.title)/Template</pre><div id=\"form\"></div>",
                 theme: osrsLightTheme(),
+                includeAssetLinks: true,
                 canonicalTitle: entry.title
             )
+            XCTAssertTrue(html.contains("js/mediawiki/gadget_calc_core.js"), entry.title)
+            XCTAssertFalse(html.contains("src=\"app-assets://localhost/gadget_calc_core.js\""), entry.title)
             XCTAssertTrue(html.contains("\"oojs-ui-core\""), entry.title)
             XCTAssertTrue(html.contains("\"mediawiki.widgets\""), entry.title)
             XCTAssertTrue(html.contains("\"wgNamespaceNumber\": 116") || html.contains("\"wgNamespaceNumber\":116"), entry.title)
@@ -135,7 +138,8 @@ final class osrsCalculatorParityTests: XCTestCase {
         XCTAssertTrue(runtime.contains("mw.loader.load('ext.gadget.calc-core')"))
         XCTAssertTrue(runtime.contains("osrsCalculatorApi"))
         XCTAssertTrue(runtime.contains("webkit.messageHandlers.osrsCalculatorApi"))
-        XCTAssertTrue(runtime.contains("loadCalcCore(attempt)"))
+        XCTAssertTrue(runtime.contains("oojs-ui-widgets"))
+        XCTAssertTrue(runtime.contains("ButtonOptionWidget"))
         XCTAssertTrue(runtime.contains("jQuery.ajax.__osrsCalculatorPatched"))
         XCTAssertTrue(runtime.contains("setTimeout(patchAjax, 25)"))
         XCTAssertTrue(runtime.contains("__osrsCalculatorSmokeSubmit"))
@@ -152,7 +156,8 @@ final class osrsCalculatorParityTests: XCTestCase {
         )
         XCTAssertTrue(calcCore.contains("document.getElementById('bodyContent') || document.body"))
         XCTAssertTrue(calcCore.contains("window.__osrsKickCalcCore"))
-        XCTAssertTrue(calcCore.contains("osrsEnsureOOUITheme"))
+        XCTAssertTrue(calcCore.contains("osrsCalcCoreDepsReady"))
+        XCTAssertTrue(calcCore.contains("OO.ui.ButtonOptionWidget"))
         XCTAssertTrue(calcCore.contains("__osrsCalculatorPatched"))
         XCTAssertFalse(calcCore.contains("$('#bodyContent')"))
         let startup = try String(
@@ -161,6 +166,26 @@ final class osrsCalculatorParityTests: XCTestCase {
         )
         XCTAssertTrue(startup.contains("\"debug\": \"0\""))
         XCTAssertFalse(startup.contains("\"debug\": \"1\""))
+    }
+
+    func testLeftoverCalculatorPlaceholdersIncludeRequiresJavaScript() {
+        let leftovers = [
+            "Please wait for the form to load",
+            "This calculator requires JavaScript to run"
+        ]
+        XCTAssertTrue(leftovers.contains(where: { $0.localizedCaseInsensitiveContains("requires JavaScript") }))
+        XCTAssertTrue(leftovers.contains(where: { $0.localizedCaseInsensitiveContains("Please wait for the form") }))
+    }
+
+    func testAssetHandlerAliasesBareCalcCoreFilename() {
+        XCTAssertEqual(
+            IOSAssetHandler.canonicalAssetPath("gadget_calc_core.js"),
+            "js/mediawiki/gadget_calc_core.js"
+        )
+        XCTAssertEqual(
+            IOSAssetHandler.canonicalAssetPath("js/mediawiki/gadget_calc_core.js"),
+            "js/mediawiki/gadget_calc_core.js"
+        )
     }
 
     private func catalogData() throws -> Data {

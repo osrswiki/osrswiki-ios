@@ -218,7 +218,7 @@
             mw.loader.load('ext.gadget.calc-core');
         };
         function injectOOUIThenStart() {
-            if (window.OO && OO.ui) {
+            if (window.OO && OO.ui && typeof OO.ui.ButtonOptionWidget === 'function') {
                 start();
                 return;
             }
@@ -228,14 +228,14 @@
             }
             var script = document.createElement('script');
             script.setAttribute('data-osrs-ooui-loader', '1');
-            script.src = '/load.php?modules=ext.gadget.rsw-util%7Coojs-ui-core%7Cmediawiki.widgets';
+            script.src = '/load.php?modules=ext.gadget.rsw-util%7Coojs-ui-core%7Coojs-ui-widgets%7Cmediawiki.widgets';
             script.onload = start;
             script.onerror = start;
             (document.head || document.documentElement).appendChild(script);
         }
         if (typeof mw.loader.using === 'function') {
             mw.loader.using(
-                ['ext.gadget.rsw-util', 'oojs-ui-core', 'mediawiki.widgets'],
+                ['ext.gadget.rsw-util', 'oojs-ui-core', 'oojs-ui-widgets', 'mediawiki.widgets'],
                 start
             );
             setTimeout(injectOOUIThenStart, 1200);

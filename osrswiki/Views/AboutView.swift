@@ -32,6 +32,7 @@ struct AboutView: View {
         .navigationTitle("About")
         .navigationBarTitleDisplayMode(.inline)
         .background(.osrsBackground)
+        .osrsInteractiveBackSwipe()
         .onAppear {
             updateNavigationBarAppearance()
         }

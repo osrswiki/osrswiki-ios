@@ -72,8 +72,14 @@ final class osrsInteractiveArticleSwipe {
             .first(where: \.isKeyWindow)
     }
 
-    static func parchmentColor() -> UIColor {
-        UIColor(red: 0.87, green: 0.84, blue: 0.77, alpha: 1)
+    /// Active article/page background. Dark mode must not peek light parchment.
+    var chromeColor: UIColor = osrsInteractiveArticleSwipe.parchmentColor()
+
+    static func parchmentColor(theme: (any osrsThemeProtocol)? = nil) -> UIColor {
+        if let theme {
+            return UIColor(theme.background)
+        }
+        return UIColor(red: 0.87, green: 0.84, blue: 0.77, alpha: 1)
     }
 
     /// True only for a featureless black frame, not a dark-theme article.
@@ -135,7 +141,7 @@ final class osrsInteractiveArticleSwipe {
     private var previousSnapshot: UIView?
     private var dimmingView: UIView?
 
-    func begin(from webView: WKWebView, contentsOpen: Bool = false) {
+    func begin(from view: UIView, contentsOpen: Bool = false) {
         isCommitSettling = false
         cleanup(resetTransform: true)
         axis = nil
@@ -144,8 +150,8 @@ final class osrsInteractiveArticleSwipe {
         contentsProgress = contentsOpen ? 1 : 0
         backProgress = 0
         contentsOpenAtStart = contentsOpen
-        slidingView = Self.slidingView(from: webView)
-        Self.navigationController(from: webView)?.interactivePopGestureRecognizer?.isEnabled = false
+        slidingView = Self.slidingView(from: view)
+        Self.navigationController(from: view)?.interactivePopGestureRecognizer?.isEnabled = false
     }
 
     static func lockAxis(
@@ -180,7 +186,7 @@ final class osrsInteractiveArticleSwipe {
         return progress >= commitProgress || velocityX <= -commitVelocity
     }
 
-    func update(translation: CGPoint, from webView: WKWebView) {
+    func update(translation: CGPoint, from view: UIView) {
         if axis == nil {
             guard let locked = Self.lockAxis(
                 translation: translation,
@@ -196,7 +202,7 @@ final class osrsInteractiveArticleSwipe {
             isTracking = true
             lastAxis = locked
             if axis == .back {
-                installBackPreview(from: webView)
+                installBackPreview(from: view)
             }
         }
 
@@ -334,7 +340,7 @@ final class osrsInteractiveArticleSwipe {
         if chromeHost == nil, let sliding = slidingView, let window = sliding.window ?? Self.keyWindow() {
             let overlay = slidingSnapshot ?? sliding.snapshotView(afterScreenUpdates: false) ?? {
                 let fallback = UIView(frame: sliding.bounds)
-                fallback.backgroundColor = sliding.backgroundColor ?? Self.parchmentColor()
+                fallback.backgroundColor = sliding.backgroundColor ?? chromeColor
                 return fallback
             }()
             var restFrame = sliding.convert(sliding.bounds, to: window)
@@ -480,7 +486,7 @@ final class osrsInteractiveArticleSwipe {
         hiddenSlidingView = nil
     }
 
-    private func installBackPreview(from webView: WKWebView) {
+    private func installBackPreview(from view: UIView) {
         guard chromeHost == nil,
               let sliding = slidingView,
               let window = sliding.window ?? Self.keyWindow() else { return }
@@ -488,7 +494,7 @@ final class osrsInteractiveArticleSwipe {
         let chrome = UIView(frame: window.bounds)
         chrome.isUserInteractionEnabled = false
         chrome.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        chrome.backgroundColor = Self.parchmentColor()
+        chrome.backgroundColor = chromeColor
         chrome.isOpaque = true
         chrome.accessibilityIdentifier = "article_back_swipe_chrome"
 
@@ -508,7 +514,7 @@ final class osrsInteractiveArticleSwipe {
         currentFrame.origin.y -= sliding.transform.ty
         let current = sliding.snapshotView(afterScreenUpdates: false) ?? {
             let fallback = UIView(frame: currentFrame)
-            fallback.backgroundColor = sliding.backgroundColor ?? Self.parchmentColor()
+            fallback.backgroundColor = sliding.backgroundColor ?? chromeColor
             return fallback
         }()
         current.frame = currentFrame
@@ -537,18 +543,18 @@ final class osrsInteractiveArticleSwipe {
             return imageView
         }
         let fallback = UIView(frame: bounds)
-        fallback.backgroundColor = Self.parchmentColor()
+        fallback.backgroundColor = chromeColor
         fallback.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         fallback.isUserInteractionEnabled = false
         return fallback
     }
 
-    static func slidingView(from webView: WKWebView) -> UIView? {
-        if let nav = navigationController(from: webView),
+    static func slidingView(from view: UIView) -> UIView? {
+        if let nav = navigationController(from: view),
            let top = nav.topViewController?.view {
             return top
         }
-        return webView
+        return view
     }
 
     static func navigationController(from view: UIView) -> UINavigationController? {
@@ -565,5 +571,182 @@ final class osrsInteractiveArticleSwipe {
             responder = current.next
         }
         return nil
+    }
+}
+
+// MARK: - Reusable full-width back swipe for pushed non-list destinations
+
+/// Anchors a UIKit pan on the destination canvas so overlays, settings pages,
+/// and other non-webview hosts get the same interactive-back chrome as articles.
+final class osrsInteractiveBackSwipeAnchorView: UIView {
+    var installOnSuperview: ((UIView) -> Void)?
+
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        isUserInteractionEnabled = false
+        if let superview {
+            installOnSuperview?(superview)
+        }
+    }
+
+    override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+        false
+    }
+}
+
+struct osrsInteractiveBackSwipeHost: UIViewRepresentable {
+    var enabled: Bool
+    var chromeColor: UIColor
+    var onBack: () -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
+    func makeUIView(context: Context) -> osrsInteractiveBackSwipeAnchorView {
+        let view = osrsInteractiveBackSwipeAnchorView()
+        view.backgroundColor = .clear
+        context.coordinator.parent = self
+        view.installOnSuperview = { [weak coordinator = context.coordinator] host in
+            coordinator?.install(on: host)
+        }
+        return view
+    }
+
+    func updateUIView(_ uiView: osrsInteractiveBackSwipeAnchorView, context: Context) {
+        context.coordinator.parent = self
+        context.coordinator.swipe.chromeColor = chromeColor
+        context.coordinator.pan.isEnabled = enabled
+        if let superview = uiView.superview {
+            context.coordinator.install(on: superview)
+        }
+    }
+
+    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
+        var parent: osrsInteractiveBackSwipeHost?
+        let swipe = osrsInteractiveArticleSwipe()
+        let pan = UIPanGestureRecognizer()
+        private weak var installedOn: UIView?
+
+        override init() {
+            super.init()
+            pan.addTarget(self, action: #selector(handlePan(_:)))
+            pan.delegate = self
+            pan.cancelsTouchesInView = false
+            pan.delaysTouchesBegan = false
+            pan.delaysTouchesEnded = false
+            pan.maximumNumberOfTouches = 1
+        }
+
+        deinit {
+            installedOn?.removeGestureRecognizer(pan)
+        }
+
+        func install(on view: UIView) {
+            let canvas = Self.destinationCanvas(from: view)
+            if installedOn === canvas {
+                pan.isEnabled = parent?.enabled ?? false
+                return
+            }
+            installedOn?.removeGestureRecognizer(pan)
+            canvas.addGestureRecognizer(pan)
+            installedOn = canvas
+            pan.isEnabled = parent?.enabled ?? false
+            if parent?.enabled == true {
+                osrsInteractiveArticleSwipe.navigationController(from: canvas)?
+                    .interactivePopGestureRecognizer?.isEnabled = false
+            }
+        }
+
+        func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+            guard parent?.enabled == true,
+                  let pan = gestureRecognizer as? UIPanGestureRecognizer,
+                  let view = pan.view else {
+                return false
+            }
+            let velocity = pan.velocity(in: view)
+            if velocity == .zero {
+                return true
+            }
+            return osrsArticleWebPanPolicy.isPrimarilyHorizontal(velocity: velocity) && velocity.x >= 0
+        }
+
+        func gestureRecognizer(
+            _ gestureRecognizer: UIGestureRecognizer,
+            shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer
+        ) -> Bool {
+            true
+        }
+
+        @objc func handlePan(_ recognizer: UIPanGestureRecognizer) {
+            guard let view = recognizer.view, parent?.enabled == true else { return }
+            swipe.chromeColor = parent?.chromeColor ?? osrsInteractiveArticleSwipe.parchmentColor()
+            switch recognizer.state {
+            case .began:
+                swipe.begin(from: view, contentsOpen: false)
+            case .changed:
+                swipe.update(
+                    translation: recognizer.translation(in: view.window ?? view),
+                    from: view
+                )
+                if swipe.axis == .contents {
+                    swipe.cancel(animated: false)
+                }
+            case .ended, .cancelled, .failed:
+                let translation = recognizer.translation(in: view.window ?? view)
+                let velocity = recognizer.velocity(in: view.window ?? view)
+                swipe.update(translation: translation, from: view)
+                if swipe.axis == .back,
+                   swipe.finish(translation: translation, velocity: velocity) == .commitBack {
+                    swipe.cleanup(resetTransform: false)
+                    parent?.onBack()
+                } else {
+                    swipe.cancel(animated: true)
+                }
+            default:
+                break
+            }
+        }
+
+        private static func destinationCanvas(from view: UIView) -> UIView {
+            var responder: UIResponder? = view
+            var lastViewControllerView: UIView = view
+            while let current = responder {
+                if let viewController = current as? UIViewController,
+                   !(viewController is UINavigationController),
+                   !(viewController is UITabBarController),
+                   !(viewController is UISplitViewController) {
+                    lastViewControllerView = viewController.view
+                }
+                responder = current.next
+            }
+            return lastViewControllerView
+        }
+    }
+}
+
+struct osrsInteractiveBackSwipeModifier: ViewModifier {
+    @EnvironmentObject private var themeManager: osrsThemeManager
+    @Environment(\.dismiss) private var dismiss
+    var isEnabled: Bool
+    var onBack: (() -> Void)?
+
+    func body(content: Content) -> some View {
+        content.background(
+            osrsInteractiveBackSwipeHost(
+                enabled: isEnabled && themeManager.swipeRightToGoBackEnabled,
+                chromeColor: UIColor(themeManager.currentTheme.background),
+                onBack: { onBack?() ?? dismiss() }
+            )
+        )
+    }
+}
+
+extension View {
+    func osrsInteractiveBackSwipe(
+        enabled: Bool = true,
+        onBack: (() -> Void)? = nil
+    ) -> some View {
+        modifier(osrsInteractiveBackSwipeModifier(isEnabled: enabled, onBack: onBack))
     }
 }

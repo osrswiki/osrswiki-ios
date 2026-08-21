@@ -31,7 +31,7 @@ class osrsPageHtmlBuilder {
     // MediaWiki ResourceLoader artifacts
     private let mediawikiArtifacts = [
         "startup.js",
-        "gadget_calc_core.js"
+        "js/mediawiki/gadget_calc_core.js"
     ]
 
     private let articleTransformJsAssetPaths = [
@@ -516,7 +516,7 @@ class osrsPageHtmlBuilder {
         // Build final HTML document
         let finalHtml = """
         <!DOCTYPE html>
-        <html class="\(wrapClass)">
+        <html class="\(themeClass) \(wrapClass)">
         <head>
             <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
             <title>\(documentTitle)</title>
