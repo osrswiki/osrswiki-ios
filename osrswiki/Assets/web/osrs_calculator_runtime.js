@@ -216,14 +216,16 @@
 
     function osrsHideCalculatorJsPlaceholder() {
         var live = !!document.querySelector(
-            '.jcTable .jsCalc-field, .jcTable .oo-ui-buttonElement, .oo-ui-fieldsetLayout .oo-ui-widget'
+            '.jcTable .jsCalc-field, .jcTable .oo-ui-buttonElement, .oo-ui-fieldsetLayout .oo-ui-widget, .jcTable input, .jcTable select, .jcTable button'
         );
         if (!live) {
             return;
         }
         document.documentElement.setAttribute('data-osrs-calc-live', '1');
-        document.querySelectorAll('.messagebox, .ambox, .mbox, table.messagebox').forEach(function(node) {
-            if (/dynamic calculator requires JavaScript/i.test(node.textContent || '')) {
+        document.querySelectorAll('.messagebox, .ambox, .mbox, table.messagebox, table.ambox, table').forEach(function(node) {
+            var text = node.textContent || '';
+            if (/dynamic calculator requires JavaScript/i.test(text) ||
+                /this calculator requires JavaScript/i.test(text)) {
                 node.setAttribute('hidden', '');
                 node.style.setProperty('display', 'none', 'important');
             }
