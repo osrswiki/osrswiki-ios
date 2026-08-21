@@ -7,111 +7,258 @@
     window.addEventListener('error', function (ev) {
         window.__osrsCalcErrors.push(String((ev && ev.message) || ev));
     });
-    function osrsPatchLoaderImpl() {
-        if (!window.mw || !mw.loader || typeof mw.loader.impl !== 'function') {
-            setTimeout(osrsPatchLoaderImpl, 10);
-            return;
-        }
-        if (mw.loader.impl.__osrsPatched) {
-            return;
-        }
-        var orig = mw.loader.impl;
-        function osrsMakeModuleRequire(files) {
-            var cache = {};
-            return function osrsRequire(name) {
-                var key = String(name || '').replace(/^\.\//, '');
-                if (Object.prototype.hasOwnProperty.call(cache, key)) {
+    function osrsMakeModuleRequire(files) {
+        var cache = {};
+        return function osrsRequire(name) {
+            var key = String(name || '').replace(/^\.\//, '');
+            if (Object.prototype.hasOwnProperty.call(cache, key)) {
+                return cache[key];
+            }
+            if (files && files[key]) {
+                var file = files[key];
+                var moduleObj = { exports: {} };
+                if (typeof file === 'function') {
+                    file(osrsRequire, moduleObj, moduleObj.exports);
+                    cache[key] = moduleObj.exports;
                     return cache[key];
                 }
-                if (files && files[key]) {
-                    var file = files[key];
-                    var moduleObj = { exports: {} };
-                    if (typeof file === 'function') {
-                        file(osrsRequire, moduleObj);
-                        cache[key] = moduleObj.exports;
-                        return cache[key];
-                    }
-                    cache[key] = file;
-                    return file;
+                cache[key] = file;
+                return file;
+            }
+            try {
+                return mw.loader.require(name);
+            } catch (ignore) {
+                if (key === 'jquery' || key === 'jquery.js') {
+                    return window.jQuery || window.$;
                 }
-                try {
-                    return mw.loader.require(name);
-                } catch (ignore) {
-                    return undefined;
+                if (key === 'oojs' || key.indexOf('oojs') === 0) {
+                    return window.OO;
                 }
-            };
-        }
-        function osrsRunModuleScript(script) {
-            var $ = window.jQuery || window.$;
-            if (typeof script === 'function') {
+                return undefined;
+            }
+        };
+    }
+    function osrsRunModuleScript(script) {
+        osrsEnsureJQueryAlias();
+        var $ = window.jQuery || window.$;
+        if (typeof script === 'function') {
+            try {
+                script($, $, osrsMakeModuleRequire(null), { exports: {} });
+                return true;
+            } catch (first) {
                 try {
-                    script($, $, osrsMakeModuleRequire(null), { exports: {} });
+                    script($, window.OO);
                     return true;
-                } catch (first) {
+                } catch (second) {
                     try {
-                        script($, window.OO);
+                        script();
                         return true;
-                    } catch (second) {
-                        try {
-                            script();
-                            return true;
-                        } catch (third) {
-                            window.__osrsCalcErrors.push(String((third && third.message) || third));
-                            return false;
-                        }
+                    } catch (third) {
+                        window.__osrsCalcErrors.push('runModule: ' + String((third && third.message) || third));
+                        return false;
                     }
                 }
             }
-            if (script && typeof script === 'object' && script.files && script.main) {
-                var req = osrsMakeModuleRequire(script.files);
-                var main = script.files[script.main];
-                if (typeof main === 'function') {
-                    try {
-                        var moduleObj = { exports: {} };
-                        main(req, moduleObj);
-                        return true;
-                    } catch (packaged) {
-                        window.__osrsCalcErrors.push(String((packaged && packaged.message) || packaged));
-                    }
+        }
+        if (script && typeof script === 'object' && script.files && script.main) {
+            var req = osrsMakeModuleRequire(script.files);
+            var main = script.files[script.main];
+            if (typeof main === 'function') {
+                try {
+                    var moduleObj = { exports: {} };
+                    main(req, moduleObj, moduleObj.exports);
+                    return true;
+                } catch (packaged) {
+                    window.__osrsCalcErrors.push('runModule: ' + String((packaged && packaged.message) || packaged));
                 }
             }
+        }
+        return false;
+    }
+    window.__osrsPendingOOUIScripts = window.__osrsPendingOOUIScripts || [];
+    function osrsEnsureJQueryAlias() {
+        if (window.jQuery && !window.$) {
+            window.$ = window.jQuery;
+        }
+        if (window.$ && !window.jQuery) {
+            window.jQuery = window.$;
+        }
+        return !!(window.$ && window.jQuery);
+    }
+    function osrsJqueryReady() {
+        osrsEnsureJQueryAlias();
+        var jq = window.jQuery || window.$;
+        return !!(jq && typeof jq === 'function' && typeof jq.proxy === 'function' && jq.fn);
+    }
+    function osrsInstallPriority(name) {
+        var key = String(name || '').split('@')[0].trim();
+        if (key === 'jquery') {
+            return 0;
+        }
+        if (key === 'oojs') {
+            return 1;
+        }
+        if (key.indexOf('oojs-ui-core') === 0) {
+            return 2;
+        }
+        if (key.indexOf('oojs-ui-widgets') === 0) {
+            return 3;
+        }
+        if (key.indexOf('mediawiki.widgets') === 0) {
+            return 4;
+        }
+        return 5;
+    }
+    function osrsCanInstallModule(name) {
+        var key = String(name || '').split('@')[0].trim();
+        if (key === 'jquery') {
+            return true;
+        }
+        if (key === 'oojs') {
+            return true;
+        }
+        if (key.indexOf('oojs-ui-core') === 0) {
+            return osrsJqueryReady() && !!window.OO;
+        }
+        if (key.indexOf('oojs-ui-widgets') === 0) {
+            return !!(window.OO && OO.ui && typeof OO.ui.HorizontalLayout === 'function');
+        }
+        if (key.indexOf('mediawiki.widgets') === 0) {
+            return !!(window.OO && OO.ui && typeof OO.ui.ButtonOptionWidget === 'function');
+        }
+        return osrsJqueryReady();
+    }
+    function osrsQueuePending(name, script) {
+        if (window.__osrsPendingOOUIScripts.length >= 16) {
+            return;
+        }
+        window.__osrsPendingOOUIScripts.push([name, script]);
+        window.__osrsPendingOOUIScripts.sort(function (a, b) {
+            return osrsInstallPriority(a[0]) - osrsInstallPriority(b[0]);
+        });
+    }
+    function osrsInstallImplementedScript(name, script) {
+        if (osrsCalcCoreDepsReady()) {
+            return true;
+        }
+        var key = String(name || '').split('@')[0].trim();
+        if (!/oojs|mediawiki\.widgets|^jquery$/i.test(key)) {
             return false;
         }
-        mw.loader.impl = function (declarator) {
+        if (!osrsCanInstallModule(key)) {
+            osrsQueuePending(name, script);
+            return false;
+        }
+        var ok = osrsRunModuleScript(script);
+        if (!ok) {
+            osrsQueuePending(name, script);
+            return false;
+        }
+        try {
+            var ready = {};
+            ready[key] = 'ready';
+            if (window.mw && mw.loader && typeof mw.loader.state === 'function') {
+                mw.loader.state(ready);
+            }
+        } catch (ignore) {}
+        return true;
+    }
+    function osrsFlushPendingOOUI() {
+        osrsEnsureJQueryAlias();
+        var pending = window.__osrsPendingOOUIScripts || [];
+        if (!pending.length) {
+            return;
+        }
+        window.__osrsPendingOOUIScripts = [];
+        pending.forEach(function (item) {
+            osrsInstallImplementedScript(item[0], item[1]);
+        });
+    }
+    function osrsPatchLoaderMethod(methodName) {
+        if (!window.mw || !mw.loader || typeof mw.loader[methodName] !== 'function') {
+            return false;
+        }
+        if (mw.loader[methodName].__osrsPatched) {
+            return true;
+        }
+        var orig = mw.loader[methodName];
+        mw.loader[methodName] = function () {
+            var args = arguments;
+            var threw = null;
+            var result;
             try {
-                return orig.apply(this, arguments);
+                result = orig.apply(this, args);
             } catch (err) {
+                threw = err;
                 var msg = String((err && err.message) || err);
-                if (msg.indexOf('already implemented') !== -1) {
-                    if (osrsCalcCoreDepsReady()) {
-                        return;
-                    }
-                    try {
-                        var payload = typeof declarator === 'function' ? declarator() : null;
-                        var rawName = payload && payload[0];
-                        var name = String(rawName || msg.replace(/^.*already implemented:\s*/, '')).split('@')[0].trim();
-                        var hasOO = !!(window.OO && OO.ui);
-                        var isCore = name.indexOf('oojs-ui-core') !== -1 || name === 'oojs';
-                        var isWidgets = name.indexOf('oojs-ui-widgets') !== -1 ||
-                            name.indexOf('mediawiki.widgets') !== -1 ||
-                            name.indexOf('oojs-ui-windows') !== -1;
-                        var missingToggle = !(window.OO && OO.ui && typeof OO.ui.ToggleSwitchWidget === 'function');
-                        var missingButton = !(window.OO && OO.ui && typeof OO.ui.ButtonOptionWidget === 'function');
-                        if ((isCore && !hasOO) || (isWidgets && hasOO && (missingButton || missingToggle))) {
-                            osrsRunModuleScript(payload && payload[1]);
-                        }
-                    } catch (ignore) {}
-                    return;
-                }
-                window.__osrsCalcErrors.push(msg);
-                if (msg.indexOf('NotFoundError') === -1) {
+                if (msg.indexOf('already implemented') === -1 && msg.indexOf('NotFoundError') === -1) {
+                    window.__osrsCalcErrors.push(msg);
                     throw err;
                 }
             }
+            if (!osrsCalcCoreDepsReady()) {
+                try {
+                    var payload = null;
+                    var name = '';
+                    if (methodName === 'impl' && typeof args[0] === 'function') {
+                        payload = args[0]();
+                        name = payload && payload[0];
+                        osrsInstallImplementedScript(name, payload && payload[1]);
+                    } else if (methodName === 'implement') {
+                        name = args[0];
+                        osrsInstallImplementedScript(name, args[1]);
+                    }
+                } catch (ignore) {}
+            }
+            return result;
         };
-        mw.loader.impl.__osrsPatched = true;
+        mw.loader[methodName].__osrsPatched = true;
+        return true;
+    }
+    function osrsPatchLoaderImpl() {
+        if (!window.mw || !mw.loader) {
+            setTimeout(osrsPatchLoaderImpl, 10);
+            return;
+        }
+        var implReady = osrsPatchLoaderMethod('impl');
+        var implementReady = osrsPatchLoaderMethod('implement');
+        if (!implReady && !implementReady) {
+            setTimeout(osrsPatchLoaderImpl, 10);
+        }
     }
     osrsPatchLoaderImpl();
+    function osrsEnsureMwHelpers() {
+        if (!window.mw) {
+            return;
+        }
+        mw.html = mw.html || {};
+        if (typeof mw.html.escape !== 'function') {
+            mw.html.escape = function (value) {
+                return String(value == null ? '' : value)
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;');
+            };
+        }
+        if (typeof mw.hook !== 'function') {
+            mw.hook = function () {
+                return {
+                    add: function () { return this; },
+                    fire: function () { return this; },
+                    remove: function () { return this; }
+                };
+            };
+        }
+        if (typeof mw.log !== 'function') {
+            mw.log = function () {};
+        }
+        mw.log.warn = mw.log.warn || function () {};
+        mw.language = mw.language || {};
+        if (typeof mw.language.getFallbackLanguageChain !== 'function') {
+            mw.language.getFallbackLanguageChain = function () { return ['en']; };
+        }
+    }
     function osrsEnsureRs() {
         window.rs = window.rs || window.rswiki || {};
         if (typeof window.rs.hasLocalStorage !== 'function') {
@@ -136,6 +283,14 @@
         } catch (err) {
             window.__osrsCalcErrors = window.__osrsCalcErrors || [];
             window.__osrsCalcErrors.push(String(err && err.message || err));
+        }
+        if (!OO.ui.theme) {
+            OO.ui.theme = {
+                getElementClasses: function () { return { on: [], off: [] }; },
+                queueUpdateElementClasses: function () {},
+                updateElementClasses: function () {},
+                getDialogTransitionDuration: function () { return 0; }
+            };
         }
     }
     function osrsCalcCoreDepsReady() {
@@ -199,12 +354,14 @@
             'oojs-ui-core.styles',
             'oojs-ui.styles.indicators',
             'oojs-ui-widgets.icons',
+            'oojs-ui-windows.icons',
+            'oojs-ui-windows.styles',
             'mediawiki.widgets.styles',
             'oojs-ui.styles.icons-content',
             'oojs-ui.styles.icons-editing-advanced'
         ].forEach(function (name) {
             var state = mw.loader.getState && mw.loader.getState(name);
-            if (state === 'loaded' || state === 'loading') {
+            if (state && state !== 'ready') {
                 stuck[name] = 'ready';
             }
         });
@@ -213,6 +370,9 @@
         }
     }
     function osrsRunCalcCoreFactory() {
+        osrsEnsureJQueryAlias();
+        osrsFlushPendingOOUI();
+        osrsEnsureMwHelpers();
         osrsMarkCalcCoreRegistered();
         osrsUnblockOOUI();
         var $ = window.jQuery || window.$;
@@ -223,8 +383,12 @@
         osrsEnsureRs();
         osrsEnsureOOUITheme();
         if (!OO.ui.theme) {
-            setTimeout(osrsRunCalcCoreFactory, 25);
-            return;
+            window.__osrsCalcThemeWait = (window.__osrsCalcThemeWait || 0) + 1;
+            if (window.__osrsCalcThemeWait < 20) {
+                setTimeout(osrsRunCalcCoreFactory, 25);
+                return;
+            }
+            osrsEnsureOOUITheme();
         }
         // Wait briefly for the app runtime to patch jQuery.ajax so parse/hiscores
         // requests hit the native wiki proxy instead of a CORS-blocked origin.

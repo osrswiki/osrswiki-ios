@@ -232,6 +232,15 @@
         });
     }
 
+    function osrsEnsureJQueryAlias() {
+        if (window.jQuery && !window.$) {
+            window.$ = window.jQuery;
+        }
+        if (window.$ && !window.jQuery) {
+            window.jQuery = window.$;
+        }
+        return !!(window.$ && window.jQuery);
+    }
     function loadCalcCore(attempt) {
         var tries = typeof attempt === 'number' ? attempt : 0;
         if (!document.querySelector('pre.jcConfig')) {
@@ -243,7 +252,12 @@
             }
             return;
         }
+        osrsEnsureJQueryAlias();
+        if (typeof window.__osrsKickCalcCore === 'function') {
+            window.__osrsKickCalcCore();
+        }
         var start = function() {
+            osrsEnsureJQueryAlias();
             patchAjax();
             if (typeof window.__osrsKickCalcCore === 'function') {
                 window.__osrsKickCalcCore();
@@ -273,10 +287,17 @@
             return true;
         }
         function osrsLoadModuleScript(src, done) {
+            osrsEnsureJQueryAlias();
             var script = document.createElement('script');
             script.setAttribute('data-osrs-ooui-loader', '1');
             script.src = src;
-            script.onload = done;
+            script.onload = function() {
+                osrsEnsureJQueryAlias();
+                if (typeof window.__osrsKickCalcCore === 'function') {
+                    window.__osrsKickCalcCore();
+                }
+                done();
+            };
             script.onerror = done;
             (document.head || document.documentElement).appendChild(script);
         }
@@ -286,16 +307,40 @@
                 return;
             }
             var steps = [
-                '/load.php?modules=oojs-ui-core',
-                '/load.php?modules=oojs-ui-widgets',
-                '/load.php?modules=mediawiki.widgets',
-                '/load.php?modules=ext.gadget.rsw-util'
+                {
+                    src: '/load.php?modules=jquery&only=scripts',
+                    skip: function() { return !!(window.jQuery && jQuery.fn && typeof jQuery.proxy === 'function'); }
+                },
+                {
+                    src: '/load.php?modules=oojs&only=scripts',
+                    skip: function() { return !!(window.OO && typeof OO.initClass === 'function'); }
+                },
+                {
+                    src: '/load.php?modules=oojs-ui-core&only=scripts',
+                    skip: function() { return !!(window.OO && OO.ui && typeof OO.ui.FieldsetLayout === 'function'); }
+                },
+                {
+                    src: '/load.php?modules=oojs-ui-widgets&only=scripts',
+                    skip: function() { return !!(window.OO && OO.ui && typeof OO.ui.ButtonOptionWidget === 'function'); }
+                },
+                {
+                    src: '/load.php?modules=mediawiki.widgets',
+                    skip: function() { return !!(window.mw && mw.widgets); }
+                },
+                {
+                    src: '/load.php?modules=ext.gadget.rsw-util&only=scripts',
+                    skip: function() { return !!(window.rs && typeof rs.hasLocalStorage === 'function'); }
+                }
             ];
             if (index >= steps.length) {
                 start();
                 return;
             }
-            osrsLoadModuleScript(steps[index], function() {
+            if (steps[index].skip()) {
+                injectSequential(index + 1);
+                return;
+            }
+            osrsLoadModuleScript(steps[index].src, function() {
                 setTimeout(function() { injectSequential(index + 1); }, 40);
             });
         }
