@@ -1366,7 +1366,7 @@ struct ArticleWebView: UIViewRepresentable {
             webView.scrollView.verticalScrollIndicatorInsets.bottom = 64
         }
         webView.isOpaque = false
-        webView.backgroundColor = UIColor.clear
+        osrsWebViewThemePaint.apply(to: webView, theme: themeManager.currentTheme)
         webView.accessibilityIdentifier = "article_web_view"
         
         if #available(iOS 16.4, *) {
@@ -1417,7 +1417,7 @@ struct ArticleWebView: UIViewRepresentable {
             webView.scrollView.verticalScrollIndicatorInsets.bottom = 64
         }
         webView.isOpaque = false
-        webView.backgroundColor = UIColor.clear
+        osrsWebViewThemePaint.apply(to: webView, theme: themeManager.currentTheme)
         webView.accessibilityIdentifier = "article_web_view"
         if #available(iOS 16.4, *) {
             webView.isInspectable = osrsWebKitSecurityPolicy.isWebViewInspectionEnabled

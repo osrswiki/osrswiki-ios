@@ -109,8 +109,11 @@ struct CustomMainTabView: View {
             }
             backgroundTasks.removeAll()
         }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
+            themeManager.applyPersistedThemeToWindows()
+        }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
-            // Update system color scheme when app becomes active
+            themeManager.applyPersistedThemeToWindows()
             let currentSystemScheme: ColorScheme = UITraitCollection.current.userInterfaceStyle == .dark ? .dark : .light
             if themeManager.selectedTheme == .automatic {
                 themeManager.updateSystemColorScheme(currentSystemScheme)

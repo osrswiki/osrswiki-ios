@@ -93,6 +93,7 @@ struct osrswikiApp: App {
                 updateGlobalTheming()
             }
             .onAppear {
+                themeManager.applyPersistedThemeToWindows()
                 // Initialize global theming when app starts
                 updateGlobalTheming()
 #if DEBUG

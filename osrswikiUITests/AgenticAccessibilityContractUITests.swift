@@ -236,8 +236,26 @@ final class AgenticAccessibilityContractUITests: XCTestCase {
 
             XCTAssertTrue(app.wait(for: .runningForeground, timeout: launchTimeout))
             XCTAssertTrue(element(in: app, identifier: "appearance_screen").waitForExistence(timeout: 10))
-            XCTAssertTrue(app.staticTexts["Display"].waitForExistence(timeout: 5))
-            XCTAssertTrue(element(in: app, identifier: "appearance_theme_picker").isHittable)
+            XCTAssertTrue(app.staticTexts["Theme"].waitForExistence(timeout: 5))
+            XCTAssertTrue(app.staticTexts["Floor numbering"].waitForExistence(timeout: 5))
+            let themePicker = element(in: app, identifier: "appearance_theme_picker")
+            XCTAssertTrue(themePicker.isHittable)
+            themePicker.tap()
+            XCTAssertTrue(
+                app.staticTexts["Theme"].exists,
+                "Theme row must stay readable while the menu is open"
+            )
+            XCTAssertTrue(
+                app.buttons["Light"].waitForExistence(timeout: 3) ||
+                    app.staticTexts["Light"].waitForExistence(timeout: 3),
+                "Theme menu should expose Light/Dark/Follow system"
+            )
+            let menuAttachment = XCTAttachment(screenshot: app.screenshot())
+            menuAttachment.name = "appearance-theme-menu-\(theme)"
+            menuAttachment.lifetime = .keepAlways
+            add(menuAttachment)
+            app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.12)).tap()
+
             XCTAssertTrue(element(in: app, identifier: "appearance_collapse_tables_toggle").isHittable)
             XCTAssertTrue(element(in: app, identifier: "appearance_wrap_table_cells_toggle").isHittable)
             XCTAssertTrue(element(in: app, identifier: "appearance_article_text_scale").isHittable)

@@ -42,15 +42,10 @@ struct osrsDownloadSettingsView: View {
             }
             .listRowBackground(Color(osrsTheme.surfaceVariant))
         }
-        .listStyle(.insetGrouped)
-        .scrollContentBackground(.hidden)
-        .background(.osrsBackground)
-        .navigationTitle("Downloads")
-        .navigationBarTitleDisplayMode(.large)
+        .osrsSettingsPage(title: "Downloads")
         .overlay(alignment: .topLeading) {
             osrsAccessibilityMarker(identifier: "downloads_screen", label: "Downloads settings")
         }
-        .osrsInteractiveBackSwipe()
         .onAppear {
             settings = osrsDownloadSettings.load()
         }

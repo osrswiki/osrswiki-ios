@@ -123,7 +123,9 @@ class osrsThemeManager: ObservableObject {
     private let swipeLeftToShowContentsKey = "osrs_swipe_left_contents_enabled"
     private let floorNumberingKey = osrsArticleFloorNumberingMode.persistenceKey
     private let readerPreferencesMigrationKey = "osrs_reader_preferences_migration_version"
-    private var cancellables = Set<AnyCancellable>()
+    private var foregroundObserver: NSObjectProtocol?
+    private var sceneForegroundObserver: NSObjectProtocol?
+    private var sceneActivateObserver: NSObjectProtocol?
     
     // MARK: - Initialization
     
@@ -151,6 +153,7 @@ class osrsThemeManager: ObservableObject {
         loadWrapTableCellsSettings()
         loadReaderPreferences()
         updateCurrentTheme()
+        listenForForegroundThemePaint()
         setupSystemColorSchemeObserver()
         // Note: Navigation bar and global theming is now handled in osrswikiApp.swift
     }
@@ -308,19 +311,67 @@ class osrsThemeManager: ObservableObject {
         }
     }
     
+    /// Paint every window from the persisted theme before SwiftUI's first resumed frame.
+    func applyPersistedThemeToWindows() {
+        applyPersistedThemeToWindows(discardPrewarmedWebViewsIfThemeChanged: false)
+    }
+
+    private func listenForForegroundThemePaint() {
+        let paint: (Notification) -> Void = { [weak self] _ in
+            Task { @MainActor in
+                self?.applyPersistedThemeToWindows()
+            }
+        }
+        foregroundObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.willEnterForegroundNotification,
+            object: nil,
+            queue: .main,
+            using: paint
+        )
+        sceneForegroundObserver = NotificationCenter.default.addObserver(
+            forName: UIScene.willEnterForegroundNotification,
+            object: nil,
+            queue: .main,
+            using: paint
+        )
+        sceneActivateObserver = NotificationCenter.default.addObserver(
+            forName: UIScene.didActivateNotification,
+            object: nil,
+            queue: .main,
+            using: paint
+        )
+    }
+
     private func updateCurrentTheme() {
+        applyPersistedThemeToWindows(discardPrewarmedWebViewsIfThemeChanged: true)
+    }
+
+    private func applyPersistedThemeToWindows(discardPrewarmedWebViewsIfThemeChanged: Bool) {
+        let previousScheme = currentColorScheme
+        let previousWasDark = currentTheme is osrsDarkTheme
         let resolvedColorScheme = selectedTheme == .automatic ? systemColorScheme : nil
         currentTheme = selectedTheme.theme(for: resolvedColorScheme)
         currentColorScheme = selectedTheme.colorScheme ?? systemColorScheme
-        osrsPreparedArticleWebViewStore.shared.removeAll()
+        let nowDark = currentTheme is osrsDarkTheme
+        let themeChanged = previousScheme != currentColorScheme || previousWasDark != nowDark
+        if discardPrewarmedWebViewsIfThemeChanged && themeChanged {
+            osrsPreparedArticleWebViewStore.shared.removeAll()
+        }
+        paintWindows()
+        UIApplication.refreshFloatingTabBarMaterial()
+        print("🎨 [THEME MANAGER] Theme updated: \(selectedTheme.displayName)")
+    }
+
+    private func paintWindows() {
+        let style: UIUserInterfaceStyle = currentColorScheme == .dark ? .dark : .light
+        let background = UIColor(currentTheme.background)
         UIApplication.shared.connectedScenes
             .compactMap { $0 as? UIWindowScene }
             .flatMap(\.windows)
             .forEach { window in
-                window.overrideUserInterfaceStyle = currentColorScheme == .dark ? .dark : .light
+                window.overrideUserInterfaceStyle = style
+                window.backgroundColor = background
             }
-        UIApplication.refreshFloatingTabBarMaterial()
-        print("🎨 [THEME MANAGER] Theme updated: \(selectedTheme.displayName)")
     }
     
     private func setupSystemColorSchemeObserver() {

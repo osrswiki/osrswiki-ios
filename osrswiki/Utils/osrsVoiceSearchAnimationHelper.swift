@@ -462,17 +462,21 @@ extension View {
 }
 
 private struct osrsThemedFloatingGlass<ChromeShape: Shape>: ViewModifier {
-    @Environment(\.colorScheme) private var colorScheme
+    @EnvironmentObject private var themeManager: osrsThemeManager
     let shape: ChromeShape
     let fallback: Color
+
+    private var isDark: Bool {
+        themeManager.currentColorScheme == .dark
+    }
 
     func body(content: Content) -> some View {
         if #available(iOS 26.0, *) {
             content
                 .glassEffect(.regular, in: shape)
-                .background(fallback.opacity(colorScheme == .light ? 0.88 : 0.0), in: shape)
+                .background(fallback.opacity(isDark ? 0.0 : 0.88), in: shape)
                 .clipShape(shape)
-                .id("osrs-floating-glass-\(colorScheme == .dark ? "dark" : "light")")
+                .id("osrs-floating-glass-\(isDark ? "dark" : "light")")
         } else {
             content
                 .background(fallback, in: shape)
@@ -482,18 +486,22 @@ private struct osrsThemedFloatingGlass<ChromeShape: Shape>: ViewModifier {
 }
 
 private struct osrsThemedContainerFloatingGlass<ChromeShape: InsettableShape>: ViewModifier {
-    @Environment(\.colorScheme) private var colorScheme
+    @EnvironmentObject private var themeManager: osrsThemeManager
     let shape: ChromeShape
     let fallback: Color
+
+    private var isDark: Bool {
+        themeManager.currentColorScheme == .dark
+    }
 
     func body(content: Content) -> some View {
         if #available(iOS 26.0, *) {
             content
                 .containerShape(shape)
                 .glassEffect(.regular, in: shape)
-                .background(fallback.opacity(colorScheme == .light ? 0.88 : 0.0), in: shape)
+                .background(fallback.opacity(isDark ? 0.0 : 0.88), in: shape)
                 .clipShape(shape)
-                .id("osrs-floating-glass-\(colorScheme == .dark ? "dark" : "light")")
+                .id("osrs-floating-glass-\(isDark ? "dark" : "light")")
         } else {
             content
                 .background(fallback, in: shape)

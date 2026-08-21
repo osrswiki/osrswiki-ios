@@ -9,66 +9,47 @@ struct AppearanceSettingsView: View {
     @EnvironmentObject var themeManager: osrsThemeManager
     @Environment(\.osrsTheme) private var osrsTheme
     var highlightFloorNumbering: Bool = false
+    var usesLargeTitle: Bool = true
     @State private var floorNumberingPulse = false
 
     var body: some View {
         ScrollViewReader { proxy in
             List {
-                Section("Display") {
-                    LabeledContent {
-                        Picker("Theme", selection: themeSelection) {
-                            ForEach(osrsThemeSelection.allCases, id: \.self) { theme in
-                                Text(theme.displayName).tag(theme)
-                            }
+                Section {
+                    Picker("Theme", selection: themeSelection) {
+                        ForEach(osrsThemeSelection.allCases, id: \.self) { theme in
+                            Text(theme.displayName).tag(theme)
                         }
-                        .labelsHidden()
-                        .pickerStyle(.menu)
-                        .accessibilityIdentifier("appearance_theme_picker")
-                    } label: {
-                        osrsAppearancePreferenceLabel(
-                            icon: "circle.lefthalf.filled",
-                            title: "Theme",
-                            summary: themeManager.selectedTheme.description
-                        )
                     }
-                    .listRowBackground(Color(osrsTheme.surfaceVariant))
+                    .accessibilityIdentifier("appearance_theme_picker")
+                } footer: {
+                    Text(themeManager.selectedTheme.description)
+                }
+                .listRowBackground(rowBackground)
 
-                    Toggle(isOn: collapseTables) {
-                        osrsAppearancePreferenceLabel(
-                            icon: "tablecells",
-                            title: "Collapse tables",
-                            summary: "Start article tables collapsed"
-                        )
-                    }
-                    .accessibilityIdentifier("appearance_collapse_tables_toggle")
-                    .listRowBackground(Color(osrsTheme.surfaceVariant))
+                Section {
+                    Toggle("Collapse tables", isOn: collapseTables)
+                        .accessibilityIdentifier("appearance_collapse_tables_toggle")
+                } footer: {
+                    Text("Start article tables collapsed")
+                }
+                .listRowBackground(rowBackground)
 
-                    Toggle(isOn: wrapTableCells) {
-                        osrsAppearancePreferenceLabel(
-                            icon: "text.alignleft",
-                            title: "Wrap table cells",
-                            summary: "Let table text wrap onto multiple lines"
-                        )
-                    }
-                    .accessibilityIdentifier("appearance_wrap_table_cells_toggle")
-                    .listRowBackground(Color(osrsTheme.surfaceVariant))
+                Section {
+                    Toggle("Wrap table cells", isOn: wrapTableCells)
+                        .accessibilityIdentifier("appearance_wrap_table_cells_toggle")
+                } footer: {
+                    Text("Let table text wrap onto multiple lines")
+                }
+                .listRowBackground(rowBackground)
 
-                    LabeledContent {
-                        Picker("Floor numbering", selection: floorNumberingSelection) {
-                            ForEach(osrsArticleFloorNumberingMode.allCases) { mode in
-                                Text(mode.displayName).tag(mode)
-                            }
+                Section {
+                    Picker("Floor numbering", selection: floorNumberingSelection) {
+                        ForEach(osrsArticleFloorNumberingMode.allCases) { mode in
+                            Text(mode.displayName).tag(mode)
                         }
-                        .labelsHidden()
-                        .pickerStyle(.menu)
-                        .accessibilityIdentifier("appearance_floor_numbering_picker")
-                    } label: {
-                        osrsAppearancePreferenceLabel(
-                            icon: "building.2",
-                            title: "Floor numbering",
-                            summary: themeManager.floorNumberingMode.summary
-                        )
                     }
+                    .accessibilityIdentifier("appearance_floor_numbering_picker")
                     .id("floor_numbering")
                     .transaction { $0.animation = nil }
                     .animation(nil, value: themeManager.floorNumberingMode)
@@ -77,71 +58,51 @@ struct AppearanceSettingsView: View {
                             ? Color(osrsTheme.primary).opacity(0.28)
                             : Color(osrsTheme.surfaceVariant)
                     )
-
-                    VStack(alignment: .leading, spacing: 12) {
-                        HStack(alignment: .top, spacing: 12) {
-                            osrsAppearancePreferenceLabel(
-                                icon: "textformat.size",
-                                title: "Article text size",
-                                summary: "Adjust article text without changing app controls"
-                            )
-
-                            Spacer(minLength: 8)
-
-                            Text(articleTextScaleLabel)
-                                .font(.callout.monospacedDigit())
-                                .foregroundStyle(Color(osrsTheme.secondaryTextColor))
-                                .accessibilityHidden(true)
-                        }
-
-                        Slider(
-                            value: articleTextScale,
-                            in: osrsThemeManager.articleTextScaleRange,
-                            step: 0.05
-                        ) {
-                            Text("Article text size")
-                        } minimumValueLabel: {
-                            Image(systemName: "textformat.size.smaller")
-                        } maximumValueLabel: {
-                            Image(systemName: "textformat.size.larger")
-                        }
-                        .tint(Color(osrsTheme.primary))
-                        .accessibilityIdentifier("appearance_article_text_scale")
-                        .accessibilityValue(articleTextScaleLabel)
-                    }
-                    .padding(.vertical, 4)
-                    .listRowBackground(Color(osrsTheme.surfaceVariant))
+                } footer: {
+                    Text(themeManager.floorNumberingMode.summary)
                 }
 
-                Section("Navigation") {
-                    Toggle(isOn: swipeRightToGoBack) {
-                        osrsAppearancePreferenceLabel(
-                            icon: "arrow.left",
-                            title: "Swipe right to go back",
-                            summary: "Navigate back from an article with a horizontal swipe"
-                        )
+                Section {
+                    HStack {
+                        Text("Article text size")
+                        Spacer()
+                        Text(articleTextScaleLabel)
+                            .font(.body.monospacedDigit())
+                            .foregroundStyle(Color(osrsTheme.secondaryTextColor))
+                            .accessibilityHidden(true)
                     }
-                    .accessibilityIdentifier("appearance_swipe_right_back_toggle")
-                    .listRowBackground(Color(osrsTheme.surfaceVariant))
-
-                    Toggle(isOn: swipeLeftToShowContents) {
-                        osrsAppearancePreferenceLabel(
-                            icon: "arrow.right",
-                            title: "Swipe left for contents",
-                            summary: "Open an article’s table of contents with a horizontal swipe"
-                        )
+                    Slider(
+                        value: articleTextScale,
+                        in: osrsThemeManager.articleTextScaleRange,
+                        step: 0.05
+                    ) {
+                        Text("Article text size")
                     }
-                    .accessibilityIdentifier("appearance_swipe_left_contents_toggle")
-                    .listRowBackground(Color(osrsTheme.surfaceVariant))
+                    .tint(Color(osrsTheme.primary))
+                    .accessibilityIdentifier("appearance_article_text_scale")
+                    .accessibilityValue(articleTextScaleLabel)
+                } footer: {
+                    Text("Adjust article text without changing app controls")
                 }
+                .listRowBackground(rowBackground)
+
+                Section {
+                    Toggle("Swipe right to go back", isOn: swipeRightToGoBack)
+                        .accessibilityIdentifier("appearance_swipe_right_back_toggle")
+                    Toggle("Swipe left for contents", isOn: swipeLeftToShowContents)
+                        .accessibilityIdentifier("appearance_swipe_left_contents_toggle")
+                } header: {
+                    Text("Navigation")
+                } footer: {
+                    Text("Navigate back from an article, or open its table of contents, with a horizontal swipe")
+                }
+                .listRowBackground(rowBackground)
             }
-            .listStyle(.insetGrouped)
-            .scrollContentBackground(.hidden)
-            .background(Color(osrsTheme.background))
-            .navigationTitle("Appearance")
-            .navigationBarTitleDisplayMode(.inline)
+            .osrsSettingsPage(
+                title: "Appearance",
+                titleDisplayMode: usesLargeTitle ? .large : .inline
+            )
             .accessibilityIdentifier("appearance_screen")
-            .osrsInteractiveBackSwipe()
             .onAppear {
                 guard highlightFloorNumbering else { return }
                 proxy.scrollTo("floor_numbering", anchor: .center)
@@ -156,6 +117,10 @@ struct AppearanceSettingsView: View {
                 }
             }
         }
+    }
+
+    private var rowBackground: Color {
+        Color(osrsTheme.surfaceVariant)
     }
 
     private var themeSelection: Binding<osrsThemeSelection> {
@@ -212,36 +177,6 @@ struct AppearanceSettingsView: View {
     }
 }
 
-private struct osrsAppearancePreferenceLabel: View {
-    @Environment(\.osrsTheme) private var osrsTheme
-
-    let icon: String
-    let title: String
-    let summary: String
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            Image(systemName: icon)
-                .font(.body.weight(.semibold))
-                .foregroundStyle(Color(osrsTheme.primary))
-                .frame(width: 24, height: 24)
-                .accessibilityHidden(true)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.body)
-                    .foregroundStyle(Color(osrsTheme.primaryTextColor))
-
-                Text(summary)
-                    .font(.caption)
-                    .foregroundStyle(Color(osrsTheme.secondaryTextColor))
-                    .lineLimit(2)
-                    .frame(height: 36, alignment: .topLeading)
-            }
-        }
-    }
-}
-
 #Preview {
     NavigationStack {
         AppearanceSettingsView()
@@ -257,4 +192,12 @@ private struct osrsAppearancePreferenceLabel: View {
     .environmentObject(osrsThemeManager.previewDark)
     .environment(\.osrsTheme, osrsDarkTheme())
     .preferredColorScheme(.dark)
+}
+
+#Preview("Sheet") {
+    NavigationStack {
+        AppearanceSettingsView(usesLargeTitle: false)
+    }
+    .environmentObject(osrsThemeManager.preview)
+    .environment(\.osrsTheme, osrsLightTheme())
 }

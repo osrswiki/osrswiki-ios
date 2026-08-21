@@ -253,7 +253,10 @@ private struct ArticleViewContent: View {
                 highlightFloorNumberingOnAppearance = false
             }) {
                 NavigationStack {
-                    AppearanceSettingsView(highlightFloorNumbering: highlightFloorNumberingOnAppearance)
+                    AppearanceSettingsView(
+                        highlightFloorNumbering: highlightFloorNumberingOnAppearance,
+                        usesLargeTitle: false
+                    )
                         .environmentObject(themeManager)
                         .toolbar {
                             ToolbarItem(placement: .navigationBarTrailing) {
@@ -321,6 +324,13 @@ private struct ArticleViewContent: View {
                 viewModel.navigateToInternalArticle = { url in
                     appState.routeInternalArticleLink(url, sourceArticleURL: pageUrl)
                 }
+#if DEBUG
+                if ProcessInfo.processInfo.arguments.contains("-startArticleShowAppearance") {
+                    highlightFloorNumberingOnAppearance =
+                        ProcessInfo.processInfo.arguments.contains("-highlightFloorNumberingOnAppearance")
+                    isShowingAppearanceSettings = true
+                }
+#endif
             }
             .onDisappear {
                 viewModel.navigateToInternalArticle = nil

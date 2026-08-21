@@ -22,10 +22,7 @@ struct NotificationSettingsView: View {
                 quietHoursSection
             }
         }
-        .listStyle(InsetGroupedListStyle())
-        .navigationTitle("Notifications")
-        .navigationBarTitleDisplayMode(.large)
-        .background(.osrsBackground)
+        .osrsSettingsPage(title: "Notifications")
         .onAppear {
             notificationManager.checkPermissionStatus()
         }

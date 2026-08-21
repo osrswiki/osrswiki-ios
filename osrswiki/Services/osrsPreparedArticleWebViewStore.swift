@@ -113,7 +113,7 @@ final class osrsPreparedArticleWebViewStore: NSObject, WKNavigationDelegate, WKS
         configuration.userContentController.add(self, contentWorld: .page, name: "osrsLiveAssetWarm")
         let webView = WKWebView(frame: hostBounds, configuration: configuration)
         webView.isOpaque = false
-        webView.backgroundColor = .clear
+        osrsWebViewThemePaint.apply(to: webView, usesDarkTheme: options.usesDarkTheme)
         webView.navigationDelegate = self
         webView.allowsBackForwardNavigationGestures = false
         webView.osrsPreparedDocumentKey = key.token
