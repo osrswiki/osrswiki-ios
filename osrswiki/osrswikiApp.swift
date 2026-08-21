@@ -96,60 +96,11 @@ enum osrsAppRoot {
     }
 
     static func applyGlobalTheming() {
-        let primaryColor = UIColor(themeManager.currentTheme.primary)
-
-        print("🎨 [GLOBAL THEMING] Applying comprehensive app-wide theming")
-        print("🎨 [GLOBAL THEMING] Primary color: \(primaryColor)")
-
-        UINavigationBar.appearance().tintColor = primaryColor
-        UITabBar.appearance().tintColor = primaryColor
-        UITableView.appearance().backgroundColor = UIColor(themeManager.currentTheme.background)
-        UITableViewCell.appearance().backgroundColor = UIColor(themeManager.currentTheme.surface)
-        UICollectionView.appearance().backgroundColor = UIColor(themeManager.currentTheme.background)
-
-        if #available(iOS 26.0, *) {
-            // Keep Liquid Glass, but pin scroll-edge and standard to the same
-            // clear material so Map's dark content cannot rematerialize the bar
-            // into a frosted capsule at the end of the adaptive tint.
-            UIApplication.applyStableTabBarAppearance()
-        } else {
-            let navAppearance = UINavigationBarAppearance()
-            navAppearance.configureWithOpaqueBackground()
-            navAppearance.backgroundColor = UIColor(themeManager.currentTheme.surface)
-            navAppearance.titleTextAttributes = [.foregroundColor: UIColor(themeManager.currentTheme.onSurface)]
-            navAppearance.largeTitleTextAttributes = [.foregroundColor: UIColor(themeManager.currentTheme.onSurface)]
-
-            UINavigationBar.appearance().standardAppearance = navAppearance
-            UINavigationBar.appearance().compactAppearance = navAppearance
-            UINavigationBar.appearance().scrollEdgeAppearance = navAppearance
-
-            let tabAppearance = UITabBarAppearance()
-            tabAppearance.configureWithOpaqueBackground()
-            tabAppearance.backgroundColor = UIColor(themeManager.currentTheme.surface)
-            UITabBar.appearance().standardAppearance = tabAppearance
-            UITabBar.appearance().scrollEdgeAppearance = tabAppearance
-        }
-
-        UIProgressView.appearance().tintColor = primaryColor
-        UIProgressView.appearance().trackTintColor = UIColor(themeManager.currentTheme.surfaceVariant)
-        UIActivityIndicatorView.appearance().color = primaryColor
-        UISwitch.appearance().onTintColor = primaryColor
-        UISwitch.appearance().thumbTintColor = UIColor(themeManager.currentTheme.surface)
-        UISlider.appearance().tintColor = primaryColor
-        UISlider.appearance().thumbTintColor = primaryColor
-        UISegmentedControl.appearance().selectedSegmentTintColor = primaryColor
-        UISegmentedControl.appearance().setTitleTextAttributes([
-            .foregroundColor: UIColor(themeManager.currentTheme.onPrimary)
-        ], for: .selected)
-        UISegmentedControl.appearance().setTitleTextAttributes([
-            .foregroundColor: UIColor(themeManager.currentTheme.onSurface)
-        ], for: .normal)
-        UIStepper.appearance().tintColor = primaryColor
-        UIPageControl.appearance().currentPageIndicatorTintColor = primaryColor
-        UIPageControl.appearance().pageIndicatorTintColor = UIColor(themeManager.currentTheme.surfaceVariant)
-        UISearchBar.appearance().tintColor = primaryColor
-        UIRefreshControl.appearance().tintColor = primaryColor
-
-        print("🎨 [GLOBAL THEMING] Comprehensive theming applied to all UI components")
+        print("🎨 [GLOBAL THEMING] Applying live window and control theming")
+        osrsLiveThemeApplier.apply(
+            themeManager.currentTheme,
+            colorScheme: themeManager.currentColorScheme
+        )
+        print("🎨 [GLOBAL THEMING] Live theming applied to connected windows")
     }
 }

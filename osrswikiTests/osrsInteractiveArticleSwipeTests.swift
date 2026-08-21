@@ -187,7 +187,7 @@ final class osrsInteractiveArticleSwipeTests: XCTestCase {
         )
     }
 
-    func testBackSwipeSnapshotsTheArticlePageInsteadOfTheKeyWindow() throws {
+    func testBackSwipeKeepsThePreviousPageLiveInsteadOfADestinationBitmap() throws {
         var root = URL(fileURLWithPath: #filePath)
         while root.pathComponents.count > 1,
               !FileManager.default.fileExists(atPath: root.appendingPathComponent("AGENTS.md").path) {
@@ -201,6 +201,26 @@ final class osrsInteractiveArticleSwipeTests: XCTestCase {
         )
         XCTAssertTrue(source.contains("sliding.snapshotView(afterScreenUpdates: false)"))
         XCTAssertFalse(source.contains("window.snapshotView(afterScreenUpdates: false)"))
-        XCTAssertTrue(source.contains("Liquid Glass"))
+        XCTAssertTrue(source.contains("livePreviousPageView"))
+        XCTAssertTrue(source.contains("restoreLivePreviousPage"))
+    }
+
+    func testLivePreviousPageViewIsTheControllerUnderTheTopOfTheStack() {
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        let first = UIViewController()
+        first.view.backgroundColor = .red
+        let second = UIViewController()
+        second.view.backgroundColor = .blue
+        let navigation = UINavigationController(rootViewController: first)
+        navigation.pushViewController(second, animated: false)
+        window.rootViewController = navigation
+        window.makeKeyAndVisible()
+        window.layoutIfNeeded()
+        navigation.view.layoutIfNeeded()
+        _ = second.view.window
+
+        let live = osrsInteractiveArticleSwipe.livePreviousPageView(from: second.view)
+        XCTAssertTrue(live === first.view)
+        XCTAssertNil(osrsInteractiveArticleSwipe.livePreviousPageView(from: first.view))
     }
 }

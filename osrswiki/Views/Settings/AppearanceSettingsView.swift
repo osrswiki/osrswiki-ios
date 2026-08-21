@@ -22,6 +22,9 @@ struct AppearanceSettingsView: View {
                         }
                     }
                     .accessibilityIdentifier("appearance_theme_picker")
+                } header: {
+                    Text("Display")
+                        .foregroundStyle(Color(osrsTheme.secondaryTextColor))
                 } footer: {
                     Text(themeManager.selectedTheme.description)
                         .foregroundStyle(Color(osrsTheme.secondaryTextColor))

@@ -141,6 +141,10 @@ final class osrsInteractiveArticleSwipe {
     private weak var slidingView: UIView?
     private var previousSnapshot: UIView?
     private var dimmingView: UIView?
+    private weak var livePreviousView: UIView?
+    private weak var livePreviousOriginalSuperview: UIView?
+    private var livePreviousOriginalFrame: CGRect = .zero
+    private var livePreviousOriginalIndex: Int?
 
     func begin(from view: UIView, contentsOpen: Bool = false) {
         isCommitSettling = false
@@ -474,6 +478,7 @@ final class osrsInteractiveArticleSwipe {
     }
 
     private func removePreviewViews() {
+        restoreLivePreviousPage()
         slidingSnapshot?.removeFromSuperview()
         previousSnapshot?.removeFromSuperview()
         dimmingView?.removeFromSuperview()
@@ -483,6 +488,43 @@ final class osrsInteractiveArticleSwipe {
         dimmingView = nil
         chromeHost = nil
         hiddenSlidingView = nil
+    }
+
+    /// Keep the previous navigation destination mounted as a live view behind the
+    /// outgoing snapshot. Bitmaps of the destination go stale after a theme change.
+    static func livePreviousPageView(from view: UIView) -> UIView? {
+        guard let navigationController = navigationController(from: view),
+              navigationController.viewControllers.count >= 2,
+              let sliding = slidingView(from: view) else {
+            return nil
+        }
+        guard view === sliding || view.isDescendant(of: sliding) else {
+            return nil
+        }
+        let previous = navigationController.viewControllers[navigationController.viewControllers.count - 2]
+        previous.loadViewIfNeeded()
+        let live = previous.view
+        if live === sliding {
+            return nil
+        }
+        return live
+    }
+
+    private func restoreLivePreviousPage() {
+        guard let live = livePreviousView else { return }
+        if let originalSuperview = livePreviousOriginalSuperview {
+            let insertionIndex = min(
+                livePreviousOriginalIndex ?? originalSuperview.subviews.count,
+                originalSuperview.subviews.count
+            )
+            originalSuperview.insertSubview(live, at: insertionIndex)
+            live.frame = livePreviousOriginalFrame
+        } else if live.superview === chromeHost {
+            live.removeFromSuperview()
+        }
+        livePreviousView = nil
+        livePreviousOriginalSuperview = nil
+        livePreviousOriginalIndex = nil
     }
 
     private func installBackPreview(from view: UIView) {
@@ -496,6 +538,18 @@ final class osrsInteractiveArticleSwipe {
         chrome.backgroundColor = .clear
         chrome.isOpaque = false
         chrome.accessibilityIdentifier = "article_back_swipe_chrome"
+
+        if let live = Self.livePreviousPageView(from: sliding) {
+            livePreviousOriginalSuperview = live.superview
+            livePreviousOriginalIndex = live.superview?.subviews.firstIndex(of: live)
+            livePreviousOriginalFrame = live.frame
+            live.isHidden = false
+            live.alpha = 1
+            chrome.addSubview(live)
+            live.frame = chrome.bounds
+            live.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+            livePreviousView = live
+        }
 
         let dimming = UIView(frame: window.bounds)
         dimming.backgroundColor = .black

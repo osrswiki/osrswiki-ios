@@ -33,16 +33,8 @@ struct FeedbackView: View {
             Color.clear.frame(height: 64)
         }
         .accessibilityIdentifier("feedback_screen")
-        .navigationTitle("Send Feedback")
-        .navigationBarTitleDisplayMode(.inline)
         .background(.osrsBackground)
-        .osrsInteractiveBackSwipe()
-        .onAppear {
-            updateNavigationBarAppearance()
-        }
-        .onChange(of: themeManager.selectedTheme) { oldValue, newValue in
-            updateNavigationBarAppearance()
-        }
+        .osrsMoreDestinationChrome(title: "Send Feedback")
         .sheet(isPresented: $showingBugReportForm) {
             osrsFeedbackFormView(
                 feedbackType: .bug,
@@ -83,58 +75,42 @@ struct FeedbackView: View {
         }
     }
 
-    private var headerSection: some View {
-        Text("Help & Feedback")
-            .font(.title)
-            .fontWeight(.bold)
-            .foregroundStyle(.osrsPrimaryTextColor)
-            .frame(maxWidth: .infinity)
-            .multilineTextAlignment(.center)
-            .padding(.bottom, 8)
-    }
-
-    // MARK: - Feedback Cards (Android Design Parity)
+    // MARK: - Feedback rows (link is the affordance)
 
     private var rateAppCard: some View {
-        VStack {
-            osrsFeedbackCardView(
-                title: "Rate This App",
-                description: "Love our app? Rate it on the App Store to help others discover it!",
-                buttonText: "Rate App",
-                buttonIcon: "arrow.up.right",
-                action: {
-                    openAppStore()
-                }
-            )
-        }
+        osrsFeedbackCardView(
+            title: "Rate This App",
+            description: "Love our app? Rate it on the App Store to help others discover it!",
+            buttonText: "Rate App",
+            buttonIcon: "arrow.up.right",
+            action: {
+                openAppStore()
+            }
+        )
     }
 
     private var reportIssueCard: some View {
-        VStack {
-            osrsFeedbackCardView(
-                title: "Report an Issue",
-                description: "Found a bug or something not working correctly? Let us know!",
-                buttonText: "Report Issue",
-                buttonIcon: "ant.fill",
-                action: {
-                    showingBugReportForm = true
-                }
-            )
-        }
+        osrsFeedbackCardView(
+            title: "Report an Issue",
+            description: "Found a bug or something not working correctly? Let us know!",
+            buttonText: "Report Issue",
+            buttonIcon: "ant.fill",
+            action: {
+                showingBugReportForm = true
+            }
+        )
     }
 
     private var requestFeatureCard: some View {
-        VStack {
-            osrsFeedbackCardView(
-                title: "Request a Feature",
-                description: "Have an idea for a new feature or improvement? Share it with us!",
-                buttonText: "Request Feature",
-                buttonIcon: "lightbulb.fill",
-                action: {
-                    showingFeatureRequestForm = true
-                }
-            )
-        }
+        osrsFeedbackCardView(
+            title: "Request a Feature",
+            description: "Have an idea for a new feature or improvement? Share it with us!",
+            buttonText: "Request Feature",
+            buttonIcon: "lightbulb.fill",
+            action: {
+                showingFeatureRequestForm = true
+            }
+        )
     }
 
     // MARK: - Actions
@@ -150,60 +126,6 @@ struct FeedbackView: View {
 
         AppStore.requestReview(in: windowScene)
     }
-
-    /// Direct UIKit navigation bar theming to match AppearanceSettingsView
-    private func updateNavigationBarAppearance() {
-        DispatchQueue.main.async {
-            guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-                  let window = windowScene.windows.first,
-                  let navigationController = findNavigationController(in: window.rootViewController) else {
-                return
-            }
-
-            let currentTheme = themeManager.currentTheme
-            if #available(iOS 26.0, *) {
-                navigationController.navigationBar.tintColor = UIColor(currentTheme.primary)
-                navigationController.overrideUserInterfaceStyle = themeManager.currentColorScheme == .dark ? .dark : .light
-                return
-            }
-
-            let appearance = UINavigationBarAppearance()
-            appearance.configureWithOpaqueBackground()
-
-            // Apply theme colors directly (matching AppearanceSettingsView)
-            appearance.backgroundColor = UIColor(currentTheme.surface)
-            appearance.titleTextAttributes = [.foregroundColor: UIColor(currentTheme.onSurface)]
-            appearance.largeTitleTextAttributes = [.foregroundColor: UIColor(currentTheme.onSurface)]
-
-            // Apply to navigation bar
-            navigationController.navigationBar.standardAppearance = appearance
-            navigationController.navigationBar.compactAppearance = appearance
-            navigationController.navigationBar.scrollEdgeAppearance = appearance
-
-            // Set tint color for back buttons and navigation items
-            navigationController.navigationBar.tintColor = UIColor(currentTheme.primary)
-
-            // Update color scheme for status bar and buttons
-            navigationController.overrideUserInterfaceStyle = themeManager.currentColorScheme == .dark ? .dark : .light
-
-            print("📱 Applied UIKit navigation bar theming to FeedbackView: \(themeManager.selectedTheme)")
-        }
-    }
-
-    /// Helper to find the navigation controller in the view hierarchy
-    private func findNavigationController(in viewController: UIViewController?) -> UINavigationController? {
-        if let navigationController = viewController as? UINavigationController {
-            return navigationController
-        }
-
-        for child in viewController?.children ?? [] {
-            if let found = findNavigationController(in: child) {
-                return found
-            }
-        }
-
-        return nil
-    }
 }
 
 // MARK: - Reusable Card Component (Android Design Parity)
@@ -218,39 +140,30 @@ struct osrsFeedbackCardView: View {
     @Environment(\.osrsTheme) var osrsTheme
 
     var body: some View {
-        Button(action: action) {
-            VStack(alignment: .leading, spacing: 20) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(title)
-                        .font(.headline)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(.osrsPrimaryTextColor)
+        VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(title)
+                    .font(.headline)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.osrsPrimaryTextColor)
 
-                    Text(description)
-                        .font(.body)
-                        .foregroundStyle(.osrsPrimaryTextColor)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-
-                HStack(spacing: 8) {
-                    Image(systemName: buttonIcon)
-                    Text(buttonText)
-                    Spacer()
-                    Image(systemName: "chevron.right")
-                        .font(.caption.weight(.semibold))
-                }
-                .font(.callout)
-                .fontWeight(.medium)
-                .foregroundStyle(.osrsPrimary)
-                .frame(minHeight: 44)
+                Text(description)
+                    .font(.body)
+                    .foregroundStyle(.osrsPrimaryTextColor)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            .padding(20)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(.osrsSurfaceVariant)
-            .cornerRadius(12)
-            .contentShape(Rectangle())
+
+            osrsOutboundLinkRow(
+                title: buttonText,
+                systemImage: buttonIcon,
+                alignment: .leading,
+                action: action
+            )
         }
-        .buttonStyle(.plain)
+        .padding(20)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.osrsSurfaceVariant)
+        .cornerRadius(12)
     }
 }
 

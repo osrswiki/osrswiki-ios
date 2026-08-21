@@ -48,39 +48,26 @@ struct DonateView: View {
             Color.clear.frame(height: 64)
         }
         .accessibilityIdentifier("donate_screen")
-        .navigationTitle("Donate")
-        .navigationBarTitleDisplayMode(.inline)
         .background(.osrsBackground)
-        .osrsInteractiveBackSwipe()
+        .osrsMoreDestinationChrome(title: "Donate")
         .onAppear {
-            updateNavigationBarAppearance()
             donationManager.loadProducts()
-        }
-        .onChange(of: themeManager.selectedTheme) { oldValue, newValue in
-            updateNavigationBarAppearance()
         }
     }
     
     private var headerSection: some View {
         VStack(spacing: isCompactVerticalLayout ? 8 : 16) {
-            if !isCompactVerticalLayout {
-                Image(systemName: "heart.fill")
-                    .font(.system(size: 48))
-                    .foregroundStyle(.osrsError)
-            }
-
-            Text("Support OSRS Wiki")
-                .font(isCompactVerticalLayout ? .headline : .title)
-                .fontWeight(.bold)
+            Text("This app is free. Nothing is locked behind a donation.")
+                .font(.body)
                 .foregroundStyle(.osrsPrimaryTextColor)
+                .multilineTextAlignment(.center)
+                .lineLimit(nil)
 
-            if !isCompactVerticalLayout {
-                Text("If you get value of this app, please consider donating! Your support helps us pay for the $99 developer fee that allows us to make the app available on the App Store. It also allows us to continue improving the app for the OSRS community.")
-                    .font(.body)
-                    .foregroundStyle(.osrsPrimaryTextColor)
-                    .multilineTextAlignment(.center)
-                    .lineLimit(nil)
-            }
+            Text("If you want to help, it goes to fees I pay to put this app in the App Store and the time it takes to keep the app working.")
+                .font(.body)
+                .foregroundStyle(.osrsPrimaryTextColor)
+                .multilineTextAlignment(.center)
+                .lineLimit(nil)
         }
     }
     
@@ -219,31 +206,12 @@ struct DonateView: View {
             Divider()
             
             VStack(spacing: 12) {
-                Text("Support the Wiki Too!")
-                    .font(.title2)
-                    .fontWeight(.bold)
-                    .foregroundStyle(.osrsPrimaryTextColor)
-                
-                Text("The Old School RuneScape Wiki is maintained by volunteers. Consider supporting them too!")
+                Text("The Old School RuneScape Wiki is run by volunteers. Support them too if you can.")
                     .font(.body)
                     .foregroundStyle(.osrsPrimaryTextColor)
                     .multilineTextAlignment(.center)
-                
-                Button(action: {
-                    openWikiDonation()
-                }) {
-                    HStack {
-                        Text("Donate to Wiki")
-                        Image(systemName: "arrow.up.right")
-                    }
-                    .font(.headline)
-                    .foregroundStyle(.osrsPrimary)
-                    .padding()
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(.osrsOutline, lineWidth: 2)
-                    )
-                }
+
+                osrsOutboundLinkRow(title: "Donate to Wiki", action: openWikiDonation)
             }
         }
     }
@@ -345,60 +313,6 @@ struct DonateView: View {
     
     private func openWikiDonation() {
         UIApplication.shared.open(osrsDonationDestinations.wikiSupportURL)
-    }
-    
-    /// Direct UIKit navigation bar theming to match AppearanceSettingsView
-    private func updateNavigationBarAppearance() {
-        DispatchQueue.main.async {
-            guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-                  let window = windowScene.windows.first,
-                  let navigationController = findNavigationController(in: window.rootViewController) else {
-                return
-            }
-
-            let currentTheme = themeManager.currentTheme
-            if #available(iOS 26.0, *) {
-                navigationController.navigationBar.tintColor = UIColor(currentTheme.primary)
-                navigationController.overrideUserInterfaceStyle = themeManager.currentColorScheme == .dark ? .dark : .light
-                return
-            }
-            
-            let appearance = UINavigationBarAppearance()
-            appearance.configureWithOpaqueBackground()
-            
-            // Apply theme colors directly (matching AppearanceSettingsView)
-            appearance.backgroundColor = UIColor(currentTheme.surface)
-            appearance.titleTextAttributes = [.foregroundColor: UIColor(currentTheme.onSurface)]
-            appearance.largeTitleTextAttributes = [.foregroundColor: UIColor(currentTheme.onSurface)]
-            
-            // Apply to navigation bar
-            navigationController.navigationBar.standardAppearance = appearance
-            navigationController.navigationBar.compactAppearance = appearance
-            navigationController.navigationBar.scrollEdgeAppearance = appearance
-            
-            // Set tint color for back buttons and navigation items
-            navigationController.navigationBar.tintColor = UIColor(currentTheme.primary)
-            
-            // Update color scheme for status bar and buttons
-            navigationController.overrideUserInterfaceStyle = themeManager.currentColorScheme == .dark ? .dark : .light
-            
-            print("📱 Applied UIKit navigation bar theming to DonateView: \(themeManager.selectedTheme)")
-        }
-    }
-    
-    /// Helper to find the navigation controller in the view hierarchy
-    private func findNavigationController(in viewController: UIViewController?) -> UINavigationController? {
-        if let navigationController = viewController as? UINavigationController {
-            return navigationController
-        }
-        
-        for child in viewController?.children ?? [] {
-            if let found = findNavigationController(in: child) {
-                return found
-            }
-        }
-        
-        return nil
     }
 }
 

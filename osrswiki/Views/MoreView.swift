@@ -106,71 +106,27 @@ struct MoreView: View {
                     .environment(\.osrsTheme, osrsTheme)
                 }
             }
-            // Hybrid Approach: NavigationStack for context, UIKit theming for reliability
             .onAppear {
-                updateNavigationBarAppearance()
+                osrsLiveThemeApplier.apply(
+                    themeManager.currentTheme,
+                    colorScheme: themeManager.currentColorScheme
+                )
             }
-            .onChange(of: themeManager.selectedTheme) { oldValue, newValue in
-                print("🔄 MoreView: Theme changed from \(oldValue) to \(newValue) - applying UIKit navigation bar theming")
-                updateNavigationBarAppearance()
+            .onChange(of: themeManager.selectedTheme) { _, _ in
+                osrsLiveThemeApplier.apply(
+                    themeManager.currentTheme,
+                    colorScheme: themeManager.currentColorScheme
+                )
+            }
+            .onChange(of: themeManager.currentTheme.primary) { _, _ in
+                osrsLiveThemeApplier.apply(
+                    themeManager.currentTheme,
+                    colorScheme: themeManager.currentColorScheme
+                )
             }
         }
         .osrsResumedNavigationHost(appState.navigationHostGeneration)
         // No view recreation - maintains navigation state
-    }
-    
-    /// Direct UIKit navigation bar theming to bypass SwiftUI limitations
-    private func updateNavigationBarAppearance() {
-        DispatchQueue.main.async {
-            guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-                  let window = windowScene.windows.first,
-                  let navigationController = findNavigationController(in: window.rootViewController) else {
-                return
-            }
-
-            let currentTheme = themeManager.currentTheme
-            if #available(iOS 26.0, *) {
-                navigationController.navigationBar.tintColor = UIColor(currentTheme.primary)
-                navigationController.overrideUserInterfaceStyle = themeManager.currentColorScheme == .dark ? .dark : .light
-                return
-            }
-            
-            let appearance = UINavigationBarAppearance()
-            appearance.configureWithOpaqueBackground()
-            
-            // Apply theme colors directly
-            appearance.backgroundColor = UIColor(currentTheme.surface)
-            appearance.titleTextAttributes = [.foregroundColor: UIColor(currentTheme.onSurface)]
-            appearance.largeTitleTextAttributes = [.foregroundColor: UIColor(currentTheme.onSurface)]
-            
-            // Apply to navigation bar
-            navigationController.navigationBar.standardAppearance = appearance
-            navigationController.navigationBar.compactAppearance = appearance
-            navigationController.navigationBar.scrollEdgeAppearance = appearance
-            
-            // Set tint color for back buttons and navigation items
-            navigationController.navigationBar.tintColor = UIColor(currentTheme.primary)
-            
-            // Update color scheme for status bar and buttons
-            navigationController.overrideUserInterfaceStyle = themeManager.currentColorScheme == .dark ? .dark : .light
-            
-            print("📱 Applied UIKit navigation bar theming to MoreView: \(themeManager.selectedTheme)")
-        }
-    }
-    
-    /// Helper to find the navigation controller in the view hierarchy
-    private func findNavigationController(in viewController: UIViewController?) -> UINavigationController? {
-        if let navigationController = viewController as? UINavigationController {
-            return navigationController
-        }
-        
-        for child in viewController?.children ?? [] {
-            if let found = findNavigationController(in: child) {
-                return found
-            }
-        }
-        
-        return nil
     }
 }
 

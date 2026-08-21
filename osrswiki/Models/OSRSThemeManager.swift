@@ -358,6 +358,7 @@ class osrsThemeManager: ObservableObject {
             osrsPreparedArticleWebViewStore.shared.removeAll()
         }
         paintWindows()
+        osrsLiveThemeApplier.apply(currentTheme, colorScheme: currentColorScheme)
         UIApplication.refreshFloatingTabBarMaterial()
         print("🎨 [THEME MANAGER] Theme updated: \(selectedTheme.displayName)")
     }
@@ -386,8 +387,8 @@ class osrsThemeManager: ObservableObject {
         // The updateSystemColorScheme method handles the actual updates
     }
     
-    // Note: Navigation bar and control theming is now handled globally in osrswikiApp.swift
-    // This eliminates the whack-a-mole problem by applying theming at the app root level
+    // Control theming walks live windows in osrsLiveThemeApplier. Appearance
+    // proxies alone cannot retint already-mounted UISwitch / UISlider instances.
 }
 
 // MARK: - WebView Integration
