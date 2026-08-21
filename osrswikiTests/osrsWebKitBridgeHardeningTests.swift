@@ -584,6 +584,8 @@ final class osrsWebKitBridgeHardeningTests: XCTestCase {
         XCTAssertTrue(youtubePlayer.contains("scenePhase"))
         XCTAssertTrue(youtubePlayer.contains("osrsYouTubeEmbed.playerRequest"))
         XCTAssertTrue(viewModel.contains("webViewWebContentProcessDidTerminate"))
+        XCTAssertTrue(viewModel.contains("osrsWebViewThemePaint.noteWebContentProcessTerminated"))
+        XCTAssertTrue(articleView.contains("osrsWebViewThemePaint.apply(to: webView, theme: osrsTheme)"))
         XCTAssertTrue(viewModel.contains("pendingYouTubeEmbedURL"))
         XCTAssertTrue(appState.contains("osrs.articleScrollOffsets"))
         XCTAssertTrue(appState.contains("persistArticleScrollOffsets"))

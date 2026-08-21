@@ -133,9 +133,10 @@ final class osrsInteractiveArticleSwipe {
 
     private(set) var lastAxis: osrsInteractiveArticleSwipeAxis?
     private var isCommitSettling = false
-    private var chromeHost: UIView?
+    private var chromeHost: osrsLiveBackChromeView?
     private var slidingSnapshot: UIView?
     private var hiddenSlidingView: UIView?
+    private var slidingRestMinX: CGFloat = 0
 
     private weak var slidingView: UIView?
     private var previousSnapshot: UIView?
@@ -214,10 +215,7 @@ final class osrsInteractiveArticleSwipe {
             backProgress = min(1, x / width)
             let moving = slidingSnapshot ?? slidingView
             moving?.transform = CGAffineTransform(translationX: x, y: 0)
-            previousSnapshot?.transform = CGAffineTransform(
-                translationX: (x - width) * Self.backPreviewParallax,
-                y: 0
-            )
+            chromeHost?.slidingMinX = slidingRestMinX + x
             dimmingView?.alpha = 0.22 * (1 - backProgress)
         case .contents:
             contentsProgress = Self.contentsProgress(
@@ -329,9 +327,8 @@ final class osrsInteractiveArticleSwipe {
         commitBackImmediately(velocity: velocity, pop: completion)
     }
 
-    /// Keep a window-level snapshot of the previous page under a snapshot of the
-    /// outgoing page, then pop immediately. NavigationStack can go black during
-    /// an incomplete push; the window chrome stays stable until the settle ends.
+    /// Translate only the outgoing article snapshot. The previous NavigationStack
+    /// page stays live and hittable in the revealed strip.
     func commitBackImmediately(velocity: CGPoint, pop: @escaping () -> Void) {
         guard slidingView != nil || slidingSnapshot != nil else {
             pop()
@@ -384,6 +381,7 @@ final class osrsInteractiveArticleSwipe {
         )
         animator.addAnimations {
             overlay.transform = CGAffineTransform(translationX: width, y: 0)
+            self.chromeHost?.slidingMinX = self.slidingRestMinX + width
             self.dimmingView?.alpha = 0
         }
         animator.addCompletion { _ in
@@ -407,6 +405,7 @@ final class osrsInteractiveArticleSwipe {
         let reset = {
             moving?.transform = .identity
             snapshot?.transform = .identity
+            self.chromeHost?.slidingMinX = self.slidingRestMinX
             dimming?.alpha = 0
         }
         if animated, let moving {
@@ -491,14 +490,12 @@ final class osrsInteractiveArticleSwipe {
               let sliding = slidingView,
               let window = sliding.window ?? Self.keyWindow() else { return }
 
-        let chrome = UIView(frame: window.bounds)
-        chrome.isUserInteractionEnabled = false
+        let chrome = osrsLiveBackChromeView(frame: window.bounds)
+        chrome.isUserInteractionEnabled = true
         chrome.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        chrome.backgroundColor = chromeColor
-        chrome.isOpaque = true
+        chrome.backgroundColor = .clear
+        chrome.isOpaque = false
         chrome.accessibilityIdentifier = "article_back_swipe_chrome"
-
-        let destination = makeDestinationPreview(in: window.bounds)
 
         let dimming = UIView(frame: window.bounds)
         dimming.backgroundColor = .black
@@ -506,9 +503,6 @@ final class osrsInteractiveArticleSwipe {
         dimming.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         dimming.isUserInteractionEnabled = false
 
-        // Snapshot the article page only. The live overlay bottom bar translates
-        // with the swipe; a window snapshot cannot capture iOS 26 Liquid Glass
-        // and hiding that bar made it vanish on the first pixel of movement.
         var currentFrame = sliding.convert(sliding.bounds, to: window)
         currentFrame.origin.x -= sliding.transform.tx
         currentFrame.origin.y -= sliding.transform.ty
@@ -520,7 +514,7 @@ final class osrsInteractiveArticleSwipe {
         current.frame = currentFrame
         current.isUserInteractionEnabled = false
 
-        chrome.addSubview(destination)
+        chrome.slidingMinX = currentFrame.minX
         chrome.addSubview(dimming)
         chrome.addSubview(current)
         window.addSubview(chrome)
@@ -528,25 +522,10 @@ final class osrsInteractiveArticleSwipe {
         sliding.alpha = 0
         hiddenSlidingView = sliding
         chromeHost = chrome
-        previousSnapshot = destination
+        previousSnapshot = nil
         dimmingView = dimming
         slidingSnapshot = current
-    }
-
-    private func makeDestinationPreview(in bounds: CGRect) -> UIView {
-        if let image = Self.currentBackPreviewImage(), !Self.isUniformBlackFlash(image) {
-            let imageView = UIImageView(image: image)
-            imageView.contentMode = .scaleToFill
-            imageView.frame = bounds
-            imageView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-            imageView.isUserInteractionEnabled = false
-            return imageView
-        }
-        let fallback = UIView(frame: bounds)
-        fallback.backgroundColor = chromeColor
-        fallback.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        fallback.isUserInteractionEnabled = false
-        return fallback
+        slidingRestMinX = currentFrame.minX
     }
 
     static func slidingView(from view: UIView) -> UIView? {
@@ -571,6 +550,17 @@ final class osrsInteractiveArticleSwipe {
             responder = current.next
         }
         return nil
+    }
+}
+
+private final class osrsLiveBackChromeView: UIView {
+    var slidingMinX: CGFloat = 0
+
+    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        if point.x < slidingMinX {
+            return nil
+        }
+        return super.hitTest(point, with: event)
     }
 }
 

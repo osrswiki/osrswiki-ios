@@ -3912,6 +3912,7 @@ extension ArticleViewModel: WKNavigationDelegate {
     }
 
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+        osrsWebViewThemePaint.noteWebContentProcessTerminated(webView)
         print("⚠️ ArticleViewModel: Web content process terminated; requesting article recovery")
         adoptedPreRenderedDocument = false
         forceNextDocumentReload = true

@@ -9,6 +9,7 @@ struct osrsMapLibreView: View {
     @State private var hasPresentedInitialMap = false
     @State private var bearing = 0.0
     @State private var selectorPresented = false
+    @State private var selectorKeyboardHeight: CGFloat = 0
     @Environment(\.osrsTheme) private var osrsTheme
 
     var body: some View {
@@ -19,7 +20,9 @@ struct osrsMapLibreView: View {
                 bearing: $bearing,
                 mapController: mapController
             )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .ignoresSafeArea()
+            .ignoresSafeArea(.keyboard)
 
             if let error = store.errorMessage {
                 Text(error)
@@ -87,10 +90,23 @@ struct osrsMapLibreView: View {
                         .frame(height: min(440, geometry.size.height * 0.52))
                         .padding(.horizontal, 16)
                         .padding(.top, 4)
+                        .padding(.bottom, max(selectorKeyboardHeight, 0))
                     }
+                    .frame(width: geometry.size.width, height: geometry.size.height, alignment: .top)
                 }
+                .allowsHitTesting(true)
                 .transition(.opacity)
             }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .ignoresSafeArea(.keyboard)
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { notification in
+            let frame = (notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect) ?? .zero
+            let overlap = max(0, UIScreen.main.bounds.maxY - frame.minY)
+            selectorKeyboardHeight = overlap
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+            selectorKeyboardHeight = 0
         }
         .onChange(of: isMapReady) { _, ready in
             if ready { hasPresentedInitialMap = true }

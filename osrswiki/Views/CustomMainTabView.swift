@@ -179,7 +179,7 @@ struct CustomMainTabView: View {
             nativeTab(NewsView(), item: .news)
             nativeTab(SavedPagesView(), item: .saved)
             nativeTab(SearchView(), item: .search)
-            nativeTab(MapView(), item: .map)
+            nativeTab(MapView().ignoresSafeArea(edges: .bottom), item: .map)
             nativeTab(MoreView(), item: .more)
         }
         .tint(Color(themeManager.currentTheme.primary))
@@ -190,15 +190,13 @@ struct CustomMainTabView: View {
         // Minimize retints the glass as it settles, which snaps the map-tab bar
         // at the end of the darkening. Keep a stable floating bar.
         .tabBarMinimizeBehavior(.never)
+        // Keep the map canvas full-bleed. An opaque `.visible` tab-bar plate
+        // punched a parchment/white hole through the bottom fifth of light Map.
+        // Capsule contrast still comes from `tabBarOpaqueFill` on UITabBar.
+        .toolbarBackground(Color.clear, for: .tabBar)
         .toolbarBackground(
             (appState.selectedTab == .map && themeManager.currentTheme is osrsLightTheme)
-                ? Color(themeManager.currentTheme.surface)
-                : Color.clear,
-            for: .tabBar
-        )
-        .toolbarBackground(
-            (appState.selectedTab == .map && themeManager.currentTheme is osrsLightTheme)
-                ? .visible
+                ? .hidden
                 : .automatic,
             for: .tabBar
         )

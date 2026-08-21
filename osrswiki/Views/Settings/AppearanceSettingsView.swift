@@ -9,7 +9,7 @@ struct AppearanceSettingsView: View {
     @EnvironmentObject var themeManager: osrsThemeManager
     @Environment(\.osrsTheme) private var osrsTheme
     var highlightFloorNumbering: Bool = false
-    var usesLargeTitle: Bool = true
+    var usesLargeTitle: Bool = false
     @State private var floorNumberingPulse = false
 
     var body: some View {
@@ -24,6 +24,7 @@ struct AppearanceSettingsView: View {
                     .accessibilityIdentifier("appearance_theme_picker")
                 } footer: {
                     Text(themeManager.selectedTheme.description)
+                        .foregroundStyle(Color(osrsTheme.secondaryTextColor))
                 }
                 .listRowBackground(rowBackground)
 
@@ -32,6 +33,7 @@ struct AppearanceSettingsView: View {
                         .accessibilityIdentifier("appearance_collapse_tables_toggle")
                 } footer: {
                     Text("Start article tables collapsed")
+                        .foregroundStyle(Color(osrsTheme.secondaryTextColor))
                 }
                 .listRowBackground(rowBackground)
 
@@ -40,6 +42,7 @@ struct AppearanceSettingsView: View {
                         .accessibilityIdentifier("appearance_wrap_table_cells_toggle")
                 } footer: {
                     Text("Let table text wrap onto multiple lines")
+                        .foregroundStyle(Color(osrsTheme.secondaryTextColor))
                 }
                 .listRowBackground(rowBackground)
 
@@ -60,6 +63,7 @@ struct AppearanceSettingsView: View {
                     )
                 } footer: {
                     Text(themeManager.floorNumberingMode.summary)
+                        .foregroundStyle(Color(osrsTheme.secondaryTextColor))
                 }
 
                 Section {
@@ -83,6 +87,7 @@ struct AppearanceSettingsView: View {
                     .accessibilityValue(articleTextScaleLabel)
                 } footer: {
                     Text("Adjust article text without changing app controls")
+                        .foregroundStyle(Color(osrsTheme.secondaryTextColor))
                 }
                 .listRowBackground(rowBackground)
 
@@ -93,8 +98,10 @@ struct AppearanceSettingsView: View {
                         .accessibilityIdentifier("appearance_swipe_left_contents_toggle")
                 } header: {
                     Text("Navigation")
+                        .foregroundStyle(Color(osrsTheme.secondaryTextColor))
                 } footer: {
                     Text("Navigate back from an article, or open its table of contents, with a horizontal swipe")
+                        .foregroundStyle(Color(osrsTheme.secondaryTextColor))
                 }
                 .listRowBackground(rowBackground)
             }

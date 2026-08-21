@@ -60,23 +60,19 @@ extension UIApplication {
         // Pin scroll-edge and standard appearances to the same material so
         // iOS 26 cannot rematerialize from clear → frosted when the sampled
         // background crosses a luminance threshold (the map-tab snap).
+        // Never use an opaque non-translucent bar: that insets TabView
+        // content and leaves a white hole above the floating capsule.
         let appearance = UITabBarAppearance()
-        if let opaqueFill {
-            appearance.configureWithOpaqueBackground()
-            appearance.backgroundEffect = nil
-            appearance.backgroundColor = opaqueFill
-        } else {
-            appearance.configureWithTransparentBackground()
-            appearance.backgroundEffect = nil
-            appearance.backgroundColor = .clear
-        }
+        appearance.configureWithTransparentBackground()
+        appearance.backgroundEffect = nil
+        appearance.backgroundColor = opaqueFill
         appearance.shadowColor = .clear
         UITabBar.appearance().standardAppearance = appearance
         UITabBar.appearance().scrollEdgeAppearance = appearance
         for bar in floatingTabBars() {
             bar.standardAppearance = appearance
             bar.scrollEdgeAppearance = appearance
-            bar.isTranslucent = opaqueFill == nil
+            bar.isTranslucent = true
         }
     }
 

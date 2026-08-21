@@ -16,8 +16,10 @@ struct osrsDownloadSettingsView: View {
                 .accessibilityIdentifier("downloads_update_policy_picker")
             } header: {
                 Text("Saved pages")
+                    .foregroundStyle(Color(osrsTheme.secondaryTextColor))
             } footer: {
                 Text(settings.updatePolicy.summary)
+                    .foregroundStyle(Color(osrsTheme.secondaryTextColor))
             }
             .listRowBackground(Color(osrsTheme.surfaceVariant))
 
@@ -30,6 +32,7 @@ struct osrsDownloadSettingsView: View {
                 .accessibilityIdentifier("downloads_network_picker")
             } footer: {
                 Text(settings.downloadNetwork.summary)
+                    .foregroundStyle(Color(osrsTheme.secondaryTextColor))
             }
             .listRowBackground(Color(osrsTheme.surfaceVariant))
 
@@ -37,8 +40,10 @@ struct osrsDownloadSettingsView: View {
                 cacheSizeLimitRow
             } header: {
                 Text("Cache")
+                    .foregroundStyle(Color(osrsTheme.secondaryTextColor))
             } footer: {
                 Text("Limits space used for ordinary article cache, separate from explicitly saved pages.")
+                    .foregroundStyle(Color(osrsTheme.secondaryTextColor))
             }
             .listRowBackground(Color(osrsTheme.surfaceVariant))
         }

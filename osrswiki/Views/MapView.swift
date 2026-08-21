@@ -15,7 +15,9 @@ struct MapView: View {
             osrsMapLibreView()
                 .accessibilityElement(children: .contain)
                 .accessibilityIdentifier("map_screen")
+                .ignoresSafeArea(edges: .bottom)
         }
+        .ignoresSafeArea(edges: .bottom)
     }
 }
 

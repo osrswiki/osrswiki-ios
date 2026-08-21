@@ -69,6 +69,27 @@ final class MapPresentationContractTests: XCTestCase {
         )
         XCTAssertTrue(tabSource.contains("toolbarBackground"))
         XCTAssertTrue(tabSource.contains("selectedTab == .map && themeManager.currentTheme is osrsLightTheme"))
+        XCTAssertTrue(tabSource.contains("toolbarBackground(Color.clear, for: .tabBar)"))
+        XCTAssertFalse(tabSource.contains("? .visible"))
+        XCTAssertTrue(tabSource.contains("MapView().ignoresSafeArea(edges: .bottom)"))
+        let mapSource = try String(
+            contentsOf: repositoryRoot().appendingPathComponent(
+                "platforms/ios/osrswiki/Views/MapView.swift"
+            ),
+            encoding: .utf8
+        )
+        XCTAssertTrue(mapSource.contains(".ignoresSafeArea(edges: .bottom)"))
+        XCTAssertFalse(mapSource.contains("Color.black"))
+        let tabBarSource = try String(
+            contentsOf: repositoryRoot().appendingPathComponent(
+                "platforms/ios/osrswiki/Extensions/UITabBar+FastRestore.swift"
+            ),
+            encoding: .utf8
+        )
+        XCTAssertTrue(tabBarSource.contains("configureWithTransparentBackground()"))
+        XCTAssertTrue(tabBarSource.contains("bar.isTranslucent = true"))
+        XCTAssertFalse(tabBarSource.contains("configureWithOpaqueBackground()"))
+        XCTAssertFalse(tabBarSource.contains("isTranslucent = opaqueFill == nil"))
     }
 
     private func repositoryRoot() throws -> URL {

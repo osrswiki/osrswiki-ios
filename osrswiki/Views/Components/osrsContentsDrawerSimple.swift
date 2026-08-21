@@ -22,6 +22,7 @@ struct osrsContentsDrawerSimple: View {
     private let drawerTrailingInset: CGFloat = osrsInteractiveArticleSwipe.contentsDrawerTrailingInset
     @State private var isDismissTracking = false
     @State private var suppressSectionSelection = false
+    @State private var settleGeneration = 0
 
     private var revealProgress: CGFloat {
         min(1, max(0, interactiveProgress))
@@ -189,8 +190,16 @@ struct osrsContentsDrawerSimple: View {
 
     private func settleDrawer(to target: CGFloat, velocity: CGFloat) {
         let clamped = min(1, max(0, target))
+        let from = interactiveProgress
+        settleGeneration += 1
+        let generation = settleGeneration
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            interactiveProgress = from
+        }
         let animation = osrsContentsReveal.settleAnimation(
-            from: interactiveProgress,
+            from: from,
             to: clamped,
             velocity: velocity
         )
@@ -200,6 +209,7 @@ struct osrsContentsDrawerSimple: View {
                 isPresented = true
             }
         } completion: {
+            guard generation == settleGeneration else { return }
             if clamped < 1 {
                 isPresented = false
             } else {

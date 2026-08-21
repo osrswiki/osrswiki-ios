@@ -90,6 +90,7 @@ private struct ArticleViewContent: View {
     @State private var isShowingShareSheet = false
     @State private var isShowingTableOfContents = false
     @State private var contentsRevealProgress: CGFloat = 0
+    @State private var contentsSettleGeneration = 0
     @State private var isShowingFindInPage = false
     @State private var findSession = 0
     @State private var isShowingAppearanceSettings = false
@@ -307,6 +308,9 @@ private struct ArticleViewContent: View {
                 },
                 onRecover: {
                     viewModel.needsContentProcessRecovery = false
+                    if let webView = viewModel.webView {
+                        osrsWebViewThemePaint.apply(to: webView, theme: osrsTheme)
+                    }
                     viewModel.loadArticle(theme: osrsTheme, isReload: true)
                 }
             )
@@ -595,6 +599,13 @@ private struct ArticleViewContent: View {
     private func settleContents(to progress: CGFloat, velocity: CGFloat) {
         let target = min(1, max(0, progress))
         let from = contentsRevealProgress
+        contentsSettleGeneration += 1
+        let generation = contentsSettleGeneration
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            contentsRevealProgress = from
+        }
         let animation = osrsContentsReveal.settleAnimation(
             from: from,
             to: target,
@@ -606,6 +617,7 @@ private struct ArticleViewContent: View {
                 isShowingTableOfContents = true
             }
         } completion: {
+            guard generation == contentsSettleGeneration else { return }
             if target < 1 {
                 isShowingTableOfContents = false
             } else {
