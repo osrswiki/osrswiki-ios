@@ -328,20 +328,41 @@
             }
             return true;
         }
+        function osrsSanitizeResourceLoaderScript(code) {
+            return String(code || '').split('window.OO=module.exports;').join(
+                'window.OO=(typeof module!==\'undefined\'&&module.exports)?module.exports:window.OO;'
+            );
+        }
         function osrsLoadModuleScript(src, done) {
             osrsEnsureJQueryAlias();
-            var script = document.createElement('script');
-            script.setAttribute('data-osrs-ooui-loader', '1');
-            script.src = src;
-            script.onload = function() {
+            var finish = function() {
                 osrsEnsureJQueryAlias();
                 if (typeof window.__osrsKickCalcCore === 'function') {
                     window.__osrsKickCalcCore();
                 }
                 done();
             };
-            script.onerror = done;
-            (document.head || document.documentElement).appendChild(script);
+            var injectSrcTag = function() {
+                var script = document.createElement('script');
+                script.setAttribute('data-osrs-ooui-loader', '1');
+                script.src = src;
+                script.onload = finish;
+                script.onerror = finish;
+                (document.head || document.documentElement).appendChild(script);
+            };
+            if (typeof fetch !== 'function') {
+                injectSrcTag();
+                return;
+            }
+            fetch(src).then(function(response) {
+                return response.text();
+            }).then(function(code) {
+                var script = document.createElement('script');
+                script.setAttribute('data-osrs-ooui-loader', '1');
+                script.text = osrsSanitizeResourceLoaderScript(code);
+                (document.head || document.documentElement).appendChild(script);
+                finish();
+            }).catch(injectSrcTag);
         }
         function injectSequential(index) {
             if (osrsCalcOOUIReady()) {

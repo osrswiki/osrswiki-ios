@@ -873,7 +873,8 @@ class IOSAssetHandler: NSObject, WKURLSchemeHandler {
             httpVersion: "HTTP/1.1",
             headerFields: ["Content-Type": Self.osrsCalculatorCachedContentType(for: originalURL)]
            ) {
-            return (cached, cachedResponse)
+            let body = originalURL.contains("/load.php") ? osrsResourceLoaderScript.sanitize(cached) : cached
+            return (body, cachedResponse)
         }
         if osrsTestEnvironment.forcesNetworkOfflineForUITests {
             throw NSError(
@@ -904,7 +905,12 @@ class IOSAssetHandler: NSObject, WKURLSchemeHandler {
             )
         }
         if isCacheableCalculatorTraffic, !data.isEmpty {
-            osrsCalculatorParseCache.write(method: method, url: originalURL, body: cacheBody, data: data)
+            let stored = originalURL.contains("/load.php") ? osrsResourceLoaderScript.sanitize(data) : data
+            osrsCalculatorParseCache.write(method: method, url: originalURL, body: cacheBody, data: stored)
+            return (stored, response)
+        }
+        if originalURL.contains("/load.php") {
+            return (osrsResourceLoaderScript.sanitize(data), response)
         }
         return (data, response)
     }

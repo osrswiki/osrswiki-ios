@@ -68,3 +68,19 @@ enum osrsWikiWebViewUrl {
         )
     }
 }
+
+enum osrsResourceLoaderScript {
+    static let brokenOojsTrailer = "window.OO=module.exports;"
+    static let safeOojsTrailer =
+        "window.OO=(typeof module!=='undefined'&&module.exports)?module.exports:window.OO;"
+
+    static func sanitize(_ source: String) -> String {
+        source.replacingOccurrences(of: brokenOojsTrailer, with: safeOojsTrailer)
+    }
+
+    static func sanitize(_ data: Data) -> Data {
+        guard let text = String(data: data, encoding: .utf8) else { return data }
+        let sanitized = sanitize(text)
+        return Data(sanitized.utf8)
+    }
+}

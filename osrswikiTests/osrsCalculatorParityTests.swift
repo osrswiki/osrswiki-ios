@@ -16,6 +16,19 @@ final class osrsCalculatorParityTests: XCTestCase {
         XCTAssertTrue(osrsWikiWebViewUrl.shouldProxy(nestedLoad))
     }
 
+    func testResourceLoaderOojsTrailerDoesNotAssignModuleExportsWhenModuleMissing() {
+        let payload = """
+        (function(global){var OO={initClass:function(){}};global.OO=OO;}(this));
+        window.OO=module.exports;
+        mw.loader.state({"oojs":"ready"});
+        """
+        let sanitized = osrsResourceLoaderScript.sanitize(payload)
+        XCTAssertTrue(payload.contains("window.OO=module.exports;"))
+        XCTAssertFalse(sanitized.contains("window.OO=module.exports;"))
+        XCTAssertTrue(sanitized.contains("typeof module!=='undefined'&&module.exports"))
+        XCTAssertEqual(sanitized, osrsResourceLoaderScript.sanitize(sanitized))
+    }
+
     func testBundledCatalogListsEveryUserFacingCalculator() throws {
         let snapshot = try osrsCalculatorCatalog.loadSnapshot(json: catalogData())
         XCTAssertGreaterThanOrEqual(snapshot.calculators.count, 100)
@@ -145,6 +158,8 @@ final class osrsCalculatorParityTests: XCTestCase {
         XCTAssertTrue(runtime.contains("CheckboxInputWidget"))
         XCTAssertTrue(runtime.contains("HorizontalLayout"))
         XCTAssertTrue(runtime.contains("data-osrs-ooui-loader"))
+        XCTAssertTrue(runtime.contains("osrsSanitizeResourceLoaderScript"))
+        XCTAssertTrue(runtime.contains("window.OO=module.exports"))
         XCTAssertTrue(runtime.contains("/load.php?modules=oojs-ui-core"))
         XCTAssertTrue(runtime.contains("only=scripts"))
         XCTAssertTrue(runtime.contains("/load.php?modules=jquery&only=scripts"))
