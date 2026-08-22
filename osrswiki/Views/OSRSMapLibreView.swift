@@ -128,6 +128,10 @@ func osrsShouldShowInitialMapLoader(
     !hasPresentedInitialMap && errorMessage == nil
 }
 
+func osrsMapPlaneLabel(_ plane: Int) -> String {
+    String(plane)
+}
+
 private struct osrsRealmFloorControl: View {
     @ObservedObject var store: osrsRealmMapStore
     let realm: osrsRealmMapRecord
@@ -140,7 +144,7 @@ private struct osrsRealmFloorControl: View {
                       index + 1 < realm.planes.count else { return }
                 store.select(plane: realm.planes[index + 1])
             }
-            Text("\(store.activePlane)")
+            Text(verbatim: osrsMapPlaneLabel(store.activePlane))
                 .font(.system(size: 17, weight: .medium))
                 .frame(width: 48, height: 32)
             button(systemName: "chevron.down", label: "Decrease map floor") {

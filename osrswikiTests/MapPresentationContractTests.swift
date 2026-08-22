@@ -28,6 +28,26 @@ final class MapPresentationContractTests: XCTestCase {
         )
     }
 
+    func testMapPlaneLabelsStayWesternDigitsAndUseVerbatimText() throws {
+        for plane in 0...3 {
+            let label = osrsMapPlaneLabel(plane)
+            XCTAssertEqual(label, String(plane))
+            XCTAssertTrue(label.allSatisfy { $0 >= "0" && $0 <= "9" })
+            XCTAssertFalse(
+                label.contains { $0 >= "\u{0660}" && $0 <= "\u{0669}" },
+                "Plane \(plane) leaked Eastern Arabic-Indic digits: \(label)"
+            )
+        }
+        let mapSource = try String(
+            contentsOf: repositoryRoot().appendingPathComponent(
+                "platforms/ios/osrswiki/Views/OSRSMapLibreView.swift"
+            ),
+            encoding: .utf8
+        )
+        XCTAssertTrue(mapSource.contains("Text(verbatim: osrsMapPlaneLabel(store.activePlane))"))
+        XCTAssertFalse(mapSource.contains("Text(\"\\(store.activePlane)\")"))
+    }
+
     func testMapControlsResolveToThemeSurfaceContrastPairs() {
         let light = osrsLightTheme()
         let dark = osrsDarkTheme()
