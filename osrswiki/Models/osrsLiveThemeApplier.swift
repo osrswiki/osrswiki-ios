@@ -16,7 +16,7 @@ enum osrsLiveThemeApplier {
         applyAppearanceProxies(theme)
         let resolved = colorScheme ?? .light
         connectedWindows.forEach { window in
-            apply(theme, to: window, colorScheme: resolved)
+            apply(theme, to: window, colorScheme: resolved, scheduleFollowUp: true)
         }
     }
 
@@ -24,12 +24,24 @@ enum osrsLiveThemeApplier {
     static func apply(
         _ theme: any osrsThemeProtocol,
         to window: UIWindow,
-        colorScheme: ColorScheme
+        colorScheme: ColorScheme,
+        scheduleFollowUp: Bool = false
     ) {
         let style: UIUserInterfaceStyle = colorScheme == .dark ? .dark : .light
         window.overrideUserInterfaceStyle = style
         apply(theme, toView: window)
         apply(theme, toViewController: window.rootViewController)
+        if scheduleFollowUp {
+            // SwiftUI Toggle can mount its switch after the first walk.
+            DispatchQueue.main.async {
+                apply(theme, toView: window)
+                apply(theme, toViewController: window.rootViewController)
+                DispatchQueue.main.async {
+                    apply(theme, toView: window)
+                    apply(theme, toViewController: window.rootViewController)
+                }
+            }
+        }
     }
 
     @MainActor
@@ -58,6 +70,7 @@ enum osrsLiveThemeApplier {
         let onPrimary = UIColor(theme.onPrimary)
         let onSurface = UIColor(theme.onSurface)
         let surfaceVariant = UIColor(theme.surfaceVariant)
+        tintSwitchLike(control, onTint: primary, thumb: switchThumbColor())
 
         switch control {
         case let toggle as UISwitch:
@@ -164,6 +177,25 @@ enum osrsLiveThemeApplier {
     /// as a white pill on light appearance.
     static func switchThumbColor() -> UIColor {
         UIColor(red: 76.0 / 255.0, green: 61.0 / 255.0, blue: 42.0 / 255.0, alpha: 1)
+    }
+
+    @MainActor
+    private static func tintSwitchLike(_ view: UIView, onTint: UIColor, thumb: UIColor) {
+        let typeName = String(describing: type(of: view))
+        let isSwitchLike = view is UISwitch
+            || typeName.localizedCaseInsensitiveContains("switch")
+        guard isSwitchLike else {
+            return
+        }
+        // iOS 26 switch visual elements honor tintColor more reliably than
+        // UISwitch.onTintColor when hosted from SwiftUI Toggle.
+        view.tintColor = onTint
+        if view.responds(to: NSSelectorFromString("setOnTintColor:")) {
+            view.perform(NSSelectorFromString("setOnTintColor:"), with: onTint)
+        }
+        if view.responds(to: NSSelectorFromString("setThumbTintColor:")) {
+            view.perform(NSSelectorFromString("setThumbTintColor:"), with: thumb)
+        }
     }
 
     @MainActor

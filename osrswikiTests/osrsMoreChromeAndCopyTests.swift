@@ -18,6 +18,8 @@ final class osrsMoreChromeAndCopyTests: XCTestCase {
         XCTAssertFalse(chrome.contains("toolbarBackground(Color(osrsTheme.background)"))
         XCTAssertTrue(chrome.contains("if #available(iOS 26.0, *)"))
         XCTAssertTrue(settingsPage.contains("osrsMoreDestinationChrome"))
+        XCTAssertTrue(settingsPage.contains(".tint(Color(osrsTheme.primary))"))
+        XCTAssertTrue(settingsPage.contains(".accentColor(Color(osrsTheme.primary))"))
         for file in [appearance, downloads] {
             XCTAssertTrue(file.contains("osrsSettingsPage("))
             XCTAssertFalse(file.contains(".id(themeManager.selectedTheme)"))
@@ -32,6 +34,9 @@ final class osrsMoreChromeAndCopyTests: XCTestCase {
         XCTAssertTrue(app.contains("osrsLiveThemeApplier.apply"))
         XCTAssertTrue(live.contains("apply(theme, toView:"))
         XCTAssertTrue(live.contains("UISwitch"))
+        XCTAssertTrue(live.contains("tintSwitchLike"))
+        XCTAssertTrue(live.contains("localizedCaseInsensitiveContains(\"switch\")"))
+        XCTAssertTrue(live.contains("scheduleFollowUp"))
         XCTAssertTrue(live.contains("UISlider"))
         XCTAssertTrue(live.contains("UISegmentedControl"))
         XCTAssertTrue(live.contains("if #available(iOS 26.0, *)"))

@@ -12,6 +12,10 @@ struct osrsSettingsPageModifier: ViewModifier {
             .scrollContentBackground(.hidden)
             .background(Color(osrsTheme.background))
             .foregroundStyle(Color(osrsTheme.primaryTextColor))
+            // List foregroundStyle can steal the switch/slider fill. Re-assert
+            // the OSRS accent on this page so toggles follow theme.primary.
+            .tint(Color(osrsTheme.primary))
+            .accentColor(Color(osrsTheme.primary))
             .osrsMoreDestinationChrome(title: title, titleDisplayMode: titleDisplayMode)
     }
 }

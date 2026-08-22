@@ -58,4 +58,19 @@ final class osrsLiveThemeApplierTests: XCTestCase {
         osrsLiveThemeApplier.apply(osrsDarkTheme(), to: window, colorScheme: .dark)
         XCTAssertEqual(toggle.thumbTintColor, osrsLiveThemeApplier.switchThumbColor())
     }
+
+    func testNestedSwitchesAreRetintedThroughTheViewWalk() {
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 320, height: 568))
+        let host = UIView()
+        let toggle = UISwitch()
+        toggle.onTintColor = .red
+        host.addSubview(toggle)
+        window.addSubview(host)
+        window.makeKeyAndVisible()
+
+        osrsLiveThemeApplier.apply(osrsDarkTheme(), to: window, colorScheme: .dark, scheduleFollowUp: true)
+        XCTAssertNotEqual(toggle.onTintColor, .red)
+        XCTAssertEqual(toggle.thumbTintColor, osrsLiveThemeApplier.switchThumbColor())
+        XCTAssertEqual(toggle.tintColor, UIColor(osrsDarkTheme().primary))
+    }
 }
