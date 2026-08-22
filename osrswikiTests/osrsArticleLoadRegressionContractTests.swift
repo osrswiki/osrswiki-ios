@@ -59,6 +59,8 @@ final class osrsArticleLoadRegressionContractTests: XCTestCase {
         XCTAssertTrue(viewModel.contains("osrsForegroundHealthProbeMaxAttempts"))
         XCTAssertTrue(viewModel.contains("javascript-unavailable"))
         XCTAssertTrue(viewModel.contains("Recommitting cached article HTML"))
+        XCTAssertTrue(viewModel.contains("applyingLivePaintPreferences(cachedHTML, theme: theme)"))
+        XCTAssertTrue(viewModel.contains("pendingLiveThemePaintAfterReload"))
         let probeBody = viewModel
             .components(separatedBy: "private func probeRenderedSnapshotIfNeeded")
             .dropFirst()

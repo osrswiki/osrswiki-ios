@@ -211,6 +211,15 @@ final class osrsSceneHostResumeUITests: XCTestCase {
         }
 
         let viewMore = app.descendants(matching: .any)["home_updates_view_more"].firstMatch
+        if !viewMore.waitForExistence(timeout: 4) || !viewMore.isHittable {
+            let carousel = app.scrollViews["home_updates_carousel"].firstMatch
+            if carousel.waitForExistence(timeout: 8) {
+                for _ in 0..<6 {
+                    carousel.swipeLeft()
+                    if viewMore.isHittable { break }
+                }
+            }
+        }
         XCTAssertTrue(viewMore.waitForExistence(timeout: 12), "View more should return with Home")
         viewMore.tap()
 

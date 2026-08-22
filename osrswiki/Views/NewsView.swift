@@ -413,23 +413,13 @@ struct WikiFeedContentView: View {
                                 }
                                 .zIndex(1)
                             }
+                            osrsHomeUpdatesViewMoreCap {
+                                appState.navigateToScopedSearch(.updates)
+                            }
                         }
                         .padding(.horizontal, 16)
                     }
                     .accessibilityIdentifier("home_updates_carousel")
-
-                    Button {
-                        appState.navigateToScopedSearch(.updates)
-                    } label: {
-                        Text("View more")
-                            .font(.osrsBody)
-                            .foregroundStyle(.osrsLink)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    .buttonStyle(.plain)
-                    .padding(.horizontal, 16)
-                    .accessibilityIdentifier("home_updates_view_more")
-                    .accessibilityLabel("View more updates")
                 }
                 .padding(.vertical, 8)
             }
@@ -663,11 +653,30 @@ struct UpdateCardView: View {
 
 private enum osrsRecentUpdateCardMetrics {
     static let standardWidth: CGFloat = 280
-    static let standardHeight: CGFloat = 228
     static let standardImageHeight: CGFloat = 140
-    static let standardContentHeight: CGFloat = standardHeight - standardImageHeight
+    /// Title plus two snippet rows, with the card's 8/12 vertical padding.
+    static let standardContentHeight: CGFloat = 112
+    static let standardHeight: CGFloat = standardImageHeight + standardContentHeight
     static let accessibilityImageHeight: CGFloat = 120
     static let standardContentSpacing: CGFloat = 4
+}
+
+private struct osrsHomeUpdatesViewMoreCap: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text("View more")
+                .font(.osrsBody)
+                .foregroundStyle(.osrsLink)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
+                .padding(.horizontal, 16)
+        }
+        .buttonStyle(.plain)
+        .frame(minWidth: 120, maxHeight: osrsRecentUpdateCardMetrics.standardHeight)
+        .accessibilityIdentifier("home_updates_view_more")
+        .accessibilityLabel("View more updates")
+    }
 }
 
 struct AnnouncementCardView: View {

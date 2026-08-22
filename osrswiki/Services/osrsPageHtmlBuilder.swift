@@ -703,10 +703,19 @@ class osrsPageHtmlBuilder {
                         background-color: #28221d !important;
                         color: #f4eaea !important;
                     }
-                    table.infobox,
-                    .infobox-switch,
+                    table.infobox:not(.infobox-bonuses),
+                    .infobox-switch:not(.infobox-bonuses),
                     .collapsible-primary-infobox {
-                        min-width: min(18.75rem, 100%);
+                        max-width: 100%;
+                        min-width: 0;
+                        box-sizing: border-box;
+                    }
+                    table.infobox-bonuses {
+                        max-width: 100%;
+                        min-width: 0;
+                        width: 100%;
+                        table-layout: fixed;
+                        box-sizing: border-box;
                     }
                     .mw-parser-output p,
                     .mw-parser-output > ul,

@@ -74,7 +74,7 @@ struct osrsMapLibreView: View {
             }
             .padding(.horizontal, 16)
             .padding(.top, 4)
-            .padding(.bottom, 10)
+            .padding(.bottom, osrsOverlayChromeMetrics.mapFloatingControlBottomInset)
 
             if selectorPresented {
                 GeometryReader { geometry in
@@ -258,14 +258,13 @@ private extension View {
         in shape: ChromeShape,
         theme: any osrsThemeProtocol
     ) -> some View {
-        let fallback = Color(theme.mapControlBackgroundColor)
-        if theme is osrsLightTheme {
-            self
-                .background(fallback, in: shape)
-                .clipShape(shape)
-        } else {
-            self.osrsFloatingGlass(in: shape, fallback: fallback.opacity(0.92))
-        }
+        // Light and dark map chrome both use Liquid Glass. An opaque light
+        // fill was a regression against the frosted realm/floor selectors.
+        // Reduce Transparency / contrast still falls back inside osrsFloatingGlass.
+        self.osrsFloatingGlass(
+            in: shape,
+            fallback: Color(theme.mapControlBackgroundColor)
+        )
     }
 }
 

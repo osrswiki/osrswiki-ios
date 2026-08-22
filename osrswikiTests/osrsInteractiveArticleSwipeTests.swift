@@ -238,6 +238,31 @@ final class osrsInteractiveArticleSwipeTests: XCTestCase {
         XCTAssertFalse(osrsInteractiveBackSwipeTouchPolicy.allowsSimultaneousRecognition(with: sliderPan))
         XCTAssertTrue(osrsInteractiveBackSwipeTouchPolicy.allowsSimultaneousRecognition(with: UIPanGestureRecognizer()))
     }
+
+    func testDestinationCanvasPrefersThePushedNavigationPageNotARootHost() {
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        let root = UIViewController()
+        root.view.backgroundColor = .red
+        let nav = UINavigationController(rootViewController: root)
+        let destination = UIViewController()
+        destination.view.backgroundColor = .blue
+        nav.pushViewController(destination, animated: false)
+        window.rootViewController = nav
+        window.makeKeyAndVisible()
+        nav.view.layoutIfNeeded()
+
+        let canvas = osrsInteractiveArticleSwipe.destinationCanvas(from: destination.view)
+        XCTAssertTrue(canvas === destination.view)
+        XCTAssertFalse(canvas === root.view)
+        XCTAssertFalse(canvas === window)
+
+        destination.view.transform = CGAffineTransform(translationX: 80, y: 0)
+        nav.view.transform = CGAffineTransform(translationX: 40, y: 0)
+        osrsInteractiveArticleSwipe.resetStuckTranslationTransforms(from: destination.view)
+        osrsInteractiveArticleSwipe.resetStuckTranslationTransforms(from: nav.view)
+        XCTAssertEqual(destination.view.transform, .identity)
+        XCTAssertEqual(nav.view.transform, .identity)
+    }
 }
 
 final class osrsInteractiveSwipeFrameProbeTests: XCTestCase {

@@ -18,6 +18,9 @@ final class osrsSceneHostAndSearchScopeTests: XCTestCase {
         let resumed = try source(root, "platforms/ios/osrswiki/Services/osrsResumedSceneWindow.swift")
 
         XCTAssertTrue(news.contains("home_updates_view_more"))
+        XCTAssertTrue(news.contains("osrsHomeUpdatesViewMoreCap"))
+        XCTAssertTrue(news.contains("standardContentHeight: CGFloat = 112"))
+        XCTAssertTrue(news.contains("alignment: .trailing"))
         XCTAssertTrue(news.contains("navigateToScopedSearch(.updates)"))
         XCTAssertTrue(news.contains("case .scopedSearch(let scope)"))
         XCTAssertTrue(news.contains(".osrsLink"))

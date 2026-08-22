@@ -407,6 +407,12 @@ enum osrsOverlayChromeMetrics {
     /// Native iOS 26 floating tab bar (icons + labels). Article chrome uses
     /// the same height so its capsule stays concentric with the device corners.
     static let floatingBarHeight: CGFloat = 62
+
+    /// Map realm/floor chrome sits in a view that ignores the bottom safe
+    /// area, so it must clear the floating tab (or article-map) bar in Y.
+    static var mapFloatingControlBottomInset: CGFloat {
+        floatingBarHeight + screenEdgeGap + pairedEdgeGap
+    }
 }
 
 extension View {

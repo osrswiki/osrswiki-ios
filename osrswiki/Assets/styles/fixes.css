@@ -1118,21 +1118,39 @@ html body .osrs-calculator-panel .oo-ui-horizontalLayout.jsCalc-group {
     white-space: nowrap;
 }
 
-.osrs-local-scroll-surface > table,
-.osrs-local-scroll-surface > table.infobox-bonuses,
-.osrs-local-scroll-surface > table.infobox-bonuses:not(.main-infobox),
-.osrs-local-scroll-surface > .osrs-disclosure-body > table,
-.osrs-local-scroll-surface > .osrs-disclosure-body > table.infobox-bonuses,
-.collapsible-content.osrs-local-scroll-surface > table,
-.collapsible-content.osrs-local-scroll-surface > table.infobox-bonuses,
-.collapsible-content.osrs-local-scroll-surface > table.infobox-bonuses:not(.main-infobox),
-.collapsible-content.osrs-local-scroll-surface > .osrs-disclosure-body > table {
+.osrs-local-scroll-surface > table:not(.infobox):not(.infobox-bonuses),
+.osrs-local-scroll-surface > .osrs-disclosure-body > table:not(.infobox):not(.infobox-bonuses),
+.collapsible-content.osrs-local-scroll-surface > table:not(.infobox):not(.infobox-bonuses),
+.collapsible-content.osrs-local-scroll-surface > .osrs-disclosure-body > table:not(.infobox):not(.infobox-bonuses) {
     clear: none !important;
     float: none !important;
     margin-inline: 0 !important;
     max-width: none !important;
     table-layout: auto !important;
     width: max-content !important;
+}
+
+/* Generic load-time minmax (width:max-content / max-width:none) must not undo
+   infobox and equipment-bonuses polish. Glory-style bonuses tables stay
+   viewport-fit with equal columns. */
+.osrs-local-scroll-surface > table.infobox,
+.osrs-local-scroll-surface > table.infobox-bonuses,
+.osrs-local-scroll-surface > .osrs-disclosure-body > table.infobox,
+.osrs-local-scroll-surface > .osrs-disclosure-body > table.infobox-bonuses,
+.collapsible-content.osrs-local-scroll-surface > table.infobox,
+.collapsible-content.osrs-local-scroll-surface > table.infobox-bonuses,
+.collapsible-content.osrs-local-scroll-surface > .osrs-disclosure-body > table.infobox,
+.collapsible-content.osrs-local-scroll-surface > .osrs-disclosure-body > table.infobox-bonuses {
+    max-width: 100% !important;
+    min-width: 0 !important;
+}
+
+.osrs-local-scroll-surface > table.infobox-bonuses,
+.osrs-local-scroll-surface > .osrs-disclosure-body > table.infobox-bonuses,
+.collapsible-content.osrs-local-scroll-surface > table.infobox-bonuses,
+.collapsible-content.osrs-local-scroll-surface > .osrs-disclosure-body > table.infobox-bonuses {
+    table-layout: fixed !important;
+    width: 100% !important;
 }
 
 /* An obsolete outer owner can remain as harmless structure around a disclosure, but never as

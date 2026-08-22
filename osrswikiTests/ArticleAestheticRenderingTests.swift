@@ -102,6 +102,9 @@ final class ArticleAestheticRenderingTests: XCTestCase {
             fixes.contains("max(8em, min-content)"),
             "An 8em min-content floor stretches compact infoboxes; WebKit also ignores min-content on table cells."
         )
+        XCTAssertTrue(fixes.contains("table:not(.infobox):not(.infobox-bonuses)"))
+        XCTAssertTrue(fixes.contains("Generic load-time minmax"))
+        XCTAssertFalse(fixes.contains(".osrs-local-scroll-surface > table.infobox-bonuses:not(.main-infobox)"))
         let tableNormalize = try readAsset("Assets/web/table_column_normalize.js")
         XCTAssertTrue(tableNormalize.contains("lockInfoboxValueCellFloors"))
         XCTAssertTrue(tableNormalize.contains("probeInfoboxValueIntrinsicWidth"))
@@ -1983,6 +1986,8 @@ final class ArticleAestheticRenderingTests: XCTestCase {
         XCTAssertTrue(htmlBuilder.contains("osrs-article-first-paint"))
         XCTAssertTrue(htmlBuilder.contains("background-color: #28221d"))
         XCTAssertTrue(htmlBuilder.contains("--body-main: #28221d"))
+        XCTAssertTrue(htmlBuilder.contains("table.infobox-bonuses"))
+        XCTAssertFalse(htmlBuilder.contains("min-width: min(18.75rem, 100%)"))
         XCTAssertTrue(htmlBuilder.contains("alegreya_bold.ttf"))
         XCTAssertTrue(htmlBuilder.contains("--osrs-article-safe-area-top"))
         XCTAssertTrue(htmlBuilder.contains("padding-top: calc(var(--osrs-article-safe-area-top) + var(--osrs-article-chrome-clearance))"))
@@ -2781,6 +2786,71 @@ final class ArticleAestheticRenderingTests: XCTestCase {
         XCTAssertEqual(number(uncharged, "labelWidth"), number(baseline, "labelWidth"), accuracy: 1.0)
         XCTAssertEqual(number(wideState, "labelHeight"), number(baseline, "labelHeight"), accuracy: 1.0)
         XCTAssertEqual(number(uncharged, "labelHeight"), number(baseline, "labelHeight"), accuracy: 1.0)
+    }
+
+    func testGloryBonusesTableStaysViewportFitInsideScrollSurface() async throws {
+        let fixes = try readAsset("Assets/styles/fixes.css")
+        let firstPaint = osrsPageHtmlBuilder.articleFirstPaintStyle(
+            chromeClearancePx: 0,
+            safeAreaTopPx: 0,
+            safeAreaBottomPx: 0
+        )
+        attachWebViewToWindow()
+        let html = """
+        <!doctype html>
+        <html>
+        <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        \(firstPaint)
+        <style>\(fixes)</style>
+        </head>
+        <body style="margin:0">
+          <div class="collapsible-content osrs-local-scroll-surface" id="surface" style="width:375px">
+            <table id="bonuses" class="infobox infobox-bonuses">
+              <tbody>
+                <tr>
+                  <th class="infobox-header" colspan="5">Combat bonuses</th>
+                </tr>
+                <tr>
+                  <td class="infobox-nested">+10</td>
+                  <td class="infobox-nested">+10</td>
+                  <td class="infobox-nested">+10</td>
+                  <td class="infobox-nested">+10</td>
+                  <td class="infobox-nested">+10</td>
+                </tr>
+              </tbody>
+            </table>
+            <table id="item" class="infobox">
+              <tbody>
+                <tr><th>Released</th><td>27 February 2002</td></tr>
+                <tr><th>Members</th><td>Yes</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </body>
+        </html>
+        """
+        try await load(html)
+        let state = try await evaluate("""
+        (() => {
+          const bonuses = document.getElementById('bonuses');
+          const item = document.getElementById('item');
+          const bonusesStyle = getComputedStyle(bonuses);
+          const itemStyle = getComputedStyle(item);
+          return {
+            bonusesLayout: bonusesStyle.tableLayout,
+            bonusesWidth: bonuses.getBoundingClientRect().width,
+            bonusesMaxWidth: bonusesStyle.maxWidth,
+            itemWidth: item.getBoundingClientRect().width,
+            itemMaxWidth: itemStyle.maxWidth,
+            viewport: document.documentElement.clientWidth
+          };
+        })()
+        """)
+        XCTAssertEqual(state["bonusesLayout"] as? String, "fixed")
+        XCTAssertLessThanOrEqual(state["bonusesWidth"] as? Double ?? 999, (state["viewport"] as? Double ?? 0) + 1)
+        XCTAssertLessThanOrEqual(state["itemWidth"] as? Double ?? 999, (state["viewport"] as? Double ?? 0) + 1)
+        XCTAssertNotEqual(state["bonusesMaxWidth"] as? String, "none")
     }
 
     func testInfoboxValueCellsKeepMeasuredFloorAfterLateFixedLayout() async throws {

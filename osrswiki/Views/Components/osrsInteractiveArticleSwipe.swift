@@ -471,6 +471,7 @@ final class osrsInteractiveArticleSwipe {
         if resetTransform {
             slidingView?.transform = .identity
             slidingSnapshot?.transform = .identity
+            Self.resetStuckTranslationTransforms(from: slidingView)
         }
         hiddenSlidingView?.alpha = 1
         removePreviewViews()
@@ -578,11 +579,47 @@ final class osrsInteractiveArticleSwipe {
     }
 
     static func slidingView(from view: UIView) -> UIView? {
+        destinationCanvas(from: view)
+    }
+
+    /// Prefer the pushed navigation destination, never a surviving tab/root
+    /// host. Walking to the last ancestor VC translated the entire app and
+    /// stacked a leftover gutter on every More swipe-back.
+    static func destinationCanvas(from view: UIView) -> UIView {
         if let nav = navigationController(from: view),
            let top = nav.topViewController?.view {
             return top
         }
+        var responder: UIResponder? = view
+        while let current = responder {
+            if let viewController = current as? UIViewController,
+               !(viewController is UINavigationController),
+               !(viewController is UITabBarController),
+               !(viewController is UISplitViewController) {
+                return viewController.view
+            }
+            responder = current.next
+        }
         return view
+    }
+
+    static func resetStuckTranslationTransforms(from view: UIView?) {
+        var current = view
+        while let node = current {
+            let transform = node.transform
+            if transform.ty == 0,
+               abs(transform.tx) > 0.5,
+               transform.a == 1,
+               transform.d == 1,
+               transform.b == 0,
+               transform.c == 0 {
+                node.transform = .identity
+            }
+            if node is UIWindow {
+                break
+            }
+            current = node.superview
+        }
     }
 
     static func navigationController(from view: UIView) -> UINavigationController? {
@@ -765,8 +802,13 @@ struct osrsInteractiveBackSwipeHost: UIViewRepresentable {
                 swipe.update(translation: translation, from: view)
                 if swipe.axis == .back,
                    swipe.finish(translation: translation, velocity: velocity) == .commitBack {
-                    swipe.cleanup(resetTransform: false)
-                    parent?.onBack()
+                    let canvas = view
+                    let navView = osrsInteractiveArticleSwipe.navigationController(from: view)?.view
+                    swipe.completeCommit(velocity: velocity) {
+                        self.parent?.onBack()
+                        osrsInteractiveArticleSwipe.resetStuckTranslationTransforms(from: canvas)
+                        osrsInteractiveArticleSwipe.resetStuckTranslationTransforms(from: navView)
+                    }
                 } else {
                     swipe.cancel(animated: true)
                 }
@@ -776,18 +818,7 @@ struct osrsInteractiveBackSwipeHost: UIViewRepresentable {
         }
 
         private static func destinationCanvas(from view: UIView) -> UIView {
-            var responder: UIResponder? = view
-            var lastViewControllerView: UIView = view
-            while let current = responder {
-                if let viewController = current as? UIViewController,
-                   !(viewController is UINavigationController),
-                   !(viewController is UITabBarController),
-                   !(viewController is UISplitViewController) {
-                    lastViewControllerView = viewController.view
-                }
-                responder = current.next
-            }
-            return lastViewControllerView
+            osrsInteractiveArticleSwipe.destinationCanvas(from: view)
         }
     }
 }

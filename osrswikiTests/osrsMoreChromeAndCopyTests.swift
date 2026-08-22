@@ -57,6 +57,9 @@ final class osrsMoreChromeAndCopyTests: XCTestCase {
         XCTAssertTrue(swipe.contains("osrsInteractiveBackSwipeTouchPolicy"))
         XCTAssertTrue(swipe.contains("allowsBackSwipe(from: hit ?? touch.view)"))
         XCTAssertTrue(swipe.contains("hitTest(touch.location(in: host)"))
+        XCTAssertTrue(swipe.contains("completeCommit(velocity:"))
+        XCTAssertTrue(swipe.contains("resetStuckTranslationTransforms"))
+        XCTAssertTrue(swipe.contains("destinationCanvas(from:"))
     }
 
     func testDonateAndFeedbackCopyAndOutboundRowsMatchTheSharedPolicy() throws {

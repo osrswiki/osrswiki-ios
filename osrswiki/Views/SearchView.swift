@@ -18,6 +18,7 @@ struct SearchView: View {
     @State private var searchText = ""
     @State private var isSearchMode = false
     @State private var isSearchFocused = false
+    @State private var searchViewAppeared = false
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @ScaledMetric(relativeTo: .subheadline) private var recentRowMinHeight: CGFloat = 44
     
@@ -42,10 +43,14 @@ struct SearchView: View {
                     osrsAccessibilityMarker(identifier: "search_screen", label: "Search screen")
 
                     if isSearchMode {
-                        if searchText.isEmpty && !viewModel.recentSearches.isEmpty {
+                        if !searchText.isEmpty {
+                            contentSection
+                        } else if !viewModel.recentSearches.isEmpty {
                             recentSearchesSection
+                        } else {
+                            historyContent
+                                .accessibilityIdentifier("search_active_canvas")
                         }
-                        contentSection
                     } else {
                         historyContent
                     }
@@ -70,6 +75,7 @@ struct SearchView: View {
                 Text("This will permanently delete all your reading history. This action cannot be undone.")
             }
             .onAppear {
+                searchViewAppeared = true
                 // Set up navigation callback with weak references to prevent retain cycles
                 viewModel.navigateToArticle = { [weak appState] title, url, searchResult in
                     guard let appState = appState else { return }
@@ -103,8 +109,11 @@ struct SearchView: View {
                 activatePendingSearchIntentIfNeeded()
             }
             .onDisappear {
-                appState.cancelSearchActivationIntent()
+                searchViewAppeared = false
+                // A Search-tab layout pass can disappear while an article→search
+                // handoff is still pending. Only cancel when leaving Search.
                 if appState.selectedTab != .search {
+                    appState.cancelSearchActivationIntent()
                     appState.invalidateActiveSearchReturnContext()
                 }
                 // Dismiss keyboard to prevent blank area when navigating back
@@ -493,13 +502,13 @@ struct SearchView: View {
     /// surface is mounted. The UI enters active-search mode before yielding a render turn; voice
     /// recognition then starts against the callbacks installed above, without a guessed delay.
     private func activatePendingSearchIntentIfNeeded() {
-        guard let intent = appState.pendingSearchActivationIntent,
+        guard searchViewAppeared,
+              let intent = appState.pendingSearchActivationIntent,
               appState.consumeSearchActivationIntent(generation: intent.generation) else {
             return
         }
 
         isSearchMode = true
-        isSearchFocused = true
         if let query = appState.pendingSearchQuery {
             searchText = query
             viewModel.currentQuery = query
@@ -507,14 +516,18 @@ struct SearchView: View {
             Task { await viewModel.performSearch(query: query, isNewSearch: true) }
         }
 
-        guard intent.startsVoiceRecognition else { return }
+        // Focus after the accessory chrome has a layout turn so article→search
+        // never lands on a keyboard-only empty canvas.
         Task { @MainActor in
             await Task.yield()
-            guard appState.selectedTab == .search,
+            guard searchViewAppeared,
+                  appState.selectedTab == .search,
                   appState.searchNavigationStack.isEmpty,
                   isSearchMode else {
                 return
             }
+            isSearchFocused = true
+            guard intent.startsVoiceRecognition else { return }
             appState.speechManager.startVoiceRecognition()
         }
     }

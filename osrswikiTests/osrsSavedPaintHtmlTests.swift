@@ -162,6 +162,9 @@ final class osrsSavedPaintHtmlTests: XCTestCase {
         XCTAssertTrue(style.contains("background-color: #28221d"))
         XCTAssertTrue(style.contains("--body-main: #28221d"))
         XCTAssertFalse(style.contains("var(--body-main, #e2dbc8)"))
+        XCTAssertFalse(style.contains("min-width: min(18.75rem, 100%)"))
+        XCTAssertTrue(style.contains("table.infobox-bonuses"))
+        XCTAssertTrue(style.contains("table-layout: fixed"))
         let dark = osrsPageHtmlBuilder.articleFirstPaintStyle(
             chromeClearancePx: 0,
             usesDarkTheme: true

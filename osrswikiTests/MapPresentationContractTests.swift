@@ -36,6 +36,11 @@ final class MapPresentationContractTests: XCTestCase {
         XCTAssertEqual(UIColor(light.mapControlTextColor), UIColor(light.onSurface))
         XCTAssertEqual(UIColor(dark.mapControlBackgroundColor), UIColor(dark.surface))
         XCTAssertEqual(UIColor(dark.mapControlTextColor), UIColor(dark.onSurface))
+        XCTAssertGreaterThan(
+            osrsOverlayChromeMetrics.mapFloatingControlBottomInset,
+            osrsOverlayChromeMetrics.floatingBarHeight,
+            "Floor chrome must clear the floating tab / article-map bar"
+        )
     }
 
     func testLightMapTabBarUsesOpaqueParchmentFill() throws {

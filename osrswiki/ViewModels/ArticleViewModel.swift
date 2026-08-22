@@ -653,6 +653,9 @@ class ArticleViewModel: NSObject, ObservableObject {
     private var contentProcessDidTerminate = false
     private var lastAppliedArticleTheme: (any osrsThemeProtocol)?
     private var lastCommittedArticleHTML: String?
+    /// Cached HTML can still carry the previous first-paint colors after a
+    /// live theme swap. Reload must re-paint the new document.
+    var pendingLiveThemePaintAfterReload = false
 
     private static let osrsForegroundHealthProbeMaxAttempts = 8
     private static let osrsForegroundHealthProbeRetryNs: UInt64 = 250_000_000
@@ -1817,8 +1820,9 @@ class ArticleViewModel: NSObject, ObservableObject {
                    let cachedHTML = self.lastCommittedArticleHTML,
                    cachedHTML.count > 100 {
                     print("♻️ ArticleViewModel: Recommitting cached article HTML (\(cachedHTML.count) chars)")
+                    let paintedHTML = self.applyingLivePaintPreferences(cachedHTML, theme: theme)
                     await self.loadCustomHtml(
-                        cachedHTML,
+                        paintedHTML,
                         theme: theme,
                         generation: loadGeneration,
                         forceDocumentReload: true
@@ -2142,6 +2146,9 @@ class ArticleViewModel: NSObject, ObservableObject {
         print("🌐 ArticleViewModel: HTML content length: \(html.count) characters")
         lastCommittedArticleHTML = html
         lastAppliedArticleTheme = theme
+        if forceDocumentReload {
+            pendingLiveThemePaintAfterReload = true
+        }
         osrsWebViewThemePaint.apply(to: webView, theme: theme)
 
         let mustWriteDocument = forceDocumentReload || needsContentProcessRecovery
@@ -3049,6 +3056,10 @@ class ArticleViewModel: NSObject, ObservableObject {
         webView?.evaluateJavaScript(
             "if (window.OSRSWikiTheme) { window.OSRSWikiTheme.switchTheme(\(isDark)); }"
         )
+        if let html = lastCommittedArticleHTML {
+            lastCommittedArticleHTML = applyingLivePaintPreferences(html, theme: theme)
+        }
+        lastAppliedArticleTheme = theme
         osrsPreparedArticleWebViewStore.shared.removeAll()
     }
 
@@ -4224,6 +4235,10 @@ extension ArticleViewModel: WKNavigationDelegate {
         extractTableOfContents()
         markWebKitReady(for: generation)
         applyAccessibilityReflow(to: webView)
+        if pendingLiveThemePaintAfterReload {
+            pendingLiveThemePaintAfterReload = false
+            applyLiveTheme(osrsAppRoot.themeManager.currentTheme, themeManager: osrsAppRoot.themeManager)
+        }
 
         // CRITICAL FIX: Complete progress for web archives immediately after loading
         if pageUrl.scheme == "app-assets" || webView.url?.scheme == "file" {
