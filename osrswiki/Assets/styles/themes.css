@@ -63,9 +63,10 @@
     /* Interface and interactive elements */
     --sidebar: var(--sidebar-color);
     --wikitable-bg-lighter: #f0e7d4;
-    --ooui-progressive: #0645ad;
-    --ooui-progressive--hover: #0b5394;
-    --ooui-accent: #36c;
+    --osrsw-brown: #605443;
+    --ooui-progressive: var(--osrsw-brown);
+    --ooui-progressive--hover: #3a301d;
+    --ooui-accent: var(--link-color);
     
     /* Message boxes and notifications */
     --errorbox-bg: #ffeedd;
@@ -75,15 +76,16 @@
     --successbox-bg: #f0fff0;
     --successbox-border: #32cd32;
     
-    /* OOUI interface elements */
-    --ooui-normal: #f8f9fa;
-    --ooui-normal--hover: #eaecf0;
-    --ooui-normal-border: #a2a9b1;
-    --ooui-text: #222;
-    --ooui-input: #fff;
-    --ooui-input-border: #a2a9b1;
-    --ooui-input-border--hover: #72777d;
-    --ooui-window-background: rgba(255,255,255,0.95);
+    /* OOUI interface elements — parchment, not Wikipedia Vector grey/white */
+    --ooui-normal: var(--wikitable-bg-lighter);
+    --ooui-normal--hover: var(--body-mid);
+    --ooui-normal-border: var(--body-border);
+    --ooui-text: var(--text-color);
+    --ooui-input: var(--body-main);
+    --ooui-input-border: var(--body-border);
+    --ooui-input-border--hover: var(--link-color);
+    --ooui-window-background: rgba(226, 219, 200, 0.95);
+    --ooui-on-progressive: #fff;
     
     /* Content-specific variables */
     --production-selected-background: var(--table-yes-background);
@@ -102,9 +104,32 @@
     --filter-black-to-link: brightness(0) saturate(100%) invert(35%) sepia(29%) saturate(1292%) hue-rotate(16deg) brightness(93%) contrast(92%);
     
     /* OOUI disabled states */
-    --ooui-disabled: #c8ccd1;
-    --ooui-disabled-text: #72777d;
-    --ooui-disabled-border: #c8ccd1;
+    --ooui-disabled: var(--body-dark-shade);
+    --ooui-disabled-text: var(--subtle-color);
+    --ooui-disabled-border: var(--body-border);
+
+    /* Codex aliases. WikimediaUI widget CSS uses these with #fff/#36c
+       fallbacks; keep them on :root (critical) so calculators and other
+       OOUI chrome follow the article parchment before deferred sheets. */
+    --background-color-base: var(--body-main);
+    --background-color-interactive: var(--ooui-normal);
+    --background-color-interactive-subtle: var(--ooui-normal);
+    --background-color-interactive--hover: var(--ooui-normal--hover);
+    --background-color-interactive-subtle--hover: var(--ooui-normal--hover);
+    --background-color-progressive: var(--ooui-progressive);
+    --background-color-progressive--hover: var(--ooui-progressive--hover);
+    --background-color-progressive--focus: var(--ooui-progressive);
+    --background-color-progressive--active: var(--ooui-progressive--hover);
+    --background-color-disabled: var(--ooui-disabled);
+    --border-color-base: var(--ooui-normal-border);
+    --border-color-input-binary: var(--ooui-input-border);
+    --border-color-input-binary--checked: var(--ooui-progressive);
+    --border-color-progressive--focus: var(--ooui-accent);
+    --border-color-progressive--hover: var(--ooui-progressive--hover);
+    --border-color-disabled: var(--ooui-disabled-border);
+    --box-shadow-color-progressive--focus: var(--ooui-accent);
+    --color-base: var(--text-color);
+    --color-disabled: var(--ooui-disabled-text);
     
     /* Phase 4: Gaming & Community Features */
     --ajaxpoll-background: var(--wikitable-bg);
@@ -263,9 +288,10 @@ body.theme-osrs-dark {
     /* Interface and interactive elements adapted for dark theme */
     --sidebar: var(--sidebar-color);
     --wikitable-bg-lighter: #453c33;
-    --ooui-progressive: #4d9bff;
-    --ooui-progressive--hover: #6babff;
-    --ooui-accent: #72a7f7;
+    --ooui-progressive: #b79d7e;
+    --ooui-progressive--hover: #cbb496;
+    --ooui-accent: var(--link-color);
+    --ooui-on-progressive: #28221d;
     
     /* Message boxes and notifications adapted for dark theme */
     --errorbox-bg: #4a2626;

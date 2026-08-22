@@ -480,12 +480,208 @@ table.archivelist th,
     width: 100% !important;
 }
 
-.osrs-calculator-panel h2 {
+.osrs-calculator-panel h2,
+.osrs-calculator-panel .oo-ui-fieldsetLayout-header {
     border: 0;
-    font-family: sans-serif;
-    font-size: 1.1em;
+    border-bottom: 1px solid var(--sidebar-color, var(--body-border));
     margin: 0 0 0.75em;
-    padding: 0;
+    padding: 0 0 0.2em;
+}
+
+.osrs-calculator-panel h2,
+.osrs-calculator-panel .oo-ui-fieldsetLayout-header,
+.osrs-calculator-panel .oo-ui-fieldsetLayout-header .oo-ui-labelElement-label {
+    color: var(--heading-color, var(--text-color));
+    font-family: 'Alegreya', 'Palatino', 'Georgia', serif !important;
+    font-size: 1.35em;
+    font-weight: 700;
+}
+
+/* Calculator article-theme chrome: OOUI + gadget-calc mapped onto parchment
+   tokens. Late WikimediaUI widget CSS is more specific than our generic
+   OOUI restyles and uses #fff/#36c fallbacks, which is why calculators
+   loaded as Wikipedia-grey forms on parchment articles. */
+html body .osrs-calculator-layout,
+html body .osrs-calculator-panel {
+    color: var(--text-color);
+    font-family: 'Alegreya Sans', 'Inter', sans-serif;
+}
+
+html body .osrs-calculator-templates,
+html body table.archivelist.osrs-calculator-templates,
+html body .osrs-calculator-templates th,
+html body .osrs-calculator-templates td {
+    background: var(--wikitable-bg) !important;
+    border-color: var(--wikitable-border) !important;
+    color: var(--text-color) !important;
+    font-family: 'Alegreya Sans', 'Inter', sans-serif;
+}
+
+html body .osrs-calculator-templates th {
+    font-family: 'Alegreya', 'Palatino', 'Georgia', serif;
+    font-size: 1.15em;
+}
+
+html body .osrs-calculator-panel .oo-ui-fieldLayout.oo-ui-labelElement.oo-ui-fieldLayout-align-right:not(.jsCalc-field-check):not(.jsCalc-field-toggleswitch) > .oo-ui-fieldLayout-body,
+html body .osrs-calculator-panel .oo-ui-fieldLayout.oo-ui-labelElement.oo-ui-fieldLayout-align-left:not(.jsCalc-field-check):not(.jsCalc-field-toggleswitch) > .oo-ui-fieldLayout-body,
+html body .osrs-calculator-layout .jcTable .oo-ui-fieldLayout:not(.jsCalc-field-check):not(.jsCalc-field-toggleswitch) > .oo-ui-fieldLayout-body {
+    align-items: stretch !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 0.28em !important;
+    max-width: 100% !important;
+    width: 100% !important;
+}
+
+html body .osrs-calculator-panel .oo-ui-fieldLayout.oo-ui-labelElement.oo-ui-fieldLayout-align-right:not(.jsCalc-field-check):not(.jsCalc-field-toggleswitch) > .oo-ui-fieldLayout-body > .oo-ui-fieldLayout-header,
+html body .osrs-calculator-panel .oo-ui-fieldLayout.oo-ui-labelElement.oo-ui-fieldLayout-align-right:not(.jsCalc-field-check):not(.jsCalc-field-toggleswitch) > .oo-ui-fieldLayout-body > .oo-ui-fieldLayout-field,
+html body .osrs-calculator-panel .oo-ui-fieldLayout.oo-ui-labelElement.oo-ui-fieldLayout-align-left:not(.jsCalc-field-check):not(.jsCalc-field-toggleswitch) > .oo-ui-fieldLayout-body > .oo-ui-fieldLayout-header,
+html body .osrs-calculator-panel .oo-ui-fieldLayout.oo-ui-labelElement.oo-ui-fieldLayout-align-left:not(.jsCalc-field-check):not(.jsCalc-field-toggleswitch) > .oo-ui-fieldLayout-body > .oo-ui-fieldLayout-field {
+    display: block !important;
+    flex: 0 1 auto !important;
+    float: none !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    order: 0 !important;
+    overflow: visible !important;
+    text-align: start !important;
+    width: 100% !important;
+}
+
+html body .osrs-calculator-panel .oo-ui-fieldLayout-header > .oo-ui-labelElement-label,
+html body .osrs-calculator-panel .jsCalc-field-check .oo-ui-fieldLayout-header {
+    color: var(--text-color) !important;
+    display: block !important;
+    font-family: 'Alegreya Sans', 'Inter', sans-serif;
+    font-size: 1em;
+    font-weight: 600;
+    height: auto !important;
+    margin: 0 !important;
+    overflow: visible !important;
+    padding: 0 !important;
+    position: static !important;
+    text-align: start !important;
+    white-space: normal !important;
+}
+
+html body .osrs-calculator-panel .oo-ui-fieldLayout.oo-ui-labelElement.oo-ui-fieldLayout-align-right.jsCalc-field-check,
+html body .osrs-calculator-panel .oo-ui-fieldLayout.oo-ui-labelElement.oo-ui-fieldLayout-align-right.jsCalc-field-toggleswitch,
+html body .osrs-calculator-panel .oo-ui-fieldLayout.oo-ui-labelElement.oo-ui-fieldLayout-align-left.jsCalc-field-check,
+html body .osrs-calculator-panel .oo-ui-fieldLayout.oo-ui-labelElement.oo-ui-fieldLayout-align-left.jsCalc-field-toggleswitch {
+    margin: 0.18em 0 !important;
+}
+
+html body .osrs-calculator-panel .oo-ui-fieldLayout.oo-ui-labelElement.oo-ui-fieldLayout-align-right.jsCalc-field-check > .oo-ui-fieldLayout-body,
+html body .osrs-calculator-panel .oo-ui-fieldLayout.oo-ui-labelElement.oo-ui-fieldLayout-align-right.jsCalc-field-toggleswitch > .oo-ui-fieldLayout-body,
+html body .osrs-calculator-panel .oo-ui-fieldLayout.oo-ui-labelElement.oo-ui-fieldLayout-align-left.jsCalc-field-check > .oo-ui-fieldLayout-body,
+html body .osrs-calculator-panel .oo-ui-fieldLayout.oo-ui-labelElement.oo-ui-fieldLayout-align-left.jsCalc-field-toggleswitch > .oo-ui-fieldLayout-body {
+    align-items: center !important;
+    display: flex !important;
+    flex-direction: row !important;
+    gap: 0.55em !important;
+    max-width: 100% !important;
+    width: 100% !important;
+}
+
+html body .osrs-calculator-panel .oo-ui-fieldLayout.oo-ui-labelElement.oo-ui-fieldLayout-align-right.jsCalc-field-check > .oo-ui-fieldLayout-body > .oo-ui-fieldLayout-field,
+html body .osrs-calculator-panel .oo-ui-fieldLayout.oo-ui-labelElement.oo-ui-fieldLayout-align-right.jsCalc-field-toggleswitch > .oo-ui-fieldLayout-body > .oo-ui-fieldLayout-field,
+html body .osrs-calculator-panel .oo-ui-fieldLayout.oo-ui-labelElement.oo-ui-fieldLayout-align-left.jsCalc-field-check > .oo-ui-fieldLayout-body > .oo-ui-fieldLayout-field,
+html body .osrs-calculator-panel .oo-ui-fieldLayout.oo-ui-labelElement.oo-ui-fieldLayout-align-left.jsCalc-field-toggleswitch > .oo-ui-fieldLayout-body > .oo-ui-fieldLayout-field {
+    display: block !important;
+    flex: 0 0 auto !important;
+    float: none !important;
+    max-width: none !important;
+    order: 1 !important;
+    overflow: visible !important;
+    width: auto !important;
+}
+
+html body .osrs-calculator-panel .oo-ui-fieldLayout.oo-ui-labelElement.oo-ui-fieldLayout-align-right.jsCalc-field-check > .oo-ui-fieldLayout-body > .oo-ui-fieldLayout-header,
+html body .osrs-calculator-panel .oo-ui-fieldLayout.oo-ui-labelElement.oo-ui-fieldLayout-align-right.jsCalc-field-toggleswitch > .oo-ui-fieldLayout-body > .oo-ui-fieldLayout-header,
+html body .osrs-calculator-panel .oo-ui-fieldLayout.oo-ui-labelElement.oo-ui-fieldLayout-align-left.jsCalc-field-check > .oo-ui-fieldLayout-body > .oo-ui-fieldLayout-header,
+html body .osrs-calculator-panel .oo-ui-fieldLayout.oo-ui-labelElement.oo-ui-fieldLayout-align-left.jsCalc-field-toggleswitch > .oo-ui-fieldLayout-body > .oo-ui-fieldLayout-header {
+    display: block !important;
+    flex: 1 1 auto !important;
+    float: none !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    order: 2 !important;
+    overflow: visible !important;
+    text-align: start !important;
+    width: auto !important;
+}
+
+html body .osrs-calculator-panel .oo-ui-buttonElement > .oo-ui-buttonElement-button {
+    background-color: var(--ooui-normal) !important;
+    border: 1px solid var(--ooui-normal-border) !important;
+    border-radius: 4px !important;
+    box-sizing: border-box !important;
+    color: var(--ooui-text) !important;
+    font-family: 'Alegreya Sans', 'Inter', sans-serif !important;
+    font-size: 1em !important;
+    font-weight: 700 !important;
+    min-height: 40px !important;
+    padding: 0.4em 0.85em !important;
+}
+
+html body .osrs-calculator-panel .oo-ui-buttonElement-framed.oo-ui-widget-enabled.oo-ui-flaggedElement-primary.oo-ui-flaggedElement-progressive > .oo-ui-buttonElement-button,
+html body .osrs-calculator-panel .jcSubmit.oo-ui-buttonElement > .oo-ui-buttonElement-button,
+html body .osrs-calculator-panel .jcSubmit .oo-ui-buttonElement-button {
+    background-color: var(--ooui-progressive) !important;
+    border-color: var(--ooui-progressive) !important;
+    color: var(--ooui-on-progressive, #fff) !important;
+}
+
+html body .osrs-calculator-panel .oo-ui-textInputWidget .oo-ui-inputWidget-input,
+html body .osrs-calculator-panel .oo-ui-numberInputWidget .oo-ui-inputWidget-input,
+html body .osrs-calculator-panel .oo-ui-dropdownInputWidget select,
+html body .osrs-calculator-panel .oo-ui-comboBoxInputWidget .oo-ui-inputWidget-input {
+    background-color: var(--ooui-input) !important;
+    border: 1px solid var(--ooui-input-border) !important;
+    border-radius: 4px !important;
+    color: var(--text-color) !important;
+    font-family: inherit !important;
+    min-height: 40px !important;
+}
+
+html body .osrs-calculator-panel .oo-ui-numberInputWidget,
+html body .osrs-calculator-panel .oo-ui-numberInputWidget-field {
+    box-sizing: border-box !important;
+    max-width: 100% !important;
+    width: 100% !important;
+}
+
+html body .osrs-calculator-panel .oo-ui-checkboxInputWidget [type='checkbox'] + span,
+html body .osrs-calculator-panel .oo-ui-checkboxInputWidget.oo-ui-widget-enabled [type='checkbox'] + span {
+    background-color: var(--ooui-input) !important;
+    border-color: var(--ooui-input-border) !important;
+}
+
+html body .osrs-calculator-panel .oo-ui-checkboxInputWidget.oo-ui-widget-enabled [type='checkbox']:checked + span {
+    background-color: var(--ooui-progressive) !important;
+    border-color: var(--ooui-progressive) !important;
+}
+
+html body .osrs-calculator-panel .jsCalc-field-fixed > .oo-ui-fieldLayout-body > .oo-ui-fieldLayout-field > .oo-ui-labelElement-label:empty,
+html body .osrs-calculator-layout .jsCalc-field-fixed > .oo-ui-fieldLayout-body > .oo-ui-fieldLayout-field > .oo-ui-labelElement-label:empty {
+    background-color: var(--ooui-input) !important;
+    border: 1px solid var(--ooui-input-border) !important;
+    color: var(--text-color) !important;
+}
+
+html body.theme-osrs-dark .osrs-calculator-panel .jsCalc-field-fixed > .oo-ui-fieldLayout-body > .oo-ui-fieldLayout-field > .oo-ui-labelElement-label:empty,
+html.theme-osrs-dark .osrs-calculator-panel .jsCalc-field-fixed > .oo-ui-fieldLayout-body > .oo-ui-fieldLayout-field > .oo-ui-labelElement-label:empty,
+html body.theme-osrs-dark .oo-ui-horizontalLayout.jsCalc-group,
+html.theme-osrs-dark .oo-ui-horizontalLayout.jsCalc-group {
+    background-color: var(--ooui-input) !important;
+    border-color: var(--wikitable-border) !important;
+}
+
+html body .osrs-calculator-panel .oo-ui-horizontalLayout.jsCalc-group {
+    background: var(--wikitable-bg);
+    border: 1px solid var(--wikitable-border) !important;
+    border-radius: 4px;
+    color: var(--text-color);
 }
 
 .osrs-calculator-row,

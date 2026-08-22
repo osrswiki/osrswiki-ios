@@ -125,6 +125,29 @@
         }
         pre.hidden = true;
         formHost.classList.add('osrs-calculator-panel');
+        osrsReassertCalculatorThemeSheets();
+    }
+
+    function osrsReassertCalculatorThemeSheets() {
+        if (!document.querySelector('.osrs-calculator-layout, pre.jcConfig')) {
+            return;
+        }
+        var head = document.head || document.documentElement;
+        var names = [
+            'wiki-integration.css',
+            'gadget_calc.css',
+            'fixes.css',
+            'ios-article-aesthetics.css',
+            'android-article-aesthetics.css'
+        ];
+        names.forEach(function(name) {
+            document.querySelectorAll('link[rel="stylesheet"]').forEach(function(node) {
+                var href = node.getAttribute('href') || node.getAttribute('data-osrs-css-href') || '';
+                if (href.indexOf(name) !== -1) {
+                    head.appendChild(node);
+                }
+            });
+        });
     }
 
     function shouldProxyCalculatorRequest(url) {
@@ -268,6 +291,7 @@
                 try { window.__osrsRebuildCalcs(); } catch (ignore) {}
             }
             osrsHideCalculatorJsPlaceholder();
+            osrsReassertCalculatorThemeSheets();
         };
         function osrsCalcOOUIReady() {
             var cfg = '';
@@ -398,6 +422,7 @@
                     start();
                 }
                 osrsHideCalculatorJsPlaceholder();
+                osrsReassertCalculatorThemeSheets();
             }, 2500);
         }
     }
@@ -498,6 +523,7 @@
                 prepareCalculatorLayout(pre, formTarget, findCalculatorResultNode(config, formTarget));
             }
         });
+        osrsReassertCalculatorThemeSheets();
         patchAjax();
         loadCalcCore();
         osrsWatchCalculatorResults();

@@ -147,6 +147,17 @@ final class osrsCalculatorParityTests: XCTestCase {
         XCTAssertTrue(runtime.contains("only=scripts"))
         XCTAssertTrue(runtime.contains("/load.php?modules=jquery&only=scripts"))
         XCTAssertTrue(runtime.contains("osrsHideCalculatorJsPlaceholder"))
+        XCTAssertTrue(runtime.contains("osrsReassertCalculatorThemeSheets"))
+        if let gadgetRange = runtime.range(of: "'gadget_calc.css'"),
+           let fixesRange = runtime.range(of: "'fixes.css'") {
+            XCTAssertLessThan(
+                gadgetRange.lowerBound,
+                fixesRange.lowerBound,
+                "Theme fixes must re-append after gadget_calc so Wikipedia #fff dump cannot win"
+            )
+        } else {
+            XCTFail("Calculator theme sheet order markers missing")
+        }
         XCTAssertTrue(runtime.contains("dynamic calculator requires JavaScript"))
         XCTAssertTrue(runtime.contains("jQuery.ajax.__osrsCalculatorPatched"))
         XCTAssertTrue(runtime.contains("setTimeout(patchAjax, 25)"))

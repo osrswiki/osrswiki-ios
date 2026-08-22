@@ -294,6 +294,182 @@ final class ArticleAestheticRenderingTests: XCTestCase {
         XCTAssertGreaterThan(tabletState["templateWidth"] as? Double ?? 0, (tabletState["viewportWidth"] as? Double ?? 768) * 0.7)
     }
 
+    func testCalculatorOOUIChromeUsesArticleParchmentTokensAgainstLateWikiStyles() async throws {
+        let themesCss = try readAsset("Assets/styles/themes.css")
+        let gadgetCss = try readAsset("Assets/styles/gadget_calc.css")
+        let fixesCss = try readAsset("Assets/styles/fixes.css")
+        let hotSwap = try String(
+            contentsOf: iosRoot.appendingPathComponent("osrswikiUITests/AppearanceThemeHotSwapUITests.swift"),
+            encoding: .utf8
+        )
+
+        XCTAssertFalse(themesCss.contains("--ooui-normal: #f8f9fa"))
+        XCTAssertFalse(themesCss.contains("--ooui-progressive: #0645ad"))
+        XCTAssertFalse(themesCss.contains("--ooui-input: #fff"))
+        XCTAssertTrue(themesCss.contains("--osrsw-brown: #605443"))
+        XCTAssertTrue(themesCss.contains("--background-color-base: var(--body-main)"))
+        XCTAssertTrue(fixesCss.contains(".osrs-calculator-panel h2"))
+        XCTAssertTrue(fixesCss.contains(".osrs-calculator-panel .oo-ui-fieldsetLayout-header"))
+        XCTAssertTrue(
+            fixesCss.contains("font-family: 'Alegreya', 'Palatino', 'Georgia', serif !important"),
+            "Calculator headings (h2 and FieldsetLayout) must use article serif chrome"
+        )
+        XCTAssertTrue(fixesCss.contains("Calculator article-theme chrome"))
+        XCTAssertTrue(fixesCss.contains("jsCalc-field-check"))
+        XCTAssertTrue(
+            fixesCss.contains("align-right.jsCalc-field-check > .oo-ui-fieldLayout-body"),
+            "Checkbox rows must beat the generic align-right column stack"
+        )
+        XCTAssertTrue(hotSwap.contains("app.staticTexts[\"Light\"]"))
+        XCTAssertTrue(hotSwap.contains("hasDarkInk(lightThemePixels)"))
+        XCTAssertFalse(
+            hotSwap.contains(".id(themeManager.selectedTheme)"),
+            "Appearance hot-swap must stay a live restyle, not a view identity reset"
+        )
+
+        attachWebViewToWindow()
+        let html = """
+        <!doctype html>
+        <html>
+        <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <style>
+        \(themesCss)
+        .oo-ui-fieldLayout.oo-ui-labelElement.oo-ui-fieldLayout-align-right > .oo-ui-fieldLayout-body {
+            display: flex;
+        }
+        .oo-ui-fieldLayout.oo-ui-labelElement.oo-ui-fieldLayout-align-right > .oo-ui-fieldLayout-body > .oo-ui-fieldLayout-field {
+            width: 60%;
+            flex-shrink: 0;
+        }
+        .oo-ui-fieldLayout.oo-ui-labelElement.oo-ui-fieldLayout-align-right > .oo-ui-fieldLayout-body > .oo-ui-fieldLayout-header {
+            flex-grow: 1;
+            text-align: right;
+        }
+        .oo-ui-buttonElement > .oo-ui-buttonElement-button {
+            background-color: #f8f9fa;
+            border: 1px solid #a2a9b1;
+            color: #222;
+            padding-top: 2.14285714em;
+        }
+        .oo-ui-buttonElement-framed.oo-ui-widget-enabled.oo-ui-flaggedElement-primary.oo-ui-flaggedElement-progressive > .oo-ui-buttonElement-button {
+            background-color: #36c;
+            border-color: #36c;
+            color: #fff;
+        }
+        .oo-ui-textInputWidget .oo-ui-inputWidget-input {
+            background-color: #fff;
+            border: 1px solid #a2a9b1;
+            color: #000;
+        }
+        .oo-ui-checkboxInputWidget [type='checkbox'] + span {
+            background-color: var(--background-color-base, #fff);
+            border: 1px solid #a2a9b1;
+        }
+        \(gadgetCss)
+        \(fixesCss)
+        </style>
+        </head>
+        <body>
+        <div class="osrs-calculator-layout">
+          <div class="osrs-calculator-panel">
+            <h2>Calculator</h2>
+            <div class="oo-ui-widget oo-ui-labelElement oo-ui-fieldsetLayout jcTable">
+              <div class="oo-ui-fieldsetLayout-header">
+                <span class="oo-ui-labelElement-label">Calculator</span>
+              </div>
+            </div>
+            <div class="oo-ui-fieldLayout oo-ui-labelElement oo-ui-fieldLayout-align-right jsCalc-field jsCalc-field-check">
+              <div class="oo-ui-fieldLayout-body">
+                <div class="oo-ui-fieldLayout-field">
+                  <span class="oo-ui-checkboxInputWidget oo-ui-widget oo-ui-widget-enabled">
+                    <input type="checkbox" checked>
+                    <span class="osrs-calc-check-box"></span>
+                  </span>
+                </div>
+                <div class="oo-ui-fieldLayout-header">
+                  <label class="oo-ui-labelElement-label">Ahrim?</label>
+                </div>
+              </div>
+            </div>
+            <span class="oo-ui-buttonElement oo-ui-buttonElement-framed oo-ui-widget oo-ui-widget-enabled oo-ui-labelElement">
+              <a class="oo-ui-buttonElement-button">Lookup</a>
+            </span>
+            <span class="oo-ui-buttonElement oo-ui-buttonElement-framed oo-ui-widget oo-ui-widget-enabled oo-ui-flaggedElement-primary oo-ui-flaggedElement-progressive jcSubmit">
+              <a class="oo-ui-buttonElement-button">Submit</a>
+            </span>
+            <div class="oo-ui-textInputWidget oo-ui-widget oo-ui-widget-enabled">
+              <input class="oo-ui-inputWidget-input" value="99">
+            </div>
+          </div>
+        </div>
+        </body>
+        </html>
+        """
+
+        try await load(html)
+        let state = try await evaluate("""
+        (() => {
+            const heading = document.querySelector('.osrs-calculator-panel .oo-ui-fieldsetLayout-header .oo-ui-labelElement-label')
+                || document.querySelector('.osrs-calculator-panel h2');
+            const label = document.querySelector('.jsCalc-field-check .oo-ui-labelElement-label');
+            const lookup = document.querySelector('.oo-ui-labelElement > .oo-ui-buttonElement-button');
+            const submit = document.querySelector('.jcSubmit .oo-ui-buttonElement-button');
+            const input = document.querySelector('.oo-ui-inputWidget-input');
+            const check = document.querySelector('.osrs-calc-check-box');
+            const labelRect = label.getBoundingClientRect();
+            const fieldRect = document.querySelector('.jsCalc-field-check .oo-ui-fieldLayout-field').getBoundingClientRect();
+            const rgb = (el, prop) => getComputedStyle(el)[prop];
+            const channels = (value) => {
+                const m = String(value).match(/rgba?\\((\\d+),\\s*(\\d+),\\s*(\\d+)/);
+                return m ? [Number(m[1]), Number(m[2]), Number(m[3])] : [0, 0, 0];
+            };
+            const nearWhite = (value) => {
+                const [r, g, b] = channels(value);
+                return r > 245 && g > 245 && b > 245;
+            };
+            const wikiBlue = (value) => {
+                const [r, g, b] = channels(value);
+                return b > 150 && b > r + 40;
+            };
+            return {
+                headingFont: getComputedStyle(heading).fontFamily,
+                headingIsGenericSans: String(getComputedStyle(heading).fontFamily).trim().toLowerCase() === 'sans-serif',
+                headingHasAlegreya: String(getComputedStyle(heading).fontFamily).includes('Alegreya'),
+                labelText: label.textContent,
+                labelVisible: labelRect.width > 20 && labelRect.height > 8 && getComputedStyle(label).color !== 'rgba(0, 0, 0, 0)',
+                labelNotClippedRight: labelRect.left < document.documentElement.clientWidth - 8,
+                checkboxThenLabel: fieldRect.left <= labelRect.left,
+                checkboxLabelSameRow: Math.abs(fieldRect.top - labelRect.top) < 16,
+                labelAfterCheckbox: labelRect.left >= fieldRect.right - 2,
+                lookupBg: rgb(lookup, 'backgroundColor'),
+                submitBg: rgb(submit, 'backgroundColor'),
+                inputBg: rgb(input, 'backgroundColor'),
+                checkBg: rgb(check, 'backgroundColor'),
+                lookupNearWhite: nearWhite(rgb(lookup, 'backgroundColor')),
+                inputNearWhite: nearWhite(rgb(input, 'backgroundColor')),
+                checkNearWhite: nearWhite(rgb(check, 'backgroundColor')),
+                submitWikiBlue: wikiBlue(rgb(submit, 'backgroundColor')),
+                lookupPaddingTop: parseFloat(getComputedStyle(lookup).paddingTop)
+            };
+        })()
+        """)
+
+        XCTAssertEqual(state["headingIsGenericSans"] as? Bool, false, "Heading font was \(state["headingFont"] ?? "")")
+        XCTAssertEqual(state["headingHasAlegreya"] as? Bool, true, "Heading font was \(state["headingFont"] ?? "")")
+        XCTAssertEqual(state["labelText"] as? String, "Ahrim?")
+        XCTAssertEqual(state["labelVisible"] as? Bool, true, "\(state)")
+        XCTAssertEqual(state["labelNotClippedRight"] as? Bool, true, "\(state)")
+        XCTAssertEqual(state["checkboxThenLabel"] as? Bool, true, "\(state)")
+        XCTAssertEqual(state["checkboxLabelSameRow"] as? Bool, true, "Checkbox/label stacked vertically: \(state)")
+        XCTAssertEqual(state["labelAfterCheckbox"] as? Bool, true, "\(state)")
+        XCTAssertEqual(state["lookupNearWhite"] as? Bool, false, "Lookup stayed Wikipedia white: \(state["lookupBg"] ?? "")")
+        XCTAssertEqual(state["inputNearWhite"] as? Bool, false, "Input stayed Wikipedia white: \(state["inputBg"] ?? "")")
+        XCTAssertEqual(state["checkNearWhite"] as? Bool, false, "Checkbox stayed Wikipedia white: \(state["checkBg"] ?? "")")
+        XCTAssertEqual(state["submitWikiBlue"] as? Bool, false, "Submit stayed Wikipedia blue: \(state["submitBg"] ?? "")")
+        XCTAssertLessThan(state["lookupPaddingTop"] as? Double ?? 99, 20, "OOUI icon padding-top leaked onto calculator buttons")
+    }
+
     func testMoneyMakingControlUsesInlineThemedIconControls() async throws {
         let articleTools = try readAsset("Assets/web/article_tools.js")
         let fixesCss = try readAsset("Assets/styles/fixes.css")
