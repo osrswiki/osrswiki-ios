@@ -91,14 +91,23 @@
 
     function prepareCalculatorLayout(pre, formTarget, resultTarget) {
         var formHost = formTarget.closest('table') || formTarget;
-        var scrollWrap = formHost && formHost.closest &&
-            formHost.closest('.osrs-scroll-generated-surface');
-        if (scrollWrap && scrollWrap.parentNode) {
+        var scrollWrap = formHost && formHost.closest && formHost.closest(
+            '.osrs-scroll-generated-surface, .osrs-article-scroll-region, .osrs-local-scroll-surface'
+        );
+        while (scrollWrap && scrollWrap.parentNode &&
+                !scrollWrap.classList.contains('mw-parser-output') &&
+                !scrollWrap.classList.contains('mw-body-content') &&
+                scrollWrap.tagName !== 'BODY' &&
+                scrollWrap.tagName !== 'HTML') {
+            var wrapParent = scrollWrap.parentNode;
             while (scrollWrap.firstChild) {
-                scrollWrap.parentNode.insertBefore(scrollWrap.firstChild, scrollWrap);
+                wrapParent.insertBefore(scrollWrap.firstChild, scrollWrap);
             }
-            scrollWrap.parentNode.removeChild(scrollWrap);
+            wrapParent.removeChild(scrollWrap);
             formHost = formTarget.closest('table') || formTarget;
+            scrollWrap = formHost && formHost.closest && formHost.closest(
+                '.osrs-scroll-generated-surface, .osrs-article-scroll-region, .osrs-local-scroll-surface'
+            );
         }
         var existing = formHost.closest('.osrs-calculator-layout');
         if (existing) {

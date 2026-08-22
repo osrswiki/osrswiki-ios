@@ -34,6 +34,8 @@ final class osrsCalculatorThemeContrastUITests: XCTestCase {
             "Ahrim? must be visible next to the checkbox, not overflow-clipped. \(ahrim.frame)"
         )
         attachScreenshot(from: app, name: "calculator-theme-contrast-barrows")
+        assertLastControlClearsTabBar(["Submit", "Calculate"], in: app, webView: webView)
+        attachScreenshot(from: app, name: "calculator-theme-contrast-barrows-scrolled")
     }
 
     func testCombatLevelFieldLabelsStayOnscreenAndThemed() throws {
@@ -47,6 +49,8 @@ final class osrsCalculatorThemeContrastUITests: XCTestCase {
             "Attack label was clipped off-screen by desktop OOUI align-right layout. \(attack.frame)"
         )
         attachScreenshot(from: app, name: "calculator-theme-contrast-combat")
+        assertLastControlClearsTabBar(["Prayer", "Submit"], in: app, webView: webView)
+        attachScreenshot(from: app, name: "calculator-theme-contrast-combat-scrolled")
     }
 
     private func launchArticle(title: String, path: String) -> XCUIApplication {
@@ -81,6 +85,35 @@ final class osrsCalculatorThemeContrastUITests: XCTestCase {
             return webMatch
         }
         return app.descendants(matching: .any)[name].firstMatch
+    }
+
+    private func assertLastControlClearsTabBar(
+        _ names: [String],
+        in app: XCUIApplication,
+        webView: XCUIElement
+    ) {
+        let tabBar = app.descendants(matching: .any)["article_bottom_bar"].firstMatch
+        XCTAssertTrue(tabBar.waitForExistence(timeout: 5), app.debugDescription)
+        var matched: XCUIElement?
+        for _ in 0..<12 {
+            for name in names {
+                let control = firstMatchingControl(name, in: app, webView: webView)
+                if control.exists, control.frame.height > 4 {
+                    matched = control
+                    if control.frame.maxY < tabBar.frame.minY - 8 {
+                        return
+                    }
+                }
+            }
+            webView.swipeUp()
+        }
+        XCTAssertNotNil(matched, "Missing \(names.joined(separator: "/")) after scrolling. \(app.debugDescription)")
+        guard let control = matched else { return }
+        XCTAssertLessThan(
+            control.frame.maxY,
+            tabBar.frame.minY - 8,
+            "\(control.label) is under the More tab bar. control=\(control.frame) tab=\(tabBar.frame)"
+        )
     }
 
     private func attachScreenshot(from app: XCUIApplication, name: String) {

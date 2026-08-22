@@ -252,7 +252,7 @@ final class ArticleAestheticRenderingTests: XCTestCase {
         param = strength|Strength|1|int|1-99
         param = hitpoints|Hitpoints|10|int|9-99
         </pre>
-        <table class="calculator-host"><tbody><tr><td><div id="combatCalcForm">Please wait for the form to load.</div><div id="combatCalcResult"></div></td></tr></tbody></table>
+        <table class="calculator-host" width="800" style="width:800px"><tbody><tr><td><div id="combatCalcForm">Please wait for the form to load.</div><div id="combatCalcResult"></div></td></tr></tbody></table>
         <script>\(runtime)</script>
         </body>
         </html>
@@ -271,7 +271,9 @@ final class ArticleAestheticRenderingTests: XCTestCase {
                 templateFloat: getComputedStyle(templates).float,
                 templateBeforePanel: templateRect.bottom <= panelRect.top,
                 columns: getComputedStyle(layout).gridTemplateColumns,
-                placeholderKept: (document.getElementById('combatCalcForm')?.innerText || '').includes('Please wait for the form to load')
+                placeholderKept: (document.getElementById('combatCalcForm')?.innerText || '').includes('Please wait for the form to load'),
+                panelWidth: panelRect.width,
+                viewportWidth: document.documentElement.clientWidth
             };
         })()
         """)
@@ -281,6 +283,11 @@ final class ArticleAestheticRenderingTests: XCTestCase {
         XCTAssertEqual(phoneState["templateBeforePanel"] as? Bool, true)
         XCTAssertEqual((phoneState["columns"] as? String ?? "").split(separator: " ").count, 1)
         XCTAssertEqual(phoneState["placeholderKept"] as? Bool, true)
+        XCTAssertLessThanOrEqual(
+            phoneState["panelWidth"] as? Double ?? 999,
+            (phoneState["viewportWidth"] as? Double ?? 0) + 1,
+            "Calculator host table must shrink to the viewport, not keep a desktop width: \(phoneState)"
+        )
 
         webView.frame = CGRect(x: 0, y: 0, width: 768, height: 1024)
         let tabletState = try await evaluate("""
@@ -314,11 +321,20 @@ final class ArticleAestheticRenderingTests: XCTestCase {
             fixesCss.contains("font-family: 'Alegreya', 'Palatino', 'Georgia', serif !important"),
             "Calculator headings (h2 and FieldsetLayout) must use article serif chrome"
         )
-        XCTAssertTrue(fixesCss.contains("Calculator article-theme chrome"))
+        XCTAssertTrue(fixesCss.contains("Calculator infobox language"))
         XCTAssertTrue(fixesCss.contains("jsCalc-field-check"))
         XCTAssertTrue(
-            fixesCss.contains("align-right.jsCalc-field-check > .oo-ui-fieldLayout-body"),
-            "Checkbox rows must beat the generic align-right column stack"
+            fixesCss.contains("grid-template-columns: minmax(6em, 38%) minmax(0, 1fr)"),
+            "Calculator fields must use an infobox-like label|control grid"
+        )
+        XCTAssertTrue(fixesCss.contains("osrs-calculator-templates > tbody"))
+        XCTAssertTrue(fixesCss.contains("oo-ui-numberInputWidget-buttoned"))
+        XCTAssertTrue(fixesCss.contains("oo-ui-numberInputWidget-field"))
+        XCTAssertTrue(fixesCss.contains("grid-row: 1"))
+        XCTAssertTrue(fixesCss.contains("table.osrs-calculator-panel"))
+        XCTAssertTrue(
+            fixesCss.contains("96px) + 12px"),
+            "Calculator layout must add tab-bar clearance on top of baked article chrome"
         )
         XCTAssertTrue(hotSwap.contains("app.staticTexts[\"Light\"]"))
         XCTAssertTrue(hotSwap.contains("hasDarkInk(lightThemePixels)"))
@@ -366,12 +382,29 @@ final class ArticleAestheticRenderingTests: XCTestCase {
             background-color: var(--background-color-base, #fff);
             border: 1px solid #a2a9b1;
         }
+        .oo-ui-numberInputWidget-field {
+            display: table;
+            table-layout: fixed;
+            width: 100%;
+        }
+        .oo-ui-numberInputWidget-buttoned .oo-ui-buttonWidget,
+        .oo-ui-numberInputWidget-buttoned .oo-ui-inputWidget-input {
+            display: table-cell;
+            height: 100%;
+        }
         \(gadgetCss)
         \(fixesCss)
         </style>
         </head>
         <body>
         <div class="osrs-calculator-layout">
+          <table class="archivelist osrs-calculator-templates">
+            <tbody>
+              <tr><td><img class="mw-file-element" width="120" height="120" alt=""></td></tr>
+              <tr><th>Templates used</th></tr>
+              <tr><td><a href="/w/Calculator:Barrows/Template">Calculator:Barrows/Template</a></td></tr>
+            </tbody>
+          </table>
           <div class="osrs-calculator-panel">
             <h2>Calculator</h2>
             <div class="oo-ui-widget oo-ui-labelElement oo-ui-fieldsetLayout jcTable">
@@ -381,14 +414,49 @@ final class ArticleAestheticRenderingTests: XCTestCase {
             </div>
             <div class="oo-ui-fieldLayout oo-ui-labelElement oo-ui-fieldLayout-align-right jsCalc-field jsCalc-field-check">
               <div class="oo-ui-fieldLayout-body">
+                <span class="oo-ui-fieldLayout-header">
+                  <label class="oo-ui-labelElement-label">Ahrim?</label>
+                </span>
                 <div class="oo-ui-fieldLayout-field">
                   <span class="oo-ui-checkboxInputWidget oo-ui-widget oo-ui-widget-enabled">
                     <input type="checkbox" checked>
                     <span class="osrs-calc-check-box"></span>
                   </span>
                 </div>
-                <div class="oo-ui-fieldLayout-header">
-                  <label class="oo-ui-labelElement-label">Ahrim?</label>
+              </div>
+            </div>
+            <div class="oo-ui-fieldLayout oo-ui-labelElement oo-ui-fieldLayout-align-right jsCalc-field jsCalc-field-check osrs-calc-check-field-first">
+              <div class="oo-ui-fieldLayout-body">
+                <div class="oo-ui-fieldLayout-field">
+                  <span class="oo-ui-checkboxInputWidget oo-ui-widget oo-ui-widget-enabled">
+                    <input type="checkbox" checked>
+                    <span class="osrs-calc-check-box osrs-calc-dharok-box"></span>
+                  </span>
+                </div>
+                <span class="oo-ui-fieldLayout-header">
+                  <label class="oo-ui-labelElement-label">Dharok?</label>
+                </span>
+              </div>
+            </div>
+            <div class="oo-ui-fieldLayout oo-ui-labelElement oo-ui-fieldLayout-align-right jsCalc-field jsCalc-field-int">
+              <div class="oo-ui-fieldLayout-body">
+                <span class="oo-ui-fieldLayout-header">
+                  <label class="oo-ui-labelElement-label">Attack</label>
+                </span>
+                <div class="oo-ui-fieldLayout-field">
+                  <div class="oo-ui-widget oo-ui-widget-enabled oo-ui-inputWidget oo-ui-textInputWidget oo-ui-textInputWidget-type-number oo-ui-numberInputWidget oo-ui-numberInputWidget-buttoned">
+                    <span class="oo-ui-iconElement-icon oo-ui-iconElement-noIcon"></span>
+                    <span class="oo-ui-indicatorElement-indicator oo-ui-indicatorElement-noIndicator"></span>
+                    <div class="oo-ui-numberInputWidget-field">
+                      <span class="oo-ui-numberInputWidget-minusButton oo-ui-widget oo-ui-widget-enabled oo-ui-buttonElement oo-ui-buttonElement-framed oo-ui-iconElement oo-ui-buttonWidget">
+                        <a class="oo-ui-buttonElement-button osrs-calc-minus" role="button">−</a>
+                      </span>
+                      <input class="oo-ui-inputWidget-input" value="1">
+                      <span class="oo-ui-numberInputWidget-plusButton oo-ui-widget oo-ui-widget-enabled oo-ui-buttonElement oo-ui-buttonElement-framed oo-ui-iconElement oo-ui-buttonWidget">
+                        <a class="oo-ui-buttonElement-button osrs-calc-plus" role="button">+</a>
+                      </span>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -412,13 +480,26 @@ final class ArticleAestheticRenderingTests: XCTestCase {
         (() => {
             const heading = document.querySelector('.osrs-calculator-panel .oo-ui-fieldsetLayout-header .oo-ui-labelElement-label')
                 || document.querySelector('.osrs-calculator-panel h2');
+            const templates = document.querySelector('.osrs-calculator-templates');
             const label = document.querySelector('.jsCalc-field-check .oo-ui-labelElement-label');
+            const attack = document.querySelector('.jsCalc-field-int .oo-ui-labelElement-label');
             const lookup = document.querySelector('.oo-ui-labelElement > .oo-ui-buttonElement-button');
             const submit = document.querySelector('.jcSubmit .oo-ui-buttonElement-button');
-            const input = document.querySelector('.oo-ui-inputWidget-input');
+            const input = document.querySelector('.oo-ui-textInputWidget .oo-ui-inputWidget-input');
             const check = document.querySelector('.osrs-calc-check-box');
+            const minus = document.querySelector('.osrs-calc-minus');
+            const plus = document.querySelector('.osrs-calc-plus');
+            const checkRect = check.getBoundingClientRect();
             const labelRect = label.getBoundingClientRect();
             const fieldRect = document.querySelector('.jsCalc-field-check .oo-ui-fieldLayout-field').getBoundingClientRect();
+            const attackRect = attack.getBoundingClientRect();
+            const intFieldRect = document.querySelector('.jsCalc-field-int .oo-ui-fieldLayout-field').getBoundingClientRect();
+            const minusRect = minus.getBoundingClientRect();
+            const plusRect = plus.getBoundingClientRect();
+            const dharokLabel = document.querySelector('.osrs-calc-check-field-first .oo-ui-labelElement-label');
+            const dharokBox = document.querySelector('.osrs-calc-dharok-box');
+            const dharokLabelRect = dharokLabel.getBoundingClientRect();
+            const dharokBoxRect = dharokBox.getBoundingClientRect();
             const rgb = (el, prop) => getComputedStyle(el)[prop];
             const channels = (value) => {
                 const m = String(value).match(/rgba?\\((\\d+),\\s*(\\d+),\\s*(\\d+)/);
@@ -436,12 +517,18 @@ final class ArticleAestheticRenderingTests: XCTestCase {
                 headingFont: getComputedStyle(heading).fontFamily,
                 headingIsGenericSans: String(getComputedStyle(heading).fontFamily).trim().toLowerCase() === 'sans-serif',
                 headingHasAlegreya: String(getComputedStyle(heading).fontFamily).includes('Alegreya'),
+                templatesHeight: templates.getBoundingClientRect().height,
                 labelText: label.textContent,
                 labelVisible: labelRect.width > 20 && labelRect.height > 8 && getComputedStyle(label).color !== 'rgba(0, 0, 0, 0)',
                 labelNotClippedRight: labelRect.left < document.documentElement.clientWidth - 8,
-                checkboxThenLabel: fieldRect.left <= labelRect.left,
-                checkboxLabelSameRow: Math.abs(fieldRect.top - labelRect.top) < 16,
-                labelAfterCheckbox: labelRect.left >= fieldRect.right - 2,
+                labelThenControl: labelRect.right <= Math.min(fieldRect.left, checkRect.left) + 8,
+                checkboxLabelSameRow: (checkRect.bottom > labelRect.top + 2) && (labelRect.bottom > checkRect.top + 2),
+                dharokThenControl: dharokLabelRect.right <= dharokBoxRect.left + 8,
+                dharokSameRow: (dharokBoxRect.bottom > dharokLabelRect.top + 2) && (dharokLabelRect.bottom > dharokBoxRect.top + 2),
+                attackThenStepper: attackRect.right <= intFieldRect.left + 8,
+                attackStepperSameRow: Math.abs(attackRect.top - intFieldRect.top) < 24,
+                minusPlusSameRow: Math.abs(minusRect.top - plusRect.top) < 8,
+                plusAfterMinus: plusRect.left >= minusRect.right - 2,
                 lookupBg: rgb(lookup, 'backgroundColor'),
                 submitBg: rgb(submit, 'backgroundColor'),
                 inputBg: rgb(input, 'backgroundColor'),
@@ -457,12 +544,18 @@ final class ArticleAestheticRenderingTests: XCTestCase {
 
         XCTAssertEqual(state["headingIsGenericSans"] as? Bool, false, "Heading font was \(state["headingFont"] ?? "")")
         XCTAssertEqual(state["headingHasAlegreya"] as? Bool, true, "Heading font was \(state["headingFont"] ?? "")")
+        XCTAssertLessThan(state["templatesHeight"] as? Double ?? 999, 72, "Templates used kept a large empty tan region: \(state)")
         XCTAssertEqual(state["labelText"] as? String, "Ahrim?")
         XCTAssertEqual(state["labelVisible"] as? Bool, true, "\(state)")
         XCTAssertEqual(state["labelNotClippedRight"] as? Bool, true, "\(state)")
-        XCTAssertEqual(state["checkboxThenLabel"] as? Bool, true, "\(state)")
+        XCTAssertEqual(state["labelThenControl"] as? Bool, true, "Infobox language is label|control, not control then label: \(state)")
         XCTAssertEqual(state["checkboxLabelSameRow"] as? Bool, true, "Checkbox/label stacked vertically: \(state)")
-        XCTAssertEqual(state["labelAfterCheckbox"] as? Bool, true, "\(state)")
+        XCTAssertEqual(state["dharokThenControl"] as? Bool, true, "Field-first OOUI DOM must still render label|control: \(state)")
+        XCTAssertEqual(state["dharokSameRow"] as? Bool, true, "Field-first OOUI DOM stacked the Dharok row: \(state)")
+        XCTAssertEqual(state["attackThenStepper"] as? Bool, true, "Attack label must sit in the grid beside the stepper: \(state)")
+        XCTAssertEqual(state["attackStepperSameRow"] as? Bool, true, "\(state)")
+        XCTAssertEqual(state["minusPlusSameRow"] as? Bool, true, "Integer steppers must keep minus and plus on one row: \(state)")
+        XCTAssertEqual(state["plusAfterMinus"] as? Bool, true, "\(state)")
         XCTAssertEqual(state["lookupNearWhite"] as? Bool, false, "Lookup stayed Wikipedia white: \(state["lookupBg"] ?? "")")
         XCTAssertEqual(state["inputNearWhite"] as? Bool, false, "Input stayed Wikipedia white: \(state["inputBg"] ?? "")")
         XCTAssertEqual(state["checkNearWhite"] as? Bool, false, "Checkbox stayed Wikipedia white: \(state["checkBg"] ?? "")")
