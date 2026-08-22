@@ -305,7 +305,8 @@
             typeof OO.ui.ButtonInputWidget === 'function' &&
             typeof OO.ui.ButtonOptionWidget === 'function' &&
             typeof OO.ui.DropdownInputWidget === 'function' &&
-            typeof OO.ui.CheckboxInputWidget === 'function');
+            typeof OO.ui.CheckboxInputWidget === 'function' &&
+            typeof OO.ui.HorizontalLayout === 'function');
         if (!base) {
             return false;
         }
@@ -2338,10 +2339,14 @@ Calc.prototype.setupCalc = function () {
         fieldset.$element.append('<br>', self.configError);
     }
 
-    $(document.getElementById('bodyContent') || document.body)
-        .find('#' + self.form)
-            .empty()
-            .append(fieldset.$element);
+    var formHost = $(document.getElementById('bodyContent') || document.body)
+        .find('#' + self.form);
+    if (!formHost.length) {
+        formHost = $(document.getElementById(self.form));
+    }
+    formHost
+        .empty()
+        .append(fieldset.$element);
     
     // make buttonselects all the same height
     self.tParams.filter(e=>e.type==='buttonselect').forEach(e=>{

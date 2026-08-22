@@ -142,6 +142,8 @@ final class osrsCalculatorParityTests: XCTestCase {
         XCTAssertTrue(runtime.contains("oojs-ui-widgets"))
         XCTAssertTrue(runtime.contains("ButtonOptionWidget"))
         XCTAssertTrue(runtime.contains("ToggleSwitchWidget"))
+        XCTAssertTrue(runtime.contains("CheckboxInputWidget"))
+        XCTAssertTrue(runtime.contains("HorizontalLayout"))
         XCTAssertTrue(runtime.contains("data-osrs-ooui-loader"))
         XCTAssertTrue(runtime.contains("/load.php?modules=oojs-ui-core"))
         XCTAssertTrue(runtime.contains("only=scripts"))
@@ -175,6 +177,7 @@ final class osrsCalculatorParityTests: XCTestCase {
             encoding: .utf8
         )
         XCTAssertTrue(calcCore.contains("document.getElementById('bodyContent') || document.body"))
+        XCTAssertTrue(calcCore.contains("document.getElementById(self.form)"))
         XCTAssertTrue(calcCore.contains("window.__osrsKickCalcCore"))
         XCTAssertTrue(calcCore.contains("osrsCalcCoreDepsReady"))
         XCTAssertTrue(calcCore.contains("OO.ui.ButtonOptionWidget"))

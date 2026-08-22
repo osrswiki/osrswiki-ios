@@ -308,10 +308,19 @@
                 var pre = document.querySelector('pre.jcConfig');
                 cfg = pre && pre.textContent ? String(pre.textContent) : '';
             } catch (ignore) {}
-            if (!(window.OO && OO.ui && typeof OO.ui.ButtonOptionWidget === 'function')) {
+            if (!(window.OO && OO.ui &&
+                    typeof OO.ui.FieldsetLayout === 'function' &&
+                    typeof OO.ui.ButtonInputWidget === 'function' &&
+                    typeof OO.ui.ButtonOptionWidget === 'function' &&
+                    typeof OO.ui.DropdownInputWidget === 'function' &&
+                    typeof OO.ui.CheckboxInputWidget === 'function' &&
+                    typeof OO.ui.HorizontalLayout === 'function')) {
                 return false;
             }
             if (/toggleswitch/i.test(cfg) && typeof OO.ui.ToggleSwitchWidget !== 'function') {
+                return false;
+            }
+            if (/\|\s*group\s*\|/i.test(cfg) && typeof OO.ui.HorizontalLayout !== 'function') {
                 return false;
             }
             if (/\|\s*hs\s*\|/i.test(cfg) && typeof OO.ui.ActionFieldLayout !== 'function') {
@@ -350,7 +359,15 @@
                 },
                 {
                     src: '/load.php?modules=oojs-ui-core&only=scripts',
-                    skip: function() { return !!(window.OO && OO.ui && typeof OO.ui.FieldsetLayout === 'function'); }
+                    skip: function() {
+                        return !!(window.OO && OO.ui &&
+                            typeof OO.ui.FieldsetLayout === 'function' &&
+                            typeof OO.ui.ButtonInputWidget === 'function' &&
+                            typeof OO.ui.CheckboxInputWidget === 'function' &&
+                            typeof OO.ui.ToggleSwitchWidget === 'function' &&
+                            typeof OO.ui.HorizontalLayout === 'function' &&
+                            typeof OO.ui.DropdownInputWidget === 'function');
+                    }
                 },
                 {
                     src: '/load.php?modules=oojs-ui-widgets&only=scripts',
