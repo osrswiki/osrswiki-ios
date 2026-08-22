@@ -423,7 +423,7 @@ struct WikiFeedContentView: View {
                     } label: {
                         Text("View more")
                             .font(.osrsBody)
-                            .foregroundStyle(.osrsPrimary)
+                            .foregroundStyle(.osrsLink)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
                     .buttonStyle(.plain)

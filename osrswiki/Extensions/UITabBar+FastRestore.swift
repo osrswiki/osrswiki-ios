@@ -160,6 +160,21 @@ extension UIApplication {
         for cover in floatingTabBarCoverViews() {
             cover.isUserInteractionEnabled = !behind
             cover.layer.zPosition = behind ? -1 : 0
+            // `_UITabBarContainerView` is a full-screen sampler whose frame
+            // originates above the 83pt wrapper. Without clipping, that
+            // overflow paints a frozen theme fill over the article after resume.
+            cover.clipsToBounds = behind
+            cover.layer.masksToBounds = behind
+            let name = NSStringFromClass(type(of: cover))
+            let isFullScreenSampler = name.contains("_UIFloatingBarContainerView")
+                || name.contains("FloatingBarHostingView")
+            if isFullScreenSampler {
+                // Full-screen Liquid Glass samplers paint a frozen theme fill
+                // over the article after resume even at z=-1. Hide them while
+                // an article owns the chrome; restore on the tab root.
+                cover.alpha = behind ? 0 : 1
+                cover.isHidden = behind
+            }
             if behind {
                 cover.layer.contents = nil
                 cover.setNeedsLayout()

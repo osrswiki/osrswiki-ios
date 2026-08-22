@@ -88,6 +88,9 @@ final class osrsSceneDelegate: UIResponder, UIWindowSceneDelegate {
         needsResumeRestore = true
         osrsAppRoot.appState.noteApplicationDidEnterBackground()
         osrsAppRoot.appState.rememberResumableArticle()
+        if let window {
+            osrsSceneCompositor.captureResumeFrame(from: window)
+        }
         print("🪟 osrsSceneDelegate mark resume reason=\(reason)")
         NSLog("osrsSceneDelegate mark resume reason=%@", reason)
     }
@@ -180,13 +183,49 @@ final class osrsSceneDelegate: UIResponder, UIWindowSceneDelegate {
         }
         window.backgroundColor = UIColor(osrsAppRoot.themeManager.currentTheme.background)
         window.overrideUserInterfaceStyle = osrsAppRoot.themeManager.currentColorScheme == .dark ? .dark : .light
-        window.layer.contents = nil
         window.makeKeyAndVisible()
+        UIApplication.shared.requestSceneSessionActivation(
+            windowScene.session,
+            userActivity: nil,
+            options: nil
+        )
         UIApplication.shared.requestSceneSessionRefresh(windowScene.session)
+        // iOS 26 UIHostingView can stop compositing UIKit children (WKWebView)
+        // after a scene resume while the live tree stays intact. Re-insert the
+        // same hosting view so didMoveToWindow fires without destroying
+        // ArticleView @StateObject / lastCommitted HTML.
+        reconnectSwiftUIHostToWindow()
         osrsSceneCompositor.restore(window)
         startResumeDisplayLink()
         print("🪟 osrsSceneDelegate restore same SwiftUI host reason=\(reason)")
         NSLog("osrsSceneDelegate restore same SwiftUI host reason=%@", reason)
+    }
+
+    /// Re-parent the existing CustomMainTabView host. Recreating the
+    /// UIHostingController would reset ArticleView @StateObject.
+    private func reconnectSwiftUIHostToWindow() {
+        guard let window, let container = sceneContainer, let host = appHost else { return }
+        host.loadViewIfNeeded()
+        let hostView = host.view!
+        if host.parent !== container {
+            container.osrsInstall(host)
+        } else {
+            hostView.removeFromSuperview()
+            hostView.frame = container.view.bounds
+            hostView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+            hostView.translatesAutoresizingMaskIntoConstraints = true
+            container.view.addSubview(hostView)
+            container.view.bringSubviewToFront(hostView)
+        }
+        hostView.isHidden = false
+        hostView.alpha = 1
+        hostView.layer.contents = nil
+        hostView.layer.shouldRasterize = false
+        window.makeKeyAndVisible()
+        CATransaction.flush()
+        print(
+            "🪟 osrsSceneDelegate reconnect host window=\(hostView.window != nil) key=\(window.isKeyWindow) scene=\(window.windowScene?.activationState.rawValue ?? -1) app=\(UIApplication.shared.applicationState.rawValue)"
+        )
     }
 
     private func existingSceneWindow(on windowScene: UIWindowScene) -> UIWindow? {
@@ -216,15 +255,12 @@ final class osrsSceneDelegate: UIResponder, UIWindowSceneDelegate {
 
     private func nudgeCompositor(on windowScene: UIWindowScene) {
         guard let window, window.windowScene === windowScene else { return }
-        window.layer.contents = nil
-        window.rootViewController?.view.layer.contents = nil
         let original = window.frame
         window.frame = original.insetBy(dx: 0, dy: 1)
         window.layoutIfNeeded()
         CATransaction.flush()
         window.frame = original
         window.layoutIfNeeded()
-        _ = window.drawHierarchy(in: window.bounds, afterScreenUpdates: true)
         windowScene.requestGeometryUpdate(
             UIWindowScene.GeometryPreferences.iOS(interfaceOrientations: .portrait)
         ) { error in
@@ -248,9 +284,6 @@ final class osrsSceneDelegate: UIResponder, UIWindowSceneDelegate {
     }
 
     @objc private func tickResumeFrame() {
-        window?.layer.contents = nil
-        window?.layer.setNeedsDisplay()
-        window?.rootViewController?.view.layer.setNeedsDisplay()
         window?.rootViewController?.view.setNeedsLayout()
     }
 }

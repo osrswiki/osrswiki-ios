@@ -229,6 +229,7 @@ struct CustomMainTabView: View {
             UIApplication.setFloatingTabBarHidden(owner != nil)
         }
         .onChange(of: appState.selectedTab) { _, _ in
+            osrsResumeFrameOverlay.discard()
             refreshTabBarChrome()
         }
         .onChange(of: themeManager.currentColorScheme) { _, _ in

@@ -40,11 +40,13 @@ function initializePage() {
         });
         // --- END PRELOADER ---
 
+        bindSwitcherViewportPin();
+
         document.body.addEventListener('click', (event) => {
             const button = event.target.closest('.button');
             if (button && button.hasAttribute('data-switch-index')) {
                 const switchIndex = button.getAttribute('data-switch-index');
-                performSwitch(switchIndex);
+                performSwitch(switchIndex, button);
             }
         });
 
@@ -71,8 +73,86 @@ function initializePage() {
     }
 }
 
-function performSwitch(switchIndex) {
+let pendingSwitcherScrollPin = null;
+
+function osrsSwitcherScrollingElement() {
+    return document.scrollingElement || document.documentElement || document.body;
+}
+
+function switcherAnchorFromEvent(event) {
+    if (!event || !event.target || typeof event.target.closest !== 'function') {
+        return null;
+    }
+    const button = event.target.closest('.button[data-switch-index], .trigger[data-switch-index]');
+    if (button) {
+        return button;
+    }
+    if (event.type === 'change') {
+        const select = event.target.closest('select');
+        if (select && select.closest('.infobox-buttons, .switch-infobox-triggers, .infobox-switch, .switch-infobox')) {
+            return select;
+        }
+    }
+    return null;
+}
+
+function bindSwitcherViewportPin() {
+    if (document.documentElement.dataset.osrsSwitcherScrollPin === 'true') {
+        return;
+    }
+    document.documentElement.dataset.osrsSwitcherScrollPin = 'true';
+    document.addEventListener('click', armSwitcherViewportPinFromEvent, true);
+    document.addEventListener('change', armSwitcherViewportPinFromEvent, true);
+}
+
+function armSwitcherViewportPinFromEvent(event) {
+    stabilizeSwitcherScrollPin(captureSwitcherScrollPin(switcherAnchorFromEvent(event)));
+}
+
+function captureSwitcherScrollPin(anchorNode) {
+    if (!anchorNode || typeof anchorNode.getBoundingClientRect !== 'function') {
+        return null;
+    }
+    return {
+        node: anchorNode,
+        top: anchorNode.getBoundingClientRect().top
+    };
+}
+
+function restoreSwitcherScrollPin(pin) {
+    if (!pin || !pin.node || !pin.node.isConnected || typeof pin.node.getBoundingClientRect !== 'function') {
+        return;
+    }
+    const delta = pin.node.getBoundingClientRect().top - pin.top;
+    if (Math.abs(delta) < 0.5) {
+        return;
+    }
+    const scroller = osrsSwitcherScrollingElement();
+    if (scroller && typeof scroller.scrollTop === 'number') {
+        scroller.scrollTop += delta;
+    }
+    if (typeof window.scrollBy === 'function') {
+        window.scrollBy(0, pin.node.getBoundingClientRect().top - pin.top);
+    }
+}
+
+function stabilizeSwitcherScrollPin(pin) {
+    if (!pin) {
+        return;
+    }
+    pendingSwitcherScrollPin = pin;
+    restoreSwitcherScrollPin(pendingSwitcherScrollPin);
+    requestAnimationFrame(function() {
+        restoreSwitcherScrollPin(pendingSwitcherScrollPin);
+        requestAnimationFrame(function() {
+            restoreSwitcherScrollPin(pendingSwitcherScrollPin);
+        });
+    });
+}
+
+function performSwitch(switchIndex, anchorNode) {
     if (typeof switchIndex === 'undefined' || switchIndex === null) return;
+    const pin = captureSwitcherScrollPin(anchorNode);
 
     // Update button states
     document.querySelectorAll('.infobox-buttons, .switch-infobox-triggers').forEach(container => {
@@ -111,6 +191,10 @@ function performSwitch(switchIndex) {
             }
         }
     });
+
+    // Restore after every height/innerHTML change so a taller top infobox
+    // cannot shove a mid-page switcher up or down the viewport.
+    stabilizeSwitcherScrollPin(pin);
 }
 
 function populatePlaceholders(container, resources, switchIndex) {
@@ -324,3 +408,9 @@ const fixUrls = (htmlString) => {
 };
 
 mw.hook('wikipage.content').add(initializePage);
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', bindSwitcherViewportPin);
+} else {
+    bindSwitcherViewportPin();
+}

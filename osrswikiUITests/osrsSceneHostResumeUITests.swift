@@ -1,4 +1,5 @@
 import XCTest
+import UIKit
 
 final class osrsSceneHostResumeUITests: XCTestCase {
     override func setUpWithError() throws {
@@ -65,6 +66,79 @@ final class osrsSceneHostResumeUITests: XCTestCase {
             app.otherElements["article_bottom_bar"].waitForExistence(timeout: 16)
                 || app.buttons["Save"].waitForExistence(timeout: 8),
             "In-app article chrome should appear"
+        )
+    }
+
+    func testDarkArticleResumeKeepsRenderedContentNotThemedBlank() {
+        let app = XCUIApplication()
+        app.launchArguments = [
+            "-osrsUITestHarness",
+            "-forceThemeForUITests", "osrs_dark",
+            "-startArticleTitle", "Amulet of glory",
+            "-startArticleURL", "https://oldschool.runescape.wiki/w/Amulet_of_glory"
+        ]
+        app.launch()
+        XCTAssertTrue(app.wait(for: .runningForeground, timeout: 12))
+
+        let webView = app.webViews["article_web_view"].exists
+            ? app.webViews["article_web_view"]
+            : app.webViews.firstMatch
+        XCTAssertTrue(webView.waitForExistence(timeout: 30), "Glory article WebView should appear")
+        waitUntilRendered(webView, timeout: 20)
+        let before = webView.screenshot().image
+        XCTAssertGreaterThan(
+            luminanceRange(before),
+            24,
+            "Loaded Glory must have article contrast, not a uniform themed fill"
+        )
+
+        backgroundAndForeground(app)
+        XCTAssertTrue(webView.waitForExistence(timeout: 12))
+        waitUntilRendered(webView, timeout: 8)
+        let after = XCUIScreen.main.screenshot().image
+        XCTAssertGreaterThan(
+            luminanceRange(after),
+            24,
+            "Resume must restore article pixels, not a uniform themed blank page"
+        )
+        XCTAssertTrue(
+            app.otherElements["article_bottom_bar"].waitForExistence(timeout: 8)
+                || app.buttons["Save"].waitForExistence(timeout: 4)
+                || app.staticTexts["Amulet of glory"].waitForExistence(timeout: 4),
+            "Resumed article must keep in-app chrome"
+        )
+
+        backgroundAndForeground(app)
+        let afterSecond = XCUIScreen.main.screenshot().image
+        XCTAssertGreaterThan(
+            luminanceRange(afterSecond),
+            24,
+            "Second resume must still keep rendered article content"
+        )
+    }
+
+    func testVarrockResumeKeepsRenderedContent() {
+        let app = XCUIApplication()
+        app.launchArguments = [
+            "-osrsUITestHarness",
+            "-forceThemeForUITests", "osrs_dark",
+            "-startArticleTitle", "Varrock",
+            "-startArticleURL", "https://oldschool.runescape.wiki/w/Varrock"
+        ]
+        app.launch()
+        XCTAssertTrue(app.wait(for: .runningForeground, timeout: 12))
+        let webView = app.webViews.firstMatch
+        XCTAssertTrue(webView.waitForExistence(timeout: 30))
+        waitUntilRendered(webView, timeout: 20)
+        backgroundAndForeground(app)
+        XCTAssertGreaterThan(
+            luminanceRange(XCUIScreen.main.screenshot().image),
+            24,
+            "Varrock resume must not collapse to a uniform themed blank"
+        )
+        XCTAssertTrue(
+            app.staticTexts["Varrock"].waitForExistence(timeout: 8)
+                || app.otherElements["article_bottom_bar"].waitForExistence(timeout: 8)
         )
     }
 
@@ -138,6 +212,20 @@ final class osrsSceneHostResumeUITests: XCTestCase {
         XCTAssertTrue(browseRow.waitForExistence(timeout: 20), "Empty Update search must list newest Update: pages")
         browseRow.tap()
         assertInAppArticleChrome(in: app)
+
+        let articleBack = app.descendants(matching: .any)["immediate_search_back_button"].firstMatch
+        if articleBack.waitForExistence(timeout: 4), articleBack.isHittable {
+            articleBack.tap()
+        } else if app.buttons["Back"].waitForExistence(timeout: 2) {
+            app.buttons["Back"].tap()
+        } else {
+            app.swipeRight()
+        }
+        XCTAssertEqual(app.state, .runningForeground, "Backing out of a View more article must not crash")
+        XCTAssertTrue(
+            app.descendants(matching: .any)["scoped_search_updates"].waitForExistence(timeout: 12),
+            "Back from a View more article should return to the updates list"
+        )
     }
 
     func testSavedArticleOpensInAppHost() {
@@ -238,5 +326,49 @@ final class osrsSceneHostResumeUITests: XCTestCase {
 
     private func element(in app: XCUIApplication, identifier: String) -> XCUIElement {
         app.descendants(matching: .any)[identifier].firstMatch
+    }
+
+    private func waitUntilRendered(_ webView: XCUIElement, timeout: TimeInterval) {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if luminanceRange(webView.screenshot().image) > 24 {
+                return
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.4))
+        }
+        XCTAssertGreaterThan(
+            luminanceRange(webView.screenshot().image),
+            24,
+            "Article WebView did not render contrasting content in time"
+        )
+    }
+
+    private func luminanceRange(_ image: UIImage) -> Int {
+        guard let cg = image.cgImage else { return 0 }
+        let width = 24
+        let height = 24
+        var pixels = [UInt8](repeating: 0, count: width * height * 4)
+        guard let ctx = CGContext(
+            data: &pixels,
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bytesPerRow: width * 4,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else {
+            return 0
+        }
+        ctx.interpolationQuality = .none
+        ctx.draw(cg, in: CGRect(x: 0, y: 0, width: width, height: height))
+        var minLuma = 255
+        var maxLuma = 0
+        for index in 0..<(width * height) {
+            let offset = index * 4
+            let luma = (Int(pixels[offset]) + Int(pixels[offset + 1]) + Int(pixels[offset + 2])) / 3
+            minLuma = min(minLuma, luma)
+            maxLuma = max(maxLuma, luma)
+        }
+        return maxLuma - minLuma
     }
 }

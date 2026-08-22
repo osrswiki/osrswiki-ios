@@ -1257,9 +1257,9 @@ struct ArticleWebView: UIViewRepresentable {
     }
     
     func makeUIView(context: Context) -> WKWebView {
-        if let existing = viewModel.webView,
+        if !viewModel.needsContentProcessRecovery,
+           let existing = viewModel.webView,
            existing.superview == nil,
-           !viewModel.needsContentProcessRecovery,
            existing.url != nil,
            existing.url?.absoluteString != "about:blank" {
             return configureAdoptedWebView(existing, context: context)
@@ -1270,7 +1270,8 @@ struct ArticleWebView: UIViewRepresentable {
             wrapTableCellsEnabled: themeManager.wrapTableCells,
             articleTextScale: Double(themeManager.articleTextScale)
         )
-        if let prepared = osrsPreparedArticleWebViewStore.shared.take(
+        if !viewModel.needsContentProcessRecovery,
+           let prepared = osrsPreparedArticleWebViewStore.shared.take(
             pageURL: viewModel.pageUrl,
             pageTitle: viewModel.pageTitle_,
             options: renderOptions
@@ -1329,6 +1330,14 @@ struct ArticleWebView: UIViewRepresentable {
             )
             userContentController.addUserScript(debuggingScript)
         }
+
+        userContentController.addUserScript(
+            WKUserScript(
+                source: osrsWebViewThemePaint.documentStartPaintScript(theme: themeManager.currentTheme),
+                injectionTime: .atDocumentStart,
+                forMainFrameOnly: true
+            )
+        )
         
         // Register message handlers
         for handlerName in osrsWebKitSecurityPolicy.enabledHandlerNames {
@@ -1341,6 +1350,9 @@ struct ArticleWebView: UIViewRepresentable {
         print("✅ Reusing shared app-assets:// handler for article WebView")
         
         let webView = WKWebView(frame: .zero, configuration: configuration)
+        // Theme-paint before any other WK configuration so the first compositor
+        // frame is not system-white or light parchment under a dark article host.
+        osrsWebViewThemePaint.apply(to: webView, theme: themeManager.currentTheme)
         // Use external navigation delegate if provided, otherwise use viewModel
         // Set navigation delegate with proper logging to verify delegate assignment
         let finalDelegate = navigationDelegate ?? viewModel
@@ -1372,7 +1384,11 @@ struct ArticleWebView: UIViewRepresentable {
             webView.scrollView.contentInset.bottom = 64
             webView.scrollView.verticalScrollIndicatorInsets.bottom = 64
         }
-        osrsWebViewThemePaint.apply(to: webView, theme: themeManager.currentTheme)
+        if viewModel.needsContentProcessRecovery {
+            osrsWebViewThemePaint.apply(to: webView, theme: themeManager.currentTheme)
+        } else {
+            osrsWebViewThemePaint.loadPlaceholderIfEmpty(in: webView, theme: themeManager.currentTheme)
+        }
         webView.accessibilityIdentifier = "article_web_view"
         
         if #available(iOS 16.4, *) {

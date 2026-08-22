@@ -26,6 +26,7 @@ extension Notification.Name {
     static let showAppearanceSettings = Notification.Name("showAppearanceSettings")
     static let osrsInternalArticleLinkRequested = Notification.Name("osrsInternalArticleLinkRequested")
     static let osrsPlayYouTubeRequested = Notification.Name("osrsPlayYouTubeRequested")
+    static let osrsSceneCompositorLooksBlank = Notification.Name("osrs.sceneCompositorLooksBlank")
 }
 
 // MARK: - Color Extension for Hex Conversion
@@ -581,6 +582,8 @@ class ArticleViewModel: NSObject, ObservableObject {
     @Published var webViewRenderGeneration: Int = 0
     /// Cancels a stale delayed foreground probe when another foreground cycle starts.
     private var foregroundDocumentProbeGeneration = 0
+    /// Prevents a second WKWebView rebuild for the same parked-process recovery.
+    private var didQueueWebViewRebuildForRecovery = false
 
     /// True when this view model still owns a rendered article document. Returning
     /// from background must not start a new network load just because SwiftUI
@@ -590,12 +593,13 @@ class ArticleViewModel: NSObject, ObservableObject {
             !isRefreshing &&
             !needsContentProcessRecovery &&
             webView != nil &&
-            webView?.url != nil &&
-            webView?.url?.absoluteString != "about:blank"
+            (hasCommittedArticleHTML || (webView?.url != nil && webView?.url?.absoluteString != "about:blank"))
     }
 
     /// Reappear must reload a terminated or empty document, including after a
     /// prewarm adopt onto a dead WKWebView, without skipping a healthy page.
+    /// A parked WebContent process can report `about:blank` while the last
+    /// committed HTML is still in memory; that is a recommit, not a missing page.
     var shouldReloadArticleOnReappear: Bool {
         if needsContentProcessRecovery {
             return true
@@ -603,9 +607,16 @@ class ArticleViewModel: NSObject, ObservableObject {
         if isLoading || isRefreshing {
             return false
         }
+        if hasCommittedArticleHTML {
+            return webView == nil
+        }
         return webView == nil
             || webView?.url == nil
             || webView?.url?.absoluteString == "about:blank"
+    }
+
+    var hasCommittedArticleHTML: Bool {
+        (lastCommittedArticleHTML?.count ?? 0) > 100
     }
 
     private static let osrsRenderedDocumentHealthScript = """
@@ -634,6 +645,14 @@ class ArticleViewModel: NSObject, ObservableObject {
     """
 
     private var lastForegroundRecoveryAt: TimeInterval = 0
+    private var lastBlankResumeAt: TimeInterval = 0
+    private var contentProcessDidTerminate = false
+    private var lastAppliedArticleTheme: (any osrsThemeProtocol)?
+    private var lastCommittedArticleHTML: String?
+
+    private static let osrsForegroundHealthProbeMaxAttempts = 8
+    private static let osrsForegroundHealthProbeRetryNs: UInt64 = 250_000_000
+    private static let osrsForegroundHealthProbeInitialDelayNs: UInt64 = 300_000_000
 
     func recoverRenderedDocumentAfterBackground() {
         let now = Date().timeIntervalSince1970
@@ -643,23 +662,60 @@ class ArticleViewModel: NSObject, ObservableObject {
         }
         lastForegroundRecoveryAt = now
         // A healthy DOM can still sit behind a blank window compositor.
-        // Rebuild WebKit only when the document probe says the page is gone.
+        // Rebuild WebKit only when the content process actually terminated.
         wakeRenderedDocumentAfterBackground()
     }
 
     func markNeedsContentProcessRecovery(rebuildWebView: Bool = false) {
-        if rebuildWebView {
+        adoptedPreRenderedDocument = false
+        forceNextDocumentReload = true
+        if rebuildWebView, !didQueueWebViewRebuildForRecovery {
+            didQueueWebViewRebuildForRecovery = true
+            // Recycle before SwiftUI rebuilds ArticleWebView so makeUIView
+            // binds the replacement to an unparked WebContent process.
+            osrsArticleWebKitRuntime.recycleProcessPool()
             webViewRenderGeneration += 1
         }
         isRefreshing = false
         needsContentProcessRecovery = true
     }
 
+    /// Parked WebContent rejects JS and `reload()` during the foreground race
+    /// (WebKit 870c656, nevermeant.dev). Reusing the shared `WKProcessPool`
+    /// keeps the replacement WKWebView blank, so recovery mints a new pool,
+    /// rebuilds the on-screen article WKWebView, and recommits cached HTML.
+    /// This is not a user refresh: keep the last painted HTML and do not show
+    /// the blank overlay.
+    func recoverBlankResume(theme: any osrsThemeProtocol) {
+        lastAppliedArticleTheme = theme
+        pendingArticleLoadIsReload = false
+        isRefreshing = false
+        let now = Date().timeIntervalSince1970
+        if now - lastBlankResumeAt < 1, !contentProcessDidTerminate {
+            pendingArticleLoadTheme = theme
+            return
+        }
+        lastBlankResumeAt = now
+        pendingArticleLoadTheme = theme
+        let terminated = contentProcessDidTerminate
+        contentProcessDidTerminate = false
+        Task { @MainActor in
+            if !terminated {
+                try? await Task.sleep(nanoseconds: 150_000_000)
+            }
+            self.markNeedsContentProcessRecovery(rebuildWebView: true)
+        }
+    }
+
     /// WKWebView can go blank after backgrounding without firing the terminate callback.
     /// Probe the live document on foreground and recover when it is empty.
     func wakeRenderedDocumentAfterBackground() {
         guard let webView else {
-            markNeedsContentProcessRecovery(rebuildWebView: true)
+            if let theme = lastAppliedArticleTheme {
+                recoverBlankResume(theme: theme)
+            } else {
+                markNeedsContentProcessRecovery(rebuildWebView: true)
+            }
             return
         }
         webView.isHidden = false
@@ -678,29 +734,39 @@ class ArticleViewModel: NSObject, ObservableObject {
         webView.evaluateJavaScript(
             "void(document.body && (document.body.style.visibility = 'visible')); window.scrollBy(0,1); window.scrollBy(0,-1);"
         )
-        probeRenderedDocumentHealthOnForeground(force: true)
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: Self.osrsForegroundHealthProbeInitialDelayNs)
+            self.probeRenderedDocumentHealthOnForeground(force: true, attempt: 0)
+        }
     }
 
-    func probeRenderedDocumentHealthOnForeground(force: Bool = false) {
+    func probeRenderedDocumentHealthOnForeground(force: Bool = false, attempt: Int = 0) {
         if !force, isLoading || isRefreshing {
             return
         }
-        if shouldReloadArticleOnReappear {
-            markNeedsContentProcessRecovery()
-            return
-        }
         guard let webView else {
-            markNeedsContentProcessRecovery(rebuildWebView: true)
+            if let theme = lastAppliedArticleTheme {
+                recoverBlankResume(theme: theme)
+            } else {
+                markNeedsContentProcessRecovery(rebuildWebView: true)
+            }
             return
         }
-        foregroundDocumentProbeGeneration += 1
+        if attempt == 0 {
+            foregroundDocumentProbeGeneration += 1
+        }
         let generation = foregroundDocumentProbeGeneration
         webView.evaluateJavaScript(Self.osrsRenderedDocumentHealthScript) { [weak self] result, error in
             Task { @MainActor in
                 guard let self else { return }
                 guard generation == self.foregroundDocumentProbeGeneration else { return }
                 if error != nil {
-                    self.markNeedsContentProcessRecovery(rebuildWebView: true)
+                    self.retryOrRecoverForegroundProbe(
+                        webView: webView,
+                        generation: generation,
+                        attempt: attempt,
+                        reason: "javascript-unavailable"
+                    )
                     return
                 }
                 let ok: Bool
@@ -714,60 +780,77 @@ class ArticleViewModel: NSObject, ObservableObject {
                     ok = false
                 }
                 if !ok {
-                    print("⚠️ ArticleViewModel: Foreground document probe found a blank article; recovering")
-                    self.markNeedsContentProcessRecovery(rebuildWebView: true)
+                    self.retryOrRecoverForegroundProbe(
+                        webView: webView,
+                        generation: generation,
+                        attempt: attempt,
+                        reason: "blank-document"
+                    )
                     return
                 }
+                osrsSceneCompositor.revealLiveArticleLayers(from: webView)
                 self.probeRenderedSnapshotIfNeeded(webView, generation: generation)
             }
         }
-        Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 1_000_000_000)
-            guard generation == self.foregroundDocumentProbeGeneration else { return }
-            guard !self.needsContentProcessRecovery else { return }
-            self.probeRenderedSnapshotIfNeeded(webView, generation: generation)
+        if attempt == 0 {
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                guard generation == self.foregroundDocumentProbeGeneration else { return }
+                guard !self.needsContentProcessRecovery else { return }
+                self.probeRenderedSnapshotIfNeeded(webView, generation: generation)
+            }
         }
     }
 
-    /// DOM can stay healthy while WKWebView's compositor is a uniform theme color.
+    private func retryOrRecoverForegroundProbe(
+        webView: WKWebView,
+        generation: Int,
+        attempt: Int,
+        reason: String
+    ) {
+        if attempt + 1 < Self.osrsForegroundHealthProbeMaxAttempts {
+            print("⚠️ ArticleViewModel: Foreground probe \(reason); retry \(attempt + 1)")
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: Self.osrsForegroundHealthProbeRetryNs)
+                guard generation == self.foregroundDocumentProbeGeneration else { return }
+                self.probeRenderedDocumentHealthOnForeground(force: true, attempt: attempt + 1)
+            }
+            return
+        }
+        print("⚠️ ArticleViewModel: Foreground document probe exhausted (\(reason)); recommitting cached HTML")
+        if let theme = lastAppliedArticleTheme {
+            recoverBlankResume(theme: theme)
+        } else {
+            markNeedsContentProcessRecovery(rebuildWebView: contentProcessDidTerminate || webView.superview == nil)
+        }
+    }
+
+    /// DOM can stay healthy while WKWebView's compositor is still the system-white
+    /// unpainted fill. Uniform themed parchment/dark is not a parked blank.
     private func probeRenderedSnapshotIfNeeded(_ webView: WKWebView, generation: Int) {
         webView.takeSnapshot(with: nil) { [weak self] image, error in
             Task { @MainActor in
                 guard let self else { return }
                 guard generation == self.foregroundDocumentProbeGeneration else { return }
-                if error != nil || image == nil || Self.osrsSnapshotLooksCompositorBlank(image) {
+                if error != nil || image == nil
+                    || osrsWebViewThemePaint.isUnpaintedSystemFill(image)
+                    || osrsWebViewThemePaint.isUniformFill(image) {
                     if self.isLoading && !self.articleRevealedForWarm {
                         return
                     }
                     print("⚠️ ArticleViewModel: Foreground snapshot found a compositor-blank article; recovering")
-                    self.markNeedsContentProcessRecovery(rebuildWebView: true)
+                    if let theme = self.lastAppliedArticleTheme {
+                        self.recoverBlankResume(theme: theme)
+                    } else {
+                        self.markNeedsContentProcessRecovery(rebuildWebView: self.contentProcessDidTerminate)
+                    }
                 }
             }
         }
     }
 
     static func osrsSnapshotLooksCompositorBlank(_ image: UIImage?) -> Bool {
-        guard let image else { return true }
-        let sample = CGSize(width: 16, height: 16)
-        UIGraphicsBeginImageContextWithOptions(sample, true, 1)
-        defer { UIGraphicsEndImageContext() }
-        image.draw(in: CGRect(origin: .zero, size: sample))
-        guard let tiny = UIGraphicsGetImageFromCurrentImageContext()?.cgImage,
-              let data = tiny.dataProvider?.data,
-              let bytes = CFDataGetBytePtr(data) else {
-            return true
-        }
-        let count = tiny.width * tiny.height
-        guard count > 0 else { return true }
-        var minLuminance = 255
-        var maxLuminance = 0
-        for index in 0..<count {
-            let offset = index * 4
-            let luminance = (Int(bytes[offset]) + Int(bytes[offset + 1]) + Int(bytes[offset + 2])) / 3
-            minLuminance = min(minLuminance, luminance)
-            maxLuminance = max(maxLuminance, luminance)
-        }
-        return (maxLuminance - minLuminance) < 10
+        osrsWebViewThemePaint.isUnpaintedSystemFill(image)
     }
     @Published var loadingProgress: Double = 0.0
     @Published var loadingProgressText: String? = nil
@@ -1561,7 +1644,9 @@ class ArticleViewModel: NSObject, ObservableObject {
         return generationScript + html
     }
 
-    func loadArticle(theme: any osrsThemeProtocol = osrsLightTheme(), isReload: Bool = false) {
+    func loadArticle(theme: (any osrsThemeProtocol)? = nil, isReload: Bool = false) {
+        let theme = theme ?? osrsAppRoot.themeManager.currentTheme
+        lastAppliedArticleTheme = theme
         guard webView != nil else {
             pendingArticleLoadTheme = theme
             pendingArticleLoadIsReload = isReload
@@ -1573,7 +1658,7 @@ class ArticleViewModel: NSObject, ObservableObject {
         if adoptedPreRenderedDocument, let webView {
             notifyAdoptedFirstViewComplete(webView)
         }
-        let skipPaintOpen = isReload || forceNextDocumentReload
+        let skipPaintOpen = isReload || (isRefreshing && !needsContentProcessRecovery)
         let paintHTML = skipPaintOpen ? nil : readyToPaintHTML(theme: theme)
         let paintOpenStarted = CFAbsoluteTimeGetCurrent()
 
@@ -1700,11 +1785,16 @@ class ArticleViewModel: NSObject, ObservableObject {
                     throw NetworkError.noConnection
                 }
 #endif
-                if !shouldForceDocumentReload,
-                   let paintHTML {
-                    let elapsedMs = Int((CFAbsoluteTimeGetCurrent() - paintOpenStarted) * 1000)
-                    print("⚡ ArticlePaintOpen: persisted snapshot chars=\(paintHTML.count) elapsedMs=\(elapsedMs)")
-                    await self.loadCustomHtml(paintHTML, theme: theme, generation: loadGeneration)
+                if shouldForceDocumentReload,
+                   let cachedHTML = self.lastCommittedArticleHTML,
+                   cachedHTML.count > 100 {
+                    print("♻️ ArticleViewModel: Recommitting cached article HTML (\(cachedHTML.count) chars)")
+                    await self.loadCustomHtml(
+                        cachedHTML,
+                        theme: theme,
+                        generation: loadGeneration,
+                        forceDocumentReload: true
+                    )
                     await MainActor.run {
                         if self.isCurrentLoad(loadGeneration) {
                             self.checkIfPageIsSaved()
@@ -1712,9 +1802,24 @@ class ArticleViewModel: NSObject, ObservableObject {
                     }
                     return
                 }
-                if shouldForceDocumentReload {
-                    await osrsArticleDocumentCoordinator.shared.invalidate(documentRequest.identity)
+                if let paintHTML {
+                    let elapsedMs = Int((CFAbsoluteTimeGetCurrent() - paintOpenStarted) * 1000)
+                    print("⚡ ArticlePaintOpen: persisted snapshot chars=\(paintHTML.count) elapsedMs=\(elapsedMs)")
+                    await self.loadCustomHtml(
+                        paintHTML,
+                        theme: theme,
+                        generation: loadGeneration,
+                        forceDocumentReload: shouldForceDocumentReload
+                    )
+                    await MainActor.run {
+                        if self.isCurrentLoad(loadGeneration) {
+                            self.checkIfPageIsSaved()
+                        }
+                    }
+                    return
                 }
+                // Do not invalidate the prepared document. Parked WebContent ignores reload();
+                // recovery writes this cached HTML with loadHTMLString into a new WKWebView.
                 let document = try await osrsArticleDocumentCoordinator.shared.preparedDocument(
                     for: documentRequest,
                     renderOptions: renderOptions,
@@ -1736,7 +1841,12 @@ class ArticleViewModel: NSObject, ObservableObject {
                     print("🚫 ArticleViewModel: Ignoring stale HTML load for generation \(loadGeneration)")
                     return
                 }
-                await self.loadCustomHtml(document.html, theme: theme, generation: loadGeneration)
+                await self.loadCustomHtml(
+                    document.html,
+                    theme: theme,
+                    generation: loadGeneration,
+                    forceDocumentReload: shouldForceDocumentReload
+                )
                 await MainActor.run {
                     if self.isCurrentLoad(loadGeneration) {
                         self.lastLoadedArticleHTML = payload.htmlContent
@@ -1835,13 +1945,13 @@ class ArticleViewModel: NSObject, ObservableObject {
     }
 #endif
 
-    func reloadArticle(theme: any osrsThemeProtocol = osrsLightTheme()) {
+    func reloadArticle(theme: (any osrsThemeProtocol)? = nil) {
         loadArticle(theme: theme)
     }
 
     /// Refresh page with Android-parity behavior: show progress bar over blank page
     /// Uses SwiftUI view state management with WebView overlay approach
-    func refreshPage(theme: any osrsThemeProtocol = osrsLightTheme()) {
+    func refreshPage(theme: (any osrsThemeProtocol)? = nil) {
         let timeString = DateFormatter.timeFormatter.string(from: Date())
         print("🔄 [\(timeString)] REFRESH: Starting SwiftUI overlay-based page refresh with blank page")
         forceNextDocumentReload = true
@@ -1988,7 +2098,12 @@ class ArticleViewModel: NSObject, ObservableObject {
         }
     }
 
-    private func loadCustomHtml(_ html: String, theme: any osrsThemeProtocol = osrsLightTheme(), generation: Int) async {
+    private func loadCustomHtml(
+        _ html: String,
+        theme: any osrsThemeProtocol,
+        generation: Int,
+        forceDocumentReload: Bool = false
+    ) async {
         guard let webView = webView else { return }
         guard isCurrentLoad(generation) else {
             print("🚫 ArticleViewModel: Skipping stale WebView load for generation \(generation)")
@@ -1997,9 +2112,13 @@ class ArticleViewModel: NSObject, ObservableObject {
 
         print("🌐 ArticleViewModel: Loading custom HTML in WebView")
         print("🌐 ArticleViewModel: HTML content length: \(html.count) characters")
+        lastCommittedArticleHTML = html
+        lastAppliedArticleTheme = theme
+        osrsWebViewThemePaint.apply(to: webView, theme: theme)
 
+        let mustWriteDocument = forceDocumentReload || needsContentProcessRecovery
         if adoptedPreRenderedDocument, webView.osrsPreparedDocumentKey != nil,
-           !needsContentProcessRecovery,
+           !mustWriteDocument,
            webView.url != nil,
            webView.url?.absoluteString != "about:blank" {
             adoptedPreRenderedDocument = false
@@ -2035,6 +2154,8 @@ class ArticleViewModel: NSObject, ObservableObject {
         let navigation = webView.loadHTMLString(htmlWithLoadGeneration(html, generation: generation), baseURL: customBaseURL)
         bindWebKitNavigation(navigation, to: generation)
         scheduleReadinessTimeout(for: generation)
+        needsContentProcessRecovery = false
+        didQueueWebViewRebuildForRecovery = false
     }
 
     private func startDeferredMapPreloadAfterWebKitReady(
@@ -4095,9 +4216,12 @@ extension ArticleViewModel: WKNavigationDelegate {
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
         osrsWebViewThemePaint.noteWebContentProcessTerminated(webView)
         print("⚠️ ArticleViewModel: Web content process terminated; requesting article recovery")
-        adoptedPreRenderedDocument = false
-        forceNextDocumentReload = true
-        needsContentProcessRecovery = true
+        contentProcessDidTerminate = true
+        if let theme = lastAppliedArticleTheme {
+            recoverBlankResume(theme: theme)
+        } else {
+            markNeedsContentProcessRecovery(rebuildWebView: true)
+        }
     }
 
     func playYouTubeVideo(id: String) {

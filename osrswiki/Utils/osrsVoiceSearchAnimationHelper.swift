@@ -791,6 +791,22 @@ struct osrsUIKitSearchTextField: UIViewRepresentable {
                     return
                 }
 
+                if let viewController = textField.osrsEnclosingViewController,
+                   let transition = viewController.transitionCoordinator
+                    ?? viewController.navigationController?.transitionCoordinator,
+                   transition.isAnimated {
+                    transition.animate(alongsideTransition: nil) { [weak self, weak textField] _ in
+                        guard let self, let textField else { return }
+                        self.synchronizeFocus(
+                            in: textField,
+                            generation: generation,
+                            attemptsRemaining: attemptsRemaining,
+                            delay: 0
+                        )
+                    }
+                    return
+                }
+
                 if self.parent.shouldFocus {
                     if !textField.isFirstResponder {
                         textField.becomeFirstResponder()
@@ -891,6 +907,19 @@ struct osrsUIKitSearchTextField: UIViewRepresentable {
             )
         }
         textField.accessibilityIdentifier = accessibilityIdentifier
+    }
+}
+
+private extension UIView {
+    var osrsEnclosingViewController: UIViewController? {
+        var responder: UIResponder? = self
+        while let current = responder {
+            if let viewController = current as? UIViewController {
+                return viewController
+            }
+            responder = current.next
+        }
+        return nil
     }
 }
 

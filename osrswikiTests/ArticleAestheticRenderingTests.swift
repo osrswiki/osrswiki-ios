@@ -19,6 +19,7 @@ private final class ArticleAestheticNavigationDelegate: NSObject, WKNavigationDe
 final class ArticleAestheticRenderingTests: XCTestCase {
     private var webView: WKWebView!
     private var navigationDelegate: ArticleAestheticNavigationDelegate?
+    private var hostWindow: UIWindow?
 
     override func setUp() {
         super.setUp()
@@ -31,6 +32,9 @@ final class ArticleAestheticRenderingTests: XCTestCase {
     }
 
     override func tearDown() {
+        webView.removeFromSuperview()
+        hostWindow?.isHidden = true
+        hostWindow = nil
         navigationDelegate = nil
         webView = nil
         super.tearDown()
@@ -1683,6 +1687,10 @@ final class ArticleAestheticRenderingTests: XCTestCase {
         XCTAssertTrue(switcher.contains("lockSwitcherMinBlockSize"))
         XCTAssertTrue(switcher.contains("applySwitcherLayoutLock"))
         XCTAssertTrue(switcher.contains("scheduleSwitcherLayoutLock"))
+        XCTAssertTrue(switcher.contains("stabilizeSwitcherScrollPin"))
+        XCTAssertTrue(switcher.contains("captureSwitcherScrollPin"))
+        XCTAssertTrue(switcher.contains("bindSwitcherViewportPin"))
+        XCTAssertTrue(switcher.contains("osrsSwitcherScrollingElement"))
         XCTAssertTrue(switcher.contains("watchSwitcherHostSize"))
         XCTAssertTrue(switcher.contains("th.scrollWidth"))
         XCTAssertTrue(switcher.contains("setProperty('table-layout'"))
@@ -1692,6 +1700,8 @@ final class ArticleAestheticRenderingTests: XCTestCase {
         XCTAssertTrue(fonts.contains("font-display: optional"))
         XCTAssertFalse(articleViewModel.contains("pageHeader.style.fontFamily"))
         XCTAssertTrue(htmlBuilder.contains("osrs-article-first-paint"))
+        XCTAssertTrue(htmlBuilder.contains("background-color: #28221d"))
+        XCTAssertTrue(htmlBuilder.contains("--body-main: #28221d"))
         XCTAssertTrue(htmlBuilder.contains("alegreya_bold.ttf"))
         XCTAssertTrue(htmlBuilder.contains("--osrs-article-safe-area-top"))
         XCTAssertTrue(htmlBuilder.contains("padding-top: calc(var(--osrs-article-safe-area-top) + var(--osrs-article-chrome-clearance))"))
@@ -1823,6 +1833,216 @@ final class ArticleAestheticRenderingTests: XCTestCase {
         XCTAssertFalse((after["width"] as? String ?? "").isEmpty)
         // Image state B is taller; width is locked so the column does not reflow.
         XCTAssertEqual(before["widthPx"] as? Double ?? 0, after["widthPx"] as? Double ?? -1, accuracy: 2.0)
+    }
+
+    func testMidPageSwitcherKeepsViewportPinWhenTopInfoboxHeightChanges() async throws {
+        attachWebViewToWindow()
+        let bootstrap = try readAsset("Assets/web/infobox_switcher_bootstrap.js")
+        let switcher = try readAsset("Assets/web/switch_infobox.js")
+        let html = """
+        <!doctype html>
+        <html>
+        <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <style>
+        body { margin: 0; width: 375px; }
+        table.infobox { width: 100%; border-collapse: collapse; }
+        .tall { height: 220px; background: #c00; }
+        .short { height: 48px; background: #0c0; }
+        </style>
+        </head>
+        <body>
+        <table class="infobox infobox-switch" data-resource-class=".infobox-resources-Item">
+            <caption>
+                <div class="infobox-buttons" data-default-version="1">
+                    <span data-switch-index="1" class="button">Short</span>
+                    <span data-switch-index="2" class="button">Tall</span>
+                </div>
+            </caption>
+            <tbody>
+                <tr><td data-attr-param="block"><div class="short"></div></td></tr>
+            </tbody>
+        </table>
+        <div class="infobox-resources-Item infobox-switch-resources">
+            <div data-attr-param="block">
+                <span data-attr-index="1"><div class="short"></div></span>
+                <span data-attr-index="2"><div class="tall"></div></span>
+            </div>
+        </div>
+        <p>Combat stats filler so the mid-page control sits below the infobox.</p>
+        <div style="height: 360px"></div>
+        <div class="infobox-buttons" id="mid-page-switcher">
+            <span data-switch-index="1" class="button">Short</span>
+            <span data-switch-index="2" class="button" id="mid-tall">Tall</span>
+        </div>
+        <div style="height: 2000px">scrollable tail</div>
+        <script>\(bootstrap)</script>
+        <script>\(switcher)</script>
+        <script>initializeInfoboxSwitcher();</script>
+        </body>
+        </html>
+        """
+        try await load(html)
+        try await Task.sleep(nanoseconds: 250_000_000)
+        _ = try await evaluate("""
+        (() => {
+            const pin = document.getElementById('mid-page-switcher');
+            pin.scrollIntoView();
+            return { ok: true };
+        })()
+        """)
+        let before = try await evaluate("""
+        (() => {
+            const pin = document.getElementById('mid-page-switcher');
+            const scroller = document.scrollingElement || document.documentElement;
+            return {
+                top: pin.getBoundingClientRect().top,
+                scrollTop: scroller.scrollTop
+            };
+        })()
+        """)
+        _ = try await evaluate("""
+        (() => {
+            performSwitch('2', document.getElementById('mid-tall'));
+            return { ok: true };
+        })()
+        """)
+        try await Task.sleep(nanoseconds: 200_000_000)
+        let after = try await evaluate("""
+        (() => {
+            const pin = document.getElementById('mid-page-switcher');
+            const scroller = document.scrollingElement || document.documentElement;
+            return {
+                top: pin.getBoundingClientRect().top,
+                scrollTop: scroller.scrollTop
+            };
+        })()
+        """)
+        XCTAssertEqual(
+            before["top"] as? Double ?? 0,
+            after["top"] as? Double ?? -1,
+            accuracy: 2.0,
+            "Switcher pin jumped from \(before) to \(after)"
+        )
+    }
+
+    func testMidPageSelectSwitcherKeepsViewportPinWhenTopInfoboxHeightChanges() async throws {
+        attachWebViewToWindow()
+        let bootstrap = try readAsset("Assets/web/infobox_switcher_bootstrap.js")
+        let switcher = try readAsset("Assets/web/switch_infobox.js")
+        let html = """
+        <!doctype html>
+        <html>
+        <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <style>
+        body { margin: 0; width: 375px; }
+        table.infobox { width: 100%; border-collapse: collapse; }
+        .tall { height: 220px; background: #c00; }
+        .short { height: 48px; background: #0c0; }
+        </style>
+        </head>
+        <body>
+        <table class="infobox infobox-switch" data-resource-class=".infobox-resources-Item">
+            <caption>
+                <div class="infobox-buttons" data-default-version="1">
+                    <span data-switch-index="1" class="button">Short</span>
+                    <span data-switch-index="2" class="button">Tall</span>
+                </div>
+            </caption>
+            <tbody>
+                <tr><td data-attr-param="block"><div class="short"></div></td></tr>
+            </tbody>
+        </table>
+        <div class="infobox-resources-Item infobox-switch-resources">
+            <div data-attr-param="block">
+                <span data-attr-index="1"><div class="short"></div></span>
+                <span data-attr-index="2"><div class="tall"></div></span>
+            </div>
+        </div>
+        <p>Bonuses filler so the mid-page control sits below the infobox.</p>
+        <div style="height: 360px"></div>
+        <div class="infobox-buttons" id="mid-page-switcher">
+            <select id="mid-select">
+                <option data-switch-index="1" value="1" selected>Short</option>
+                <option data-switch-index="2" value="2">Tall</option>
+            </select>
+        </div>
+        <div style="height: 2000px">scrollable tail</div>
+        <script>\(bootstrap)</script>
+        <script>\(switcher)</script>
+        <script>initializeInfoboxSwitcher();</script>
+        </body>
+        </html>
+        """
+        try await load(html)
+        try await Task.sleep(nanoseconds: 250_000_000)
+        _ = try await evaluate("""
+        (() => {
+            document.getElementById('mid-page-switcher').scrollIntoView();
+            return { ok: true };
+        })()
+        """)
+        let before = try await evaluate("""
+        (() => {
+            const pin = document.getElementById('mid-page-switcher');
+            return { top: pin.getBoundingClientRect().top };
+        })()
+        """)
+        _ = try await evaluate("""
+        (() => {
+            const select = document.getElementById('mid-select');
+            select.value = '2';
+            select.dispatchEvent(new Event('change', { bubbles: true }));
+            performSwitch('2', select);
+            return { ok: true };
+        })()
+        """)
+        try await Task.sleep(nanoseconds: 200_000_000)
+        let after = try await evaluate("""
+        (() => {
+            const pin = document.getElementById('mid-page-switcher');
+            return { top: pin.getBoundingClientRect().top };
+        })()
+        """)
+        XCTAssertEqual(
+            before["top"] as? Double ?? 0,
+            after["top"] as? Double ?? -1,
+            accuracy: 2.0,
+            "Select switcher pin jumped from \(before) to \(after)"
+        )
+    }
+
+    func testDarkFirstPaintUsesLiteralThemeBackgroundBeforeSharedCss() async throws {
+        let firstPaint = osrsPageHtmlBuilder.articleFirstPaintStyle(
+            chromeClearancePx: 0,
+            safeAreaTopPx: 0,
+            safeAreaBottomPx: 0
+        )
+        let html = """
+        <!doctype html>
+        <html class="theme-osrs-dark">
+        <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        \(firstPaint)
+        </head>
+        <body class="theme-osrs-dark"></body>
+        </html>
+        """
+        try await load(html)
+        let colors = try await evaluate("""
+        (() => {
+            const html = getComputedStyle(document.documentElement);
+            const body = getComputedStyle(document.body);
+            return {
+                htmlBg: html.backgroundColor,
+                bodyBg: body.backgroundColor,
+                htmlColor: html.color
+            };
+        })()
+        """)
+        XCTAssertTrue((colors["htmlBg"] as? String ?? "").contains("40, 34, 29"))
+        XCTAssertTrue((colors["bodyBg"] as? String ?? "").contains("40, 34, 29"))
     }
 
     func testBuilderAppliesUserArticleTextScaleExactlyOnce() async throws {
@@ -2280,6 +2500,25 @@ final class ArticleAestheticRenderingTests: XCTestCase {
         XCTAssertEqual(number(uncharged, "labelWidth"), number(baseline, "labelWidth"), accuracy: 1.0)
         XCTAssertEqual(number(wideState, "labelHeight"), number(baseline, "labelHeight"), accuracy: 1.0)
         XCTAssertEqual(number(uncharged, "labelHeight"), number(baseline, "labelHeight"), accuracy: 1.0)
+    }
+
+    private func attachWebViewToWindow() {
+        let host = UIViewController()
+        host.view.frame = CGRect(x: 0, y: 0, width: 375, height: 812)
+        webView.frame = host.view.bounds
+        host.view.addSubview(webView)
+        let window: UIWindow
+        if let scene = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first {
+            window = UIWindow(windowScene: scene)
+            window.frame = CGRect(x: 0, y: 0, width: 375, height: 812)
+        } else {
+            window = UIWindow(frame: CGRect(x: 0, y: 0, width: 375, height: 812))
+        }
+        window.rootViewController = host
+        window.makeKeyAndVisible()
+        host.view.layoutIfNeeded()
+        webView.layoutIfNeeded()
+        hostWindow = window
     }
 
     private func load(_ html: String) async throws {

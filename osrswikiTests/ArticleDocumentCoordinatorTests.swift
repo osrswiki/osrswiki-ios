@@ -1572,6 +1572,8 @@ final class ArticleDocumentCoordinatorTests: XCTestCase {
         XCTAssertTrue(articleViewModel.contains("notifyAdoptedFirstViewComplete"))
         XCTAssertTrue(articleViewModel.contains("if adoptedPreRenderedDocument, let webView"))
         XCTAssertTrue(articleViewModel.contains("skipping loadHTMLString"))
+        XCTAssertTrue(articleViewModel.contains("mustWriteDocument"))
+        XCTAssertTrue(articleViewModel.contains("recoverBlankResume"))
         XCTAssertTrue(articleViewModel.contains("pendingFirstViewComplete"))
         XCTAssertTrue(articleViewModel.contains("firstViewCompletePosted"))
         XCTAssertTrue(articleViewModel.contains("osrsPreparedArticleWebViewStore.shared.pin"))

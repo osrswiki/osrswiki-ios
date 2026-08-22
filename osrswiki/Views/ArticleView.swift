@@ -235,6 +235,7 @@ private struct ArticleViewContent: View {
                 isArticleVisible = false
                 viewModel.setArticleVisibility(false, allowsPassiveCaching: savedPageId == nil)
                 viewModel.cancelActiveWorkForNavigation()
+                osrsResumeFrameOverlay.discard()
                 if !stillShowingArticle {
                     overlayManager?.hideArticleBottomBar(owner: articleIdentity)
                     showMainTabBar()
@@ -320,17 +321,20 @@ private struct ArticleViewContent: View {
                 onLeaveForeground: captureCurrentArticleScroll,
                 onEnterForeground: restoreArticleAfterBackground,
                 onRecover: {
-                    viewModel.needsContentProcessRecovery = false
                     if let webView = viewModel.webView {
                         osrsWebViewThemePaint.apply(to: webView, theme: osrsTheme)
                     }
-                    viewModel.loadArticle(theme: osrsTheme, isReload: true)
+                    viewModel.recoverBlankResume(theme: osrsTheme)
                 }
             )
             .onReceive(NotificationCenter.default.publisher(for: .osrsPlayYouTubeRequested)) { notification in
                 if let videoId = notification.userInfo?["videoId"] as? String {
                     viewModel.playYouTubeVideo(id: videoId)
                 }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .osrsSceneCompositorLooksBlank)) { _ in
+                guard viewModel.hasCommittedArticleHTML else { return }
+                viewModel.recoverBlankResume(theme: osrsTheme)
             }
             .onReceive(NotificationCenter.default.publisher(for: .showAppearanceSettings)) { notification in
                 highlightFloorNumberingOnAppearance =
@@ -365,9 +369,6 @@ private struct ArticleViewContent: View {
         restoreCapturedArticleScrollIfNeeded()
         updateArticleBottomBar()
         viewModel.recoverRenderedDocumentAfterBackground()
-        if viewModel.shouldReloadArticleOnReappear {
-            viewModel.loadArticle(theme: osrsTheme, isReload: true)
-        }
     }
 
     private func beginAppearanceLoad() {
@@ -380,7 +381,7 @@ private struct ArticleViewContent: View {
         if hasLoadedBefore {
             if viewModel.shouldReloadArticleOnReappear {
                 print("🔄 ARTICLEVIEW: Reloading terminated or empty article document")
-                viewModel.loadArticle(theme: osrsTheme, isReload: true)
+                viewModel.recoverBlankResume(theme: osrsTheme)
             } else {
                 restoreCapturedArticleScrollIfNeeded()
             }

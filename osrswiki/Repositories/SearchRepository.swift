@@ -171,7 +171,7 @@ class SearchRepository {
         continueToken: String? = nil
     ) -> SearchResponse {
         let searchResults = pages.map { apiResult in
-            let preview = firstNonBlank(apiResult.snippet, apiResult.extract)
+            let preview = osrsSearchPreviewText.fromCandidates(apiResult.snippet, apiResult.extract)
             return SearchResult(
                 id: apiResult.pageid > 0 ? String(apiResult.pageid) : "title:\(apiResult.title)",
                 title: apiResult.title,
@@ -203,7 +203,7 @@ class SearchRepository {
     ) -> [WikiGeneratedSearchPage] {
         guard !openSearchPages.isEmpty else { return pages }
         return pages.map { page in
-            if firstNonBlank(page.snippet, page.extract) != nil { return page }
+            if osrsSearchPreviewText.fromCandidates(page.snippet, page.extract) != nil { return page }
             guard let open = openSearchPages.first(where: {
                 $0.title.compare(page.title, options: [.caseInsensitive, .diacriticInsensitive]) == .orderedSame
             }) else {
@@ -320,11 +320,98 @@ class SearchRepository {
         let decoded = try JSONDecoder().decode(WikiGeneratedSearchResponse.self, from: data)
         let continueToken = decoded.continuation?.gsroffset.map(String.init)
             ?? decoded.continuation?.grccontinue
+        let pages = decoded.query?.pages ?? []
+        let resolved = includeExtracts ? await enrichMissingPreviews(pages.map { $0.withPreviewFallback() }) : pages
         return SearchGeneratorPageFetch(
-            pages: decoded.query?.pages ?? [],
+            pages: resolved,
             hasMore: continueToken != nil,
             continueToken: continueToken
         )
+    }
+
+    private func enrichMissingPreviews(_ pages: [WikiGeneratedSearchPage]) async -> [WikiGeneratedSearchPage] {
+        let missingIds = pages.compactMap { page -> Int? in
+            osrsSearchPreviewText.fromCandidates(page.snippet, page.extract) == nil ? page.pageid : nil
+        }.filter { $0 > 0 }
+        guard !missingIds.isEmpty else { return pages }
+
+        var byId = Dictionary(uniqueKeysWithValues: pages.map { ($0.pageid, $0) })
+        if let extracts = try? await fetchPlainExtracts(pageIds: missingIds) {
+            for (pageId, extract) in extracts {
+                guard let preview = osrsSearchPreviewText.fromPlainExtract(extract),
+                      let existing = byId[pageId] else { continue }
+                byId[pageId] = existing.withResolvedPreview(preview)
+            }
+        }
+        let stillMissing = missingIds.filter { pageId in
+            osrsSearchPreviewText.fromCandidates(byId[pageId]?.snippet, byId[pageId]?.extract) == nil
+        }
+        await withTaskGroup(of: (Int, String?).self) { group in
+            for pageId in stillMissing {
+                group.addTask {
+                    let html = try? await self.fetchParseHtml(pageId: pageId)
+                    return (pageId, osrsSearchPreviewText.fromHtml(html))
+                }
+            }
+            for await (pageId, preview) in group {
+                guard let preview, let existing = byId[pageId] else { continue }
+                byId[pageId] = existing.withResolvedPreview(preview)
+            }
+        }
+        return pages.map { byId[$0.pageid] ?? $0 }
+    }
+
+    private func fetchPlainExtracts(pageIds: [Int]) async throws -> [Int: String] {
+        var components = URLComponents(string: baseURL)!
+        components.queryItems = [
+            URLQueryItem(name: "action", value: "query"),
+            URLQueryItem(name: "format", value: "json"),
+            URLQueryItem(name: "formatversion", value: "2"),
+            URLQueryItem(name: "prop", value: "extracts"),
+            URLQueryItem(name: "explaintext", value: "1"),
+            URLQueryItem(name: "exchars", value: "280"),
+            URLQueryItem(name: "exlimit", value: "max"),
+            URLQueryItem(name: "pageids", value: pageIds.map(String.init).joined(separator: "|"))
+        ]
+        guard let url = components.url else { throw SearchError.invalidURL }
+        let (data, response) = try await NetworkManager.shared.performDataRequest(url: url)
+        guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+            throw SearchError.invalidResponse
+        }
+        let decoded = try JSONDecoder().decode(WikiGeneratedSearchResponse.self, from: data)
+        var extracts: [Int: String] = [:]
+        for page in decoded.query?.pages ?? [] {
+            if let extract = page.extract, !extract.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                extracts[page.pageid] = extract
+            }
+        }
+        return extracts
+    }
+
+    private func fetchParseHtml(pageId: Int) async throws -> String? {
+        var components = URLComponents(string: baseURL)!
+        components.queryItems = [
+            URLQueryItem(name: "action", value: "parse"),
+            URLQueryItem(name: "format", value: "json"),
+            URLQueryItem(name: "formatversion", value: "2"),
+            URLQueryItem(name: "prop", value: "text"),
+            URLQueryItem(name: "disablelimitreport", value: "1"),
+            URLQueryItem(name: "pageid", value: String(pageId))
+        ]
+        guard let url = components.url else { throw SearchError.invalidURL }
+        let (data, response) = try await NetworkManager.shared.performDataRequest(url: url)
+        guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+            throw SearchError.invalidResponse
+        }
+        let decoded = try JSONDecoder().decode(WikiParsePreviewResponse.self, from: data)
+        return decoded.parse?.text
+    }
+
+    private struct WikiParsePreviewResponse: Decodable {
+        struct Parse: Decodable {
+            let text: String?
+        }
+        let parse: Parse?
     }
 
     private func browseNewestPages(
@@ -574,9 +661,20 @@ struct WikiGeneratedSearchPage: Codable {
     }
 
     func withPreviewFallback() -> WikiGeneratedSearchPage {
-        let preview = firstNonBlank(snippet, extract)
+        let preview = osrsSearchPreviewText.fromCandidates(snippet, extract)
         guard preview != snippet else { return self }
         return replacing(snippet: preview, extract: extract, thumbnail: thumbnail, size: size, wordcount: wordcount, timestamp: timestamp)
+    }
+
+    func withResolvedPreview(_ preview: String) -> WikiGeneratedSearchPage {
+        replacing(
+            snippet: preview,
+            extract: firstNonBlank(extract, preview),
+            thumbnail: thumbnail,
+            size: size,
+            wordcount: wordcount,
+            timestamp: timestamp
+        )
     }
 
     func enriched(with other: WikiGeneratedSearchPage) -> WikiGeneratedSearchPage {

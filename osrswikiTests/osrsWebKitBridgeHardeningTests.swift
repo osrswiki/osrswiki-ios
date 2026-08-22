@@ -576,6 +576,11 @@ final class osrsWebKitBridgeHardeningTests: XCTestCase {
         XCTAssertTrue(articleView.contains("needsContentProcessRecovery"))
         XCTAssertTrue(articleView.contains("shouldReloadArticleOnReappear"))
         XCTAssertTrue(articleView.contains("isArticleVisible = true"))
+        XCTAssertTrue(articleView.contains("recoverBlankResume"))
+        XCTAssertTrue(viewModel.contains("recoverBlankResume"))
+        XCTAssertTrue(viewModel.contains("pendingArticleLoadIsReload = false"))
+        XCTAssertFalse(viewModel.contains("pendingArticleLoadIsReload = true"))
+        XCTAssertTrue(viewModel.contains("mustWriteDocument"))
         XCTAssertTrue(viewModel.contains("document.body.style.visibility = 'visible'"))
         XCTAssertTrue(articleView.contains("osrsYouTubePlayerSheet"))
         let youtubePlayer = try String(
@@ -595,6 +600,8 @@ final class osrsWebKitBridgeHardeningTests: XCTestCase {
         XCTAssertTrue(appState.contains("noteApplicationDidBecomeActive"))
         XCTAssertFalse(appState.contains("osrsResumedSceneWindow.reconnectAfterBackground"))
         XCTAssertTrue(appState.contains("osrsSceneCompositor.restoreResumedScenes"))
+        XCTAssertTrue(appState.contains("navigationHostGeneration"))
+        XCTAssertFalse(appState.contains("navigationHostGeneration += 1"))
         XCTAssertTrue(appState.contains("osrsResumableArticleDidChange"))
         XCTAssertFalse(appState.contains("articleForegroundEpoch += 1"))
         let newsView = try String(
@@ -608,6 +615,8 @@ final class osrsWebKitBridgeHardeningTests: XCTestCase {
             encoding: .utf8
         )
         XCTAssertTrue(compositor.contains("isAppContentWindow"))
+        XCTAssertTrue(compositor.contains("windowLooksCompositorBlank"))
+        XCTAssertTrue(compositor.contains("osrsSceneCompositorLooksBlank"))
         XCTAssertTrue(compositor.contains("TextEffects"))
         XCTAssertTrue(compositor.contains("removeStaleSnapshotOverlays"))
         XCTAssertTrue(compositor.contains("clearFrozenHostSnapshots"))
@@ -621,6 +630,7 @@ final class osrsWebKitBridgeHardeningTests: XCTestCase {
         XCTAssertFalse(tabBar.contains("_UIGraphicsView"))
         XCTAssertTrue(tabBar.contains("sendFloatingTabBarCoversBehindContent"))
         XCTAssertTrue(tabBar.contains("layer.zPosition"))
+        XCTAssertTrue(tabBar.contains("cover.clipsToBounds = behind"))
         XCTAssertFalse(tabBar.contains("container.alpha = hidden ? 0"))
         let themeManager = try String(
             contentsOf: root.appendingPathComponent("platforms/ios/osrswiki/Models/OSRSThemeManager.swift"),
@@ -658,6 +668,7 @@ final class osrsWebKitBridgeHardeningTests: XCTestCase {
         XCTAssertFalse(sceneDelegate.contains("foreground-article"))
         XCTAssertTrue(sceneDelegate.contains("restoreResumedScene"))
         XCTAssertTrue(sceneDelegate.contains("same SwiftUI host"))
+        XCTAssertTrue(sceneDelegate.contains("reconnectSwiftUIHostToWindow"))
         XCTAssertTrue(sceneDelegate.contains("replaceRootViewController"))
         XCTAssertTrue(sceneDelegate.contains("existingSceneWindow"))
         XCTAssertTrue(sceneDelegate.contains("osrsAppSceneViewController"))
@@ -684,6 +695,7 @@ final class osrsWebKitBridgeHardeningTests: XCTestCase {
             encoding: .utf8
         )
         XCTAssertTrue(tabView.contains("osrsResumedSceneWindow.bindRuntime"))
+        XCTAssertTrue(tabView.contains("nativeTabContent"))
         XCTAssertTrue(tabView.contains("nativeTabContent"))
         XCTAssertFalse(tabView.contains("sceneRestoreNudge"))
         XCTAssertFalse(tabView.contains("articleForegroundEpoch"))

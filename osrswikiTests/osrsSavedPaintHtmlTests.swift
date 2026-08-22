@@ -59,11 +59,22 @@ final class osrsSavedPaintHtmlTests: XCTestCase {
             safeAreaTopPx: 0,
             safeAreaBottomPx: 0
         )
-        XCTAssertTrue(style.contains("background-color: var(--body-main, #e2dbc8)"))
-        XCTAssertTrue(style.contains("color: var(--text-color, #000000)"))
+        XCTAssertTrue(style.contains("background-color: #e2dbc8"))
+        XCTAssertTrue(style.contains("color: #000000"))
         XCTAssertTrue(style.contains("html.theme-osrs-dark"))
         XCTAssertTrue(style.contains("body.theme-osrs-dark"))
-        XCTAssertTrue(style.contains("#28221d"))
+        XCTAssertTrue(style.contains("background-color: #28221d"))
+        XCTAssertTrue(style.contains("--body-main: #28221d"))
+        XCTAssertFalse(style.contains("var(--body-main, #e2dbc8)"))
+        let dark = osrsPageHtmlBuilder.articleFirstPaintStyle(
+            chromeClearancePx: 0,
+            usesDarkTheme: true
+        )
+        let darkUnscoped = dark.components(separatedBy: "html.theme-osrs-dark").first ?? ""
+        XCTAssertTrue(darkUnscoped.contains("background-color: #28221d"))
+        XCTAssertTrue(darkUnscoped.contains("--body-main: #28221d"))
+        let beforeNot = darkUnscoped.components(separatedBy: "html:not(.theme-osrs-dark)").first ?? ""
+        XCTAssertFalse(beforeNot.contains("background-color: #e2dbc8"))
     }
 
     func testCopyCachedResponseReusesPriorGenerationBytes() throws {

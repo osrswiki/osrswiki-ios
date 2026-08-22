@@ -100,7 +100,7 @@ extension ArticleViewModel {
             
             // Use the existing loadArticle method with the current theme
             // The proxy system will transparently handle online/offline switching
-            loadArticle(theme: osrsLightTheme(), isReload: false)
+            loadArticle(theme: osrsAppRoot.themeManager.currentTheme, isReload: false)
             
             // Auto-disable save mode after a reasonable timeout
             DispatchQueue.main.asyncAfter(deadline: .now() + 30.0) {

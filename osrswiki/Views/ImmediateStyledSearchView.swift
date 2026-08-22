@@ -75,7 +75,7 @@ struct ImmediateStyledTextField: UIViewRepresentable {
 struct ImmediateStyledSearchView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var searchText = ""
-    @State private var isSearchFocused = true
+    @State private var isSearchFocused: Bool
     @State private var viewModel: SearchViewModel?
     @State private var hasInitialized = false
     
@@ -92,6 +92,7 @@ struct ImmediateStyledSearchView: View {
         self.theme = theme
         self.customNavigationClosure = nil
         self.scope = scope
+        _isSearchFocused = State(initialValue: !scope.emptyQueryBrowsesNewest)
     }
     
     // Full initializer with custom navigation closure
@@ -101,6 +102,7 @@ struct ImmediateStyledSearchView: View {
         self.theme = theme
         self.customNavigationClosure = customNavigationClosure
         self.scope = scope
+        _isSearchFocused = State(initialValue: !scope.emptyQueryBrowsesNewest)
     }
     
     var body: some View {

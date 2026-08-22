@@ -510,7 +510,8 @@ class osrsPageHtmlBuilder {
             chromeClearancePx: chromeClearance,
             safeAreaTopPx: safeAreaTop,
             safeAreaBottomPx: safeAreaBottom,
-            bottomChromePx: bottomChrome
+            bottomChromePx: bottomChrome,
+            usesDarkTheme: theme is osrsDarkTheme
         )
 
         // Build final HTML document
@@ -550,7 +551,8 @@ class osrsPageHtmlBuilder {
         chromeClearancePx: Int,
         safeAreaTopPx: Int = 0,
         safeAreaBottomPx: Int = 0,
-        bottomChromePx: Int? = nil
+        bottomChromePx: Int? = nil,
+        usesDarkTheme: Bool = false
     ) -> String {
         let resolvedBottomChrome = bottomChromePx ?? chromeClearancePx
         let chromePadding: String
@@ -570,6 +572,19 @@ class osrsPageHtmlBuilder {
         } else {
             chromePadding = ""
         }
+        let bodyMain = usesDarkTheme ? "#28221d" : "#e2dbc8"
+        let bodyLight = usesDarkTheme ? "#3e362f" : "#d8ccb4"
+        let textColor = usesDarkTheme ? "#f4eaea" : "#000000"
+        let lightFallback = usesDarkTheme ? """
+                    html:not(.theme-osrs-dark),
+                    html:not(.theme-osrs-dark) body {
+                        --body-main: #e2dbc8;
+                        --body-light: #d8ccb4;
+                        --text-color: #000000;
+                        background-color: #e2dbc8 !important;
+                        color: #000000 !important;
+                    }
+        """ : ""
         return """
         <style id="osrs-article-first-paint">
         \(chromePadding)
@@ -588,15 +603,31 @@ class osrsPageHtmlBuilder {
                     html, body, .mw-parser-output, .mw-content-text {
                         line-height: 1.35 !important;
                     }
+                    html {
+                        --body-main: \(bodyMain);
+                        --body-light: \(bodyLight);
+                        --text-color: \(textColor);
+                    }
                     html, body {
-                        background-color: var(--body-main, #e2dbc8) !important;
-                        color: var(--text-color, #000000) !important;
+                        background-color: \(bodyMain) !important;
+                        color: \(textColor) !important;
+                    }
+                    \(lightFallback)
+                    html.theme-osrs-dark {
+                        --body-main: #28221d;
+                        --body-light: #3e362f;
+                        --text-color: #f4eaea;
                     }
                     html.theme-osrs-dark,
                     html.theme-osrs-dark body,
                     body.theme-osrs-dark {
-                        background-color: var(--body-main, #28221d) !important;
-                        color: var(--text-color, #f4eaea) !important;
+                        background-color: #28221d !important;
+                        color: #f4eaea !important;
+                    }
+                    table.infobox,
+                    .infobox-switch,
+                    .collapsible-primary-infobox {
+                        min-width: min(18.75rem, 100%);
                     }
                     .mw-parser-output p,
                     .mw-parser-output > ul,

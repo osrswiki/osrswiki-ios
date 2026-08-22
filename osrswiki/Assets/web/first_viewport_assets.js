@@ -242,9 +242,48 @@
 
     window.osrsWatchFirstViewComplete = watchComplete;
 
+    function sampleLayoutStability() {
+        var target = document.querySelector(
+            '.infobox-switch, .collapsible-primary-infobox, table.infobox, .infobox'
+        );
+        window.__osrsLayoutStability = window.__osrsLayoutStability || {
+            samples: [],
+            maxTopDelta: 0,
+            maxHeightDelta: 0
+        };
+        if (!target || typeof target.getBoundingClientRect !== 'function') {
+            return;
+        }
+        var samples = [];
+        var frames = 0;
+        function tick() {
+            var rect = target.getBoundingClientRect();
+            samples.push({
+                t: performance.now(),
+                top: rect.top,
+                height: rect.height,
+                width: rect.width
+            });
+            frames += 1;
+            if (frames < 32) {
+                requestAnimationFrame(tick);
+                return;
+            }
+            var tops = samples.map(function (sample) { return sample.top; });
+            var heights = samples.map(function (sample) { return sample.height; });
+            window.__osrsLayoutStability = {
+                samples: samples,
+                maxTopDelta: Math.max.apply(null, tops) - Math.min.apply(null, tops),
+                maxHeightDelta: Math.max.apply(null, heights) - Math.min.apply(null, heights)
+            };
+        }
+        requestAnimationFrame(tick);
+    }
+
     function start() {
         notify(unique(collectIntersecting()));
         watchComplete();
+        sampleLayoutStability();
     }
 
     if (document.readyState === 'loading') {
