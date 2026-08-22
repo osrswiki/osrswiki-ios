@@ -76,46 +76,32 @@ final class IOS06TrustBoundaryTests: XCTestCase {
     }
 
     @MainActor
-    func testDonationManagerDoesNotStartPaymentWhenProviderIsUnavailable() {
+    func testDonationManagerDoesNotStartPaymentWhenProviderIsUnavailable() async {
         let gateway = osrsFakeDonationGateway(
-            availability: .unavailable("Donations are unavailable in this build.")
+            availability: .unavailable("Donations are unavailable in this build."),
+            products: osrsDonationProductIds.previewProducts,
+            purchaseResult: .success
         )
         let manager = DonationManager(paymentGateway: gateway)
 
-        manager.loadProducts()
+        await manager.loadProductsAsync()
         XCTAssertEqual(
             manager.donationState,
             .productsUnavailable("Donations are unavailable in this build.")
         )
+        XCTAssertFalse(manager.canStartDonation)
 
         let completionExpectation = expectation(description: "Donation completion")
         manager.processDonation(amount: 5) { success in
             XCTAssertFalse(success)
             completionExpectation.fulfill()
         }
-        wait(for: [completionExpectation], timeout: 1)
+        await fulfillment(of: [completionExpectation], timeout: 1)
 
-        XCTAssertEqual(gateway.startedAmounts, [])
+        XCTAssertEqual(gateway.purchasedProductIds, [])
         XCTAssertEqual(
             manager.donationState,
             .productsUnavailable("Donations are unavailable in this build.")
         )
-    }
-}
-
-private final class osrsFakeDonationGateway: osrsDonationPaymentGateway {
-    let availability: osrsDonationPaymentAvailability
-    private(set) var startedAmounts: [Decimal] = []
-
-    init(availability: osrsDonationPaymentAvailability) {
-        self.availability = availability
-    }
-
-    func startDonation(
-        amount: Decimal,
-        completion: @escaping (osrsDonationPurchaseResult) -> Void
-    ) {
-        startedAmounts.append(amount)
-        completion(.success)
     }
 }

@@ -29,6 +29,9 @@
       selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
       shouldUseLaunchSchemeArgsEnv = "YES"
       shouldAutocreateTestPlan = "YES">
+      <StoreKitConfigurationFileReference
+         identifier = "../../osrswiki/StoreKit/osrsDonations.storekit">
+      </StoreKitConfigurationFileReference>
       <Testables>
          <TestableReference
             skipped = "NO">

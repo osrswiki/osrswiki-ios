@@ -11,6 +11,14 @@ struct osrsDonationProduct: Equatable {
     let id: String
     let displayName: String
     let amount: Decimal
+    let displayPrice: String
+
+    init(id: String, displayName: String, amount: Decimal, displayPrice: String? = nil) {
+        self.id = id
+        self.displayName = displayName
+        self.amount = amount
+        self.displayPrice = displayPrice ?? displayName
+    }
 }
 
 enum osrsDonationProductLoadResult: Equatable {

@@ -1,0 +1,75 @@
+{
+  "identifier" : "3F8E2C91-6A14-4B55-9D0E-7B1A2C3D4E5F",
+  "nonRenewingSubscriptions" : [],
+  "products" : [
+    {
+      "displayPrice" : "0.99",
+      "familyShareable" : false,
+      "internalID" : "A11AA111-0001-4000-8000-000000000001",
+      "localizations" : [
+        {
+          "description" : "One-time donation to support the OSRS Wiki app.",
+          "displayName" : "Donate $1",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "donate_1_usd",
+      "referenceName" : "Donate $1",
+      "type" : "Consumable"
+    },
+    {
+      "displayPrice" : "4.99",
+      "familyShareable" : false,
+      "internalID" : "A11AA111-0001-4000-8000-000000000005",
+      "localizations" : [
+        {
+          "description" : "One-time donation to support the OSRS Wiki app.",
+          "displayName" : "Donate $5",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "donate_5_usd",
+      "referenceName" : "Donate $5",
+      "type" : "Consumable"
+    },
+    {
+      "displayPrice" : "9.99",
+      "familyShareable" : false,
+      "internalID" : "A11AA111-0001-4000-8000-000000000010",
+      "localizations" : [
+        {
+          "description" : "One-time donation to support the OSRS Wiki app.",
+          "displayName" : "Donate $10",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "donate_10_usd",
+      "referenceName" : "Donate $10",
+      "type" : "Consumable"
+    },
+    {
+      "displayPrice" : "24.99",
+      "familyShareable" : false,
+      "internalID" : "A11AA111-0001-4000-8000-000000000025",
+      "localizations" : [
+        {
+          "description" : "One-time donation to support the OSRS Wiki app.",
+          "displayName" : "Donate $25",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "donate_25_usd",
+      "referenceName" : "Donate $25",
+      "type" : "Consumable"
+    }
+  ],
+  "settings" : {
+    "_failTransactionsEnabled" : false,
+    "_storeKitError" : 0
+  },
+  "subscriptionGroups" : [],
+  "version" : {
+    "major" : 3,
+    "minor" : 0
+  }
+}

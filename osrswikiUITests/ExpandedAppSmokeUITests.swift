@@ -46,19 +46,26 @@ final class ExpandedAppSmokeUITests: XCTestCase {
     }
 
     func testDirectDonateRouteLaunchesWithoutPaymentSheet() throws {
-        let app = makeApp(startTab: "more", extraArguments: ["-startMoreDestination", "donate"])
+        let app = makeApp(
+            startTab: "more",
+            extraArguments: [
+                "-startMoreDestination",
+                "donate",
+                "-osrsDonationGatewayFake"
+            ]
+        )
         app.launch()
 
         XCTAssertTrue(app.wait(for: .runningForeground, timeout: tabLaunchBudget))
         XCTAssertTrue(app.staticTexts["Support OSRS Wiki"].waitForExistence(timeout: 8), "Donate route should render")
-        XCTAssertTrue(app.buttons["Donations Unavailable"].waitForExistence(timeout: 5), "Donate action should clearly show unavailable state")
-        XCTAssertFalse(app.buttons["Donations Unavailable"].isEnabled, "Unavailable donate action should not be tappable")
-        XCTAssertTrue(app.staticTexts["donation_unavailable_message"].waitForExistence(timeout: 5), "Donate route should explain why app donations are unavailable")
+        XCTAssertTrue(app.segmentedControls["donation_preset_amounts"].waitForExistence(timeout: 5), "Preset donation amounts should be visible")
+        let priceSegment = app.segmentedControls["donation_preset_amounts"].buttons["$0.99"]
         XCTAssertTrue(
-            app.staticTexts["donation_unavailable_message"].label.contains("no payment provider is configured"),
-            "Unavailable copy should avoid implying a payment can succeed"
+            priceSegment.waitForExistence(timeout: 5),
+            "Store displayPrice should replace the $1 fallback when products load"
         )
-        XCTAssertFalse(app.sheets.firstMatch.exists, "Smoke launch should not present an Apple Pay sheet")
+        XCTAssertFalse(app.buttons["Donations Unavailable"].exists, "Fake-loaded StoreKit products should not keep the unavailable stub")
+        XCTAssertFalse(app.sheets.firstMatch.exists, "Smoke launch should not present a payment sheet")
         attachScreenshot(from: app, name: "expanded-smoke-donate-route")
     }
 
