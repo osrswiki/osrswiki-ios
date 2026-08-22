@@ -313,6 +313,15 @@ final class ArticleGestureOwnershipTests: XCTestCase {
         XCTAssertTrue(source.contains("pendingBackCommitAuthorized = true"))
         XCTAssertTrue(source.contains("parent.onSidebarGesture?()"))
         XCTAssertTrue(source.contains("isLocalOwnerAtStartPoint: false"))
+        XCTAssertTrue(source.contains("osrsInteractiveSwipeFrameProbe.recordPanFrame()"))
+        XCTAssertTrue(source.contains("webView.scrollView.addGestureRecognizer(recognizer)"))
+        XCTAssertFalse(source.contains("webView.addGestureRecognizer(recognizer)"))
+        XCTAssertTrue(
+            source.contains("interactiveSwipe.begin(from: webView, contentsOpen: parent.isContentsOpen())")
+        )
+        XCTAssertFalse(
+            source.contains("if articleChromeBlockedForSequence || articleChromeClassificationPending")
+        )
     }
 
     func testHorizontalOverflowClaimsTheWholePointerSequence() throws {

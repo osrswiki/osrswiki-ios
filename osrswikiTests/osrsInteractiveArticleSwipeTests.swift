@@ -223,4 +223,29 @@ final class osrsInteractiveArticleSwipeTests: XCTestCase {
         XCTAssertTrue(live === first.view)
         XCTAssertNil(osrsInteractiveArticleSwipe.livePreviousPageView(from: first.view))
     }
+
+    func testBackSwipeIgnoresTouchesOnSlidersAndSwitches() {
+        let slider = UISlider()
+        let thumb = UIView()
+        slider.addSubview(thumb)
+        XCTAssertFalse(osrsInteractiveBackSwipeTouchPolicy.allowsBackSwipe(from: thumb))
+        XCTAssertFalse(osrsInteractiveBackSwipeTouchPolicy.allowsBackSwipe(from: slider))
+        XCTAssertFalse(osrsInteractiveBackSwipeTouchPolicy.allowsBackSwipe(from: UISwitch()))
+        XCTAssertTrue(osrsInteractiveBackSwipeTouchPolicy.allowsBackSwipe(from: UIView()))
+
+        let sliderPan = UIPanGestureRecognizer()
+        slider.addGestureRecognizer(sliderPan)
+        XCTAssertFalse(osrsInteractiveBackSwipeTouchPolicy.allowsSimultaneousRecognition(with: sliderPan))
+        XCTAssertTrue(osrsInteractiveBackSwipeTouchPolicy.allowsSimultaneousRecognition(with: UIPanGestureRecognizer()))
+    }
+}
+
+final class osrsInteractiveSwipeFrameProbeTests: XCTestCase {
+    func testSummaryTreatsSixteenMillisecondFramesAsSixtyHertz() {
+        let stats = osrsInteractiveSwipeFrameProbe.summary(samples: [0.016, 0.017, 0.016, 0.018, 0.016])
+        XCTAssertEqual(stats.count, 5)
+        XCTAssertLessThan(stats.medianMs, 18)
+        XCTAssertGreaterThan(stats.medianHz, 50)
+        XCTAssertGreaterThan(stats.displayHz, 0)
+    }
 }

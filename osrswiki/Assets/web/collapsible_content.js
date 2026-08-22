@@ -933,11 +933,54 @@
     }
 
     window.OSRSInitializeCollapsibleContent = initialize;
-    if (document.body) {
-        initialize();
-    } else if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', initialize, { once: true });
-    } else {
+
+    var COLLAPSE_AFTER_FIRST_VIEW_FALLBACK_MS = 2500;
+    var collapseInitScheduled = false;
+    var collapseInitStarted = false;
+
+    function startCollapseAndMapWork() {
+        if (collapseInitStarted) {
+            return;
+        }
+        collapseInitStarted = true;
+        if (!document.body) {
+            collapseInitStarted = false;
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', startCollapseAndMapWork, { once: true });
+            }
+            return;
+        }
         initialize();
     }
+
+    function scheduleCollapseAndMapWork() {
+        if (collapseInitScheduled) {
+            return;
+        }
+        collapseInitScheduled = true;
+
+        function arm() {
+            if (collapseInitStarted) {
+                return;
+            }
+            if (typeof window.osrsWatchFirstViewComplete !== 'function') {
+                startCollapseAndMapWork();
+                return;
+            }
+            if (window.__osrsFirstViewPainted) {
+                setTimeout(startCollapseAndMapWork, 0);
+                return;
+            }
+            window.addEventListener('osrs-first-view-complete', function () {
+                setTimeout(startCollapseAndMapWork, 0);
+            }, { once: true });
+            setTimeout(startCollapseAndMapWork, COLLAPSE_AFTER_FIRST_VIEW_FALLBACK_MS);
+        }
+
+        // Yield so first_viewport_assets.js (next script in the article document) can
+        // start and unlock host reveal without waiting on collapse + map measure.
+        setTimeout(arm, 0);
+    }
+
+    scheduleCollapseAndMapWork();
 })();

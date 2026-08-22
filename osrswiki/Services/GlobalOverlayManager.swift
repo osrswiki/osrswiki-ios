@@ -41,10 +41,13 @@ class GlobalOverlayManager: ObservableObject {
     }
 
     func setArticleBottomBarExitProgress(_ progress: CGFloat) {
-        articleBottomBarExitProgress = min(1, max(0, progress))
+        let clamped = min(1, max(0, progress))
+        guard abs(articleBottomBarExitProgress - clamped) > 0.0005 else { return }
+        articleBottomBarExitProgress = clamped
     }
 
     func setArticleBottomBarCovered(_ covered: Bool) {
+        guard articleBottomBarCovered != covered else { return }
         articleBottomBarCovered = covered
     }
 }

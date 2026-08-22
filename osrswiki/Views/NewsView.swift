@@ -379,7 +379,7 @@ struct WikiFeedContentView: View {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
                         Text("Updates")
                             .font(.osrsSectionHeaderSmallCaps)
-                            .dynamicTypeSize(.xSmall ... .xLarge)
+                            .dynamicTypeSize(.xSmall ... .accessibility5)
                             .foregroundStyle(.osrsOnSurface)
                             .kerning(0.5)
                             .lineLimit(1)
@@ -809,6 +809,7 @@ struct OnThisDayEventView: View {
 
 /// Specialized HTMLTextView that applies monospace font to year patterns
 struct MonospaceYearHTMLTextView: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let htmlString: String
     let onLinkTap: ((URL) -> Void)?
     
@@ -839,7 +840,7 @@ struct MonospaceYearHTMLTextView: View {
             let range = NSRange(location: 0, length: attributedString.length)
             
             // Apply base styling with theme-aware colors
-            let systemFont = UIFont.systemFont(ofSize: 16)
+            let systemFont = dynamicTypeSize.osrsPreferredFont(forTextStyle: .body)
             attributedString.addAttribute(.font, value: systemFont, range: range)
             // Use theme-aware text color instead of system label
             let textColor = UIColor { traitCollection in
@@ -858,7 +859,10 @@ struct MonospaceYearHTMLTextView: View {
                 let matches = yearDashPattern.matches(in: text, range: NSRange(location: 0, length: text.count))
                 
                 for match in matches {
-                    let monoFont = UIFont.monospacedSystemFont(ofSize: 16, weight: .regular)
+                    let monoFont = UIFont.monospacedSystemFont(
+                        ofSize: dynamicTypeSize.osrsPreferredFont(forTextStyle: .body).pointSize,
+                        weight: .regular
+                    )
                     attributedString.addAttribute(.font, value: monoFont, range: match.range)
                 }
             } catch {
@@ -881,7 +885,7 @@ struct MonospaceYearHTMLTextView: View {
             
             // Override HTML fonts and colors with theme-aware styling
             let range = NSRange(location: 0, length: attributedString.length)
-            let systemFont = UIFont.systemFont(ofSize: 16)
+            let systemFont = dynamicTypeSize.osrsPreferredFont(forTextStyle: .body)
             
             // Remove existing attributes and apply base styling with theme-aware colors
             attributedString.removeAttribute(.font, range: range)
@@ -911,7 +915,10 @@ struct MonospaceYearHTMLTextView: View {
                     attributedString.addAttribute(.foregroundColor, value: linkColor, range: linkRange)
                     
                     // Apply medium font weight to make links heavier (iOS-Android consistency)
-                    let mediumFont = UIFont.systemFont(ofSize: 16, weight: .medium)
+                    let mediumFont = UIFont.systemFont(
+                        ofSize: dynamicTypeSize.osrsPreferredFont(forTextStyle: .body).pointSize,
+                        weight: .medium
+                    )
                     attributedString.addAttribute(.font, value: mediumFont, range: linkRange)
                 }
             }
@@ -923,7 +930,10 @@ struct MonospaceYearHTMLTextView: View {
                 let matches = yearDashPattern.matches(in: text, range: NSRange(location: 0, length: text.count))
                 
                 for match in matches {
-                    let monoFont = UIFont.monospacedSystemFont(ofSize: 16, weight: .regular)
+                    let monoFont = UIFont.monospacedSystemFont(
+                        ofSize: dynamicTypeSize.osrsPreferredFont(forTextStyle: .body).pointSize,
+                        weight: .regular
+                    )
                     attributedString.addAttribute(.font, value: monoFont, range: match.range)
                 }
             } catch {

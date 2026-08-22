@@ -645,7 +645,11 @@ class ArticleViewModel: NSObject, ObservableObject {
     """
 
     private var lastForegroundRecoveryAt: TimeInterval = 0
+    private var lastDocumentRecommitAt: TimeInterval = 0
     private var lastBlankResumeAt: TimeInterval = 0
+    /// True after a real application background. Sheets and Control Center
+    /// must not recommit the article document.
+    private var pendingBackgroundDocumentRecommit = false
     private var contentProcessDidTerminate = false
     private var lastAppliedArticleTheme: (any osrsThemeProtocol)?
     private var lastCommittedArticleHTML: String?
@@ -654,15 +658,36 @@ class ArticleViewModel: NSObject, ObservableObject {
     private static let osrsForegroundHealthProbeRetryNs: UInt64 = 250_000_000
     private static let osrsForegroundHealthProbeInitialDelayNs: UInt64 = 300_000_000
 
+    func noteApplicationDidEnterBackground() {
+        pendingBackgroundDocumentRecommit = true
+    }
+
+    /// iOS 26 parks WebKit GPU while the article DOM stays healthy, so a
+    /// snapshot/JS probe cannot tell the LCD is a themed blank. Ordinary
+    /// resume must wake the existing WKWebView. `loadHTMLString` here is what
+    /// turned a usable article into a chrome-less theme fill.
+    func recommitCachedArticleAfterBackground(force: Bool = false) {
+        _ = force
+        pendingBackgroundDocumentRecommit = false
+        recoverRenderedDocumentAfterBackground()
+        if let webView {
+            // Do not reparent WK on ordinary resume: removeFromSuperview
+            // parks GPU tiles after a healthy DOM. Do not nil WKScrollView
+            // contents here either: that dropped live tiles on iOS 26.
+            if let window = webView.window {
+                osrsSceneCompositor.restore(window)
+            }
+        }
+    }
+
     func recoverRenderedDocumentAfterBackground() {
         let now = Date().timeIntervalSince1970
         if now - lastForegroundRecoveryAt < 1 {
-            wakeRenderedDocumentAfterBackground()
             return
         }
         lastForegroundRecoveryAt = now
-        // A healthy DOM can still sit behind a blank window compositor.
-        // Rebuild WebKit only when the content process actually terminated.
+        // Wake the existing WKWebView. Do not rebuild it: snapshot/JS false
+        // blanks during resume destroyed a usable article+chrome frame.
         wakeRenderedDocumentAfterBackground()
     }
 
@@ -711,6 +736,7 @@ class ArticleViewModel: NSObject, ObservableObject {
     /// Probe the live document on foreground and recover when it is empty.
     func wakeRenderedDocumentAfterBackground() {
         guard let webView else {
+            guard contentProcessDidTerminate else { return }
             if let theme = lastAppliedArticleTheme {
                 recoverBlankResume(theme: theme)
             } else {
@@ -722,6 +748,7 @@ class ArticleViewModel: NSObject, ObservableObject {
         webView.alpha = 1
         webView.scrollView.isHidden = false
         webView.scrollView.alpha = 1
+        osrsSceneCompositor.clearFrozenWebKitScrollSnapshot(webView)
         webView.scrollView.layer.setNeedsDisplay()
         webView.setNeedsLayout()
         webView.layoutIfNeeded()
@@ -734,6 +761,9 @@ class ArticleViewModel: NSObject, ObservableObject {
         webView.evaluateJavaScript(
             "void(document.body && (document.body.style.visibility = 'visible')); window.scrollBy(0,1); window.scrollBy(0,-1);"
         )
+        if isLoading || isRefreshing {
+            return
+        }
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: Self.osrsForegroundHealthProbeInitialDelayNs)
             self.probeRenderedDocumentHealthOnForeground(force: true, attempt: 0)
@@ -745,6 +775,7 @@ class ArticleViewModel: NSObject, ObservableObject {
             return
         }
         guard let webView else {
+            guard contentProcessDidTerminate else { return }
             if let theme = lastAppliedArticleTheme {
                 recoverBlankResume(theme: theme)
             } else {
@@ -817,33 +848,30 @@ class ArticleViewModel: NSObject, ObservableObject {
             }
             return
         }
-        print("⚠️ ArticleViewModel: Foreground document probe exhausted (\(reason)); recommitting cached HTML")
-        if let theme = lastAppliedArticleTheme {
-            recoverBlankResume(theme: theme)
-        } else {
-            markNeedsContentProcessRecovery(rebuildWebView: contentProcessDidTerminate || webView.superview == nil)
+        print("⚠️ ArticleViewModel: Foreground document probe exhausted (\(reason)); waking live layers without rewriting HTML")
+        osrsSceneCompositor.clearFrozenWebKitScrollSnapshot(webView)
+        if let window = webView.window {
+            osrsSceneCompositor.restore(window)
         }
     }
 
     /// DOM can stay healthy while WKWebView's compositor is still the system-white
     /// unpainted fill. Uniform themed parchment/dark is not a parked blank.
+    /// Rebuild the existing article WKWebView via `needsContentProcessRecovery`
+    /// so chrome stays; do not use recoverBlankResume (that parks a chrome-less host).
     private func probeRenderedSnapshotIfNeeded(_ webView: WKWebView, generation: Int) {
         webView.takeSnapshot(with: nil) { [weak self] image, error in
             Task { @MainActor in
                 guard let self else { return }
                 guard generation == self.foregroundDocumentProbeGeneration else { return }
                 if error != nil || image == nil
-                    || osrsWebViewThemePaint.isUnpaintedSystemFill(image)
-                    || osrsWebViewThemePaint.isUniformFill(image) {
+                    || osrsWebViewThemePaint.isUnpaintedSystemFill(image) {
                     if self.isLoading && !self.articleRevealedForWarm {
                         return
                     }
-                    print("⚠️ ArticleViewModel: Foreground snapshot found a compositor-blank article; recovering")
-                    if let theme = self.lastAppliedArticleTheme {
-                        self.recoverBlankResume(theme: theme)
-                    } else {
-                        self.markNeedsContentProcessRecovery(rebuildWebView: self.contentProcessDidTerminate)
-                    }
+                    print("⚠️ ArticleViewModel: Foreground snapshot found a compositor-blank article; revealing live layers")
+                    osrsSceneCompositor.revealLiveArticleLayers(from: webView)
+                    osrsSceneCompositor.clearFrozenWebKitScrollSnapshot(webView)
                 }
             }
         }
@@ -1506,9 +1534,9 @@ class ArticleViewModel: NSObject, ObservableObject {
             if webKitProgress >= 1.0 {
                 // TIMING MEASUREMENT: Record when WebKit completes (not final completion)
                 self.progressCompletionTime = timestamp
-                print("📊 [\(timeString)] 🔴 WEBKIT COMPLETE: WebKit reached 100%, waiting for JavaScript content readiness...")
+                print("📊 [\(timeString)] 🔴 WEBKIT COMPLETE: WebKit reached 100%, waiting for first-viewport paint...")
 
-                // Progress stays at 95% and loading continues until "StylingScriptsComplete"
+                // Progress stays at 95% and loading continues until osrsFirstViewComplete
                 self.loadingProgress = 0.95
                 self.loadingProgressText = "Finalizing content..."
                 self.isLoading = true
@@ -2153,6 +2181,7 @@ class ArticleViewModel: NSObject, ObservableObject {
 
         let navigation = webView.loadHTMLString(htmlWithLoadGeneration(html, generation: generation), baseURL: customBaseURL)
         bindWebKitNavigation(navigation, to: generation)
+        osrsSceneCompositor.wakeLiveArticleWebView(webView)
         scheduleReadinessTimeout(for: generation)
         needsContentProcessRecovery = false
         didQueueWebViewRebuildForRecovery = false
@@ -3465,11 +3494,11 @@ class ArticleViewModel: NSObject, ObservableObject {
         let timeoutWorkItem = DispatchWorkItem { [weak self] in
             guard let self = self, self.isCurrentLoad(generation), self.isLoading || self.isRefreshing else { return }
             let timeString = DateFormatter.timeFormatter.string(from: Date())
-            print("⚠️ [\(timeString)] ARTICLE READINESS TIMEOUT: generation \(generation) did not reach WebKit+JS readiness")
-            self.isLoading = false
-            self.isRefreshing = false
-            self.loadingProgressText = nil
-            self.errorMessage = "Page rendering timed out. Please try reloading."
+            print("⚠️ [\(timeString)] ARTICLE READINESS TIMEOUT: generation \(generation) revealing via first-view fallback")
+            self.markJavaScriptReady(for: generation)
+            if self.webKitReadyGeneration != generation {
+                self.markWebKitReady(for: generation)
+            }
         }
 
         readinessTimeoutWorkItem = timeoutWorkItem
@@ -4203,12 +4232,7 @@ extension ArticleViewModel: WKNavigationDelegate {
             return
         }
 
-        // For live HTTPS pages: Inject styling complete notification similar to Android
-        webView.evaluateJavaScript("""
-            if (window.RenderTimeline) {
-                window.RenderTimeline.log('Event: StylingScriptsComplete:\(generation)');
-            }
-        """)
+        // Live HTTPS pages reveal on osrsFirstViewComplete / FirstViewPainted, not a host-injected styling event.
 
         print("🎉 ArticleViewModel: Page rendering complete")
     }

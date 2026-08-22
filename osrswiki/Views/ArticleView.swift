@@ -213,6 +213,11 @@ private struct ArticleViewContent: View {
                 }
 #endif
             }
+            .onChange(of: viewModel.isRefreshing) { _, isRefreshing in
+                if !isRefreshing {
+                    restoreCapturedArticleScrollIfNeeded()
+                }
+            }
             .onDisappear {
                 overlayManager?.setArticleBottomBarCovered(false)
                 savedCachePreparationTask?.cancel()
@@ -241,11 +246,15 @@ private struct ArticleViewContent: View {
                     showMainTabBar()
                 }
             }
+            .onReceive(NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)) { _ in
+                captureCurrentArticleScroll()
+                viewModel.noteApplicationDidEnterBackground()
+            }
             .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
-                restoreArticleAfterBackground()
+                restoreArticleAfterBackground(forceDocumentRecommit: false)
             }
             .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
-                restoreArticleAfterBackground()
+                restoreArticleAfterBackground(forceDocumentRecommit: false)
             }
     }
 
@@ -318,13 +327,17 @@ private struct ArticleViewContent: View {
             }
             .osrsArticleSceneRestore(
                 needsRecovery: $viewModel.needsContentProcessRecovery,
-                onLeaveForeground: captureCurrentArticleScroll,
-                onEnterForeground: restoreArticleAfterBackground,
+                onLeaveForeground: {
+                    captureCurrentArticleScroll()
+                    viewModel.noteApplicationDidEnterBackground()
+                },
+                onEnterForeground: { restoreArticleAfterBackground(forceDocumentRecommit: false) },
                 onRecover: {
+                    viewModel.needsContentProcessRecovery = false
                     if let webView = viewModel.webView {
                         osrsWebViewThemePaint.apply(to: webView, theme: osrsTheme)
                     }
-                    viewModel.recoverBlankResume(theme: osrsTheme)
+                    viewModel.loadArticle(theme: osrsTheme, isReload: true)
                 }
             )
             .onReceive(NotificationCenter.default.publisher(for: .osrsPlayYouTubeRequested)) { notification in
@@ -334,7 +347,8 @@ private struct ArticleViewContent: View {
             }
             .onReceive(NotificationCenter.default.publisher(for: .osrsSceneCompositorLooksBlank)) { _ in
                 guard viewModel.hasCommittedArticleHTML else { return }
-                viewModel.recoverBlankResume(theme: osrsTheme)
+                viewModel.needsContentProcessRecovery = false
+                viewModel.loadArticle(theme: osrsTheme, isReload: true)
             }
             .onReceive(NotificationCenter.default.publisher(for: .showAppearanceSettings)) { notification in
                 highlightFloorNumberingOnAppearance =
@@ -362,13 +376,13 @@ private struct ArticleViewContent: View {
     /// Saved-page cache inspection and listener binding are disk/network preparation, so they
     /// suspend without occupying MainActor. The article request starts only after its selected
     /// routing mode is fully installed; a disappeared view cannot resume a stale load or owner.
-    private func restoreArticleAfterBackground() {
+    private func restoreArticleAfterBackground(forceDocumentRecommit: Bool = false) {
         isArticleVisible = true
         hideMainTabBar()
         viewModel.setArticleVisibility(true, allowsPassiveCaching: savedPageId == nil)
-        restoreCapturedArticleScrollIfNeeded()
         updateArticleBottomBar()
-        viewModel.recoverRenderedDocumentAfterBackground()
+        viewModel.recommitCachedArticleAfterBackground(force: forceDocumentRecommit)
+        restoreCapturedArticleScrollIfNeeded()
     }
 
     private func beginAppearanceLoad() {
@@ -381,7 +395,11 @@ private struct ArticleViewContent: View {
         if hasLoadedBefore {
             if viewModel.shouldReloadArticleOnReappear {
                 print("🔄 ARTICLEVIEW: Reloading terminated or empty article document")
-                viewModel.recoverBlankResume(theme: osrsTheme)
+                if viewModel.webView == nil {
+                    viewModel.recoverBlankResume(theme: osrsTheme)
+                } else {
+                    viewModel.loadArticle(theme: osrsTheme, isReload: true)
+                }
             } else {
                 restoreCapturedArticleScrollIfNeeded()
             }

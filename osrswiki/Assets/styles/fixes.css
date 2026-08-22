@@ -828,8 +828,18 @@ table.archivelist th,
     white-space: nowrap !important;
     width: max-content !important;
     min-width: max-content !important;
+    /* In table-layout:fixed, width:max-content without a matching max-width
+       lets the label column absorb leftover space and crush the value cell
+       to ~1px. WebKit also treats table-cell min-content as 0. */
+    max-width: max-content !important;
     hyphens: none !important;
 }
+
+/* Value cells keep auto width so wrapping examine/teleport text can still
+   shrink-wrap the card. Do not floor these cells with an 8em min-content
+   max() expression: WebKit ignores min-content on table cells, and that
+   large em floor stretches compact infoboxes (about 159px to about 489px).
+   table_column_normalize.js locks a measured px floor after first layout. */
 
 /* Infobox cards: put the disclosure gutter in padding, not child margins.
    `width: fit-content` plus `overflow-x: hidden` clips body margins, which is

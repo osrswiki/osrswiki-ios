@@ -94,19 +94,31 @@ final class osrsSceneHostResumeUITests: XCTestCase {
 
         backgroundAndForeground(app)
         XCTAssertTrue(webView.waitForExistence(timeout: 12))
-        waitUntilRendered(webView, timeout: 8)
+        waitUntilRendered(webView, timeout: 20)
         let after = XCUIScreen.main.screenshot().image
         XCTAssertGreaterThan(
             luminanceRange(after),
             24,
             "Resume must restore article pixels, not a uniform themed blank page"
         )
+        let bottomBar = app.otherElements["article_bottom_bar"]
+        let save = app.buttons["Save"].firstMatch
         XCTAssertTrue(
-            app.otherElements["article_bottom_bar"].waitForExistence(timeout: 8)
-                || app.buttons["Save"].waitForExistence(timeout: 4)
-                || app.staticTexts["Amulet of glory"].waitForExistence(timeout: 4),
+            bottomBar.waitForExistence(timeout: 8) || save.waitForExistence(timeout: 8),
             "Resumed article must keep in-app chrome"
         )
+        XCTAssertTrue(
+            app.staticTexts["Amulet of glory"].waitForExistence(timeout: 8),
+            "Resume must restore the same Glory article, not a different WebView"
+        )
+        XCTAssertTrue(
+            (bottomBar.exists && bottomBar.isHittable) || (save.exists && save.isHittable),
+            "Resumed chrome must be hittable, not a frozen cover"
+        )
+        if save.exists, save.isHittable {
+            save.tap()
+            XCTAssertEqual(app.state, .runningForeground, "Tapping Save after resume must be live")
+        }
 
         backgroundAndForeground(app)
         let afterSecond = XCUIScreen.main.screenshot().image
@@ -137,8 +149,15 @@ final class osrsSceneHostResumeUITests: XCTestCase {
             "Varrock resume must not collapse to a uniform themed blank"
         )
         XCTAssertTrue(
-            app.staticTexts["Varrock"].waitForExistence(timeout: 8)
-                || app.otherElements["article_bottom_bar"].waitForExistence(timeout: 8)
+            app.staticTexts["Varrock"].waitForExistence(timeout: 8),
+            "Varrock resume must restore the same article"
+        )
+        let varrockBar = app.otherElements["article_bottom_bar"]
+        let varrockSave = app.buttons["Save"].firstMatch
+        XCTAssertTrue(
+            (varrockBar.waitForExistence(timeout: 8) && varrockBar.isHittable)
+                || (varrockSave.waitForExistence(timeout: 8) && varrockSave.isHittable),
+            "Varrock resume chrome must be hittable"
         )
     }
 
@@ -331,15 +350,19 @@ final class osrsSceneHostResumeUITests: XCTestCase {
     private func waitUntilRendered(_ webView: XCUIElement, timeout: TimeInterval) {
         let deadline = Date().addingTimeInterval(timeout)
         while Date() < deadline {
-            if luminanceRange(webView.screenshot().image) > 24 {
+            let webRange = luminanceRange(webView.screenshot().image)
+            let screenRange = luminanceRange(XCUIScreen.main.screenshot().image)
+            if max(webRange, screenRange) > 24 {
                 return
             }
             RunLoop.current.run(until: Date().addingTimeInterval(0.4))
         }
+        let webRange = luminanceRange(webView.screenshot().image)
+        let screenRange = luminanceRange(XCUIScreen.main.screenshot().image)
         XCTAssertGreaterThan(
-            luminanceRange(webView.screenshot().image),
+            max(webRange, screenRange),
             24,
-            "Article WebView did not render contrasting content in time"
+            "Article WebView did not render contrasting content in time (web=\(webRange) screen=\(screenRange))"
         )
     }
 

@@ -9,6 +9,30 @@ final class ArticleDocumentCoordinatorTests: XCTestCase {
         articleTextScale: 1.0
     )
 
+    private func skipIfSpeculativePreloadsDisabled() throws {
+        throw XCTSkip("Speculative live article preloads are product-disabled")
+    }
+
+    @MainActor
+    func testSpeculativeLiveArticlePreloadsAreHardDisabled() async {
+        XCTAssertFalse(osrsArticlePreloadPolicy.speculativeLiveArticlePreloadsEnabled)
+        XCTAssertEqual(allowedConditions(isConstrained: false).maximumConcurrentPrewarms, 0)
+        XCTAssertEqual(allowedConditions(isConstrained: true).maximumConcurrentPrewarms, 0)
+        let coordinator = makeCoordinator(fetcher: { _ in
+            XCTFail("Speculative prewarm must not fetch")
+            return Self.fixtureData(title: "Disabled speculation")
+        })
+        let started = await coordinator.startPrewarm(
+            owner: UUID(),
+            request: request("Disabled speculation"),
+            renderOptions: options,
+            conditions: allowedConditions(isConstrained: false)
+        )
+        XCTAssertFalse(started)
+        let paintPrewarmDisabled = osrsPreparedArticleWebViewStore.isPaintPrewarmDisabled
+        XCTAssertTrue(paintPrewarmDisabled)
+    }
+
     func testConcurrentForegroundRequestsCoalesceFetchDecodeAndBuild() async throws {
         let fetchCount = LockedCounter()
         let buildCount = LockedCounter()
@@ -381,6 +405,7 @@ final class ArticleDocumentCoordinatorTests: XCTestCase {
     }
 
     func testForegroundPromotesAndJoinsInFlightPrewarm() async throws {
+        try skipIfSpeculativePreloadsDisabled()
         let fetchCount = LockedCounter()
         let events = LockedEvents()
         let coordinator = makeCoordinator(
@@ -422,6 +447,7 @@ final class ArticleDocumentCoordinatorTests: XCTestCase {
     }
 
     func testPromotedPrewarmKeepsOneConfiguredNoStoreFlight() async throws {
+        try skipIfSpeculativePreloadsDisabled()
         let foregroundFetchCount = LockedCounter()
         let speculativeFetchCount = LockedCounter()
         let coordinator = makeCoordinator(
@@ -561,6 +587,7 @@ final class ArticleDocumentCoordinatorTests: XCTestCase {
 
     @MainActor
     func testHiddenArticleReleasesPassiveOwnerBeforeAnotherTabPrewarms() async throws {
+        try skipIfSpeculativePreloadsDisabled()
         let articleA = ArticleViewModel(
             pageUrl: URL(string: "https://oldschool.runescape.wiki/w/Article_A")!,
             pageTitle: "Article A"
@@ -794,6 +821,7 @@ final class ArticleDocumentCoordinatorTests: XCTestCase {
     }
 
     func testLeavingVisibleRowCancelsUnderlyingWorkWhenNoConsumerRemains() async throws {
+        try skipIfSpeculativePreloadsDisabled()
         let cancellationCount = LockedCounter()
         let coordinator = makeCoordinator(fetcher: { _ in
             do {
@@ -921,6 +949,7 @@ final class ArticleDocumentCoordinatorTests: XCTestCase {
     }
 
     func testDuplicateVisibleOwnersShareOnePrewarmIdentitySlot() async throws {
+        try skipIfSpeculativePreloadsDisabled()
         let coordinator = makeCoordinator(fetcher: { url in
             try await Task.sleep(nanoseconds: 5_000_000_000)
             return Self.fixtureData(title: Self.pageTitle(in: url))
@@ -979,6 +1008,7 @@ final class ArticleDocumentCoordinatorTests: XCTestCase {
     }
 
     func testDistinctForegroundPreemptsExactlyOnePurelySpeculativeIdentity() async throws {
+        try skipIfSpeculativePreloadsDisabled()
         let cancellations = LockedURLs()
         let starts = LockedURLs()
         let coordinator = makeCoordinator(fetcher: { url in
@@ -1030,6 +1060,7 @@ final class ArticleDocumentCoordinatorTests: XCTestCase {
     }
 
     func testNonCooperativeCancellationKeepsOneBoundedForegroundLane() async throws {
+        try skipIfSpeculativePreloadsDisabled()
         let speculationGate = AsyncTestGate()
         let firstForegroundGate = AsyncTestGate()
         let starts = LockedURLs()
@@ -1106,6 +1137,7 @@ final class ArticleDocumentCoordinatorTests: XCTestCase {
     }
 
     func testTwoToOneDownshiftRetainsPhysicalSlotUntilCanceledRunCompletes() async throws {
+        try skipIfSpeculativePreloadsDisabled()
         let firstGate = AsyncTestGate()
         let secondGate = AsyncTestGate()
         let starts = LockedURLs()
@@ -1170,6 +1202,7 @@ final class ArticleDocumentCoordinatorTests: XCTestCase {
     }
 
     func testForegroundStartsWhileTwoToOneDownshiftRetiresNonCooperativeSpeculation() async throws {
+        try skipIfSpeculativePreloadsDisabled()
         let firstGate = AsyncTestGate()
         let secondGate = AsyncTestGate()
         let starts = LockedURLs()
@@ -1231,6 +1264,7 @@ final class ArticleDocumentCoordinatorTests: XCTestCase {
     }
 
     func testForegroundStartsWhileSuppressionRetiresNonCooperativeSpeculation() async throws {
+        try skipIfSpeculativePreloadsDisabled()
         let speculationGate = AsyncTestGate()
         let starts = LockedURLs()
         let concurrency = LockedConcurrencyProbe()
@@ -1279,6 +1313,7 @@ final class ArticleDocumentCoordinatorTests: XCTestCase {
     }
 
     func testDuplicateOwnerRetirementCannotStarveDistinctForeground() async throws {
+        try skipIfSpeculativePreloadsDisabled()
         let speculationGate = AsyncTestGate()
         let firstForegroundGate = AsyncTestGate()
         let starts = LockedURLs()
@@ -1354,8 +1389,42 @@ final class ArticleDocumentCoordinatorTests: XCTestCase {
     }
 
     func testPrewarmConstraintsAreDeterministicAndBounded() {
-        XCTAssertEqual(allowedConditions(isConstrained: false).maximumConcurrentPrewarms, 2)
-        XCTAssertEqual(allowedConditions(isConstrained: true).maximumConcurrentPrewarms, 1)
+        XCTAssertEqual(allowedConditions(isConstrained: false).maximumConcurrentPrewarms, 0)
+        XCTAssertEqual(allowedConditions(isConstrained: true).maximumConcurrentPrewarms, 0)
+
+        XCTAssertEqual(
+            osrsArticlePrewarmConditions(
+                hasNetworkConnection: true,
+                isConstrained: false,
+                isLowPowerModeEnabled: true,
+                thermalState: .nominal,
+                isApplicationActive: true,
+                isOfflineContentAvailable: false
+            ).maximumConcurrentPrewarms,
+            0
+        )
+        XCTAssertEqual(
+            osrsArticlePrewarmConditions(
+                hasNetworkConnection: true,
+                isConstrained: false,
+                isLowPowerModeEnabled: false,
+                thermalState: .serious,
+                isApplicationActive: true,
+                isOfflineContentAvailable: false
+            ).maximumConcurrentPrewarms,
+            0
+        )
+        XCTAssertEqual(
+            osrsArticlePrewarmConditions(
+                hasNetworkConnection: true,
+                isConstrained: false,
+                isLowPowerModeEnabled: false,
+                thermalState: .nominal,
+                isApplicationActive: false,
+                isOfflineContentAvailable: false
+            ).maximumConcurrentPrewarms,
+            0
+        )
 
         XCTAssertEqual(
             osrsArticlePrewarmConditions(
@@ -1399,11 +1468,12 @@ final class ArticleDocumentCoordinatorTests: XCTestCase {
                 isApplicationActive: true,
                 isOfflineContentAvailable: true
             ).maximumConcurrentPrewarms,
-            1
+            0
         )
     }
 
     func testIncreasingConcurrencyLimitImmediatelyDrainsVisibleQueue() async throws {
+        try skipIfSpeculativePreloadsDisabled()
         let coordinator = makeCoordinator(fetcher: { url in
             try await Task.sleep(nanoseconds: 5_000_000_000)
             return Self.fixtureData(title: Self.pageTitle(in: url))
@@ -1440,6 +1510,7 @@ final class ArticleDocumentCoordinatorTests: XCTestCase {
     }
 
     func testLowPowerAndBackgroundTransitionsCancelActiveSpeculation() async throws {
+        try skipIfSpeculativePreloadsDisabled()
         let lowPowerCoordinator = makeCoordinator(fetcher: { _ in
             try await Task.sleep(nanoseconds: 5_000_000_000)
             return Self.fixtureData(title: "Low power")
@@ -1480,6 +1551,7 @@ final class ArticleDocumentCoordinatorTests: XCTestCase {
     }
 
     func testPrewarmTransportIsParseDocumentOnlyAndNeverRequestsImagesMapsOrCharts() async throws {
+        try skipIfSpeculativePreloadsDisabled()
         let requestedURLs = LockedURLs()
         let coordinator = makeCoordinator(fetcher: { url in
             requestedURLs.append(url)
@@ -1565,6 +1637,8 @@ final class ArticleDocumentCoordinatorTests: XCTestCase {
         XCTAssertFalse(coordinator.contains("osrsLiveArticleAssetWarmer"))
         XCTAssertFalse(coordinator.contains("startLiveArticleAssetWarmIfNeeded"))
         XCTAssertTrue(coordinator.contains("osrsFirstViewPrewarmStore"))
+        XCTAssertTrue(coordinator.contains("guard osrsArticlePreloadPolicy.speculativeLiveArticlePreloadsEnabled else"))
+        XCTAssertTrue(coordinator.contains("policy-disabled"))
         XCTAssertFalse(coordinator.contains("enablePassiveCachingMode"))
         XCTAssertFalse(articleViewModel.contains("FIRST_SCREEN_LIMIT"))
         XCTAssertTrue(articleViewModel.contains("osrsFirstViewComplete"))

@@ -2,14 +2,21 @@ import UIKit
 import WebKit
 import ObjectiveC
 
-/// Off-screen WKWebView cache so a visible-row prewarm pays HTML parse, first
-/// layout, and first-view decode/paint before the user taps.
+/// Speculative live article preloads are a product non-requirement.
+/// Shared process-pool warmup and on-demand HTML cache may remain.
+enum osrsArticlePreloadPolicy {
+    static let speculativeLiveArticlePreloadsEnabled = false
+}
+
+/// Off-screen WKWebView cache for guessed destinations. Production preload is
+/// hard-disabled; `take` is a miss so the live article WebView is created on demand.
 @MainActor
 final class osrsPreparedArticleWebViewStore: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
     static let shared = osrsPreparedArticleWebViewStore()
 
     static var isPaintPrewarmDisabled: Bool {
-        ProcessInfo.processInfo.arguments.contains("-osrsDisableFirstViewPaintPrewarm")
+        !osrsArticlePreloadPolicy.speculativeLiveArticlePreloadsEnabled
+            || ProcessInfo.processInfo.arguments.contains("-osrsDisableFirstViewPaintPrewarm")
     }
 
     private struct Entry {
@@ -98,6 +105,9 @@ final class osrsPreparedArticleWebViewStore: NSObject, WKNavigationDelegate, WKS
     }
 
     func preload(document: osrsPreparedArticleDocument, options: osrsArticleRenderOptions) {
+        guard osrsArticlePreloadPolicy.speculativeLiveArticlePreloadsEnabled else {
+            return
+        }
         if osrsBackgroundWorkGate.shared.isPaused {
             Task { @MainActor in
                 await osrsBackgroundWorkGate.shared.waitWhilePaused()
@@ -139,6 +149,9 @@ final class osrsPreparedArticleWebViewStore: NSObject, WKNavigationDelegate, WKS
         pageTitle: String?,
         options: osrsArticleRenderOptions
     ) -> WKWebView? {
+        guard osrsArticlePreloadPolicy.speculativeLiveArticlePreloadsEnabled else {
+            return nil
+        }
         if Self.isPaintPrewarmDisabled {
             return nil
         }
@@ -173,6 +186,13 @@ final class osrsPreparedArticleWebViewStore: NSObject, WKNavigationDelegate, WKS
             entry.webView.removeFromSuperview()
         }
         entries.removeAll()
+    }
+
+    /// iOS 26 snapshots the first window WebView. The process-warmer host is
+    /// inserted at window index 0, so resume must take it out of the key
+    /// window. `attachToHost` puts it back on the next preload.
+    func detachFromKeyWindowForResume() {
+        hostView?.removeFromSuperview()
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
@@ -307,6 +327,7 @@ final class osrsPreparedArticleWebViewStore: NSObject, WKNavigationDelegate, WKS
             let host = UIView(frame: hostBounds)
             host.isUserInteractionEnabled = false
             host.alpha = 0.01
+            host.accessibilityIdentifier = "osrs_prepared_article_host"
             host.isAccessibilityElement = false
             host.accessibilityElementsHidden = true
             hostView = host
@@ -315,11 +336,19 @@ final class osrsPreparedArticleWebViewStore: NSObject, WKNavigationDelegate, WKS
         if host.superview == nil {
             let scene = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first
             let window = scene?.windows.first(where: \.isKeyWindow) ?? scene?.windows.first
-            window?.insertSubview(host, at: 0)
-            host.frame = hostBounds
-            host.setNeedsLayout()
-            host.layoutIfNeeded()
+            // Never insert at 0: iOS 26 snapshots the first window subview's
+            // WKWebView as the resumed scene. Keep the live UITransitionView first.
+            window?.addSubview(host)
         }
+        // Keep the process-warmer off the live compositor. A full-screen
+        // alpha=0.01 WKWebView at (0,0) is the first WebView in the window
+        // and iOS 26 will snapshot it as the resumed scene.
+        var parked = hostBounds
+        parked.origin.x = hostBounds.width
+        host.frame = parked
+        host.alpha = 0.01
+        host.setNeedsLayout()
+        host.layoutIfNeeded()
         webView.isAccessibilityElement = false
         webView.accessibilityElementsHidden = true
         webView.translatesAutoresizingMaskIntoConstraints = false

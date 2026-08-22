@@ -55,7 +55,7 @@ struct osrsSavedPaintHtml {
         _ html: String,
         loadCss: (String) -> String?
     ) -> String {
-        let pattern = #"<link\s+rel=["']stylesheet["']\s+href=["'][^"']+://localhost/([^"']+)["']\s*/?>"#
+        let pattern = #"<link\b(?=[^>]*\brel=["']stylesheet["'])[^>]*\bhref=["'][^"']+://localhost/([^"']+)["'][^>]*>"#
         guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
             return html
         }
@@ -68,7 +68,12 @@ struct osrsSavedPaintHtml {
             let replacement = "<style data-osrs-inline-css=\"\(assetPath)\">\(css)</style>"
             result = result.replacingCharacters(in: match.range, with: replacement) as NSString
         }
-        return result as String
+        let preloadPattern = #"<link\b(?=[^>]*\brel=["']preload["'])(?=[^>]*\bas=["']style["'])[^>]*>\s*"#
+        guard let preloadRegex = try? NSRegularExpression(pattern: preloadPattern, options: [.caseInsensitive]) else {
+            return result as String
+        }
+        let preloadRange = NSRange(location: 0, length: result.length)
+        return preloadRegex.stringByReplacingMatches(in: result as String, options: [], range: preloadRange, withTemplate: "")
     }
 
     static func withLiveChrome(

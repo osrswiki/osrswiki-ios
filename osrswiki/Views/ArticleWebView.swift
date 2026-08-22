@@ -1471,6 +1471,7 @@ struct ArticleWebView: UIViewRepresentable {
         if !viewModel.isRefreshing {
             webView.scrollView.refreshControl?.endRefreshing()
         }
+        context.coordinator.maybeRunSyntheticSwipeFPSProbe(on: webView)
     }
 
     private func applyDynamicTypeScale(to webView: WKWebView, coordinator: Coordinator? = nil) {
@@ -1484,13 +1485,18 @@ struct ArticleWebView: UIViewRepresentable {
         viewModel.setAccessibilityReflowEnabled(requiresWebReflow, textScale: requiresWebReflow ? scale : 1.0)
 #if DEBUG
         let existing = (webView.accessibilityValue as? String) ?? ""
-        let nativeMapTokens = existing
+        let preservedTokens = existing
             .split(separator: ";")
             .map(String.init)
             .filter {
                 $0.hasPrefix("native_article_maps=") ||
-                    $0.hasPrefix("native_map_frame=")
+                    $0.hasPrefix("native_map_frame=") ||
+                    $0.hasPrefix("swipe_fps_")
             }
+        let probeTokens = (osrsInteractiveSwipeFrameProbe.accessibilityToken() ?? "")
+            .split(separator: ";")
+            .map(String.init)
+        let keptWithoutProbe = preservedTokens.filter { !$0.hasPrefix("swipe_fps_") }
         webView.accessibilityValue = ([
             String(format: "article_dynamic_type_scale=%.2f", Double(scale)),
             String(format: "article_user_text_scale=%.2f", themeManager.articleTextScale),
@@ -1498,7 +1504,7 @@ struct ArticleWebView: UIViewRepresentable {
             "article_wrap_table_cells=\(themeManager.wrapTableCells ? 1 : 0)",
             "article_swipe_right_back=\(themeManager.swipeRightToGoBackEnabled ? 1 : 0)",
             "article_swipe_left_contents=\(themeManager.swipeLeftToShowContentsEnabled ? 1 : 0)"
-        ] + nativeMapTokens)
+        ] + keptWithoutProbe + (probeTokens.isEmpty ? preservedTokens.filter { $0.hasPrefix("swipe_fps_") } : probeTokens))
             .joined(separator: ";")
 #endif
     }
@@ -1829,6 +1835,9 @@ struct ArticleWebView: UIViewRepresentable {
         private var articleChromeClassificationPending = false
         fileprivate var lastAppliedPageZoom: CGFloat?
         fileprivate var lastInjectedThemeIsDark: Bool?
+        private var didRunSyntheticSwipeFPSProbe = false
+        private var syntheticSwipeDisplayLink: CADisplayLink?
+        private var syntheticSwipeProgress: CGFloat = 0
         
         init(_ parent: ArticleWebView) {
             self.parent = parent
@@ -1841,13 +1850,25 @@ struct ArticleWebView: UIViewRepresentable {
         }
 
         func installArticleNavigationGesture(on webView: WKWebView) {
+            // Touches land on WKScrollView. A pan on WKWebView itself is often
+            // starved by the scroll pan on iOS 26, which makes interactive chrome
+            // wait (feels like a sub-120Hz hitch) and hides the gesture from XCTest.
+            let host = webView.scrollView
+            if articleNavigationRecognizer?.view === host {
+                osrsInteractiveArticleSwipe.navigationController(from: webView)?
+                    .interactivePopGestureRecognizer?.isEnabled = false
+                return
+            }
+            if let previous = articleNavigationRecognizer {
+                previous.view?.removeGestureRecognizer(previous)
+            }
             let recognizer = UIPanGestureRecognizer(target: self, action: #selector(handleArticleNavigationPan(_:)))
             recognizer.delegate = self
             recognizer.cancelsTouchesInView = false
             recognizer.delaysTouchesBegan = false
             recognizer.delaysTouchesEnded = false
             recognizer.maximumNumberOfTouches = 1
-            webView.addGestureRecognizer(recognizer)
+            webView.scrollView.addGestureRecognizer(recognizer)
             articleNavigationRecognizer = recognizer
             osrsInteractiveArticleSwipe.navigationController(from: webView)?
                 .interactivePopGestureRecognizer?.isEnabled = false
@@ -1858,6 +1879,63 @@ struct ArticleWebView: UIViewRepresentable {
             refreshControl.addTarget(self, action: #selector(handleArticlePullToRefresh), for: .valueChanged)
             webView.scrollView.refreshControl = refreshControl
         }
+
+#if DEBUG
+        func maybeRunSyntheticSwipeFPSProbe(on webView: WKWebView) {
+            guard osrsInteractiveSwipeFrameProbe.isEnabled,
+                  osrsInteractiveSwipeFrameProbe.isSyntheticPanEnabled,
+                  !didRunSyntheticSwipeFPSProbe else { return }
+            didRunSyntheticSwipeFPSProbe = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) { [weak self] in
+                self?.startSyntheticSwipeFPSProbe()
+            }
+        }
+
+        private func startSyntheticSwipeFPSProbe() {
+            guard let webView else { return }
+            osrsInteractiveSwipeFrameProbe.beginSequence()
+            publishSwipeFrameProbeToWebView()
+            interactiveSwipe.begin(from: webView, contentsOpen: parent.isContentsOpen())
+            syntheticSwipeProgress = 0
+            let link = CADisplayLink(target: self, selector: #selector(handleSyntheticSwipeFPSProbeTick(_:)))
+            link.add(to: .main, forMode: .common)
+            syntheticSwipeDisplayLink = link
+        }
+
+        @objc private func handleSyntheticSwipeFPSProbeTick(_ link: CADisplayLink) {
+            guard let webView else {
+                stopSyntheticSwipeFPSProbe()
+                return
+            }
+            osrsInteractiveSwipeFrameProbe.recordPanFrame()
+            publishSwipeFrameProbeToWebView()
+            syntheticSwipeProgress = min(1, syntheticSwipeProgress + 0.045)
+            let width = max(webView.bounds.width, 1)
+            let translation = CGPoint(x: syntheticSwipeProgress * width * 0.28, y: 0)
+            interactiveSwipe.update(translation: translation, from: webView)
+            if interactiveSwipe.isTracking {
+                freezeWebScrollIfNeeded(webView)
+                if interactiveSwipe.axis == .back {
+                    parent.onBackProgress?(interactiveSwipe.backProgress)
+                } else if interactiveSwipe.axis == .contents {
+                    parent.onSidebarProgress?(interactiveSwipe.contentsProgress)
+                }
+            }
+            if syntheticSwipeProgress >= 1 {
+                stopSyntheticSwipeFPSProbe()
+            }
+        }
+
+        private func stopSyntheticSwipeFPSProbe() {
+            syntheticSwipeDisplayLink?.invalidate()
+            syntheticSwipeDisplayLink = nil
+            osrsInteractiveSwipeFrameProbe.finishSequence()
+            publishSwipeFrameProbeToWebView()
+            cancelInteractiveSwipe(restoreScroll: true)
+        }
+#else
+        func maybeRunSyntheticSwipeFPSProbe(on webView: WKWebView) {}
+#endif
 
         @objc private func handleArticlePullToRefresh() {
             parent.viewModel.refreshPage(theme: parent.themeManager.currentTheme)
@@ -1913,11 +1991,16 @@ struct ArticleWebView: UIViewRepresentable {
                 articleGestureStartPoint = recognizer.location(in: view)
                 articleChromeBlockedForSequence = false
                 articleChromeClassificationPending = true
+                osrsInteractiveSwipeFrameProbe.beginSequence()
+                publishSwipeFrameProbeToWebView()
                 if let webView, let startPoint = articleGestureStartPoint {
                     if mapHandler?.ownsArticleGesture(at: startPoint, in: webView) == true {
                         articleChromeBlockedForSequence = true
                         articleChromeClassificationPending = false
                     } else {
+                        // Follow the finger immediately. Waiting on WK JS
+                        // classifyPoint stalls ProMotion on heavy articles.
+                        interactiveSwipe.begin(from: webView, contentsOpen: parent.isContentsOpen())
                         classifyArticleChromeStartPoint(
                             startPoint,
                             in: webView,
@@ -1927,9 +2010,11 @@ struct ArticleWebView: UIViewRepresentable {
                 }
             case .changed:
                 guard let webView else { return }
-                if articleChromeBlockedForSequence || articleChromeClassificationPending {
+                if articleChromeBlockedForSequence {
                     return
                 }
+                osrsInteractiveSwipeFrameProbe.recordPanFrame()
+                publishSwipeFrameProbeToWebView()
                 // A late map overlay attaching during an already-committed chrome swipe
                 // must not abort it. A local table/chart that claims before chrome is
                 // locked still wins so the table can scroll.
@@ -1954,6 +2039,8 @@ struct ArticleWebView: UIViewRepresentable {
                     }
                 }
             case .ended:
+                osrsInteractiveSwipeFrameProbe.finishSequence()
+                publishSwipeFrameProbeToWebView()
                 defer {
                     articleGestureGeneration = nil
                     articleGestureStartPoint = nil
@@ -2040,6 +2127,8 @@ struct ArticleWebView: UIViewRepresentable {
                     action: action
                 )
             case .cancelled, .failed:
+                osrsInteractiveSwipeFrameProbe.finishSequence()
+                publishSwipeFrameProbeToWebView()
                 osrsGestureState.shared.cancelArticleGesture(generation: articleGestureGeneration)
                 articleGestureGeneration = nil
                 articleGestureStartPoint = nil
@@ -2055,6 +2144,18 @@ struct ArticleWebView: UIViewRepresentable {
             guard restoredWebScrollEnabled == nil else { return }
             restoredWebScrollEnabled = webView.scrollView.isScrollEnabled
             webView.scrollView.isScrollEnabled = false
+        }
+
+        private func publishSwipeFrameProbeToWebView() {
+            guard let token = osrsInteractiveSwipeFrameProbe.accessibilityToken(), let webView else { return }
+#if DEBUG
+            let kept = ((webView.accessibilityValue as? String) ?? "")
+                .split(separator: ";")
+                .map(String.init)
+                .filter { !$0.hasPrefix("swipe_fps_") }
+            webView.accessibilityValue = (kept + token.split(separator: ";").map(String.init))
+                .joined(separator: ";")
+#endif
         }
 
         private func restoreWebScroll() {
@@ -2196,9 +2297,9 @@ struct ArticleWebView: UIViewRepresentable {
                     self.articleChromeClassificationPending = false
                     if isLocalOwner {
                         self.articleChromeBlockedForSequence = true
+                        self.cancelInteractiveSwipe(restoreScroll: true)
                         return
                     }
-                    self.interactiveSwipe.begin(from: webView, contentsOpen: self.parent.isContentsOpen())
                     if let recognizer = self.articleNavigationRecognizer {
                         self.interactiveSwipe.update(
                             translation: recognizer.translation(in: recognizer.view?.window ?? recognizer.view ?? webView),
@@ -2259,6 +2360,8 @@ struct ArticleWebView: UIViewRepresentable {
             osrsGestureState.shared.cancelArticleGesture(generation: articleGestureGeneration)
             articleGestureGeneration = nil
             articleGestureStartPoint = nil
+            syntheticSwipeDisplayLink?.invalidate()
+            syntheticSwipeDisplayLink = nil
             interactiveSwipe.cleanup(resetTransform: true)
             restoreWebScroll()
             if let recognizer = articleNavigationRecognizer {
@@ -2328,6 +2431,11 @@ struct ArticleWebView: UIViewRepresentable {
                 }
             case "osrsFirstViewComplete":
                 parent.viewModel.markFirstViewComplete()
+                if let generation = firstViewGeneration(from: body) {
+                    parent.viewModel.completeLoadingWithBodyReveal(loadGeneration: generation)
+                } else {
+                    parent.viewModel.completeLoadingWithBodyReveal()
+                }
             case "safariDebugger":
                 handleSafariDebuggerMessage(body)
             default:
@@ -2391,10 +2499,10 @@ struct ArticleWebView: UIViewRepresentable {
                 let timeString = DateFormatter.timeFormatter.string(from: Date())
                 print("📊 [\(timeString)] 🎯 RenderTimeline: \(message)")
                 
-                // Handle specific render events
-                if message.hasPrefix("Event: StylingScriptsComplete") {
+                // Handle first-viewport paint (primary reveal) and late styling-complete fallback
+                if message.hasPrefix("Event: FirstViewPainted") || message.hasPrefix("Event: StylingScriptsComplete") {
                     let loadGeneration = Self.loadGeneration(from: message)
-                    // ANDROID PARITY: JavaScript is ready - now wait for body reveal completion
+                    // ANDROID PARITY: first-viewport paint unlocks reveal; styling-complete is a late fallback
                     DispatchQueue.main.async {
                         // TIMING MEASUREMENT: Record JavaScript completion time
                         let jsCompletionTime = Date()
@@ -2407,7 +2515,11 @@ struct ArticleWebView: UIViewRepresentable {
                         }
                         
                         // Trigger body reveal and complete progress when it's done
-                        self.parent.viewModel.completeLoadingWithBodyReveal(loadGeneration: loadGeneration)
+                        if let loadGeneration {
+                            self.parent.viewModel.completeLoadingWithBodyReveal(loadGeneration: loadGeneration)
+                        } else {
+                            self.parent.viewModel.completeLoadingWithBodyReveal()
+                        }
                     }
                 } else {
                     print("📊 [\(timeString)] 📝 OTHER JS EVENT: \(message)")
@@ -2416,11 +2528,22 @@ struct ArticleWebView: UIViewRepresentable {
         }
 
         private static func loadGeneration(from message: String) -> Int? {
-            let prefix = "Event: StylingScriptsComplete:"
-            guard message.hasPrefix(prefix) else {
-                return nil
+            let prefixes = ["Event: FirstViewPainted:", "Event: StylingScriptsComplete:"]
+            for prefix in prefixes {
+                guard message.hasPrefix(prefix) else { continue }
+                return Int(message.dropFirst(prefix.count).trimmingCharacters(in: .whitespacesAndNewlines))
             }
-            return Int(message.dropFirst(prefix.count).trimmingCharacters(in: .whitespacesAndNewlines))
+            return nil
+        }
+
+        private func firstViewGeneration(from body: [String: Any]) -> Int? {
+            if let generation = body["generation"] as? Int {
+                return generation
+            }
+            if let generation = body["generation"] as? NSNumber {
+                return generation.intValue
+            }
+            return nil
         }
 
         private func handleLinkMessage(_ body: [String: Any]) {

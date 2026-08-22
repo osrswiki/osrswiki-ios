@@ -331,29 +331,33 @@ final class osrsInteractiveArticleSwipe {
         commitBackImmediately(velocity: velocity, pop: completion)
     }
 
-    /// Translate only the outgoing article snapshot. The previous NavigationStack
-    /// page stays live and hittable in the revealed strip.
+    /// Translate the live article while the finger is down. Snapshot only at
+    /// commit so the outgoing page can keep moving after the VC pops.
+    /// `snapshotView` of a heavy WKWebView during tracking is the 20 Hz hitch.
     func commitBackImmediately(velocity: CGPoint, pop: @escaping () -> Void) {
         guard slidingView != nil || slidingSnapshot != nil else {
             pop()
             return
         }
-        if chromeHost == nil, let sliding = slidingView, let window = sliding.window ?? Self.keyWindow() {
-            let overlay = slidingSnapshot ?? sliding.snapshotView(afterScreenUpdates: false) ?? {
+        if slidingSnapshot == nil, let sliding = slidingView {
+            let window = sliding.window ?? Self.keyWindow()
+            let overlay = sliding.snapshotView(afterScreenUpdates: false) ?? {
                 let fallback = UIView(frame: sliding.bounds)
                 fallback.backgroundColor = sliding.backgroundColor ?? chromeColor
                 return fallback
             }()
-            var restFrame = sliding.convert(sliding.bounds, to: window)
+            var restFrame = sliding.convert(sliding.bounds, to: window ?? sliding.superview ?? sliding)
             restFrame.origin.x -= sliding.transform.tx
             restFrame.origin.y -= sliding.transform.ty
             overlay.frame = restFrame
             overlay.transform = sliding.transform
             overlay.isUserInteractionEnabled = false
             if overlay.superview == nil {
-                window.addSubview(overlay)
+                (window ?? sliding.superview)?.addSubview(overlay)
             }
             slidingSnapshot = overlay
+            sliding.alpha = 0
+            hiddenSlidingView = sliding
         }
         guard let overlay = slidingSnapshot else {
             pop()
@@ -530,9 +534,9 @@ final class osrsInteractiveArticleSwipe {
     private func installBackPreview(from view: UIView) {
         guard chromeHost == nil,
               let sliding = slidingView,
-              let window = sliding.window ?? Self.keyWindow() else { return }
+              let host = sliding.superview else { return }
 
-        let chrome = osrsLiveBackChromeView(frame: window.bounds)
+        let chrome = osrsLiveBackChromeView(frame: host.bounds)
         chrome.isUserInteractionEnabled = true
         chrome.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         chrome.backgroundColor = .clear
@@ -551,34 +555,25 @@ final class osrsInteractiveArticleSwipe {
             livePreviousView = live
         }
 
-        let dimming = UIView(frame: window.bounds)
+        let dimming = UIView(frame: chrome.bounds)
         dimming.backgroundColor = .black
         dimming.alpha = 0.22
         dimming.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         dimming.isUserInteractionEnabled = false
 
-        var currentFrame = sliding.convert(sliding.bounds, to: window)
+        var currentFrame = sliding.convert(sliding.bounds, to: host)
         currentFrame.origin.x -= sliding.transform.tx
         currentFrame.origin.y -= sliding.transform.ty
-        let current = sliding.snapshotView(afterScreenUpdates: false) ?? {
-            let fallback = UIView(frame: currentFrame)
-            fallback.backgroundColor = sliding.backgroundColor ?? chromeColor
-            return fallback
-        }()
-        current.frame = currentFrame
-        current.isUserInteractionEnabled = false
 
         chrome.slidingMinX = currentFrame.minX
         chrome.addSubview(dimming)
-        chrome.addSubview(current)
-        window.addSubview(chrome)
+        host.insertSubview(chrome, belowSubview: sliding)
 
-        sliding.alpha = 0
-        hiddenSlidingView = sliding
         chromeHost = chrome
         previousSnapshot = nil
         dimmingView = dimming
-        slidingSnapshot = current
+        slidingSnapshot = nil
+        hiddenSlidingView = nil
         slidingRestMinX = currentFrame.minX
     }
 
@@ -619,6 +614,28 @@ private final class osrsLiveBackChromeView: UIView {
 }
 
 // MARK: - Reusable full-width back swipe for pushed non-list destinations
+
+enum osrsInteractiveBackSwipeTouchPolicy {
+    /// Full-width back swipe must not steal slider/switch drags on settings pages.
+    static func allowsBackSwipe(from touchView: UIView?) -> Bool {
+        var view = touchView
+        while let current = view {
+            if current is UIControl {
+                return false
+            }
+            let name = NSStringFromClass(type(of: current))
+            if name.range(of: "slider", options: [.caseInsensitive, .diacriticInsensitive]) != nil {
+                return false
+            }
+            view = current.superview
+        }
+        return true
+    }
+
+    static func allowsSimultaneousRecognition(with other: UIGestureRecognizer) -> Bool {
+        allowsBackSwipe(from: other.view)
+    }
+}
 
 /// Anchors a UIKit pan on the destination canvas so overlays, settings pages,
 /// and other non-webview hosts get the same interactive-back chrome as articles.
@@ -715,11 +732,17 @@ struct osrsInteractiveBackSwipeHost: UIViewRepresentable {
             return osrsArticleWebPanPolicy.isPrimarilyHorizontal(velocity: velocity) && velocity.x >= 0
         }
 
+        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+            let host = gestureRecognizer.view
+            let hit = host?.hitTest(touch.location(in: host), with: nil)
+            return osrsInteractiveBackSwipeTouchPolicy.allowsBackSwipe(from: hit ?? touch.view)
+        }
+
         func gestureRecognizer(
             _ gestureRecognizer: UIGestureRecognizer,
             shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer
         ) -> Bool {
-            true
+            osrsInteractiveBackSwipeTouchPolicy.allowsSimultaneousRecognition(with: otherGestureRecognizer)
         }
 
         @objc func handlePan(_ recognizer: UIPanGestureRecognizer) {

@@ -290,14 +290,29 @@ struct osrsSearchLauncher: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            osrsUIKitSearchLauncherButton(
-                title: placeholder,
-                accessibilityIdentifier: accessibilityIdentifier,
-                foregroundColor: UIColor(osrsTheme.placeholderColor),
-                allowsTwoLines: dynamicTypeSize.isAccessibilitySize,
-                controlHeight: controlHeight,
-                action: onSearchTap
-            )
+            ZStack(alignment: .leading) {
+                osrsUIKitSearchLauncherButton(
+                    title: placeholder,
+                    accessibilityIdentifier: accessibilityIdentifier,
+                    foregroundColor: UIColor(osrsTheme.placeholderColor),
+                    allowsTwoLines: dynamicTypeSize.isAccessibilitySize,
+                    controlHeight: controlHeight,
+                    action: onSearchTap
+                )
+                HStack(spacing: 10) {
+                    Color.clear
+                        .frame(width: 22, height: 22)
+                    Text(placeholder)
+                        .font(.body)
+                        .foregroundStyle(Color(osrsTheme.placeholderColor))
+                        .lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
+                        .minimumScaleFactor(0.8)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .accessibilityHidden(true)
+                }
+                .padding(.leading, 12)
+                .allowsHitTesting(false)
+            }
             .frame(maxWidth: .infinity)
             .frame(height: controlHeight)
 
@@ -663,19 +678,15 @@ private struct osrsUIKitSearchLauncherButton: UIViewRepresentable {
 
     private func configure(_ button: UIButton) {
         var configuration = UIButton.Configuration.plain()
-        configuration.title = title
+        // iOS 26 glassEffect composites UIKit Configuration titles at zero alpha.
+        // SwiftUI `Text(placeholder)` is the visible inactive hint; this button
+        // keeps one accessibility node and the magnifying-glass template image.
+        configuration.title = nil
         configuration.image = UIImage(systemName: "magnifyingglass")
         configuration.imagePlacement = .leading
         configuration.imagePadding = 10
         configuration.baseForegroundColor = foregroundColor
         configuration.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: 12, bottom: 0, trailing: 0)
-        configuration.titleLineBreakMode = allowsTwoLines ? .byWordWrapping : .byTruncatingTail
-        configuration.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
-            var attributes = attributes
-            attributes.font = UIFont.preferredFont(forTextStyle: .callout)
-            attributes.foregroundColor = foregroundColor
-            return attributes
-        }
         button.configuration = configuration
         button.titleLabel?.adjustsFontForContentSizeCategory = true
         button.titleLabel?.numberOfLines = allowsTwoLines ? 2 : 1
@@ -687,6 +698,7 @@ private struct osrsUIKitSearchLauncherButton: UIViewRepresentable {
 /// A real UITextField keeps its editable accessibility node equal to the 44pt host instead of
 /// exposing only SwiftUI's font-tight glyph frame. FocusState remains the source of truth.
 struct osrsUIKitSearchTextField: UIViewRepresentable {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Binding var text: String
     let shouldFocus: Bool
     let onFocusChange: (Bool) -> Void
@@ -893,6 +905,12 @@ struct osrsUIKitSearchTextField: UIViewRepresentable {
     }
 
     private func configureAppearance(_ textField: UITextField) {
+        textField.font = UIFont.preferredFont(
+            forTextStyle: .callout,
+            compatibleWith: UITraitCollection(
+                preferredContentSizeCategory: dynamicTypeSize.osrsUIContentSizeCategory
+            )
+        )
         textField.textColor = textColor
         textField.tintColor = tintColor
         let hasAttributedPlaceholder = (textField.attributedPlaceholder?.length ?? 0) > 0

@@ -143,7 +143,33 @@
         } catch (ignore) {}
     }
 
+    function firstViewPayload() {
+        var payload = { complete: true };
+        if (typeof window.__osrsArticleLoadGeneration === 'number') {
+            payload.generation = window.__osrsArticleLoadGeneration;
+        }
+        return payload;
+    }
+
+    function dispatchFirstViewEvent() {
+        try {
+            window.dispatchEvent(new CustomEvent('osrs-first-view-complete'));
+        } catch (ignore) {}
+        try {
+            if (window.RenderTimeline && typeof window.RenderTimeline.log === 'function') {
+                var generation = window.__osrsArticleLoadGeneration;
+                window.RenderTimeline.log(
+                    typeof generation === 'number'
+                        ? 'Event: FirstViewPainted:' + generation
+                        : 'Event: FirstViewPainted'
+                );
+            }
+        } catch (ignore) {}
+    }
+
     function postComplete() {
+        dispatchFirstViewEvent();
+        var payload = firstViewPayload();
         try {
             if (window.OsrsWikiBridge && typeof window.OsrsWikiBridge.firstViewComplete === 'function') {
                 window.OsrsWikiBridge.firstViewComplete();
@@ -151,7 +177,7 @@
         } catch (ignore) {}
         try {
             if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.osrsFirstViewComplete) {
-                window.webkit.messageHandlers.osrsFirstViewComplete.postMessage({ complete: true });
+                window.webkit.messageHandlers.osrsFirstViewComplete.postMessage(payload);
             }
         } catch (ignore) {}
         console.log('osrsFirstViewComplete');

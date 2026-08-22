@@ -34,13 +34,13 @@ struct osrsProgressView: View {
         for fontName in fontNames {
             if UIFont(name: fontName, size: 14) != nil {
                 print("✅ Found RuneScape font: \(fontName)")
-                return Font.custom(fontName, size: 14)
+                return Font.custom(fontName, size: 14, relativeTo: .footnote)
             }
         }
         
         // For now, use a distinctive font that shows the difference
         print("⚠️ Using fallback bold monospaced font (should be replaced with RuneScape)")
-        return Font.system(size: 14, weight: .bold, design: .monospaced)
+        return Font.system(.footnote, design: .monospaced).weight(.bold)
     }
     
     var body: some View {

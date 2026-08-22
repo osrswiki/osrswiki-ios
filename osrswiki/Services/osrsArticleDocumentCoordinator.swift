@@ -186,6 +186,9 @@ struct osrsArticlePrewarmConditions: Equatable, Sendable {
     let isOfflineContentAvailable: Bool
 
     var maximumConcurrentPrewarms: Int {
+        if !osrsArticlePreloadPolicy.speculativeLiveArticlePreloadsEnabled {
+            return 0
+        }
         if ProcessInfo.processInfo.arguments.contains("-disableArticlePrewarm") {
             return 0
         }
@@ -497,6 +500,10 @@ actor osrsArticleDocumentCoordinator {
         preferred: Bool = false
     ) -> Bool {
         pendingPrewarms.removeValue(forKey: owner)
+        guard osrsArticlePreloadPolicy.speculativeLiveArticlePreloadsEnabled else {
+            emit(.suppressed, request.identity, elapsedMilliseconds: 0, detail: "policy-disabled")
+            return false
+        }
         let limit = conditions.maximumConcurrentPrewarms
         schedulerConcurrencyLimit = limit
         if activePrewarms[owner] != nil {
@@ -1610,6 +1617,7 @@ private struct osrsArticleVisibleRowPrewarmModifier: ViewModifier {
     }
 
     private func schedule() {
+        guard osrsArticlePreloadPolicy.speculativeLiveArticlePreloadsEnabled else { return }
         cancel()
         let pageURLs = ([pageURL].compactMap { $0 } + additionalPageURLs).reduce(into: [URL]()) {
             if !$0.contains($1) { $0.append($1) }

@@ -7,10 +7,10 @@
 //  still there; the framebuffer is the SwiftUI theme fill. Tweaking layers
 //  inside that host does not reconnect them.
 //
-//  After a real background, osrsSceneDelegate keeps the scene's one UIWindow
-//  and the same CustomMainTabView host, then asks osrsSceneCompositor to
-//  restore. Do not stack a second UIWindow or load the public wiki as a
-//  parallel article product.
+//  After a real background, osrsSceneDelegate keeps the same
+//  CustomMainTabView host and scene container. A fresh osrsResumedSceneWindow
+//  is only a compositor surface for that same root — not a second article
+//  product and not a cover window. Do not load the public wiki in parallel.
 //
 
 import UIKit

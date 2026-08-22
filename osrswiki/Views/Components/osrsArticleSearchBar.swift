@@ -65,11 +65,11 @@ struct osrsArticleSearchBar: View {
                     HStack(spacing: 12) {
                         Image(systemName: "magnifyingglass")
                             .foregroundStyle(osrsTheme.placeholderColor)
-                            .font(.system(size: 16))
+                            .font(.body)
 
                         Text(compactSearchTitle)
                             .foregroundStyle(osrsTheme.placeholderColor)
-                            .font(.system(size: 16))
+                            .font(.body)
                             .lineLimit(1)
                             .minimumScaleFactor(0.8)
                             .frame(maxWidth: .infinity, alignment: .leading)

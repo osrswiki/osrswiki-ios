@@ -18,9 +18,12 @@ struct AppearanceSettingsView: View {
                 Section {
                     Picker("Theme", selection: themeSelection) {
                         ForEach(osrsThemeSelection.allCases, id: \.self) { theme in
-                            Text(theme.displayName).tag(theme)
+                            Text(theme.displayName)
+                                .foregroundStyle(Color(osrsTheme.primaryTextColor))
+                                .tag(theme)
                         }
                     }
+                    .tint(Color(osrsTheme.primaryTextColor))
                     .accessibilityIdentifier("appearance_theme_picker")
                 } header: {
                     Text("Display")
@@ -52,9 +55,12 @@ struct AppearanceSettingsView: View {
                 Section {
                     Picker("Floor numbering", selection: floorNumberingSelection) {
                         ForEach(osrsArticleFloorNumberingMode.allCases) { mode in
-                            Text(mode.displayName).tag(mode)
+                            Text(mode.displayName)
+                                .foregroundStyle(Color(osrsTheme.primaryTextColor))
+                                .tag(mode)
                         }
                     }
+                    .tint(Color(osrsTheme.primaryTextColor))
                     .accessibilityIdentifier("appearance_floor_numbering_picker")
                     .id("floor_numbering")
                     .transaction { $0.animation = nil }
@@ -72,6 +78,7 @@ struct AppearanceSettingsView: View {
                 Section {
                     HStack {
                         Text("Article text size")
+                            .accessibilityIdentifier("appearance_article_text_size_label")
                         Spacer()
                         Text(articleTextScaleLabel)
                             .font(.body.monospacedDigit())
@@ -89,7 +96,7 @@ struct AppearanceSettingsView: View {
                     .accessibilityIdentifier("appearance_article_text_scale")
                     .accessibilityValue(articleTextScaleLabel)
                 } footer: {
-                    Text("Adjust article text without changing app controls")
+                    Text("Scale article text, settings, and app chrome")
                         .foregroundStyle(Color(osrsTheme.secondaryTextColor))
                 }
                 .listRowBackground(rowBackground)

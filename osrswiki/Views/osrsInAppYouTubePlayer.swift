@@ -79,9 +79,9 @@ struct osrsArticleSceneRestoreModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
             .onChange(of: scenePhase) { _, phase in
-                if phase != .active {
+                if phase == .background {
                     onLeaveForeground()
-                } else {
+                } else if phase == .active {
                     onEnterForeground()
                 }
             }

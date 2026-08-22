@@ -75,6 +75,7 @@ enum osrsAppRoot {
 
     static var mainView: some View {
         CustomMainTabView()
+            .osrsUserTextScaled()
             .environmentObject(themeManager)
             .environmentObject(appState)
             .background(Color(themeManager.currentTheme.background))

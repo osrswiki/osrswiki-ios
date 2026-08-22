@@ -70,12 +70,14 @@ enum osrsLiveThemeApplier {
         let onPrimary = UIColor(theme.onPrimary)
         let onSurface = UIColor(theme.onSurface)
         let surfaceVariant = UIColor(theme.surfaceVariant)
-        tintSwitchLike(control, onTint: primary, thumb: switchThumbColor())
+        let ink = UIColor(theme.primaryTextColor)
+        tintSwitchLike(control, onTint: primary, thumb: switchThumbColorForCurrentOS())
+        tintMenuValue(control, ink: ink)
 
         switch control {
         case let toggle as UISwitch:
             toggle.onTintColor = primary
-            toggle.thumbTintColor = switchThumbColor()
+            toggle.thumbTintColor = switchThumbColorForCurrentOS()
         case let slider as UISlider:
             slider.minimumTrackTintColor = primary
             slider.thumbTintColor = primary
@@ -136,7 +138,7 @@ enum osrsLiveThemeApplier {
         UIProgressView.appearance().trackTintColor = UIColor(theme.surfaceVariant)
         UIActivityIndicatorView.appearance().color = primary
         UISwitch.appearance().onTintColor = primary
-        UISwitch.appearance().thumbTintColor = switchThumbColor()
+        UISwitch.appearance().thumbTintColor = switchThumbColorForCurrentOS()
         UISlider.appearance().tintColor = primary
         UISlider.appearance().thumbTintColor = primary
         UISegmentedControl.appearance().selectedSegmentTintColor = primary
@@ -174,13 +176,22 @@ enum osrsLiveThemeApplier {
 
     /// Android `switch_thumb_tint` uses `osrs_brown_deep` for the checked thumb
     /// in both themes so the gold track stays legible. Parchment-as-thumb reads
-    /// as a white pill on light appearance.
+    /// as a white pill on light appearance. iOS 26 glass switches treat a
+    /// custom thumb tint as the whole capsule fill, so those keep the system
+    /// thumb (`nil`) and only retint the track.
     static func switchThumbColor() -> UIColor {
         UIColor(red: 76.0 / 255.0, green: 61.0 / 255.0, blue: 42.0 / 255.0, alpha: 1)
     }
 
+    static func switchThumbColorForCurrentOS() -> UIColor? {
+        if #available(iOS 26.0, *) {
+            return nil
+        }
+        return switchThumbColor()
+    }
+
     @MainActor
-    private static func tintSwitchLike(_ view: UIView, onTint: UIColor, thumb: UIColor) {
+    private static func tintSwitchLike(_ view: UIView, onTint: UIColor, thumb: UIColor?) {
         let typeName = String(describing: type(of: view))
         let isSwitchLike = view is UISwitch
             || typeName.localizedCaseInsensitiveContains("switch")
@@ -196,6 +207,68 @@ enum osrsLiveThemeApplier {
         if view.responds(to: NSSelectorFromString("setThumbTintColor:")) {
             view.perform(NSSelectorFromString("setThumbTintColor:"), with: thumb)
         }
+    }
+
+    /// List menu pickers keep a UIKit trailing value whose title color does
+    /// not follow SwiftUI `foregroundStyle`. Walk buttons and list cells so
+    /// Light/Dark/Auto and UK/US update on the same frame as the theme change.
+    @MainActor
+    private static func tintMenuValue(_ view: UIView, ink: UIColor) {
+        if isDescendedFromTabBar(view) || view is UISwitch || isDescendedFromSwitch(view) {
+            return
+        }
+        if let button = view as? UIButton {
+            button.setTitleColor(ink, for: .normal)
+            button.setTitleColor(ink, for: .highlighted)
+            button.tintColor = ink
+            if #available(iOS 15.0, *) {
+                if var config = button.configuration {
+                    config.baseForegroundColor = ink
+                    button.configuration = config
+                }
+            }
+        }
+        if let label = view as? UILabel {
+            label.textColor = ink
+        }
+        if let cell = view as? UICollectionViewListCell {
+            if var config = cell.contentConfiguration as? UIListContentConfiguration {
+                config.textProperties.color = ink
+                config.secondaryTextProperties.color = ink
+                cell.contentConfiguration = config
+            }
+            cell.tintColor = ink
+        }
+        if let cell = view as? UITableViewCell {
+            cell.textLabel?.textColor = ink
+            cell.detailTextLabel?.textColor = ink
+            cell.tintColor = ink
+        }
+    }
+
+    @MainActor
+    private static func isDescendedFromTabBar(_ view: UIView) -> Bool {
+        var current: UIView? = view
+        while let node = current {
+            if node is UITabBar {
+                return true
+            }
+            current = node.superview
+        }
+        return false
+    }
+
+    @MainActor
+    private static func isDescendedFromSwitch(_ view: UIView) -> Bool {
+        var current: UIView? = view.superview
+        while let node = current {
+            let typeName = String(describing: type(of: node))
+            if node is UISwitch || typeName.localizedCaseInsensitiveContains("switch") {
+                return true
+            }
+            current = node.superview
+        }
+        return false
     }
 
     @MainActor

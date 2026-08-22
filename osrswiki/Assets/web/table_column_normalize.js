@@ -148,6 +148,125 @@
     });
   }
 
+  function isInfoboxValueCell(cell) {
+    if (!(cell instanceof HTMLElement) || cell.tagName !== 'TD') return false;
+    const span = Number(cell.getAttribute('colspan') || 1);
+    if (span > 1) return false;
+    if (cell.classList.contains('infobox-image') ||
+        cell.classList.contains('infobox-full-width-content') ||
+        cell.classList.contains('infobox-nested') ||
+        cell.classList.contains('infobox-padding') ||
+        cell.classList.contains('infobox-header') ||
+        cell.classList.contains('infobox-bonuses-image')) {
+      return false;
+    }
+    const table = cell.closest('table.infobox');
+    if (!table || table.classList.contains('infobox-bonuses')) return false;
+    const row = cell.parentElement;
+    if (!row) return false;
+    const cols = Array.from(row.children).filter((child) => {
+      return child.tagName === 'TH' || child.tagName === 'TD';
+    });
+    return cols.length === 2 && cols[0].tagName === 'TH' && cols[1] === cell;
+  }
+
+  function restoreInlineStyle(style, name, previousValue, previousPriority) {
+    if (previousValue) style.setProperty(name, previousValue, previousPriority || '');
+    else style.removeProperty(name);
+  }
+
+  function snapshotInline(style, names) {
+    const snapshot = {};
+    names.forEach((name) => {
+      snapshot[name] = style.getPropertyValue(name);
+      snapshot[name + 'Priority'] = style.getPropertyPriority(name);
+    });
+    return snapshot;
+  }
+
+  function restoreSnapshot(style, snapshot, names) {
+    names.forEach((name) => restoreInlineStyle(style, name, snapshot[name], snapshot[name + 'Priority']));
+  }
+
+  function probeInfoboxValueIntrinsicWidth(table, label, cell) {
+    const tableStyle = table.style;
+    const cellStyle = cell.style;
+    const tableSnap = snapshotInline(tableStyle, ['table-layout']);
+    const cellSnap = snapshotInline(cellStyle, ['min-width', 'width', 'max-width']);
+    tableStyle.setProperty('table-layout', 'auto', 'important');
+    cellStyle.removeProperty('min-width');
+    cellStyle.setProperty('width', 'auto', 'important');
+    const intrinsic = cell.getBoundingClientRect().width;
+    restoreSnapshot(tableStyle, tableSnap, ['table-layout']);
+    restoreSnapshot(cellStyle, cellSnap, ['min-width', 'width', 'max-width']);
+    return intrinsic;
+  }
+
+  function watchInfoboxValueFloorImages(table) {
+    if (!(table instanceof HTMLElement) || table.dataset.osrsValueFloorWatch === 'true') return;
+    table.dataset.osrsValueFloorWatch = 'true';
+    table.querySelectorAll('img').forEach((img) => {
+      if (!(img instanceof HTMLElement) || img.complete) return;
+      img.addEventListener('load', () => lockInfoboxValueCellFloors(table), { once: true });
+    });
+  }
+
+  function infoboxTablesIn(scope) {
+    const tables = [];
+    if (scope && scope.matches && scope.matches('table.infobox:not(.infobox-bonuses)')) {
+      tables.push(scope);
+    }
+    if (scope && scope.querySelectorAll) {
+      scope.querySelectorAll('table.infobox:not(.infobox-bonuses)').forEach((table) => tables.push(table));
+    }
+    return tables;
+  }
+
+  function lockInfoboxValueCellFloors(root) {
+    const scope = root && root.querySelectorAll ? root : document;
+    infoboxTablesIn(scope).forEach((table) => {
+      watchInfoboxValueFloorImages(table);
+      const tableWidth = table.getBoundingClientRect().width;
+      if (tableWidth < 32) return;
+      table.querySelectorAll('tr').forEach((row) => {
+        const cols = Array.from(row.children).filter((child) => {
+          return child.tagName === 'TH' || child.tagName === 'TD';
+        });
+        if (cols.length !== 2) return;
+        const label = cols[0];
+        const cell = cols[1];
+        if (!isInfoboxValueCell(cell)) return;
+        const labelWidth = label.getBoundingClientRect().width;
+        const leftover = Math.max(24, tableWidth - Math.max(labelWidth, 0));
+        let floor = cell.getBoundingClientRect().width;
+        if (floor < 8) {
+          const probed = probeInfoboxValueIntrinsicWidth(table, label, cell);
+          floor = Math.min(probed > 8 ? probed : leftover, leftover);
+        } else {
+          floor = Math.min(floor, leftover);
+        }
+        if (floor < 8) return;
+        const previous = Number(cell.dataset.osrsValueFloor || 0);
+        if (previous && floor + 0.5 < previous) {
+          cell.style.setProperty('min-width', Math.ceil(previous) + 'px', 'important');
+          return;
+        }
+        const px = Math.ceil(floor);
+        cell.dataset.osrsValueFloor = String(px);
+        cell.style.setProperty('min-width', px + 'px', 'important');
+      });
+    });
+  }
+
+  function clearInfoboxValueCellFloors(root) {
+    const scope = root && root.querySelectorAll ? root : document;
+    scope.querySelectorAll('td[data-osrs-value-floor]').forEach((cell) => {
+      if (!(cell instanceof HTMLElement)) return;
+      cell.style.removeProperty('min-width');
+      delete cell.dataset.osrsValueFloor;
+    });
+  }
+
   function tightenTableIcons(root) {
     root.querySelectorAll('table :is(td, th) .scp').forEach((scp) => {
       if (!(scp instanceof HTMLElement)) return;
@@ -176,6 +295,7 @@
       table.querySelectorAll('tr').forEach(normalizeRow);
     });
     tightenTableIcons(scope);
+    lockInfoboxValueCellFloors(scope);
   }
 
   function ready(fn) {
@@ -198,9 +318,15 @@
       }, 50);
     });
     if (document.body) observer.observe(document.body, { childList: true, subtree: true });
+    window.addEventListener('load', () => normalize());
+    window.addEventListener('resize', () => {
+      clearInfoboxValueCellFloors();
+      normalize();
+    });
   });
 
   window.__osrsNormalizeArticleTables = normalize;
+  window.__osrsLockInfoboxValueFloors = lockInfoboxValueCellFloors;
   window.osrsApplyTableCellWrapPreference = function (enabled) {
     const wrap = !!enabled;
     [document.documentElement, document.body].forEach((element) => {
@@ -214,9 +340,8 @@
         cell.style.removeProperty('white-space');
       }
     });
-    if (!wrap) {
-      normalize();
-    }
+    clearInfoboxValueCellFloors();
+    normalize();
   };
   window.__osrsDumpArticleTableMetrics = function () {
     function box(el) {

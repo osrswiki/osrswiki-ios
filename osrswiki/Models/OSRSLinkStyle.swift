@@ -16,9 +16,7 @@ struct OSRSLinkTextModifier: ViewModifier {
     }
     
     func body(content: Content) -> some View {
-        print("🔗 OSRSLinkTextModifier applied - using medium font size \(fontSize)")
-        return content
-            .font(.system(size: fontSize, weight: .medium)) // Override with medium weight as expected by TDD test
+        content.font(.body.weight(.medium))
     }
 }
 

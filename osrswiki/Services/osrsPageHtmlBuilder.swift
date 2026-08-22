@@ -11,22 +11,31 @@ import UIKit
 class osrsPageHtmlBuilder {
     private let logTag = "PageLoadTrace"
 
-    // App-specific stylesheets (matching Android implementation)
-    private let styleSheetAssets = [
+    // Render-blocking first-paint CSS: theme tokens, typography, above-fold chrome.
+    // See shared/css/article-css-priority.json.
+    private let criticalStyleSheetAssets = [
         "styles/themes.css",
         "styles/base.css",
         "styles/fonts.css",
         "styles/layout.css",
         "styles/components.css",
-        "styles/wiki-integration.css",
-        "styles/navbox_styles.css",
         "web/collapsible_tables.css",
         "web/collapsible_sections.css",
-        "web/switch_infobox_styles.css",
+        "web/switch_infobox_styles.css"
+    ]
+
+    // Heavy wiki fidelity sheets. Downloaded immediately but applied after first paint.
+    private let deferredStyleSheetAssets = [
+        "styles/wiki-integration.css",
+        "styles/navbox_styles.css",
         "styles/fixes.css",
         "styles/gadget_calc.css",
         "styles/ios-article-aesthetics.css"
     ]
+
+    private var styleSheetAssets: [String] {
+        criticalStyleSheetAssets + deferredStyleSheetAssets
+    }
 
     // MediaWiki ResourceLoader artifacts
     private let mediawikiArtifacts = [
@@ -415,29 +424,11 @@ class osrsPageHtmlBuilder {
         }
 
         // Generate CSS links only if requested (disabled for WKUserScript injection)
-        let cssLinks: String
-        if inlineFirstPaintCss {
-            cssLinks = styleSheetAssets.map { assetPath in
-                if let css = loadAssetText(assetPath) {
-                    return "<style data-osrs-inline-css=\"\(assetPath)\">\(css)</style>"
-                }
-                return "<link rel=\"stylesheet\" href=\"\(customScheme)://localhost/\(assetPath)\">"
-            }.joined(separator: "\n")
-        } else if includeAssetLinks {
-            // Get the dynamic scheme name from UserDefaults
-            print("\(logTag): 🔍 UserDefaults WKURLSchemeHandler_Scheme = '\(UserDefaults.standard.string(forKey: "WKURLSchemeHandler_Scheme") ?? "nil")'")
-            print("\(logTag): 🔍 Using scheme: '\(customScheme)'")
-
-            cssLinks = styleSheetAssets.map { assetPath in
-                // Option B: Generate custom scheme URLs for WKURLSchemeHandler
-                return "<link rel=\"stylesheet\" href=\"\(customScheme)://localhost/\(assetPath)\">"
-            }.joined(separator: "\n")
-            print("\(logTag): Including CSS asset links with \(customScheme):// URLs for Option B")
-            print("\(logTag): 📋 First CSS link: \(cssLinks.components(separatedBy: "\n").first ?? "none")")
-        } else {
-            cssLinks = "<!-- CSS assets injected via WKUserScript -->"
-            print("\(logTag): Skipping CSS links - using WKUserScript injection")
-        }
+        let cssLinks = stylesheetMarkup(
+            inlineFirstPaintCss: inlineFirstPaintCss,
+            includeAssetLinks: includeAssetLinks,
+            customScheme: customScheme
+        )
 
         // Generate MediaWiki scripts only if requested
         let mediawikiScripts: String
@@ -543,8 +534,96 @@ class osrsPageHtmlBuilder {
 
         let elapsedTime = (CFAbsoluteTimeGetCurrent() - startTime) * 1000
         print("\(logTag): buildFullHtmlDocument() took \(Int(elapsedTime))ms")
+        print("LOAD-MINMAX html_ready buildMs=\(Int(elapsedTime)) htmlChars=\(finalHtml.count) inlineFirstPaintCss=\(inlineFirstPaintCss) includeAssetLinks=\(includeAssetLinks)")
 
         return finalHtml
+    }
+
+    private func stylesheetMarkup(
+        inlineFirstPaintCss: Bool,
+        includeAssetLinks: Bool,
+        customScheme: String
+    ) -> String {
+        let hrefPrefix = "\(customScheme)://localhost/"
+        if inlineFirstPaintCss {
+            let inlined = styleSheetAssets.map { assetPath -> String in
+                if let css = loadAssetText(assetPath) {
+                    return "<style data-osrs-inline-css=\"\(assetPath)\">\(css)</style>"
+                }
+                return osrsPageHtmlBuilder.blockingStylesheetLink(asset: assetPath, hrefPrefix: hrefPrefix)
+            }.joined(separator: "\n")
+            return inlined + "\n" + osrsPageHtmlBuilder.articleCssLoaderScript
+        }
+        if includeAssetLinks {
+            print("\(logTag): 🔍 UserDefaults WKURLSchemeHandler_Scheme = '\(UserDefaults.standard.string(forKey: "WKURLSchemeHandler_Scheme") ?? "nil")'")
+            print("\(logTag): 🔍 Using scheme: '\(customScheme)'")
+            let critical = criticalStyleSheetAssets.map { assetPath in
+                osrsPageHtmlBuilder.blockingStylesheetLink(asset: assetPath, hrefPrefix: hrefPrefix)
+            }.joined(separator: "\n")
+            let deferred = deferredStyleSheetAssets.map { assetPath in
+                osrsPageHtmlBuilder.deferredStylesheetLinks(asset: assetPath, hrefPrefix: hrefPrefix)
+            }.joined(separator: "\n")
+            let markup = critical + "\n" + osrsPageHtmlBuilder.articleCssLoaderScript + "\n" + deferred
+            print("\(logTag): Including CSS asset links with \(customScheme):// URLs for Option B")
+            print("\(logTag): 📋 First CSS link: \(markup.components(separatedBy: "\n").first ?? "none")")
+            return markup
+        }
+        print("\(logTag): Skipping CSS links - using WKUserScript injection")
+        return "<!-- CSS assets injected via WKUserScript -->"
+    }
+
+    /// Shared head loader for deferred CSS activation and load-minmax timeline events.
+    /// Keep in lockstep with PageHtmlBuilder.ARTICLE_CSS_LOADER_SCRIPT on Android.
+    static let articleCssLoaderScript = """
+    <script id="osrs-article-css-loader">
+    (function() {
+      window.osrsActivateDeferredStylesheet = function(link) {
+        if (!link || link.getAttribute('data-osrs-css-activated') === '1') { return; }
+        link.media = 'all';
+        link.onload = null;
+        link.setAttribute('data-osrs-css-activated', '1');
+        var href = link.getAttribute('data-osrs-css-href') || link.getAttribute('href') || '';
+        if (window.RenderTimeline && typeof window.RenderTimeline.log === 'function') {
+          window.RenderTimeline.log('Event: DeferredCssApplied:' + href);
+        }
+      };
+      function osrsActivatePendingDeferredStylesheets() {
+        var nodes = document.querySelectorAll('link[data-osrs-css="deferred"]');
+        for (var i = 0; i < nodes.length; i++) {
+          if (nodes[i].media !== 'all') {
+            window.osrsActivateDeferredStylesheet(nodes[i]);
+          }
+        }
+      }
+      document.addEventListener('DOMContentLoaded', function() {
+        osrsActivatePendingDeferredStylesheets();
+        if (window.RenderTimeline && typeof window.RenderTimeline.log === 'function') {
+          window.RenderTimeline.log('Event: ParseReady');
+        }
+      });
+      if (window.requestAnimationFrame) {
+        requestAnimationFrame(function() {
+          requestAnimationFrame(function() {
+            if (window.RenderTimeline && typeof window.RenderTimeline.log === 'function') {
+              window.RenderTimeline.log('Event: FirstPaint');
+            }
+          });
+        });
+      }
+    })();
+    </script>
+    """
+
+    static func blockingStylesheetLink(asset: String, hrefPrefix: String) -> String {
+        "<link rel=\"stylesheet\" href=\"\(hrefPrefix)\(asset)\" data-osrs-css=\"critical\">"
+    }
+
+    static func deferredStylesheetLinks(asset: String, hrefPrefix: String) -> String {
+        let href = "\(hrefPrefix)\(asset)"
+        return """
+        <link rel="preload" as="style" href="\(href)">
+        <link rel="stylesheet" href="\(href)" media="print" onload="osrsActivateDeferredStylesheet(this)" data-osrs-css="deferred" data-osrs-css-href="\(asset)">
+        """
     }
 
     static func articleFirstPaintStyle(

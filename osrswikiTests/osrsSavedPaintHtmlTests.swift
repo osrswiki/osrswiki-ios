@@ -53,6 +53,102 @@ final class osrsSavedPaintHtmlTests: XCTestCase {
         XCTAssertTrue(live.contains("--osrs-article-chrome-clearance: 12px"))
     }
 
+    func testInlinesDeferredStylesheetLinksAndIgnoresStylePreloads() {
+        let html = """
+        <html><head>
+        <link rel="preload" as="style" href="app-assets://localhost/styles/wiki-integration.css">
+        <link rel="stylesheet" href="app-assets://localhost/styles/wiki-integration.css" media="print" onload="osrsActivateDeferredStylesheet(this)" data-osrs-css="deferred" data-osrs-css-href="styles/wiki-integration.css">
+        <link rel="stylesheet" href="app-assets://localhost/styles/themes.css" data-osrs-css="critical">
+        <link rel="preload" href="app-assets://localhost/fonts/alegreya_bold.ttf" as="font" type="font/ttf" crossorigin="anonymous">
+        </head><body></body></html>
+        """
+        var loaded: [String] = []
+        let inlined = osrsSavedPaintHtml.inlineLinkedFirstPaintCss(html) { path in
+            loaded.append(path)
+            return path == "styles/wiki-integration.css" ? "table.infobox{color:red}" : "body{background:#e2dbc8}"
+        }
+        XCTAssertEqual(Set(loaded), Set(["styles/wiki-integration.css", "styles/themes.css"]))
+        XCTAssertTrue(inlined.contains("data-osrs-inline-css=\"styles/wiki-integration.css\""))
+        XCTAssertTrue(inlined.contains("table.infobox{color:red}"))
+        XCTAssertTrue(inlined.contains("data-osrs-inline-css=\"styles/themes.css\""))
+        XCTAssertTrue(inlined.contains("body{background:#e2dbc8}"))
+        XCTAssertFalse(inlined.contains("rel=\"stylesheet\""))
+        XCTAssertFalse(inlined.contains("as=\"style\""))
+        XCTAssertTrue(inlined.contains("as=\"font\""))
+        XCTAssertTrue(inlined.contains("alegreya_bold.ttf"))
+    }
+
+    func testLiveHtmlKeepsCriticalThemeCssBlockingAndDefersWikiIntegration() {
+        let html = osrsPageHtmlBuilder().buildFullHtmlDocument(
+            title: "Varrock",
+            bodyContent: "<table class=\"infobox\"><tr><td>Capital</td></tr></table>",
+            theme: osrsLightTheme(),
+            includeAssetLinks: true,
+            bakeChromeInsets: false
+        )
+        assertCriticalStylesheet(html, asset: "styles/themes.css")
+        assertCriticalStylesheet(html, asset: "web/collapsible_tables.css")
+        assertCriticalStylesheet(html, asset: "web/switch_infobox_styles.css")
+        assertDeferredStylesheet(html, asset: "styles/wiki-integration.css")
+        assertDeferredStylesheet(html, asset: "styles/fixes.css")
+        assertDeferredStylesheet(html, asset: "styles/ios-article-aesthetics.css")
+        XCTAssertTrue(html.contains("id=\"osrs-article-first-paint\""))
+        XCTAssertTrue(html.contains("background-color: #e2dbc8"))
+        XCTAssertTrue(html.contains("background-color: #28221d"))
+        XCTAssertTrue(html.contains("osrsActivateDeferredStylesheet"))
+        XCTAssertTrue(html.contains("Event: ParseReady"))
+        XCTAssertTrue(html.contains("Event: FirstPaint"))
+        let fixesIndex = html.range(of: "styles/fixes.css")
+        let aestheticsIndex = html.range(of: "styles/ios-article-aesthetics.css")
+        XCTAssertNotNil(fixesIndex)
+        XCTAssertNotNil(aestheticsIndex)
+        XCTAssertTrue(fixesIndex!.lowerBound < aestheticsIndex!.lowerBound)
+    }
+
+    private func assertCriticalStylesheet(_ html: String, asset: String) {
+        let stylesheet = stylesheetLinks(in: html, asset: asset)
+        XCTAssertTrue(
+            stylesheet.contains(where: { $0.contains("rel=\"stylesheet\"") && $0.contains("data-osrs-css=\"critical\"") }),
+            "expected blocking \(asset) in \(stylesheet)"
+        )
+        XCTAssertFalse(
+            stylesheet.contains(where: { $0.contains("media=\"print\"") }),
+            "critical \(asset) must not use media=print"
+        )
+    }
+
+    private func assertDeferredStylesheet(_ html: String, asset: String) {
+        let stylesheet = stylesheetLinks(in: html, asset: asset)
+        XCTAssertTrue(
+            stylesheet.contains(where: { $0.contains("rel=\"preload\"") && $0.contains("as=\"style\"") }),
+            "expected preload for \(asset) in \(stylesheet)"
+        )
+        XCTAssertTrue(
+            stylesheet.contains(where: {
+                $0.contains("rel=\"stylesheet\"") &&
+                $0.contains("media=\"print\"") &&
+                $0.contains("data-osrs-css=\"deferred\"")
+            }),
+            "expected deferred stylesheet for \(asset) in \(stylesheet)"
+        )
+        XCTAssertFalse(
+            stylesheet.contains(where: { $0.contains("rel=\"stylesheet\"") && !$0.contains("media=\"print\"") }),
+            "deferred \(asset) must not be a blocking stylesheet"
+        )
+    }
+
+    private func stylesheetLinks(in html: String, asset: String) -> [String] {
+        guard let regex = try? NSRegularExpression(pattern: "<link\\b[^>]*>", options: [.caseInsensitive]) else {
+            return []
+        }
+        let range = NSRange(html.startIndex..., in: html)
+        return regex.matches(in: html, range: range).compactMap { match in
+            guard let matchRange = Range(match.range, in: html) else { return nil }
+            let tag = String(html[matchRange])
+            return tag.contains(asset) ? tag : nil
+        }
+    }
+
     func testFirstPaintStyleIncludesBodyColorAndBackgroundFallbacks() {
         let style = osrsPageHtmlBuilder.articleFirstPaintStyle(
             chromeClearancePx: 0,

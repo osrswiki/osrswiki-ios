@@ -9,6 +9,7 @@ import UIKit
 final class osrsSceneDelegate: UIResponder, UIWindowSceneDelegate {
     var window: UIWindow?
     private var needsResumeRestore = false
+    private var didLeaveToBackground = false
     private var resumeDisplayLink: CADisplayLink?
     private var isAttaching = false
     private var finishedFirstActivation = false
@@ -39,6 +40,7 @@ final class osrsSceneDelegate: UIResponder, UIWindowSceneDelegate {
     }
 
     func sceneDidEnterBackground(_ scene: UIScene) {
+        didLeaveToBackground = true
         markNeedsResumeRestore(reason: "sceneDidEnterBackground")
     }
 
@@ -70,6 +72,7 @@ final class osrsSceneDelegate: UIResponder, UIWindowSceneDelegate {
             object: nil,
             queue: .main
         ) { [weak self] _ in
+            self?.didLeaveToBackground = true
             self?.markNeedsResumeRestore(reason: "applicationDidEnterBackground")
         })
         appObservers.append(center.addObserver(
@@ -88,6 +91,7 @@ final class osrsSceneDelegate: UIResponder, UIWindowSceneDelegate {
         needsResumeRestore = true
         osrsAppRoot.appState.noteApplicationDidEnterBackground()
         osrsAppRoot.appState.rememberResumableArticle()
+        osrsPreparedArticleWebViewStore.shared.detachFromKeyWindowForResume()
         if let window {
             osrsSceneCompositor.captureResumeFrame(from: window)
         }
@@ -111,6 +115,8 @@ final class osrsSceneDelegate: UIResponder, UIWindowSceneDelegate {
         NSLog("osrsSceneDelegate resume compositor trigger=%@", reason)
         restoreResumedScene(on: windowScene, reason: reason)
         osrsAppRoot.appState.noteApplicationDidBecomeActive()
+        // 8a413: a same-window geometry nudge after Safari unparks UIKit
+        // children. Window bounce / nilling windowScene left parchment.
         DispatchQueue.main.async { [weak self] in
             self?.nudgeCompositor(on: windowScene)
         }
@@ -163,6 +169,10 @@ final class osrsSceneDelegate: UIResponder, UIWindowSceneDelegate {
         sceneWindow.makeKeyAndVisible()
         window = sceneWindow
 
+        osrsResumeFrameOverlay.onAdoptedPrimary = { [weak self] overlay in
+            self?.window = overlay
+        }
+
         UIApplication.shared.requestSceneSessionRefresh(windowScene.session)
         print(
             "🪟 osrsSceneDelegate attach reason=\(reason) host=CustomMainTabView sceneWindows=\(windowScene.windows.count) key=\(sceneWindow.isKeyWindow) frame=\(Int(sceneWindow.frame.width))x\(Int(sceneWindow.frame.height))"
@@ -181,20 +191,36 @@ final class osrsSceneDelegate: UIResponder, UIWindowSceneDelegate {
             attachPrimaryWindow(to: windowScene, reason: reason)
             return
         }
+        // Keep this scene's existing UIWindow and CustomMainTabView host.
+        // Minting a second window (or nilling windowScene) left iOS 26
+        // compositing only backgroundColor. Rebinding UIHostingController
+        // dropped WKContentView to 0x0.
         window.backgroundColor = UIColor(osrsAppRoot.themeManager.currentTheme.background)
         window.overrideUserInterfaceStyle = osrsAppRoot.themeManager.currentColorScheme == .dark ? .dark : .light
-        window.makeKeyAndVisible()
+        reconnectSwiftUIHostToWindow()
+        osrsPreparedArticleWebViewStore.shared.detachFromKeyWindowForResume()
+        // Safari leave parks SpringBoard's scene snapshot over the live
+        // window (theme fill + ◀ Safari, no hits). Activating this same
+        // session and bouncing windowLevel on this window — not
+        // windowScene = nil — is what 4bcb7f27 used to lift that snapshot.
+        // LCD pixels then come from a .statusBar overlay that is key and
+        // returns the live tree from hitTest. Cover windows at .alert
+        // ate hits without forwarding and are gone.
+        if window is osrsResumeCoverWindow {
+            window.makeKeyAndVisible()
+        } else {
+            window.windowLevel = .statusBar
+            window.makeKeyAndVisible()
+            CATransaction.flush()
+            window.windowLevel = .normal
+            window.makeKeyAndVisible()
+        }
         UIApplication.shared.requestSceneSessionActivation(
             windowScene.session,
             userActivity: nil,
             options: nil
         )
         UIApplication.shared.requestSceneSessionRefresh(windowScene.session)
-        // iOS 26 UIHostingView can stop compositing UIKit children (WKWebView)
-        // after a scene resume while the live tree stays intact. Re-insert the
-        // same hosting view so didMoveToWindow fires without destroying
-        // ArticleView @StateObject / lastCommitted HTML.
-        reconnectSwiftUIHostToWindow()
         osrsSceneCompositor.restore(window)
         startResumeDisplayLink()
         print("🪟 osrsSceneDelegate restore same SwiftUI host reason=\(reason)")
@@ -202,24 +228,22 @@ final class osrsSceneDelegate: UIResponder, UIWindowSceneDelegate {
     }
 
     /// Re-parent the existing CustomMainTabView host. Recreating the
-    /// UIHostingController would reset ArticleView @StateObject.
+    /// UIHostingController would reset ArticleView @StateObject. Do not
+    /// `removeFromSuperview` when already attached: that parks WK GPU tiles.
     private func reconnectSwiftUIHostToWindow() {
         guard let window, let container = sceneContainer, let host = appHost else { return }
         host.loadViewIfNeeded()
         let hostView = host.view!
-        if host.parent !== container {
+        if host.parent !== container || hostView.superview !== container.view || hostView.window == nil {
             container.osrsInstall(host)
         } else {
-            hostView.removeFromSuperview()
-            hostView.frame = container.view.bounds
-            hostView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-            hostView.translatesAutoresizingMaskIntoConstraints = true
-            container.view.addSubview(hostView)
+            hostView.isHidden = false
+            hostView.alpha = 1
+            hostView.layer.shouldRasterize = false
             container.view.bringSubviewToFront(hostView)
         }
         hostView.isHidden = false
         hostView.alpha = 1
-        hostView.layer.contents = nil
         hostView.layer.shouldRasterize = false
         window.makeKeyAndVisible()
         CATransaction.flush()
@@ -254,13 +278,22 @@ final class osrsSceneDelegate: UIResponder, UIWindowSceneDelegate {
     }
 
     private func nudgeCompositor(on windowScene: UIWindowScene) {
+        if osrsResumeFrameOverlay.hasAdoptedLiveRoot {
+            osrsResumeFrameOverlay.makeOverlayKeyIfInstalled()
+            return
+        }
         guard let window, window.windowScene === windowScene else { return }
+        if !osrsResumeFrameOverlay.hasCapturedFrame {
+            window.layer.contents = nil
+            window.rootViewController?.view.layer.contents = nil
+        }
         let original = window.frame
         window.frame = original.insetBy(dx: 0, dy: 1)
         window.layoutIfNeeded()
         CATransaction.flush()
         window.frame = original
         window.layoutIfNeeded()
+        _ = window.drawHierarchy(in: window.bounds, afterScreenUpdates: true)
         windowScene.requestGeometryUpdate(
             UIWindowScene.GeometryPreferences.iOS(interfaceOrientations: .portrait)
         ) { error in
@@ -268,23 +301,40 @@ final class osrsSceneDelegate: UIResponder, UIWindowSceneDelegate {
         }
         UIApplication.shared.requestSceneSessionRefresh(windowScene.session)
         osrsSceneCompositor.restore(window)
-        print("🪟 osrsSceneDelegate nudge key=\(window.isKeyWindow) frame=\(Int(window.frame.width))x\(Int(window.frame.height))")
-        NSLog("osrsSceneDelegate nudge key=%d", window.isKeyWindow ? 1 : 0)
+        if osrsResumeFrameOverlay.isPassthroughInstalled {
+            osrsResumeFrameOverlay.makeOverlayKeyIfInstalled()
+        } else {
+            window.makeKeyAndVisible()
+        }
+        print("🪟 osrsSceneDelegate nudge key=\(window.isKeyWindow) overlay=\(osrsResumeFrameOverlay.isPassthroughInstalled) frame=\(Int(window.frame.width))x\(Int(window.frame.height))")
+        NSLog("osrsSceneDelegate nudge key=%d overlay=%d", window.isKeyWindow ? 1 : 0, osrsResumeFrameOverlay.isPassthroughInstalled ? 1 : 0)
     }
 
     private func startResumeDisplayLink() {
         resumeDisplayLink?.invalidate()
         let link = CADisplayLink(target: self, selector: #selector(tickResumeFrame))
+        if #available(iOS 15.0, *) {
+            link.preferredFrameRateRange = CAFrameRateRange(minimum: 10, maximum: 30, preferred: 20)
+        }
         link.add(to: .main, forMode: .common)
         resumeDisplayLink = link
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
-            self?.resumeDisplayLink?.invalidate()
-            self?.resumeDisplayLink = nil
-        }
     }
 
     @objc private func tickResumeFrame() {
-        window?.rootViewController?.view.setNeedsLayout()
+        if osrsResumeFrameOverlay.hasAdoptedLiveRoot {
+            resumeDisplayLink?.invalidate()
+            resumeDisplayLink = nil
+            return
+        }
+        guard let window else { return }
+        window.isHidden = false
+        window.alpha = 1
+        osrsResumeFrameOverlay.blitPassthroughResumePixels(from: window)
+        window.rootViewController?.view.setNeedsLayout()
+        if !osrsResumeFrameOverlay.isPassthroughInstalled {
+            resumeDisplayLink?.invalidate()
+            resumeDisplayLink = nil
+        }
     }
 }
 

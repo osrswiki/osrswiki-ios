@@ -66,6 +66,9 @@ final class ArticleAestheticRenderingTests: XCTestCase {
         XCTAssertTrue(collapsible.contains("Tap to collapse"))
         XCTAssertTrue(collapsible.contains("Tap to expand"))
         XCTAssertTrue(collapsible.contains("collapsible-state"))
+        XCTAssertTrue(collapsible.contains("scheduleCollapseAndMapWork"))
+        XCTAssertTrue(collapsible.contains("osrs-first-view-complete"))
+        XCTAssertTrue(collapsible.contains("startCollapseAndMapWork"))
         XCTAssertTrue(fixes.contains("mask-image:"))
         XCTAssertTrue(fixes.contains("text-overflow: ellipsis"))
         XCTAssertTrue(tables.contains("mask-image:"))
@@ -84,6 +87,7 @@ final class ArticleAestheticRenderingTests: XCTestCase {
         XCTAssertTrue(infoboxRule.contains("float: none"))
         XCTAssertFalse(infoboxRule.contains("float: right"))
         XCTAssertTrue(fixes.contains("min-width: max-content !important;"))
+        XCTAssertTrue(fixes.contains("max-width: max-content !important;"))
         XCTAssertTrue(fixes.contains("hyphens: none !important;"))
         XCTAssertTrue(fixes.contains(".collapsible-primary-infobox table.infobox th:not(.infobox-header) {"))
         XCTAssertFalse(
@@ -94,6 +98,14 @@ final class ArticleAestheticRenderingTests: XCTestCase {
             fixes.contains(".collapsible-primary-infobox th,\n.collapsible-primary-infobox td {"),
             "Blanket white-space:normal on every primary-infobox th wraps location labels such as Inhabitants."
         )
+        XCTAssertFalse(
+            fixes.contains("max(8em, min-content)"),
+            "An 8em min-content floor stretches compact infoboxes; WebKit also ignores min-content on table cells."
+        )
+        let tableNormalize = try readAsset("Assets/web/table_column_normalize.js")
+        XCTAssertTrue(tableNormalize.contains("lockInfoboxValueCellFloors"))
+        XCTAssertTrue(tableNormalize.contains("probeInfoboxValueIntrinsicWidth"))
+        XCTAssertTrue(tableNormalize.contains("osrsValueFloor"))
     }
 
     func testJcConfigCombatCalculatorLeavesWikiFormForCalcCore() async throws {
@@ -2500,6 +2512,107 @@ final class ArticleAestheticRenderingTests: XCTestCase {
         XCTAssertEqual(number(uncharged, "labelWidth"), number(baseline, "labelWidth"), accuracy: 1.0)
         XCTAssertEqual(number(wideState, "labelHeight"), number(baseline, "labelHeight"), accuracy: 1.0)
         XCTAssertEqual(number(uncharged, "labelHeight"), number(baseline, "labelHeight"), accuracy: 1.0)
+    }
+
+    func testInfoboxValueCellsKeepMeasuredFloorAfterLateFixedLayout() async throws {
+        let fixes = try readAsset("Assets/styles/fixes.css")
+        let iosAesthetics = try readAsset("Assets/styles/ios-article-aesthetics.css")
+        let normalize = try readAsset("Assets/web/table_column_normalize.js")
+        XCTAssertFalse(fixes.contains("max(8em, min-content)"))
+        attachWebViewToWindow()
+        let html = """
+        <!doctype html>
+        <html>
+        <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <style>
+        body { margin: 0; font: 16px/1.3 -apple-system, sans-serif; }
+        .article { width: 375px; max-width: 375px; overflow: hidden; }
+        \(fixes)
+        \(iosAesthetics)
+        </style>
+        </head>
+        <body>
+        <div class="article">
+          <div class="collapsible-primary-infobox">
+            <div class="collapsible-content">
+              <table class="main-infobox infobox infobox-switch">
+                <tbody>
+                  <tr><th colspan="2" class="infobox-header">Abyssal whip</th></tr>
+                  <tr><td colspan="2" class="infobox-image"><img width="120" height="120" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=="></td></tr>
+                  <tr><th>Released</th><td id="released">26 January 2005</td></tr>
+                  <tr><th>Members</th><td id="members">Yes</td></tr>
+                  <tr><th>Tradeable</th><td id="tradeable">Yes</td></tr>
+                  <tr><th>Examine</th><td id="examine">A weapon from the abyss.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        <script>\(normalize)</script>
+        </body>
+        </html>
+        """
+
+        try await load(html)
+        try await Task.sleep(nanoseconds: 250_000_000)
+        _ = try await evaluate("""
+        (() => {
+            if (typeof window.__osrsLockInfoboxValueFloors === 'function') {
+                window.__osrsLockInfoboxValueFloors();
+            }
+            return { ok: 1 };
+        })()
+        """)
+        let before = try await evaluate("""
+        (() => {
+            const box = document.querySelector('table.infobox');
+            const released = document.getElementById('released');
+            const examine = document.getElementById('examine');
+            return {
+                boxWidth: box.getBoundingClientRect().width,
+                releasedWidth: released.getBoundingClientRect().width,
+                examineWidth: examine.getBoundingClientRect().width,
+                floor: released.dataset.osrsValueFloor || ''
+            };
+        })()
+        """)
+        XCTAssertGreaterThan(number(before, "releasedWidth"), 24)
+        XCTAssertGreaterThan(number(before, "examineWidth"), 24)
+        XCTAssertLessThan(
+            number(before, "boxWidth"),
+            390,
+            "Value-cell floors must not stretch a compact infobox past the phone column"
+        )
+
+        _ = try await evaluate("""
+        (() => {
+            const box = document.querySelector('table.infobox');
+            const width = box.getBoundingClientRect().width;
+            box.style.setProperty('table-layout', 'fixed', 'important');
+            box.style.setProperty('width', width + 'px', 'important');
+            if (typeof window.__osrsLockInfoboxValueFloors === 'function') {
+                window.__osrsLockInfoboxValueFloors();
+            }
+            return { ok: 1 };
+        })()
+        """)
+        try await Task.sleep(nanoseconds: 50_000_000)
+        let after = try await evaluate("""
+        (() => {
+            const box = document.querySelector('table.infobox');
+            const released = document.getElementById('released');
+            const examine = document.getElementById('examine');
+            return {
+                boxWidth: box.getBoundingClientRect().width,
+                releasedWidth: released.getBoundingClientRect().width,
+                examineWidth: examine.getBoundingClientRect().width
+            };
+        })()
+        """)
+        XCTAssertGreaterThan(number(after, "releasedWidth"), 24)
+        XCTAssertGreaterThan(number(after, "examineWidth"), 24)
+        XCTAssertEqual(number(after, "boxWidth"), number(before, "boxWidth"), accuracy: 8.0)
     }
 
     private func attachWebViewToWindow() {
