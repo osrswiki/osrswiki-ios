@@ -2599,11 +2599,19 @@ struct ArticleWebView: UIViewRepresentable {
             case "setHorizontalScrollGesture":
                 if let phase = body["phase"] as? String,
                    let gestureId = body["gestureId"] as? String {
+                    let ownerId = body["ownerId"] as? String ?? "article-navigation"
+                    let isLocalOwner: Bool
+                    if let explicit = body["isLocalOwner"] as? Bool {
+                        isLocalOwner = explicit
+                    } else {
+                        let inProgress = phase == "begin" || phase == "change"
+                        isLocalOwner = inProgress && ownerId != "article-navigation"
+                    }
                     mapHandler?.setHorizontalScrollGesture(
                         phase: phase,
                         gestureId: gestureId,
-                        ownerId: body["ownerId"] as? String ?? "article-navigation",
-                        isLocalOwner: body["isLocalOwner"] as? Bool ?? true
+                        ownerId: ownerId,
+                        isLocalOwner: isLocalOwner
                     )
                 }
                 

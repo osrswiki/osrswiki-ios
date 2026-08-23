@@ -98,9 +98,17 @@
     }
 
     function osrsStripJavascriptRequiredBanners(root) {
+        // Only hide the wiki's JS-required messagebox itself. Matching every
+        // `div`/`p` by textContent previously blanked #bodyContent and
+        // .mw-parser-output because those ancestors also contain the banner.
         var scope = root || document;
-        var nodes = scope.querySelectorAll('p, div, .mw-parser-output > *');
+        var nodes = scope.querySelectorAll(
+            'table.messagebox, .messagebox, table.ambox, .ambox, table.mbox, .mbox, .js-required, .jcRequired'
+        );
         nodes.forEach(function (node) {
+            if (node.closest && node.closest('.osrs-calculator-layout, .osrs-calculator-panel, .jcTable')) {
+                return;
+            }
             var text = (node.textContent || '').replace(/\s+/g, ' ').trim();
             if (/dynamic calculator requires JavaScript/i.test(text) ||
                 /this calculator requires JavaScript/i.test(text)) {
@@ -376,7 +384,7 @@ function parseCalculatorConfig(pre) {
             return;
         }
         document.documentElement.setAttribute('data-osrs-calc-live', '1');
-        document.querySelectorAll('.messagebox, .ambox, .mbox, table.messagebox, table.ambox, table').forEach(function(node) {
+        document.querySelectorAll('.messagebox, .ambox, .mbox, table.messagebox, table.ambox, table.mbox, .js-required, .jcRequired').forEach(function(node) {
             var text = node.textContent || '';
             if (/dynamic calculator requires JavaScript/i.test(text) ||
                 /this calculator requires JavaScript/i.test(text)) {

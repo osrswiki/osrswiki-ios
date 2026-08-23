@@ -3010,6 +3010,7 @@ class ArticleViewModel: NSObject, ObservableObject {
             "switch_infobox.js",
             "map_bridge.js",
             "horizontal_scroll_interceptor.js",
+            "image_area_cap.js",
             "responsive_videos.js",
             "mobile_article_polish.js",
             "clipboard_bridge.js"
@@ -3350,6 +3351,7 @@ class ArticleViewModel: NSObject, ObservableObject {
             "web/switch_infobox.js",
             "web/map_bridge.js",
             "web/horizontal_scroll_interceptor.js",
+            "web/image_area_cap.js",
             "web/responsive_videos.js",
             "web/mobile_article_polish.js",
             "web/clipboard_bridge.js"

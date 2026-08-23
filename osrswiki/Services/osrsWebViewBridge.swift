@@ -36,6 +36,29 @@ class osrsWebViewBridge: NSObject, WKScriptMessageHandler {
             if let isScrolling = body["isScrolling"] as? Bool {
                 handleSetHorizontalScroll(isScrolling)
             }
+
+        case "setHorizontalScrollGesture":
+            if let phase = body["phase"] as? String,
+               let gestureId = body["gestureId"] as? String {
+                let ownerId = body["ownerId"] as? String ?? "article-navigation"
+                let isLocalOwner: Bool
+                if let explicit = body["isLocalOwner"] as? Bool {
+                    isLocalOwner = explicit
+                } else {
+                    let inProgress = phase == "begin" || phase == "change"
+                    isLocalOwner = inProgress && ownerId != "article-navigation"
+                }
+                handleSetHorizontalScrollGesture(
+                    phase: phase,
+                    gestureId: gestureId,
+                    ownerId: ownerId,
+                    isLocalOwner: isLocalOwner
+                )
+            }
+
+        case "setArticleTouchSequence":
+            // iOS arbitration binds DOM ownership by gesture id; sequence is informational.
+            break
             
         case "log":
             if let logMessage = body["message"] as? String {
@@ -61,6 +84,35 @@ class osrsWebViewBridge: NSObject, WKScriptMessageHandler {
         DispatchQueue.main.async {
             osrsGestureState.shared.isJavaScriptScrollBlocked = isScrolling
             print("[WebViewBridge] JavaScript scroll blocking: \(isScrolling)")
+        }
+    }
+
+    /// Phased local-scroll ownership — mirrors Android NativeMapHandler.setHorizontalScrollGesture.
+    private func handleSetHorizontalScrollGesture(
+        phase: String,
+        gestureId: String,
+        ownerId: String,
+        isLocalOwner: Bool
+    ) {
+        DispatchQueue.main.async {
+            print("[WebViewBridge] gesture phase=\(phase) id=\(gestureId) owner=\(ownerId) local=\(isLocalOwner)")
+            switch phase {
+            case "begin":
+                osrsGestureState.shared.classifyJavaScriptGesture(
+                    id: gestureId,
+                    isLocalOwner: isLocalOwner
+                )
+            case "change":
+                if isLocalOwner {
+                    osrsGestureState.shared.claimJavaScriptGesture(id: gestureId)
+                }
+            case "end":
+                osrsGestureState.shared.endJavaScriptGesture(id: gestureId)
+            case "cancel":
+                osrsGestureState.shared.cancelJavaScriptGesture(id: gestureId)
+            default:
+                break
+            }
         }
     }
     
@@ -93,6 +145,46 @@ class osrsWebViewBridge: NSObject, WKScriptMessageHandler {
                 } catch (e) {
                     console.warn('Failed to communicate horizontal scroll state:', e);
                 }
+            },
+
+            // Phased ownership matching Android NativeMapHandler.setHorizontalScrollGesture.
+            // horizontal_scroll_interceptor.js prefers this over the legacy bool API.
+            setHorizontalScrollGesture: function(phase, gestureId, ownerId) {
+                try {
+                    var local = (phase === 'begin' || phase === 'change') && ownerId !== 'article-navigation';
+                    var payload = {
+                        method: 'setHorizontalScrollGesture',
+                        phase: String(phase || ''),
+                        gestureId: String(gestureId || ''),
+                        ownerId: String(ownerId || 'article-navigation'),
+                        isLocalOwner: !!local
+                    };
+                    if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.mapBridge) {
+                        window.webkit.messageHandlers.mapBridge.postMessage({
+                            action: 'setHorizontalScrollGesture',
+                            phase: payload.phase,
+                            gestureId: payload.gestureId,
+                            ownerId: payload.ownerId,
+                            isLocalOwner: payload.isLocalOwner
+                        });
+                    } else {
+                        window.webkit.messageHandlers.OsrsWikiBridge.postMessage(payload);
+                    }
+                } catch (e) {
+                    console.warn('Failed to communicate horizontal scroll gesture:', e);
+                }
+            },
+
+            // Android binds DOM touch sequences to native pointer generations; iOS binds via
+            // gesture id in classifyJavaScriptGesture. Keep the hook so the interceptor does
+            // not silently no-op on one platform.
+            setArticleTouchSequence: function(sequence) {
+                try {
+                    window.webkit.messageHandlers.OsrsWikiBridge.postMessage({
+                        method: 'setArticleTouchSequence',
+                        sequence: Number(sequence) || 0
+                    });
+                } catch (e) {}
             },
             
             // Match Android log interface  

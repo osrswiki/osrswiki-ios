@@ -50,7 +50,8 @@ class osrsPageHtmlBuilder {
         "web/first_viewport_assets.js",
         "web/live_article_asset_warm.js",
         "web/mobile_article_polish.js",
-        "web/horizontal_scroll_interceptor.js"
+        "web/horizontal_scroll_interceptor.js",
+        "web/image_area_cap.js"
     ]
 
     // Base JavaScript assets
@@ -309,6 +310,23 @@ class osrsPageHtmlBuilder {
                     } else {
                         console.error('🚨 [INLINE-BRIDGE] webkit.messageHandlers.mapBridge not available');
                     }
+                },
+
+                setHorizontalScrollGesture: function(phase, gestureId, ownerId) {
+                    var local = (phase === 'begin' || phase === 'change') && ownerId !== 'article-navigation';
+                    if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.mapBridge) {
+                        window.webkit.messageHandlers.mapBridge.postMessage({
+                            action: 'setHorizontalScrollGesture',
+                            phase: String(phase || ''),
+                            gestureId: String(gestureId || ''),
+                            ownerId: String(ownerId || 'article-navigation'),
+                            isLocalOwner: !!local
+                        });
+                    }
+                },
+
+                setArticleTouchSequence: function(sequence) {
+                    // Handled natively via gesture-id binding on iOS.
                 },
 
                 log: function(message) {

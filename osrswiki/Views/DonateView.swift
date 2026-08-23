@@ -59,7 +59,7 @@ struct DonateView: View {
                 .multilineTextAlignment(.center)
                 .accessibilityIdentifier("donate_header")
 
-            Text("This app is free. Nothing is locked behind a donation. If you want to help, it goes to fees I pay to put this app in the App Store and the time it takes to keep the app working. The Old School RuneScape Wiki (the web version) is run by separate volunteers. Support them too if you can.")
+            Text("This app is free. Nothing is locked behind a donation. If you want to help, it goes to fees I pay to put this app in the App Store and the time it takes to keep the app working.")
                 .font(.body)
                 .foregroundStyle(.osrsPrimaryTextColor)
                 .multilineTextAlignment(.center)
@@ -99,7 +99,7 @@ struct DonateView: View {
                     Text(donateButtonText)
                 }
                 .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 32)
             }
             .font(.headline)
             .foregroundStyle(isDonateButtonEnabled ? Color(osrsTheme.onPrimary) : Color(osrsTheme.primaryTextColor))
@@ -113,6 +113,7 @@ struct DonateView: View {
             .buttonStyle(osrsDonationButtonStyle())
             .disabled(!isDonateButtonEnabled)
             .accessibilityIdentifier("donate_submit")
+            .frame(maxWidth: .infinity)
 
             if let unavailableMessage = donationManager.donationUnavailableMessage {
                 Text(unavailableMessage)
@@ -245,7 +246,7 @@ struct DonationAmountButton: View {
     let isSelected: Bool
     var isEnabled: Bool = true
     let action: () -> Void
-    @ScaledMetric(relativeTo: .headline) private var regularMinButtonHeight: CGFloat = 52
+    @ScaledMetric(relativeTo: .headline) private var regularMinButtonHeight: CGFloat = 44
 
     var body: some View {
         Button(action: action) {
@@ -254,8 +255,8 @@ struct DonationAmountButton: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.85)
                 .frame(maxWidth: .infinity, minHeight: minButtonHeight)
-                .padding(.horizontal, 16)
-                .padding(.vertical, verticalSizeClass == .compact ? 4 : 8)
+                .padding(.horizontal, 12)
+                .padding(.vertical, verticalSizeClass == .compact ? 4 : 6)
                 .contentShape(RoundedRectangle(cornerRadius: 12))
         }
         .foregroundStyle(isSelected ? Color(osrsTheme.onPrimary) : Color(osrsTheme.primaryTextColor))
@@ -276,7 +277,7 @@ struct DonationAmountButton: View {
     }
 
     private var minButtonHeight: CGFloat {
-        verticalSizeClass == .compact ? 36 : regularMinButtonHeight
+        verticalSizeClass == .compact ? 32 : regularMinButtonHeight
     }
 }
 
