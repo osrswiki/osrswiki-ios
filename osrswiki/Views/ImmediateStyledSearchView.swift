@@ -226,13 +226,14 @@ struct ImmediateStyledSearchView: View {
 
             if searchText.isEmpty, !scope.emptyQueryBrowsesNewest, let vm = viewModel, !vm.recentSearches.isEmpty {
                 recentSearchesSection(viewModel: vm)
+                    .padding(.top, 4)
                     .background(Color(theme.background))
             }
         }
     }
     
     private func recentSearchesSection(viewModel: SearchViewModel) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 4) {
             HStack {
                 Text("Recent")
                     .font(.subheadline)

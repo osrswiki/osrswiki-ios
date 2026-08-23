@@ -738,6 +738,7 @@ class ArticleViewModel: NSObject, ObservableObject {
     /// WKWebView can go blank after backgrounding without firing the terminate callback.
     /// Probe the live document on foreground and recover when it is empty.
     func wakeRenderedDocumentAfterBackground() {
+        print("🔁 [RESUME-WAKE] waking rendered document (hasHTML=\(hasCommittedArticleHTML), terminated=\(contentProcessDidTerminate))")
         guard let webView else {
             guard contentProcessDidTerminate else { return }
             if let theme = lastAppliedArticleTheme {

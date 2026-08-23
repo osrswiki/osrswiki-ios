@@ -21,15 +21,15 @@ class osrsPageHtmlBuilder {
         "styles/components.css",
         "web/collapsible_tables.css",
         "web/collapsible_sections.css",
-        "web/switch_infobox_styles.css"
+        "web/switch_infobox_styles.css",
+        "styles/fixes.css",
+        "styles/gadget_calc.css"
     ]
 
     // Heavy wiki fidelity sheets. Downloaded immediately but applied after first paint.
     private let deferredStyleSheetAssets = [
         "styles/wiki-integration.css",
         "styles/navbox_styles.css",
-        "styles/fixes.css",
-        "styles/gadget_calc.css",
         "styles/ios-article-aesthetics.css"
     ]
 
@@ -709,14 +709,15 @@ class osrsPageHtmlBuilder {
                     .infobox-switch:not(.infobox-bonuses),
                     .collapsible-primary-infobox {
                         max-width: 100%;
-                        min-width: 0;
+                        min-width: min(18.75rem, 100%);
                         box-sizing: border-box;
                     }
+                    /* Bonuses column sizing lives in critical fixes.css.
+                       Do not force table-layout:fixed here alone — that crushed
+                       Attack/Defence/Other columns before polish applied. */
                     table.infobox-bonuses {
                         max-width: 100%;
                         min-width: 0;
-                        width: 100%;
-                        table-layout: fixed;
                         box-sizing: border-box;
                     }
                     .mw-parser-output p,

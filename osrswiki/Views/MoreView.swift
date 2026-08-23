@@ -37,6 +37,16 @@ struct MoreView: View {
                     .listRowBackground(Color(osrsTheme.surfaceVariant))
                     .accessibilityIdentifier("more_downloads")
                     
+                    NavigationLink(destination: FeedbackView()) {
+                        MoreRowView(
+                            iconName: "envelope.fill",
+                            iconColor: Color(osrsTheme.primary),
+                            title: "Feedback"
+                        )
+                    }
+                    .listRowBackground(Color(osrsTheme.surfaceVariant))
+                    .accessibilityIdentifier("more_feedback")
+
                     NavigationLink(destination: DonateView()) {
                         MoreRowView(
                             iconName: "heart.fill",
@@ -56,16 +66,6 @@ struct MoreView: View {
                     }
                     .listRowBackground(Color(osrsTheme.surfaceVariant))
                     .accessibilityIdentifier("more_about")
-                    
-                    NavigationLink(destination: FeedbackView()) {
-                        MoreRowView(
-                            iconName: "envelope.fill",
-                            iconColor: Color(osrsTheme.primary),
-                            title: "Feedback"
-                        )
-                    }
-                    .listRowBackground(Color(osrsTheme.surfaceVariant))
-                    .accessibilityIdentifier("more_feedback")
                 }
                 .listSectionSeparator(.hidden)
             }
@@ -111,6 +111,7 @@ struct MoreView: View {
                     themeManager.currentTheme,
                     colorScheme: themeManager.currentColorScheme
                 )
+                DonationManager.prefetchProductsIfNeeded()
             }
             .onChange(of: themeManager.selectedTheme) { _, _ in
                 osrsLiveThemeApplier.apply(

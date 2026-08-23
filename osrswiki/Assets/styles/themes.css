@@ -430,3 +430,20 @@ body.theme-osrs-dark {
 * {
     -webkit-tap-highlight-color: var(--tap-highlight-color);
 }
+
+/* Long-press text selection: keep readable foreground/background.
+   Transparent or theme-mismatched selection paint blanked page chrome. */
+::selection {
+    background-color: color-mix(in srgb, var(--link-color) 45%, transparent);
+    color: var(--text-color);
+}
+::-moz-selection {
+    background-color: color-mix(in srgb, var(--link-color) 45%, transparent);
+    color: var(--text-color);
+}
+html.theme-osrs-dark ::selection,
+body.wgl-theme-dark ::selection,
+body.theme-osrs-dark ::selection {
+    background-color: color-mix(in srgb, var(--link-color) 55%, transparent);
+    color: var(--text-color);
+}

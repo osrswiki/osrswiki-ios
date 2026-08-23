@@ -21,13 +21,14 @@ struct FeedbackView: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 24) {
+            VStack(alignment: .leading, spacing: osrsMorePageMetrics.pageStackSpacing) {
                 rateAppCard
                 reportIssueCard
                 requestFeatureCard
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 16)
+            .padding(.horizontal, osrsMorePageMetrics.horizontalPadding)
+            .padding(.vertical, osrsMorePageMetrics.verticalPadding)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .safeAreaInset(edge: .bottom) {
             Color.clear.frame(height: 64)
@@ -137,18 +138,16 @@ struct osrsFeedbackCardView: View {
     let buttonIcon: String
     let action: () -> Void
 
-    @Environment(\.osrsTheme) var osrsTheme
-
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            VStack(alignment: .leading, spacing: 8) {
+        // Match About: plain text + outbound text link (no elevated card chrome).
+        VStack(alignment: .leading, spacing: osrsMorePageMetrics.creditBlockSpacing) {
+            VStack(alignment: .leading, spacing: osrsMorePageMetrics.headingBodySpacing) {
                 Text(title)
-                    .font(.headline)
-                    .fontWeight(.semibold)
-                    .foregroundStyle(.osrsPrimaryTextColor)
+                    .font(.osrsTitle)
+                    .foregroundStyle(.osrsOnSurface)
 
                 Text(description)
-                    .font(.body)
+                    .font(.osrsBody)
                     .foregroundStyle(.osrsPrimaryTextColor)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -160,10 +159,7 @@ struct osrsFeedbackCardView: View {
                 action: action
             )
         }
-        .padding(20)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.osrsSurfaceVariant)
-        .cornerRadius(12)
     }
 }
 

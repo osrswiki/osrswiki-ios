@@ -29,7 +29,125 @@
         setTimeout(osrsPublishCalculatorResult, 150);
     };
 
-    function parseCalculatorConfig(pre) {
+    
+    
+
+    function osrsInstallCalculatorKeyboardGuards() {
+        if (window.__osrsCalcKeyboardGuardsInstalled) return;
+        window.__osrsCalcKeyboardGuardsInstalled = true;
+
+        function focusedCalcInput() {
+            var el = document.activeElement;
+            if (!el) return null;
+            if (el.closest && el.closest('.osrs-calculator-layout, .jcTable, .oo-ui-numberInputWidget, .jsCalc-field')) {
+                return el;
+            }
+            return null;
+        }
+
+        function ensurePageVisible() {
+            try {
+                var root = document.documentElement;
+                var body = document.body;
+                if (root) {
+                    root.style.visibility = 'visible';
+                    root.style.opacity = '1';
+                }
+                if (body) {
+                    body.style.visibility = 'visible';
+                    body.style.opacity = '1';
+                    body.style.minHeight = '100%';
+                }
+            } catch (e) {}
+        }
+
+        function scrollFocusedIntoView() {
+            var el = focusedCalcInput();
+            if (!el || !el.scrollIntoView) return;
+            try {
+                el.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' });
+            } catch (e) {
+                try { el.scrollIntoView(true); } catch (e2) {}
+            }
+            ensurePageVisible();
+        }
+
+        document.addEventListener('focusin', function (ev) {
+            var t = ev.target;
+            if (!t || !t.closest) return;
+            if (!t.closest('.osrs-calculator-layout, .jcTable, .oo-ui-numberInputWidget, .jsCalc-field')) return;
+            ensurePageVisible();
+            setTimeout(scrollFocusedIntoView, 50);
+            setTimeout(scrollFocusedIntoView, 300);
+        }, true);
+
+        document.addEventListener('focusout', function () {
+            setTimeout(ensurePageVisible, 50);
+            setTimeout(ensurePageVisible, 350);
+        }, true);
+
+        if (window.visualViewport) {
+            window.visualViewport.addEventListener('resize', function () {
+                ensurePageVisible();
+                scrollFocusedIntoView();
+            });
+            window.visualViewport.addEventListener('scroll', function () {
+                ensurePageVisible();
+            });
+        }
+    }
+
+    function osrsStripJavascriptRequiredBanners(root) {
+        var scope = root || document;
+        var nodes = scope.querySelectorAll('p, div, .mw-parser-output > *');
+        nodes.forEach(function (node) {
+            var text = (node.textContent || '').replace(/\s+/g, ' ').trim();
+            if (/dynamic calculator requires JavaScript/i.test(text) ||
+                /this calculator requires JavaScript/i.test(text)) {
+                node.style.display = 'none';
+                node.setAttribute('data-osrs-calc-js-banner', 'stripped');
+            }
+        });
+    }
+
+    function osrsPromoteCalculatorDescription(layout, formHost) {
+        if (!layout || !formHost) return;
+        var desc = null;
+        var prev = formHost.previousElementSibling;
+        while (prev) {
+            if (prev.matches && (prev.matches('p') || prev.matches('.calculator-description') || prev.matches('.mw-parser-output > p'))) {
+                desc = prev;
+                break;
+            }
+            if (prev.querySelector && prev.querySelector('pre.jcConfig, .jcTable, .oo-ui-widget')) break;
+            prev = prev.previousElementSibling;
+        }
+        if (!desc) {
+            var parent = formHost.parentElement;
+            if (parent) {
+                desc = parent.querySelector(':scope > p, :scope > .calculator-description');
+            }
+        }
+        if (desc && !desc.classList.contains('osrs-calculator-description')) {
+            desc.classList.add('osrs-calculator-description');
+            layout.insertBefore(desc, layout.firstChild);
+        }
+    }
+
+    function osrsApplyNumericKeyboards(root) {
+        if (!root || !root.querySelectorAll) return;
+        root.querySelectorAll('input[type="number"], .oo-ui-numberInputWidget input, .jsCalc-field-int input, .jsCalc-field-number input').forEach(function (input) {
+            try {
+                input.setAttribute('inputmode', 'decimal');
+                input.setAttribute('enterkeyhint', 'done');
+                if (!input.getAttribute('type') || input.getAttribute('type') === 'text') {
+                    input.setAttribute('type', 'number');
+                }
+            } catch (e) {}
+        });
+    }
+
+function parseCalculatorConfig(pre) {
         var config = { params: [] };
         pre.textContent.split('\n').forEach(function(line) {
             var equalsIndex = line.indexOf('=');
@@ -121,6 +239,10 @@
         var templates = findCalculatorTemplateBox(pre);
         var layout = document.createElement('div');
         layout.className = 'osrs-calculator-layout';
+        osrsInstallCalculatorKeyboardGuards();
+        osrsStripJavascriptRequiredBanners(document);
+        osrsPromoteCalculatorDescription(layout, formHost);
+        osrsApplyNumericKeyboards(layout);
         formHost.parentNode.insertBefore(layout, templates || formHost);
 
         if (templates) {
@@ -589,7 +711,8 @@
     function boot() {
         patchAjax();
         if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', initialize);
+            osrsInstallCalculatorKeyboardGuards();
+    document.addEventListener('DOMContentLoaded', initialize);
         } else {
             initialize();
         }

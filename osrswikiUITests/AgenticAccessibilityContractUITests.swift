@@ -52,7 +52,7 @@ final class AgenticAccessibilityContractUITests: XCTestCase {
             screenIdentifier: "more_screen",
             requiredButtons: ["more_appearance", "more_donate", "more_feedback"],
             requiredLabels: ["More", "Appearance", "Donate", "Feedback"],
-            orderIdentifiers: ["more_appearance", "more_donate", "more_about", "more_feedback"]
+            orderIdentifiers: ["more_appearance", "more_downloads", "more_feedback", "more_donate", "more_about"]
         )
     }
 
@@ -70,7 +70,7 @@ final class AgenticAccessibilityContractUITests: XCTestCase {
             startTab: "more",
             screenIdentifier: "donate_screen",
             requiredButtons: [],
-            requiredLabels: ["Support OSRS Wiki"],
+            requiredLabels: ["Support the OSRS Wiki App"],
             extraArguments: ["-startMoreDestination", "donate"],
             expectNavigationExit: true
         )
@@ -542,7 +542,7 @@ final class AgenticAccessibilityContractUITests: XCTestCase {
 
         XCTAssertTrue(app.wait(for: .runningForeground, timeout: launchTimeout))
         XCTAssertTrue(element(in: app, identifier: "donate_screen").waitForExistence(timeout: 10))
-        XCTAssertTrue(app.staticTexts["Support OSRS Wiki"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Support the OSRS Wiki App"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["$1"].waitForExistence(timeout: 5))
 
         let presetAmountLabels = Set(["$1", "$5", "$10", "$25"])

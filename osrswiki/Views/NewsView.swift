@@ -621,7 +621,8 @@ struct UpdateCardView: View {
     }
 
     private var cardHeight: CGFloat? {
-        dynamicTypeSize.isAccessibilitySize ? nil : osrsRecentUpdateCardMetrics.standardHeight
+        // Intrinsic height avoids empty band under short snippets.
+        nil
     }
 
     private var imageHeight: CGFloat {
@@ -654,9 +655,9 @@ struct UpdateCardView: View {
 private enum osrsRecentUpdateCardMetrics {
     static let standardWidth: CGFloat = 280
     static let standardImageHeight: CGFloat = 140
-    /// Title plus two snippet rows, with the card's 8/12 vertical padding.
-    static let standardContentHeight: CGFloat = 112
-    static let standardHeight: CGFloat = standardImageHeight + standardContentHeight
+    /// Title plus up to two snippet lines (intrinsic); no fixed empty band.
+    static let standardContentHeight: CGFloat? = nil
+    static let standardHeight: CGFloat = standardImageHeight + 88
     static let accessibilityImageHeight: CGFloat = 120
     static let standardContentSpacing: CGFloat = 4
 }

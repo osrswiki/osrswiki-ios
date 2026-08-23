@@ -115,3 +115,74 @@ body.wgl-theme-dark .oo-ui-horizontalLayout.jsCalc-group {
 .oo-ui-optionWidget.oo-ui-labelElement > .oo-ui-labelElement-label {
 	overflow: visible;
 }
+
+/* App calculator chrome (generalized across jcConfig forms). */
+.osrs-calculator-layout {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    max-width: 100%;
+    width: 100%;
+    box-sizing: border-box;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.osrs-calculator-layout .osrs-calculator-description,
+.osrs-calculator-layout > .calculator-description,
+.osrs-calculator-layout > p:first-child {
+    order: -1;
+    margin: 0 0 0.25rem 0;
+}
+
+.osrs-calculator-templates {
+    font-size: 0.85em;
+    line-height: 1.25;
+    margin: 0;
+    max-width: 100%;
+}
+
+.osrs-calculator-panel,
+.osrs-calculator-layout .jcTable,
+.osrs-calculator-layout .oo-ui-panelLayout,
+.osrs-calculator-layout .oo-ui-fieldsetLayout {
+    max-width: 100% !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+    overflow-x: auto;
+}
+
+.osrs-calculator-layout .oo-ui-numberInputWidget,
+.osrs-calculator-layout .oo-ui-textInputWidget {
+    max-width: 100% !important;
+    min-width: 0 !important;
+}
+
+/* +/- buttons: theme tokens, never pure black on dark parchment. */
+.osrs-calculator-layout .oo-ui-buttonElement-button,
+.osrs-calculator-layout .oo-ui-numberInputWidget-button,
+body.wgl-theme-dark .osrs-calculator-layout .oo-ui-buttonElement-button,
+html.theme-osrs-dark .osrs-calculator-layout .oo-ui-buttonElement-button {
+    color: var(--ooui-text, var(--text-color)) !important;
+    background-color: var(--ooui-normal, var(--wikitable-bg-lighter)) !important;
+    border-color: var(--ooui-normal-border, var(--body-border)) !important;
+}
+
+body.wgl-theme-dark .osrs-calculator-layout .oo-ui-buttonElement-button .oo-ui-iconElement-icon,
+html.theme-osrs-dark .osrs-calculator-layout .oo-ui-buttonElement-button .oo-ui-iconElement-icon,
+body.wgl-theme-dark .osrs-calculator-layout .oo-ui-numberInputWidget-button,
+html.theme-osrs-dark .osrs-calculator-layout .oo-ui-numberInputWidget-button {
+    filter: none !important;
+    opacity: 1 !important;
+    color: var(--ooui-text, var(--text-color)) !important;
+}
+
+/* Calculator header row: full width, vertically centered title. */
+.osrs-calculator-layout .oo-ui-fieldsetLayout-header,
+.osrs-calculator-layout .oo-ui-labelElement-label {
+    display: flex;
+    align-items: center;
+    min-height: 2rem;
+    width: 100%;
+}
+

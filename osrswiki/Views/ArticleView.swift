@@ -347,8 +347,10 @@ private struct ArticleViewContent: View {
             }
             .onReceive(NotificationCenter.default.publisher(for: .osrsSceneCompositorLooksBlank)) { _ in
                 guard viewModel.hasCommittedArticleHTML else { return }
-                viewModel.needsContentProcessRecovery = false
-                viewModel.loadArticle(theme: osrsTheme, isReload: true)
+                // Prefer exact interactive wake over HTML rewrite. Full reload here
+                // intermittently left a chrome-less themed blank after resume.
+                print("⚠️ ArticleView: compositor-blank signal; waking existing WKWebView")
+                viewModel.wakeRenderedDocumentAfterBackground()
             }
             .onReceive(NotificationCenter.default.publisher(for: .showAppearanceSettings)) { notification in
                 highlightFloorNumberingOnAppearance =

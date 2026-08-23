@@ -16,14 +16,14 @@ struct AboutView: View {
     
     var body: some View {
         ScrollView {
-            VStack(spacing: 24) {
+            VStack(spacing: osrsMorePageMetrics.pageStackSpacing) {
                 titleSection
                 versionSection
                 creditsSection
                 privacySection
             }
-            .padding(.horizontal, 24)
-            .padding(.vertical, 24)
+            .padding(.horizontal, osrsMorePageMetrics.horizontalPadding)
+            .padding(.vertical, osrsMorePageMetrics.verticalPadding)
         }
         .safeAreaInset(edge: .bottom) {
             Color.clear.frame(height: 64)
@@ -48,13 +48,13 @@ struct AboutView: View {
     }
     
     private var creditsSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: osrsMorePageMetrics.sectionSpacing) {
             Text("Credits & Acknowledgments")
                 .font(.osrsHeadline)
                 .foregroundStyle(.osrsOnSurface)
                 .frame(maxWidth: .infinity, alignment: .leading)
             
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: osrsMorePageMetrics.creditBlockSpacing) {
                 creditItem(
                     title: "Old School RuneScape",
                     description: "Jagex®, RuneScape®, and Old School RuneScape® are registered and/or unregistered trademarks of Jagex in the United Kingdom, the United States, the European Union and other territories."
@@ -63,7 +63,7 @@ struct AboutView: View {
                 osrsOutboundLinkRow(title: "Visit OSRS", action: openOSRS)
             }
             
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: osrsMorePageMetrics.creditBlockSpacing) {
                 creditItem(
                     title: "OSRS Wiki",
                     description: "All information and game content fetched by this app is provided by the Old School Runescape Wiki. This app would not be possible without the wiki itself."
@@ -72,7 +72,7 @@ struct AboutView: View {
                 osrsOutboundLinkRow(title: "Visit OSRS Wiki", action: openWiki)
             }
             
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: osrsMorePageMetrics.creditBlockSpacing) {
                 creditItem(
                     title: "OpenRS2",
                     description: "OpenRS2 provides the game cache archive and decryption keys that provides the game data used to generate the map. The OpenRS2 Archive preserves and maintains accessible OSRS game data for the community."
@@ -81,7 +81,7 @@ struct AboutView: View {
                 osrsOutboundLinkRow(title: "Visit OpenRS2 Archive", action: openOpenRS2)
             }
             
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: osrsMorePageMetrics.creditBlockSpacing) {
                 creditItem(
                     title: "MapLibre",
                     description: "MapLibre provides the open-source map rendering engine that powers both the native map tab and embedded maps within wiki articles. The MapLibre SDK enables seamless integration of OSRS game maps with modern mobile mapping capabilities."
@@ -90,7 +90,7 @@ struct AboutView: View {
                 osrsOutboundLinkRow(title: "Visit MapLibre", action: openMapLibre)
             }
             
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: osrsMorePageMetrics.creditBlockSpacing) {
                 creditItem(
                     title: "Wikipedia",
                     description: "This app's design and architecture were influenced by the Wikipedia app. In the spirit of both Oldschool Runescape Wiki and Wikipedia's free and open source principles, the OSRS Wiki app is and will always be free."
@@ -102,7 +102,7 @@ struct AboutView: View {
     }
     
     private var privacySection: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: osrsMorePageMetrics.sectionSpacing) {
             Text("Privacy Policy")
                 .font(.osrsHeadline)
                 .foregroundStyle(.osrsOnSurface)
@@ -118,7 +118,7 @@ struct AboutView: View {
     }
     
     private func creditItem(title: String, description: String) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: osrsMorePageMetrics.headingBodySpacing) {
             Text(title)
                 .font(.osrsTitle)
                 .foregroundStyle(.osrsOnSurface)

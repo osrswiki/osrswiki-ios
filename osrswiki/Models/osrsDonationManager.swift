@@ -19,6 +19,22 @@ final class DonationManager: ObservableObject {
 
     private let paymentGateway: osrsDonationPaymentGateway
 
+    /// Process-wide StoreKit product cache so Donate does not blank→populate
+    /// on first open. Prefetch from More (or app warm); Donate hydrates from cache.
+    private static var prefetchedProducts: [osrsDonationProduct] = []
+    private static var prefetchTask: Task<Void, Never>?
+
+    static func prefetchProductsIfNeeded() {
+        guard prefetchTask == nil else { return }
+        prefetchTask = Task { @MainActor in
+            let manager = DonationManager()
+            await manager.loadProductsAsync(forceNetwork: true)
+            if !manager.products.isEmpty {
+                prefetchedProducts = manager.products
+            }
+        }
+    }
+
     init(paymentGateway: osrsDonationPaymentGateway? = nil) {
         let gateway = paymentGateway ?? osrsDonationGatewayFactory.makeDefault()
         self.paymentGateway = gateway
@@ -69,9 +85,20 @@ final class DonationManager: ObservableObject {
         }
     }
 
-    func loadProductsAsync() async {
+    func loadProductsAsync(forceNetwork: Bool = false) async {
         canMakePayments = paymentGateway.availability.isAvailable
         isApplePayAvailable = paymentGateway.availability.isAvailable
+
+        if !forceNetwork, products.isEmpty, !Self.prefetchedProducts.isEmpty {
+            products = Self.prefetchedProducts
+            donationState = .idle
+            let result = await paymentGateway.loadDonationProducts()
+            if case .loaded(let loaded) = result {
+                products = loaded
+                Self.prefetchedProducts = loaded
+            }
+            return
+        }
 
         if let reason = paymentGateway.availability.unavailableReason {
             products = []
@@ -84,6 +111,7 @@ final class DonationManager: ObservableObject {
         switch result {
         case .loaded(let loaded):
             products = loaded
+            Self.prefetchedProducts = loaded
         case .unavailable, .failed:
             products = []
         }

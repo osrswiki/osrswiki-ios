@@ -1134,23 +1134,28 @@ html body .osrs-calculator-panel .oo-ui-horizontalLayout.jsCalc-group {
    infobox and equipment-bonuses polish. Glory-style bonuses tables stay
    viewport-fit with equal columns. */
 .osrs-local-scroll-surface > table.infobox,
-.osrs-local-scroll-surface > table.infobox-bonuses,
 .osrs-local-scroll-surface > .osrs-disclosure-body > table.infobox,
-.osrs-local-scroll-surface > .osrs-disclosure-body > table.infobox-bonuses,
 .collapsible-content.osrs-local-scroll-surface > table.infobox,
-.collapsible-content.osrs-local-scroll-surface > table.infobox-bonuses,
-.collapsible-content.osrs-local-scroll-surface > .osrs-disclosure-body > table.infobox,
-.collapsible-content.osrs-local-scroll-surface > .osrs-disclosure-body > table.infobox-bonuses {
+.collapsible-content.osrs-local-scroll-surface > .osrs-disclosure-body > table.infobox {
     max-width: 100% !important;
     min-width: 0 !important;
+}
+.osrs-local-scroll-surface > table.infobox-bonuses,
+.osrs-local-scroll-surface > .osrs-disclosure-body > table.infobox-bonuses,
+.collapsible-content.osrs-local-scroll-surface > table.infobox-bonuses,
+.collapsible-content.osrs-local-scroll-surface > .osrs-disclosure-body > table.infobox-bonuses {
+    max-width: 100% !important;
+    min-width: var(--osrs-bonuses-min-inline-size) !important;
 }
 
 .osrs-local-scroll-surface > table.infobox-bonuses,
 .osrs-local-scroll-surface > .osrs-disclosure-body > table.infobox-bonuses,
 .collapsible-content.osrs-local-scroll-surface > table.infobox-bonuses,
 .collapsible-content.osrs-local-scroll-surface > .osrs-disclosure-body > table.infobox-bonuses {
-    table-layout: fixed !important;
-    width: 100% !important;
+    table-layout: auto !important;
+    width: max-content !important;
+    max-width: 100% !important;
+    min-width: var(--osrs-bonuses-min-inline-size) !important;
 }
 
 /* An obsolete outer owner can remain as harmless structure around a disclosure, but never as
@@ -1374,8 +1379,10 @@ table.osrs-map-table > :is(thead, tbody, tfoot) > tr > :is(th, td):has(.mw-karto
     --osrs-infobox-state-control-padding-inline: 0.5em;
     --osrs-intrinsic-cell-min-inline-size: min(5rem, 24vw);
     --osrs-intrinsic-cell-max-inline-size: min(16rem, 44vw);
-    /* Size bonuses to their cells instead of a viewport-width floor that stretched later columns. */
-    --osrs-bonuses-min-inline-size: 0;
+    /* Floor keeps fixed-layout bonus grids from shrink-wrapping to a needle in
+       disclosure cards; still capped at 100% so wide phones are not forced wider. */
+    /* Absolute floor — percentage floors collapse under shrink-wrap parents. */
+    --osrs-bonuses-min-inline-size: 22.5rem;
     --osrs-bonuses-label-inline-size: clamp(8rem, 34vw, 10rem);
     --osrs-bonuses-state-inline-size: clamp(4.5rem, 20vw, 5.75rem);
     --osrs-infobox-line-height: 1.3;
@@ -1533,9 +1540,11 @@ table.infobox :is(th, td).infobox-padding:empty {
    constants. The primary article infobox is excluded and retains its viewport-fit contract. */
 table.infobox-bonuses:not(.main-infobox) {
     max-width: 100% !important;
-    min-width: 0;
-    table-layout: fixed !important;
-    width: 100% !important;
+    min-width: var(--osrs-bonuses-min-inline-size) !important;
+    /* auto: fixed+zero-floor previously crushed Attack/Defence/Other into one needle */
+    table-layout: auto !important;
+    width: max-content !important;
+    max-width: 100% !important;
 }
 
 table.infobox-bonuses:not(.main-infobox) :is(th, td) {
@@ -1573,10 +1582,11 @@ table.infobox-bonuses :is(th, td).infobox-nested {
     overflow: visible !important;
 }
 
-/* Inner combat grids share leftover width instead of stretching the last cell. */
+/* Inner combat grids: auto so fixed+tiny parent cannot crush icon columns. */
 table.infobox-bonuses table {
-    table-layout: fixed !important;
+    table-layout: auto !important;
     width: 100% !important;
+    min-width: 100% !important;
 }
 
 /* Nested combat cells contain an icon and sometimes a short label. Keep them
@@ -2370,5 +2380,37 @@ table.notebox th,
 .osrs-local-scroll-surface:has(> table.mbox),
 .osrs-local-scroll-surface:has(> table.notebox) {
     overflow-x: visible !important;
+}
+
+/* osrs-bonuses-overlap-guard: keep section labels and slot text from
+   colliding when table-layout:fixed is active on narrow viewports. */
+table.infobox-bonuses:not(.main-infobox) .infobox-header,
+table.infobox-bonuses:not(.main-infobox) .infobox-subheader[colspan],
+table.infobox-bonuses .infobox-subheader[colspan] {
+    white-space: normal !important;
+    overflow-wrap: anywhere !important;
+    word-break: normal !important;
+    line-height: 1.25 !important;
+    padding-block: 0.28em !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    width: auto !important;
+    text-align: center !important;
+}
+
+table.infobox-bonuses [data-attr-param="slot_link"],
+table.infobox-bonuses [data-attr-param="slot"] {
+    white-space: normal !important;
+    overflow-wrap: anywhere !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    padding-inline: 0.2em !important;
+}
+
+table.infobox-bonuses [data-attr-param="slot_link"] a,
+table.infobox-bonuses [data-attr-param="slot"] a {
+    white-space: normal !important;
+    display: inline !important;
+    width: auto !important;
 }
 

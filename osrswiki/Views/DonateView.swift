@@ -17,7 +17,6 @@ struct DonateView: View {
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     @StateObject private var donationManager: DonationManager
     @State private var selectedAmount: DonationAmount?
-    @State private var showingCustomInput = false
 
     @MainActor
     init() {
@@ -31,20 +30,15 @@ struct DonateView: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: isCompactVerticalLayout ? 12 : 24) {
+            VStack(spacing: osrsMorePageMetrics.pageStackSpacing) {
                 headerSection
                 amountSelectionSection
-
-                if showingCustomInput {
-                    customAmountSection
-                }
-
                 donateButtonSection
                 statusSection
                 wikiSupportSection
             }
-            .padding(.horizontal, 24)
-            .padding(.vertical, isCompactVerticalLayout ? 8 : 16)
+            .padding(.horizontal, osrsMorePageMetrics.horizontalPadding)
+            .padding(.vertical, isCompactVerticalLayout ? 8 : osrsMorePageMetrics.verticalPadding)
         }
         .safeAreaInset(edge: .bottom) {
             Color.clear.frame(height: 64)
@@ -58,19 +52,14 @@ struct DonateView: View {
     }
 
     private var headerSection: some View {
-        VStack(spacing: isCompactVerticalLayout ? 8 : 16) {
-            Text("Support OSRS Wiki")
+        VStack(spacing: osrsMorePageMetrics.sectionSpacing) {
+            Text("Support the OSRS Wiki App")
                 .font(isCompactVerticalLayout ? .headline : .title2)
                 .foregroundStyle(.osrsPrimaryTextColor)
                 .multilineTextAlignment(.center)
+                .accessibilityIdentifier("donate_header")
 
-            Text("This app is free. Nothing is locked behind a donation.")
-                .font(.body)
-                .foregroundStyle(.osrsPrimaryTextColor)
-                .multilineTextAlignment(.center)
-                .lineLimit(nil)
-
-            Text("If you want to help, it goes to fees I pay to put this app in the App Store and the time it takes to keep the app working.")
+            Text("This app is free. Nothing is locked behind a donation. If you want to help, it goes to fees I pay to put this app in the App Store and the time it takes to keep the app working. The Old School RuneScape Wiki (the web version) is run by separate volunteers. Support them too if you can.")
                 .font(.body)
                 .foregroundStyle(.osrsPrimaryTextColor)
                 .multilineTextAlignment(.center)
@@ -79,56 +68,25 @@ struct DonateView: View {
     }
 
     private var amountSelectionSection: some View {
-        VStack(spacing: isCompactVerticalLayout ? 8 : 12) {
+        VStack(spacing: osrsMorePageMetrics.sectionSpacing) {
             Text("Choose an amount")
                 .font(isCompactVerticalLayout ? .subheadline : .headline)
                 .foregroundStyle(.osrsPrimaryTextColor)
 
-            Picker("Preset amount", selection: presetAmountSelection) {
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                 ForEach(DonationAmount.presets, id: \.self) { amount in
-                    Text(donationManager.displayPrice(for: amount))
-                        .tag(Optional(amount))
+                    DonationAmountButton(
+                        title: donationManager.displayPrice(for: amount),
+                        amount: amount,
+                        isSelected: selectedAmount == amount,
+                        isEnabled: donationManager.canStartDonation || donationManager.donationUnavailableMessage == nil
+                    ) {
+                        selectedAmount = amount
+                    }
                 }
             }
-            .labelsHidden()
-            .pickerStyle(.segmented)
             .accessibilityIdentifier("donation_preset_amounts")
-            .disabled(!donationManager.canStartDonation && donationManager.donationUnavailableMessage != nil)
-
-            DonationAmountButton(
-                amount: .custom,
-                isSelected: showingCustomInput
-            ) {
-                showingCustomInput = true
-                selectedAmount = .custom
-            }
         }
-    }
-
-    private var presetAmountSelection: Binding<DonationAmount?> {
-        Binding(
-            get: {
-                selectedAmount == .custom ? nil : selectedAmount
-            },
-            set: { newAmount in
-                guard let newAmount else {
-                    return
-                }
-                selectedAmount = newAmount
-                showingCustomInput = false
-            }
-        )
-    }
-
-    private var customAmountSection: some View {
-        Text(DonationManager.customAmountUnsupportedMessage)
-            .font(.caption)
-            .foregroundStyle(.osrsSecondaryTextColor)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .accessibilityIdentifier("donate_custom_amount_handoff")
-            .padding()
-            .background(.osrsSearchBoxBackgroundColor)
-            .cornerRadius(12)
     }
 
     private var donateButtonSection: some View {
@@ -169,16 +127,16 @@ struct DonateView: View {
     @ViewBuilder
     private var statusSection: some View {
         switch donationManager.donationState {
-        case .loadingProducts:
+        case .loadingProducts where donationManager.products.isEmpty:
             processingRow(text: "Loading donation amounts...")
         case .purchasing:
-            processingRow(text: "Processing payment...")
+            processingRow(text: "Processing donation...")
         case .succeeded:
             statusText("Thank you for supporting the app.", identifier: "donate_status_success")
         case .cancelled:
-            statusText("Purchase cancelled.", identifier: "donate_status_cancelled")
+            statusText("Donation cancelled", identifier: "donate_status_cancelled")
         case .pending:
-            statusText("This purchase is pending approval.", identifier: "donate_status_pending")
+            statusText("This donation is pending approval.", identifier: "donate_status_pending")
         case .failed(let message):
             statusText(message, identifier: "donate_status_failed", isError: true)
         default:
@@ -206,7 +164,7 @@ struct DonateView: View {
     private func statusText(_ text: String, identifier: String, isError: Bool = false) -> some View {
         Text(text)
             .font(.body)
-            .foregroundStyle(isError ? .osrsError : .osrsSecondaryTextColor)
+            .foregroundStyle(isError ? .osrsError : .osrsPrimaryTextColor)
             .multilineTextAlignment(.center)
             .accessibilityIdentifier(identifier)
             .padding()
@@ -215,10 +173,11 @@ struct DonateView: View {
     }
 
     private var wikiSupportSection: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: osrsMorePageMetrics.sectionSpacing) {
             Divider()
+                .padding(.top, osrsMorePageMetrics.donateWikiBlockSpacing - osrsMorePageMetrics.sectionSpacing)
 
-            VStack(spacing: 12) {
+            VStack(spacing: osrsMorePageMetrics.sectionSpacing) {
                 Text("The Old School RuneScape Wiki is run by volunteers. Support them too if you can.")
                     .font(.body)
                     .foregroundStyle(.osrsPrimaryTextColor)
@@ -237,21 +196,18 @@ struct DonateView: View {
     }
 
     private var isDonateButtonEnabled: Bool {
-        guard let selectedAmount, selectedAmount != .custom else {
+        guard selectedAmount != nil else {
             return false
         }
         return !isPurchasing && donationManager.canStartDonation
     }
 
     private var donateButtonText: String {
-        if case .loadingProducts = donationManager.donationState {
+        if case .loadingProducts = donationManager.donationState, donationManager.products.isEmpty {
             return "Loading..."
         }
         if donationManager.donationUnavailableMessage != nil {
             return "Donations Unavailable"
-        }
-        if selectedAmount == .custom {
-            return "Use Donate to Wiki"
         }
         if let selectedAmount {
             return "Donate \(donationManager.displayPrice(for: selectedAmount))"
@@ -264,15 +220,15 @@ struct DonateView: View {
     }
 
     private func processDonation() {
-        guard let selectedAmount, selectedAmount != .custom else {
+        guard let selectedAmount else {
             return
         }
 
         donationManager.processDonation(amount: selectedAmount) { success in
             if success {
                 self.selectedAmount = nil
-                showingCustomInput = false
             }
+            // Keep selection after cancel so amount chips stay readable.
         }
     }
 
@@ -284,14 +240,16 @@ struct DonateView: View {
 struct DonationAmountButton: View {
     @Environment(\.osrsTheme) var osrsTheme
     @Environment(\.verticalSizeClass) private var verticalSizeClass
+    let title: String
     let amount: DonationAmount
     let isSelected: Bool
+    var isEnabled: Bool = true
     let action: () -> Void
     @ScaledMetric(relativeTo: .headline) private var regularMinButtonHeight: CGFloat = 52
 
     var body: some View {
         Button(action: action) {
-            Text(amount.displayValue)
+            Text(title)
                 .font(.headline)
                 .lineLimit(1)
                 .minimumScaleFactor(0.85)
@@ -300,15 +258,21 @@ struct DonationAmountButton: View {
                 .padding(.vertical, verticalSizeClass == .compact ? 4 : 8)
                 .contentShape(RoundedRectangle(cornerRadius: 12))
         }
-        .foregroundStyle(isSelected ? .osrsOnPrimary : .osrsPrimaryTextColor)
-        .background(isSelected ? .osrsPrimary : .osrsSearchBoxBackgroundColor)
+        .foregroundStyle(isSelected ? Color(osrsTheme.onPrimary) : Color(osrsTheme.primaryTextColor))
+        .background(isSelected ? Color(osrsTheme.secondary) : Color(osrsTheme.surfaceVariant))
         .cornerRadius(12)
         .overlay(
             RoundedRectangle(cornerRadius: 12)
-                .stroke(isSelected ? Color(osrsTheme.outline) : Color.clear, lineWidth: 2)
+                .stroke(
+                    isSelected ? Color(osrsTheme.primary) : Color(osrsTheme.outline),
+                    lineWidth: isSelected ? 2 : 1
+                )
         )
+        .opacity(isEnabled ? 1 : 0.55)
+        .disabled(!isEnabled)
         .buttonStyle(osrsDonationButtonStyle())
         .accessibilityIdentifier("donate_amount_\(amount.displayValue)")
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 
     private var minButtonHeight: CGFloat {

@@ -14,7 +14,7 @@ final class DonateStoreKitUITests: XCTestCase {
         continueAfterFailure = false
     }
 
-    func testPresetPricesAndCustomAmountHandoff() throws {
+    func testPresetDisplayPricesAndNoCustomAmount() throws {
         let app = XCUIApplication()
         app.launchArguments = [
             "-screenshotMode",
@@ -41,13 +41,12 @@ final class DonateStoreKitUITests: XCTestCase {
         XCTAssertTrue(app.buttons["Donate $4.99"].isEnabled)
         XCTAssertFalse(app.sheets.firstMatch.exists)
 
-        app.buttons["Custom"].tap()
-        XCTAssertTrue(app.staticTexts["donate_custom_amount_handoff"].waitForExistence(timeout: 3))
-        XCTAssertTrue(
-            app.staticTexts["donate_custom_amount_handoff"].label.contains("Donate to Wiki"),
-            "Custom amount should hand off to wiki/Patreon instead of inventing a dynamic IAP"
+        XCTAssertFalse(
+            app.buttons["Custom"].exists,
+            "Custom amount is not an IAP SKU and must not appear on Donate"
         )
         XCTAssertFalse(app.textFields["donate_custom_amount"].exists)
+        XCTAssertFalse(app.staticTexts["donate_custom_amount_handoff"].exists)
         XCTAssertFalse(app.buttons["Donate $4.99"].exists)
         XCTAssertTrue(app.buttons["Use Donate to Wiki"].waitForExistence(timeout: 3))
         XCTAssertFalse(app.buttons["Use Donate to Wiki"].isEnabled)
