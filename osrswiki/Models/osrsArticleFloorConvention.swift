@@ -71,6 +71,16 @@ enum osrsArticleFloorConvention: String {
         }
     }
 
+    /// Numeric map chrome analog of wiki Template:FloorNumber.
+    /// Entrance is UK "Ground floor" / US "1st floor", so GB shows game
+    /// index `p` and US shows `p + 1`. Tile selection still uses `p`.
+    func displayPlane(_ gamePlane: Int) -> Int {
+        switch self {
+        case .gb: return gamePlane
+        case .us: return gamePlane + 1
+        }
+    }
+
     private static let usEntranceIsFirstFloor: Set<String> = [
         "US", "AS", "GU", "MP", "PR", "VI", "UM",
         "CA", "MX", "BR",

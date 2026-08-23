@@ -30,21 +30,52 @@ final class MapPresentationContractTests: XCTestCase {
 
     func testMapPlaneLabelsStayWesternDigitsAndUseVerbatimText() throws {
         for plane in 0...3 {
-            let label = osrsMapPlaneLabel(plane)
-            XCTAssertEqual(label, String(plane))
-            XCTAssertTrue(label.allSatisfy { $0 >= "0" && $0 <= "9" })
+            let gb = osrsMapPlaneLabel(plane, convention: .gb)
+            XCTAssertEqual(gb, String(plane))
+            XCTAssertTrue(gb.allSatisfy { $0 >= "0" && $0 <= "9" })
             XCTAssertFalse(
-                label.contains { $0 >= "\u{0660}" && $0 <= "\u{0669}" },
-                "Plane \(plane) leaked Eastern Arabic-Indic digits: \(label)"
+                gb.contains { $0 >= "\u{0660}" && $0 <= "\u{0669}" },
+                "GB plane \(plane) leaked Eastern Arabic-Indic digits: \(gb)"
+            )
+            let us = osrsMapPlaneLabel(plane, convention: .us)
+            XCTAssertEqual(us, String(plane + 1))
+            XCTAssertTrue(us.allSatisfy { $0 >= "0" && $0 <= "9" })
+            XCTAssertFalse(
+                us.contains { $0 >= "\u{0660}" && $0 <= "\u{0669}" },
+                "US plane \(plane) leaked Eastern Arabic-Indic digits: \(us)"
             )
         }
+        XCTAssertEqual(
+            osrsMapPlaneLabel(
+                0,
+                convention: .current(mode: .auto, locale: Locale(identifier: "en_US"))
+            ),
+            "1"
+        )
+        XCTAssertEqual(
+            osrsMapPlaneLabel(
+                0,
+                convention: .current(mode: .auto, locale: Locale(identifier: "en_GB"))
+            ),
+            "0"
+        )
+        XCTAssertEqual(
+            osrsMapPlaneCurrentDescription(
+                plane: 0,
+                realmName: "Gielinor Surface",
+                convention: .us
+            ),
+            "Current floor 1 of Gielinor Surface"
+        )
         let mapSource = try String(
             contentsOf: repositoryRoot().appendingPathComponent(
                 "platforms/ios/osrswiki/Views/OSRSMapLibreView.swift"
             ),
             encoding: .utf8
         )
-        XCTAssertTrue(mapSource.contains("Text(verbatim: osrsMapPlaneLabel(store.activePlane))"))
+        XCTAssertTrue(mapSource.contains("Text(verbatim: osrsMapPlaneLabel(store.activePlane, convention: convention))"))
+        XCTAssertTrue(mapSource.contains("themeManager.floorNumberingMode"))
+        XCTAssertTrue(mapSource.contains("osrsMapPlaneCurrentDescription("))
         XCTAssertFalse(mapSource.contains("Text(\"\\(store.activePlane)\")"))
     }
 

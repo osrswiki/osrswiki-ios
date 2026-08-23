@@ -128,14 +128,30 @@ func osrsShouldShowInitialMapLoader(
     !hasPresentedInitialMap && errorMessage == nil
 }
 
-func osrsMapPlaneLabel(_ plane: Int) -> String {
-    String(plane)
+func osrsMapPlaneLabel(
+    _ plane: Int,
+    convention: osrsArticleFloorConvention = .current()
+) -> String {
+    String(convention.displayPlane(plane))
+}
+
+func osrsMapPlaneCurrentDescription(
+    plane: Int,
+    realmName: String,
+    convention: osrsArticleFloorConvention = .current()
+) -> String {
+    "Current floor \(osrsMapPlaneLabel(plane, convention: convention)) of \(realmName)"
 }
 
 private struct osrsRealmFloorControl: View {
     @ObservedObject var store: osrsRealmMapStore
     let realm: osrsRealmMapRecord
     @Environment(\.osrsTheme) private var osrsTheme
+    @EnvironmentObject private var themeManager: osrsThemeManager
+
+    private var convention: osrsArticleFloorConvention {
+        osrsArticleFloorConvention.current(mode: themeManager.floorNumberingMode)
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -144,9 +160,16 @@ private struct osrsRealmFloorControl: View {
                       index + 1 < realm.planes.count else { return }
                 store.select(plane: realm.planes[index + 1])
             }
-            Text(verbatim: osrsMapPlaneLabel(store.activePlane))
+            Text(verbatim: osrsMapPlaneLabel(store.activePlane, convention: convention))
                 .font(.system(size: 17, weight: .medium))
                 .frame(width: 48, height: 32)
+                .accessibilityLabel(
+                    osrsMapPlaneCurrentDescription(
+                        plane: store.activePlane,
+                        realmName: realm.canonicalName,
+                        convention: convention
+                    )
+                )
             button(systemName: "chevron.down", label: "Decrease map floor") {
                 guard let index = realm.planes.firstIndex(of: store.activePlane), index > 0 else { return }
                 store.select(plane: realm.planes[index - 1])

@@ -66,4 +66,33 @@ final class osrsArticleFloorConventionTests: XCTestCase {
             .us
         )
     }
+
+    func testNumericMapDigitsFollowWikiEntranceOffset() {
+        for plane in 0...3 {
+            XCTAssertEqual(osrsArticleFloorConvention.gb.displayPlane(plane), plane)
+            XCTAssertEqual(osrsArticleFloorConvention.us.displayPlane(plane), plane + 1)
+        }
+        XCTAssertEqual(
+            osrsArticleFloorNumberingMode.auto.convention(locale: Locale(identifier: "en_US")).displayPlane(0),
+            1
+        )
+        XCTAssertEqual(
+            osrsArticleFloorNumberingMode.auto.convention(locale: Locale(identifier: "en_GB")).displayPlane(0),
+            0
+        )
+        XCTAssertEqual(
+            osrsArticleFloorConvention.current(
+                mode: .gb,
+                locale: Locale(identifier: "en_US")
+            ).displayPlane(0),
+            0
+        )
+        XCTAssertEqual(
+            osrsArticleFloorConvention.current(
+                mode: .us,
+                locale: Locale(identifier: "en_GB")
+            ).displayPlane(0),
+            1
+        )
+    }
 }
