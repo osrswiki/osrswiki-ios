@@ -66,6 +66,12 @@ struct osrsArticleParsePayload: Sendable {
     let htmlContent: String
 
     var resolvedTitle: String {
+        // Prefer the API canonical title for navigation/reload. displaytitle HTML
+        // historically lost Calculator: via extractMainTitle(mw-page-title-main only),
+        // which sent Calculator subpages to Failed to Load (e.g. Agility Arena Tickets).
+        if !title.isEmpty {
+            return title
+        }
         guard let displayTitle, !displayTitle.isEmpty else {
             return title
         }
@@ -954,6 +960,10 @@ class ArticleViewModel: NSObject, ObservableObject {
     private var firstViewOpenAt: CFAbsoluteTime?
     private var pendingFirstViewComplete = false
     private var firstViewCompletePosted = false
+    /// Tap/open clock for FirstViewportSettled; not cleared by painted.
+    private var articleOpenAt: CFAbsoluteTime?
+    private var pendingFirstViewportSettled = false
+    private var firstViewportSettledPosted = false
     private var pendingArticleLoadTheme: (any osrsThemeProtocol)?
     private var pendingArticleLoadIsReload = false
     private var articleRevealedForWarm = false
@@ -1448,6 +1458,26 @@ class ArticleViewModel: NSObject, ObservableObject {
         pendingFirstViewComplete = false
         let elapsedMs = Int((CFAbsoluteTimeGetCurrent() - started) * 1000)
         NSLog("osrsFirstViewComplete elapsedMs=%d", elapsedMs)
+        NSLog("LOAD-MINMAX first_viewport elapsedMs=%d", elapsedMs)
+    }
+
+    func markFirstViewportSettled(loadGeneration: Int? = nil) {
+        if let loadGeneration, !isCurrentLoad(loadGeneration) {
+            print("🚫 ArticleViewModel: Ignoring stale FirstViewportSettled for generation \(loadGeneration)")
+            return
+        }
+        if firstViewportSettledPosted {
+            return
+        }
+        guard let started = articleOpenAt else {
+            pendingFirstViewportSettled = true
+            return
+        }
+        firstViewportSettledPosted = true
+        pendingFirstViewportSettled = false
+        let elapsedMs = Int((CFAbsoluteTimeGetCurrent() - started) * 1000)
+        NSLog("osrsFirstViewportSettled elapsedMs=%d", elapsedMs)
+        NSLog("LOAD-MINMAX first_viewport_settled elapsedMs=%d", elapsedMs)
     }
 
     private func notifyAdoptedFirstViewComplete(_ webView: WKWebView) {
@@ -1577,9 +1607,15 @@ class ArticleViewModel: NSObject, ObservableObject {
 
         currentLoadGeneration += 1
         firstViewCompletePosted = false
+        firstViewportSettledPosted = false
         firstViewOpenAt = CFAbsoluteTimeGetCurrent()
+        articleOpenAt = firstViewOpenAt
         if pendingFirstViewComplete {
             markFirstViewComplete()
+        }
+        if pendingFirstViewportSettled {
+            pendingFirstViewportSettled = false
+            markFirstViewportSettled()
         }
         osrsFirstViewPrewarmStore.shared.pin(
             identity: osrsArticleDocumentIdentity(pageURL: pageUrl, pageTitle: pageTitle).value
@@ -1633,6 +1669,9 @@ class ArticleViewModel: NSObject, ObservableObject {
         pendingFirstViewComplete = false
         firstViewCompletePosted = false
         firstViewOpenAt = nil
+        pendingFirstViewportSettled = false
+        firstViewportSettledPosted = false
+        articleOpenAt = nil
     }
 
     private func bindWebKitNavigation(_ navigation: WKNavigation?, to generation: Int) {
@@ -3154,7 +3193,8 @@ class ArticleViewModel: NSObject, ObservableObject {
             collapseTablesEnabled: collapseTablesEnabled,
             includeAssetLinks: true,  // This generates <link> and <script> tags
             articleTextScale: articleTextScale,
-            wrapTableCellsEnabled: wrapTableCellsEnabled
+            wrapTableCellsEnabled: wrapTableCellsEnabled,
+            inlineFirstPaintCss: osrsLoadPerformancePrefs.inlineLiveFirstPaintCss
         )
 
         // Replace href and src attributes to use ios-assets:// scheme for internal resources only

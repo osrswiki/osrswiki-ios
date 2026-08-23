@@ -415,11 +415,18 @@ extension AppState {
 
     static func articleTitle(from url: URL) -> String {
         let path = url.path
-        let encodedTitle: String
+        var encodedTitle: String
         if path.hasPrefix("/w/") {
+            // Keep full remainder including "/" subpages (Calculator:Agility/...).
             encodedTitle = String(path.dropFirst(3))
+        } else if path.hasPrefix("/wiki/") {
+            encodedTitle = String(path.dropFirst(6))
         } else {
-            encodedTitle = url.lastPathComponent
+            // Prefer full path over lastPathComponent so slashed titles survive.
+            encodedTitle = path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+            if encodedTitle.isEmpty {
+                encodedTitle = url.lastPathComponent
+            }
         }
 
         let decodedTitle = encodedTitle

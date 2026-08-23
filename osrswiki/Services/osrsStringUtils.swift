@@ -39,41 +39,47 @@ class osrsStringUtils {
         return processedTitle
     }
     
-    /// Internal uncached version of extractMainTitle for actual processing
+    /// Internal uncached version of extractMainTitle for actual processing.
+    /// Preserves Calculator: (and other) namespaces from mw-page-title-namespace so
+    /// Calculator subpages stay loadable when the result is reused for navigation.
     private static func extractMainTitleUncached(_ displayTitle: String) -> String {
         var extractedTitle: String?
 
-        // Check if it contains MediaWiki title HTML structure
         if displayTitle.contains("mw-page-title-main") {
-            // Extract content between <span class="mw-page-title-main"> and </span>
-            let pattern = #"<span[^>]*class="mw-page-title-main"[^>]*>([^<]+)</span>"#
-            
+            let mainPattern = #"<span[^>]*class="mw-page-title-main"[^>]*>([^<]+)</span>"#
+            let nsPattern = #"<span[^>]*class="mw-page-title-namespace"[^>]*>([^<]+)</span>"#
             do {
-                let regex = try NSRegularExpression(pattern: pattern, options: [])
+                let mainRegex = try NSRegularExpression(pattern: mainPattern, options: [])
                 let range = NSRange(location: 0, length: displayTitle.utf16.count)
-                
-                if let match = regex.firstMatch(in: displayTitle, options: [], range: range) {
-                    if let swiftRange = Range(match.range(at: 1), in: displayTitle) {
-                        extractedTitle = String(displayTitle[swiftRange])
+                if let match = mainRegex.firstMatch(in: displayTitle, options: [], range: range),
+                   let mainRange = Range(match.range(at: 1), in: displayTitle) {
+                    let main = String(displayTitle[mainRange])
+                    var namespace: String?
+                    let nsRegex = try NSRegularExpression(pattern: nsPattern, options: [])
+                    if let nsMatch = nsRegex.firstMatch(in: displayTitle, options: [], range: range),
+                       let nsRange = Range(nsMatch.range(at: 1), in: displayTitle) {
+                        namespace = String(displayTitle[nsRange])
+                    }
+                    if let namespace, !namespace.isEmpty {
+                        extractedTitle = "\(namespace):\(main)"
+                    } else {
+                        extractedTitle = main
                     }
                 }
             } catch {
                 print("Error parsing MediaWiki title HTML: \(error)")
             }
         }
-        
-        // Normalize at the presentation boundary as well as at persistence. MediaWiki feed
-        // records can be entity encoded more than once (for example `&amp;amp;`).
+
         let cleanTitle = decodeHTMLEntitiesFixedPoint(stripHTML(extractedTitle ?? displayTitle))
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        
-        // Remove "Update:" prefixes (with and without space)
+
         if cleanTitle.hasPrefix("Update: ") {
             return String(cleanTitle.dropFirst("Update: ".count))
         } else if cleanTitle.hasPrefix("Update:") {
             return String(cleanTitle.dropFirst("Update:".count))
         }
-        
+
         return cleanTitle
     }
     

@@ -5,8 +5,11 @@
     }
     window.__osrsFirstViewportAssets = true;
     window.__osrsFirstViewPainted = false;
+    window.__osrsFirstViewportSettled = false;
 
     var reportedComplete = false;
+    var reportedSettled = false;
+    var paintedAtMs = null;
 
     function srcsetUrls(value) {
         if (!value) {
@@ -167,6 +170,22 @@
         } catch (ignore) {}
     }
 
+    function dispatchViewportSettledEvent() {
+        try {
+            window.dispatchEvent(new CustomEvent('osrs-first-viewport-settled'));
+        } catch (ignore) {}
+        try {
+            if (window.RenderTimeline && typeof window.RenderTimeline.log === 'function') {
+                var generation = window.__osrsArticleLoadGeneration;
+                window.RenderTimeline.log(
+                    typeof generation === 'number'
+                        ? 'Event: FirstViewportSettled:' + generation
+                        : 'Event: FirstViewportSettled'
+                );
+            }
+        } catch (ignore) {}
+    }
+
     function postComplete() {
         dispatchFirstViewEvent();
         var payload = firstViewPayload();
@@ -183,13 +202,105 @@
         console.log('osrsFirstViewComplete');
     }
 
+    function stabilitySnapshot() {
+        var s = window.__osrsLayoutStability || {};
+        return {
+            maxTopDelta: typeof s.maxTopDelta === 'number' ? s.maxTopDelta : null,
+            maxHeightDelta: typeof s.maxHeightDelta === 'number' ? s.maxHeightDelta : null
+        };
+    }
+
+    function settledPayload() {
+        var snap = stabilitySnapshot();
+        var payload = {
+            complete: true,
+            maxTopDelta: snap.maxTopDelta,
+            maxHeightDelta: snap.maxHeightDelta
+        };
+        if (typeof window.__osrsArticleLoadGeneration === 'number') {
+            payload.generation = window.__osrsArticleLoadGeneration;
+        }
+        if (paintedAtMs != null) {
+            payload.tPaintedMs = paintedAtMs;
+        }
+        payload.tSettledMs = performance.now();
+        return payload;
+    }
+
+    function dispatchSettledEvent() {
+        try {
+            window.dispatchEvent(new CustomEvent('osrs-first-viewport-settled'));
+        } catch (ignore) {}
+        try {
+            if (window.RenderTimeline && typeof window.RenderTimeline.log === 'function') {
+                var generation = window.__osrsArticleLoadGeneration;
+                window.RenderTimeline.log(
+                    typeof generation === 'number'
+                        ? 'Event: FirstViewportSettled:' + generation
+                        : 'Event: FirstViewportSettled'
+                );
+            }
+        } catch (ignore) {}
+    }
+
+    function postSettled() {
+        dispatchSettledEvent();
+        var payload = settledPayload();
+        try {
+            if (window.OsrsWikiBridge && typeof window.OsrsWikiBridge.firstViewportSettled === 'function') {
+                window.OsrsWikiBridge.firstViewportSettled(JSON.stringify(payload));
+            }
+        } catch (ignore) {}
+        try {
+            if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.osrsFirstViewportSettled) {
+                window.webkit.messageHandlers.osrsFirstViewportSettled.postMessage(payload);
+            }
+        } catch (ignore) {}
+        console.log('osrsFirstViewportSettled');
+    }
+
+    function reportSettled() {
+        window.__osrsFirstViewportSettled = true;
+        if (reportedSettled) {
+            return;
+        }
+        reportedSettled = true;
+        postSettled();
+    }
+
+    function waitForStabilitySampleThenSettle() {
+        // Phase A: report-only — emit after sample finishes (or 2s fallback), attach deltas.
+        // Do not gate reveal. Thresholds stay open questions from the spec.
+        var tries = 0;
+        function tick() {
+            var s = window.__osrsLayoutStability;
+            if (s && Array.isArray(s.samples) && s.samples.length >= 32) {
+                reportSettled();
+                return;
+            }
+            tries += 1;
+            if (tries > 120) { // ~2s at 60fps + rAF slack
+                reportSettled();
+                return;
+            }
+            requestAnimationFrame(tick);
+        }
+        requestAnimationFrame(tick);
+    }
+
     function reportComplete() {
         window.__osrsFirstViewPainted = true;
+        paintedAtMs = performance.now();
         if (reportedComplete) {
             return;
         }
         reportedComplete = true;
         postComplete();
+        waitForStabilitySampleThenSettle();
+    }
+
+    function reportViewportSettled() {
+        dispatchViewportSettledEvent();
     }
 
     function elementHasDecodedUrl(el, url) {
@@ -254,6 +365,7 @@
         wait.then(function () {
             clearTimeout(timeout);
             reportComplete();
+            reportViewportSettled();
         });
     }
 
@@ -265,6 +377,8 @@
         window.__osrsFirstViewPainted = true;
         postComplete();
     };
+
+    window.osrsNotifyFirstViewportSettled = reportSettled;
 
     window.osrsWatchFirstViewComplete = watchComplete;
 

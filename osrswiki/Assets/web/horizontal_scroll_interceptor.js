@@ -44,7 +44,7 @@
         'table[class*="league"]',
         'table[class*="task"]'
     ].join(',');
-    const standaloneScrollSurfaceSelector = [
+    const standaloneScrollSurfaceSelectorParts = [
         '.mw-parser-output > table.wikitable',
         '.mw-parser-output > .wikitable',
         '.mw-parser-output > table.sortable',
@@ -54,7 +54,15 @@
         '.mwe-math-fallback-image-display',
         'math.mwe-math-element[display="block"]',
         '.mwe-math-element:has(.mwe-math-fallback-image-display)'
-    ].join(',');
+    ];
+    var __osrsSupportsHas = false;
+    try {
+        __osrsSupportsHas = !!(window.CSS && CSS.supports && CSS.supports('selector(:has(*))'));
+    } catch (e) { __osrsSupportsHas = false; }
+    const standaloneScrollSurfaceSelector = (__osrsSupportsHas
+        ? standaloneScrollSurfaceSelectorParts
+        : standaloneScrollSurfaceSelectorParts.filter(function (p) { return p.indexOf(':has(') < 0; })
+    ).join(',');
     
     // Helper function to log to Android
     function log(message) {

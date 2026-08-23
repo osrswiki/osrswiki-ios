@@ -133,3 +133,17 @@ code {
     font-family: monospace;
     border-radius: 3px;
 }
+
+/* Long Calculator titles (e.g. Genie lamps…) must wrap, not clip */
+.mw-page-title,
+.firstHeading,
+.page-title,
+#firstHeading,
+h1.firstHeading,
+h1.page-header {
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: break-word;
+    word-break: normal;
+    overflow: visible;
+}

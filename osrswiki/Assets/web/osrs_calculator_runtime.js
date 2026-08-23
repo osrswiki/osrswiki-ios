@@ -35,6 +35,10 @@
     function osrsInstallCalculatorKeyboardGuards() {
         if (window.__osrsCalcKeyboardGuardsInstalled) return;
         window.__osrsCalcKeyboardGuardsInstalled = true;
+        osrsInstallCalculatorDropdownIntercept();
+        osrsCollapseTemplatesUsed(document);
+        setTimeout(function(){ osrsCollapseTemplatesUsed(document); }, 500);
+        setTimeout(function(){ osrsCollapseTemplatesUsed(document); }, 2000);
 
         function focusedCalcInput() {
             var el = document.activeElement;
@@ -75,7 +79,17 @@
         document.addEventListener('focusin', function (ev) {
             var t = ev.target;
             if (!t || !t.closest) return;
-            if (!t.closest('.osrs-calculator-layout, .jcTable, .oo-ui-numberInputWidget, .jsCalc-field')) return;
+            var layout = t.closest('.osrs-calculator-layout, .jcTable');
+            if (!layout && !t.closest('.oo-ui-numberInputWidget, .jsCalc-field')) return;
+            if (layout) {
+                osrsApplyNumericKeyboards(layout);
+            } else if (t.tagName === 'INPUT') {
+                try {
+                    if (t.type === 'number' || (t.closest && t.closest('.oo-ui-numberInputWidget'))) {
+                        if (!t.getAttribute('inputmode')) t.setAttribute('inputmode', 'decimal');
+                    }
+                } catch (e) {}
+            }
             ensurePageVisible();
             setTimeout(scrollFocusedIntoView, 50);
             setTimeout(scrollFocusedIntoView, 300);
@@ -118,17 +132,58 @@
         });
     }
 
-    function osrsPromoteCalculatorDescription(layout, formHost) {
+        function osrsCollapseTemplatesUsed(root) {
+        if (!root || !root.querySelectorAll) return;
+        var scope = root.querySelectorAll ? root : document;
+        scope.querySelectorAll(
+            '.templatesUsed, .mw-templatesUsedExplanation, table.archivelist, table.osrs-calculator-templates'
+        ).forEach(function (node) {
+            try {
+                node.setAttribute('data-osrs-templates-collapsed', '1');
+                node.style.setProperty('display', 'none', 'important');
+                // Also detach so flex/layout CSS cannot resurrect it.
+                if (node.parentNode) node.parentNode.removeChild(node);
+            } catch (e) {}
+        });
+    }
+
+function osrsPromoteCalculatorDescription(layout, formHost) {
         if (!layout || !formHost) return;
         var desc = null;
         var prev = formHost.previousElementSibling;
         while (prev) {
-            if (prev.matches && (prev.matches('p') || prev.matches('.calculator-description') || prev.matches('.mw-parser-output > p'))) {
-                desc = prev;
-                break;
+            if (prev.matches && (
+                prev.matches('p') ||
+                prev.matches('.calculator-description') ||
+                prev.matches('.mw-parser-output > p') ||
+                prev.matches('div.calculator-description')
+            )) {
+                // Skip obsolete/JS messageboxes — keep real explanatory copy.
+                var t = (prev.textContent || '').replace(/\s+/g, ' ').trim();
+                if (!/requires JavaScript/i.test(t) && !prev.classList.contains('messagebox')) {
+                    desc = prev;
+                    break;
+                }
             }
             if (prev.querySelector && prev.querySelector('pre.jcConfig, .jcTable, .oo-ui-widget')) break;
             prev = prev.previousElementSibling;
+        }
+        if (!desc) {
+            var root = document.querySelector('.mw-parser-output') || document.body;
+            var pre = root.querySelector('pre.jcConfig');
+            if (pre) {
+                var cursor = pre.previousElementSibling;
+                while (cursor) {
+                    if (cursor.matches && cursor.matches('p, .calculator-description')) {
+                        var tt = (cursor.textContent || '').replace(/\s+/g, ' ').trim();
+                        if (tt && !/requires JavaScript/i.test(tt) && !cursor.classList.contains('messagebox')) {
+                            desc = cursor;
+                            break;
+                        }
+                    }
+                    cursor = cursor.previousElementSibling;
+                }
+            }
         }
         if (!desc) {
             var parent = formHost.parentElement;
@@ -143,16 +198,420 @@
     }
 
     function osrsApplyNumericKeyboards(root) {
+        osrsCollapseTemplatesUsed(root || document);
         if (!root || !root.querySelectorAll) return;
-        root.querySelectorAll('input[type="number"], .oo-ui-numberInputWidget input, .jsCalc-field-int input, .jsCalc-field-number input').forEach(function (input) {
+        // Prefer 3x3 phone/number pads. Do NOT force type=number (OOUI + iOS
+        // often fall back to qwerty-with-numbers). pattern=[0-9]* helps iOS ints.
+        var nodes = root.querySelectorAll(
+            'input[type="number"], .oo-ui-numberInputWidget input, ' +
+            '.jsCalc-field-int input, .jsCalc-field-number input, ' +
+            '.jsCalc-field-float input, .jsCalc-field-hs input'
+        );
+        Array.prototype.forEach.call(nodes, function (input) {
             try {
-                input.setAttribute('inputmode', 'decimal');
-                input.setAttribute('enterkeyhint', 'done');
-                if (!input.getAttribute('type') || input.getAttribute('type') === 'text') {
-                    input.setAttribute('type', 'number');
+                var field = input.closest && input.closest('.jsCalc-field, .oo-ui-numberInputWidget');
+                var isInt = !!(field && (
+                    field.classList.contains('jsCalc-field-int') ||
+                    field.classList.contains('oo-ui-numberInputWidget')
+                ));
+                // decimals / floats keep a decimal pad; pure ints get numeric + pattern
+                var mode = 'decimal';
+                if (isInt && field && field.classList.contains('jsCalc-field-int')) {
+                    mode = 'numeric';
+                    if (!input.getAttribute('pattern')) {
+                        input.setAttribute('pattern', '[0-9]*');
+                    }
                 }
+                input.setAttribute('inputmode', mode);
+                input.setAttribute('enterkeyhint', 'done');
+                input.setAttribute('autocomplete', 'off');
+                // Keep OOUI type as-is; only hint the soft keyboard.
             } catch (e) {}
         });
+        // Also catch bare tel-style quantity fields without OOUI wrappers.
+        root.querySelectorAll('input[inputmode="decimal"], input[inputmode="numeric"]').forEach(function (input) {
+            try { input.setAttribute('enterkeyhint', 'done'); } catch (e) {}
+        });
+    }
+
+    /**
+     * Install native OS picker intercept for calculator dropdowns.
+     * 
+     * Replaces broken OOUI dropdowns in calculators with OS-native choice UI:
+     * - Android: MaterialAlertDialog with radio list
+     * - iOS: Action sheet or picker wheel
+     * 
+     * Scope: .osrs-calculator-layout, .jcTable, .oo-ui-dropdownWidget inside calculators only.
+     */
+    function osrsInstallCalculatorDropdownIntercept() {
+        if (window.__osrsCalcDropdownInterceptInstalled) return;
+        window.__osrsCalcDropdownInterceptInstalled = true;
+
+        // Check if native bridge is available
+        var hasAndroidBridge = !!(window.osrsCalculatorApi && 
+            typeof window.osrsCalculatorApi.showChoicePicker === 'function');
+        var hasIOSBridge = !!(window.webkit && window.webkit.messageHandlers && 
+            window.webkit.messageHandlers.osrsCalculatorApi);
+        
+        if (!hasAndroidBridge && !hasIOSBridge) {
+            console.log('[CalcDropdown] No native bridge available, keeping web dropdowns');
+            return;
+        }
+
+        /**
+         * Extract options from a calculator dropdown element.
+         * Supports native <select> and OOUI DropdownWidget.
+         */
+        function extractDropdownOptions(element) {
+            var options = [];
+            var currentValue = null;
+            var label = '';
+
+            // Find label from nearby structure
+            var labelNode = null;
+            if (element.closest) {
+                var fieldLayout = element.closest('.oo-ui-fieldLayout, .jsCalc-field');
+                if (fieldLayout) {
+                    labelNode = fieldLayout.querySelector('.oo-ui-labelElement-label, label');
+                }
+            }
+            if (!labelNode && element.previousElementSibling) {
+                labelNode = element.previousElementSibling.querySelector('label');
+            }
+            label = labelNode ? (labelNode.textContent || labelNode.innerText || '').trim() : 'Choose option';
+
+            // Extract from native <select>
+            if (element.tagName === 'SELECT') {
+                currentValue = element.value;
+                Array.prototype.forEach.call(element.options, function(opt) {
+                    options.push({
+                        label: (opt.textContent || opt.innerText || '').trim(),
+                        value: opt.value
+                    });
+                });
+                return { label: label, options: options, currentValue: currentValue, element: element };
+            }
+
+            // Extract from OOUI DropdownWidget / DropdownInputWidget
+            var dropdownRoot = element.classList.contains('oo-ui-dropdownWidget')
+                ? element
+                : (element.closest && element.closest('.oo-ui-dropdownWidget'));
+            if (dropdownRoot) {
+                // Prefer the backing <select> used by DropdownInputWidget — OOUI menus are
+                // often not mounted until opened, and $.data(widget) is frequently missing
+                // inside the app WebView, so scraping the select is the reliable path.
+                var backingSelect = null;
+                var fieldRoot = dropdownRoot.closest('.oo-ui-dropdownInputWidget, .oo-ui-fieldLayout, .jsCalc-field') || dropdownRoot.parentElement;
+                if (fieldRoot && fieldRoot.querySelector) {
+                    backingSelect = fieldRoot.querySelector('select');
+                }
+                if (!backingSelect && dropdownRoot.parentElement) {
+                    backingSelect = dropdownRoot.parentElement.querySelector('select');
+                }
+                if (backingSelect && backingSelect.options && backingSelect.options.length) {
+                    currentValue = backingSelect.value;
+                    Array.prototype.forEach.call(backingSelect.options, function(opt) {
+                        options.push({
+                            label: (opt.textContent || opt.innerText || '').trim(),
+                            value: opt.value
+                        });
+                    });
+                    return {
+                        label: label,
+                        options: options,
+                        currentValue: currentValue,
+                        element: backingSelect,
+                        widget: null,
+                        dropdownRoot: dropdownRoot
+                    };
+                }
+
+                var widget = null;
+                try {
+                    if (window.$ && window.$.data) {
+                        widget = window.$.data(dropdownRoot, 'oo-ui-dropdownWidget') ||
+                            window.$.data(dropdownRoot, 'oo-ui-widget');
+                    }
+                    if (!widget && dropdownRoot.id && window.OO && OO.ui && OO.ui.infuse) {
+                        // no-op fallback
+                    }
+                } catch (e) {}
+
+                if (widget && widget.getMenu) {
+                    try {
+                        var menu = widget.getMenu();
+                        var items = menu.getItems ? menu.getItems() : [];
+                        currentValue = widget.getValue ? widget.getValue() : null;
+                        items.forEach(function(item) {
+                            var itemLabel = item.getLabel ? item.getLabel() : '';
+                            var itemData = item.getData ? item.getData() : null;
+                            options.push({
+                                label: String(itemLabel || '').trim(),
+                                value: itemData != null ? String(itemData) : String(itemLabel)
+                            });
+                        });
+                    } catch (e) {}
+                }
+
+                // DOM fallback: scrape menu option widgets (works when $.data widget missing)
+                if (!options.length) {
+                    var menuRoot = dropdownRoot.querySelector('.oo-ui-menuSelectWidget, .oo-ui-selectWidget');
+                    var optionNodes = (menuRoot || document).querySelectorAll(
+                        '.oo-ui-menuOptionWidget, .oo-ui-optionWidget'
+                    );
+                    // Prefer options scoped under this dropdown's popup if present
+                    if (menuRoot) {
+                        optionNodes = menuRoot.querySelectorAll('.oo-ui-menuOptionWidget, .oo-ui-optionWidget');
+                    } else {
+                        // Closest field may stash options in a clipped menu sibling
+                        var field = dropdownRoot.closest('.oo-ui-fieldLayout, .jsCalc-field') || dropdownRoot.parentElement;
+                        if (field) {
+                            optionNodes = field.querySelectorAll('.oo-ui-menuOptionWidget, .oo-ui-optionWidget');
+                        }
+                    }
+                    Array.prototype.forEach.call(optionNodes, function(node) {
+                        var lab = (node.textContent || '').replace(/\s+/g, ' ').trim();
+                        if (!lab) return;
+                        var val = node.getAttribute('data-data') ||
+                            node.getAttribute('data-value') ||
+                            lab;
+                        options.push({ label: lab, value: String(val) });
+                    });
+                    var handle = dropdownRoot.querySelector('.oo-ui-dropdownWidget-handle');
+                    if (handle) {
+                        currentValue = (handle.textContent || '').replace(/\s+/g, ' ').trim();
+                    }
+                }
+
+                // Last resort: parse from jcConfig select param options in nearby pre (not ideal)
+                if (!options.length && label) {
+                    var pre = document.querySelector('pre.jcConfig');
+                    if (pre) {
+                        var lines = (pre.textContent || '').split('\n');
+                        for (var li = 0; li < lines.length; li++) {
+                            var line = lines[li];
+                            if (line.toLowerCase().indexOf('|select|') < 0 &&
+                                line.toLowerCase().indexOf('|buttonselect|') < 0) continue;
+                            if (label && line.indexOf(label) < 0 && line.toLowerCase().indexOf(label.toLowerCase()) < 0) {
+                                // still allow if option list present
+                            }
+                            var parts = line.split('|');
+                            // param = id|Label|default|select|A,B,C
+                            if (parts.length >= 5 && /select/i.test(parts[3] || '')) {
+                                var optStr = parts[4] || '';
+                                // strip trailing ;bindings
+                                optStr = optStr.split(';')[0];
+                                optStr.split(',').forEach(function(raw) {
+                                    var lab2 = raw.trim();
+                                    if (!lab2) return;
+                                    options.push({ label: lab2, value: lab2 });
+                                });
+                                if (parts[2]) currentValue = parts[2].trim();
+                                if (options.length) break;
+                            }
+                        }
+                    }
+                }
+
+                return { label: label, options: options, currentValue: currentValue, element: dropdownRoot, widget: widget };
+            }
+
+            return null;
+        }
+
+        /**
+         * Update dropdown value after native picker selection.
+         */
+        function updateDropdownValue(dropdownInfo, selectedValue) {
+            if (!dropdownInfo || selectedValue == null) return;
+
+            // Update native <select> (including OOUI DropdownInputWidget backing select)
+            if (dropdownInfo.element.tagName === 'SELECT') {
+                dropdownInfo.element.value = selectedValue;
+                var changeEvent = new Event('change', { bubbles: true, cancelable: true });
+                dropdownInfo.element.dispatchEvent(changeEvent);
+                var inputEvent = new Event('input', { bubbles: true, cancelable: true });
+                dropdownInfo.element.dispatchEvent(inputEvent);
+                // Keep visible OOUI handle label in sync when we drove a backing select.
+                try {
+                    var root = dropdownInfo.dropdownRoot ||
+                        (dropdownInfo.element.closest && dropdownInfo.element.closest('.oo-ui-dropdownInputWidget, .oo-ui-fieldLayout'));
+                    if (root) {
+                        var handleLabel = root.querySelector('.oo-ui-dropdownWidget-handle .oo-ui-labelElement-label, .oo-ui-dropdownWidget-handle');
+                        var opt = dropdownInfo.element.selectedOptions && dropdownInfo.element.selectedOptions[0];
+                        if (handleLabel && opt) {
+                            var lab = (opt.textContent || opt.innerText || selectedValue).trim();
+                            if (handleLabel.classList.contains('oo-ui-dropdownWidget-handle')) {
+                                var inner = handleLabel.querySelector('.oo-ui-labelElement-label');
+                                if (inner) inner.textContent = lab;
+                            } else {
+                                handleLabel.textContent = lab;
+                            }
+                        }
+                    }
+                } catch (e) {}
+                // Wave2d: also drive OOUI DropdownInputWidget.setValue so field
+                // toggles (Level vs XP Current rows) fire. Backing-select change
+                // alone often does not notify the OOUI widget.
+                try {
+                    var oouiWidget = dropdownInfo.widget;
+                    var syncRoot = dropdownInfo.dropdownRoot ||
+                        (dropdownInfo.element.closest && dropdownInfo.element.closest('.oo-ui-dropdownInputWidget, .oo-ui-fieldLayout'));
+                    if (!oouiWidget && window.$ && syncRoot) {
+                        var $root = window.$(syncRoot);
+                        oouiWidget = $root.data('oo-ui-dropdownInputWidget') ||
+                            $root.data('oo-ui-widget') ||
+                            (syncRoot.parentElement && window.$(syncRoot.parentElement).data('oo-ui-dropdownInputWidget'));
+                    }
+                    if (!oouiWidget && syncRoot && window.OO && OO.ui && OO.ui.infuse) {
+                        try { oouiWidget = OO.ui.infuse(syncRoot); } catch (infuseErr) {}
+                    }
+                    if (oouiWidget && typeof oouiWidget.setValue === 'function') {
+                        oouiWidget.setValue(selectedValue);
+                    }
+                } catch (syncErr) {}
+                return;
+            }
+
+            // Update OOUI widget
+            if (dropdownInfo.widget && dropdownInfo.widget.setValue) {
+                dropdownInfo.widget.setValue(selectedValue);
+                // OOUI widgets emit their own change events
+            }
+        }
+
+        /**
+         * Show native picker for Android.
+         */
+        function showAndroidPicker(dropdownInfo) {
+            if (!window.osrsCalculatorApi || !window.osrsCalculatorApi.showChoicePicker) return false;
+            
+            try {
+                var payload = JSON.stringify({
+                    label: dropdownInfo.label,
+                    options: dropdownInfo.options,
+                    currentValue: dropdownInfo.currentValue
+                });
+                var result = window.osrsCalculatorApi.showChoicePicker(payload);
+                var response = JSON.parse(result);
+                
+                if (response.selected) {
+                    updateDropdownValue(dropdownInfo, response.value);
+                }
+                return true;
+            } catch (e) {
+                console.error('[CalcDropdown] Android picker failed:', e);
+                return false;
+            }
+        }
+
+        /**
+         * Show native picker for iOS.
+         */
+        function showIOSPicker(dropdownInfo) {
+            if (!window.webkit || !window.webkit.messageHandlers || 
+                !window.webkit.messageHandlers.osrsCalculatorApi) return false;
+
+            try {
+                // Create callback for iOS response
+                var callbackId = 'calcDropdown_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+                window[callbackId] = function(response) {
+                    try {
+                        if (response && response.selected) {
+                            updateDropdownValue(dropdownInfo, response.value);
+                        }
+                    } finally {
+                        delete window[callbackId];
+                    }
+                };
+
+                window.webkit.messageHandlers.osrsCalculatorApi.postMessage({
+                    action: 'showChoicePicker',
+                    label: dropdownInfo.label,
+                    options: dropdownInfo.options,
+                    currentValue: dropdownInfo.currentValue,
+                    callbackId: callbackId
+                });
+                return true;
+            } catch (e) {
+                console.error('[CalcDropdown] iOS picker failed:', e);
+                return false;
+            }
+        }
+
+        /**
+         * Handle dropdown click/focus to show native picker.
+         */
+        function handleDropdownInteraction(event) {
+            var target = event.target;
+            if (!target) return;
+
+            // Check if we're inside a calculator
+            var calcContainer = target.closest('.osrs-calculator-layout, .jcTable');
+            if (!calcContainer) return;
+
+            // Find the dropdown element (handle clicks resolve to parent widget)
+            var dropdown = target.closest('select, .oo-ui-dropdownWidget');
+            if (!dropdown && target.closest('.oo-ui-dropdownWidget-handle')) {
+                dropdown = target.closest('.oo-ui-dropdownWidget-handle').closest('.oo-ui-dropdownWidget');
+            }
+            if (!dropdown) return;
+
+            var dropdownInfo = extractDropdownOptions(dropdown);
+            if (!dropdownInfo || !dropdownInfo.options || dropdownInfo.options.length === 0) {
+                return;
+            }
+
+            // Prevent default dropdown behavior
+            event.preventDefault();
+            event.stopPropagation();
+
+            // Blur any focused input to hide keyboard
+            if (document.activeElement && document.activeElement.blur) {
+                document.activeElement.blur();
+            }
+
+            // Show native picker
+            var handled = false;
+            if (hasAndroidBridge) {
+                handled = showAndroidPicker(dropdownInfo);
+            } else if (hasIOSBridge) {
+                handled = showIOSPicker(dropdownInfo);
+            }
+
+            if (handled) {
+                console.log('[CalcDropdown] Showed native picker for:', dropdownInfo.label);
+            }
+        }
+
+        // Install event listeners on calculator container
+        document.addEventListener('click', function(event) {
+            var target = event.target;
+            if (!target || !target.closest) return;
+            
+            // Check for dropdown click in calculator
+            var calcContainer = target.closest('.osrs-calculator-layout, .jcTable');
+            if (!calcContainer) return;
+
+            var dropdown = target.closest('select, .oo-ui-dropdownWidget, .oo-ui-dropdownWidget-handle');
+            if (dropdown) {
+                handleDropdownInteraction(event);
+            }
+        }, true);
+
+        // Also intercept focus for native <select>
+        document.addEventListener('focus', function(event) {
+            var target = event.target;
+            if (!target || !target.closest) return;
+            if (target.tagName !== 'SELECT') return;
+
+            var calcContainer = target.closest('.osrs-calculator-layout, .jcTable');
+            if (calcContainer) {
+                handleDropdownInteraction(event);
+            }
+        }, true);
+
+        console.log('[CalcDropdown] Native picker intercept installed');
     }
 
 function parseCalculatorConfig(pre) {
@@ -241,27 +700,35 @@ function parseCalculatorConfig(pre) {
                 existing.appendChild(resultTarget);
                 resultTarget.classList.add('osrs-calculator-result');
             }
+            osrsInstallCalculatorKeyboardGuards();
+            osrsApplyNumericKeyboards(existing);
+            osrsCollapseTemplatesUsed(document);
             return;
         }
 
+        // Intentionally drop Template:Calc_use "Templates used" archive lists —
+        // they waste the first viewport on mobile and are not user-facing.
         var templates = findCalculatorTemplateBox(pre);
+        if (templates && templates.parentNode) {
+            templates.parentNode.removeChild(templates);
+            templates = null;
+        }
         var layout = document.createElement('div');
         layout.className = 'osrs-calculator-layout';
         osrsInstallCalculatorKeyboardGuards();
         osrsStripJavascriptRequiredBanners(document);
         osrsPromoteCalculatorDescription(layout, formHost);
-        osrsApplyNumericKeyboards(layout);
-        formHost.parentNode.insertBefore(layout, templates || formHost);
+        formHost.parentNode.insertBefore(layout, formHost);
 
-        if (templates) {
-            templates.classList.add('osrs-calculator-templates');
-            layout.appendChild(templates);
-        }
         layout.appendChild(formHost);
         if (resultTarget && resultTarget !== formHost) {
             layout.appendChild(resultTarget);
             resultTarget.classList.add('osrs-calculator-result');
         }
+        // Apply AFTER formHost is inside layout — OOUI inputs live under formHost.
+        osrsApplyNumericKeyboards(layout);
+        setTimeout(function () { osrsApplyNumericKeyboards(layout); }, 400);
+        setTimeout(function () { osrsApplyNumericKeyboards(layout); }, 1500);
         pre.hidden = true;
         formHost.classList.add('osrs-calculator-panel');
         osrsReassertCalculatorThemeSheets();
@@ -734,6 +1201,9 @@ function parseCalculatorConfig(pre) {
             mw.hook('rscalc.setupComplete').add(function() {
                 patchAjax();
                 osrsHideCalculatorJsPlaceholder();
+                document.querySelectorAll('.osrs-calculator-layout').forEach(function (layout) {
+                    osrsApplyNumericKeyboards(layout);
+                });
             });
         }
     }

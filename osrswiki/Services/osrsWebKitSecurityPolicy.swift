@@ -22,7 +22,8 @@ enum osrsWebKitSecurityPolicy {
         "renderTimeline",
         "osrsCalculatorApi",
         "osrsLiveAssetWarm",
-        "osrsFirstViewComplete"
+        "osrsFirstViewComplete",
+        "osrsFirstViewportSettled"
     ]
 
     static let diagnosticHandlerNames: Set<String> = [

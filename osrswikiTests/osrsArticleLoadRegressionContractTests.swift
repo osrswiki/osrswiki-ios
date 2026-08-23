@@ -100,8 +100,44 @@ final class osrsArticleLoadRegressionContractTests: XCTestCase {
         XCTAssertTrue(firstViewport.contains("__osrsLayoutStability"))
         XCTAssertTrue(firstViewport.contains("osrs-first-view-complete"))
         XCTAssertTrue(firstViewport.contains("Event: FirstViewPainted"))
+        XCTAssertTrue(firstViewport.contains("Event: FirstViewportSettled"))
+        XCTAssertTrue(firstViewport.contains("__osrsFirstViewportSettled"))
+        XCTAssertTrue(firstViewport.contains("osrs-first-viewport-settled"))
+        XCTAssertTrue(firstViewport.contains("osrsWatchFirstViewportSettled") || firstViewport.contains("reportSettled"))
         XCTAssertTrue(articleWebView.contains("Event: FirstViewPainted"))
+        XCTAssertTrue(articleWebView.contains("Event: FirstViewportSettled"))
         XCTAssertTrue(articleWebView.contains("completeLoadingWithBodyReveal"))
+        XCTAssertTrue(articleWebView.contains("Event: FirstViewportSettled"))
+        XCTAssertTrue(articleWebView.contains("markFirstViewportSettled"))
+        XCTAssertTrue(viewModel.contains("LOAD-MINMAX first_viewport_settled"))
+        XCTAssertTrue(viewModel.contains("articleOpenAt"))
+        XCTAssertTrue(viewModel.contains("markFirstViewportSettled"))
+        XCTAssertTrue(
+            articleWebView.contains("Event: FirstViewportSettled:"),
+            "loadGeneration prefixes must include FirstViewportSettled"
+        )
+        // Settled is stopwatch-only: must not share the reveal hasPrefix gate.
+        XCTAssertNil(
+            articleWebView.range(
+                of: #"FirstViewportSettled[\s\S]{0,160}?completeLoadingWithBodyReveal"#,
+                options: .regularExpression
+            ),
+            "FirstViewportSettled must not call completeLoadingWithBodyReveal"
+        )
+        let revealGate = articleWebView
+            .components(separatedBy: "private func handleRenderTimelineMessage")
+            .dropFirst()
+            .first?
+            .components(separatedBy: "private static func loadGeneration")
+            .first ?? ""
+        XCTAssertTrue(revealGate.contains("Event: FirstViewPainted"))
+        XCTAssertTrue(revealGate.contains("Event: StylingScriptsComplete"))
+        XCTAssertTrue(revealGate.contains("Event: FirstViewportSettled"))
+        // The OR'd reveal branch must stay painted/styling only.
+        XCTAssertTrue(
+            revealGate.contains("message.hasPrefix(\"Event: FirstViewPainted\") || message.hasPrefix(\"Event: StylingScriptsComplete\")"),
+            "Reveal hasPrefix list must remain FirstViewPainted / StylingScriptsComplete only"
+        )
         XCTAssertTrue(compositor.contains("stripNonImageLayerContents"))
         XCTAssertTrue(compositor.contains("isUniformFill"))
         XCTAssertTrue(themePaint.contains("placeholderHTML"))
@@ -248,6 +284,92 @@ final class osrsArticleLoadRegressionContractTests: XCTestCase {
         XCTAssertFalse(compositor.contains("installCoverWindow"))
         XCTAssertTrue(compositor.contains("osrsSceneCompositorLooksBlank must not be posted from restore()"))
         XCTAssertFalse(compositor.contains("osrsResumedArticleViewController"))
+    }
+
+
+    func testLiveInlineFirstPaintCssFlagWired() throws {
+        let root = try repositoryRoot()
+        let prefs = try source(root, "platforms/ios/osrswiki/Services/osrsLoadPerformancePrefs.swift")
+        XCTAssertTrue(prefs.contains("static var inlineLiveFirstPaintCss: Bool = true"))
+        let coord = try source(root, "platforms/ios/osrswiki/Services/osrsArticleDocumentCoordinator.swift")
+        XCTAssertTrue(coord.contains("inlineFirstPaintCss: osrsLoadPerformancePrefs.inlineLiveFirstPaintCss"))
+        let loader = try source(root, "platforms/ios/osrswiki/Services/osrsPageContentLoader.swift")
+        XCTAssertTrue(loader.contains("inlineFirstPaintCss: Bool = osrsLoadPerformancePrefs.inlineLiveFirstPaintCss"))
+        let viewModel = try source(root, "platforms/ios/osrswiki/ViewModels/ArticleViewModel.swift")
+        XCTAssertTrue(viewModel.contains("inlineFirstPaintCss: osrsLoadPerformancePrefs.inlineLiveFirstPaintCss"))
+        let htmlBuilder = try source(root, "platforms/ios/osrswiki/Services/osrsPageHtmlBuilder.swift")
+        XCTAssertTrue(htmlBuilder.contains("inlineFirstPaintCss: Bool = false"))
+        XCTAssertTrue(htmlBuilder.contains("data-osrs-inline-css"))
+    }
+
+    func testCriticalArticleBundleFlagDefaultsOffAndWired() throws {
+        let root = try repositoryRoot()
+        let prefs = try source(root, "platforms/ios/osrswiki/Services/osrsLoadPerformancePrefs.swift")
+        XCTAssertTrue(prefs.contains("static var useCriticalArticleBundle: Bool = false"))
+        let builder = try source(root, "platforms/ios/osrswiki/Services/osrsPageHtmlBuilder.swift")
+        XCTAssertTrue(builder.contains("osrsLoadPerformancePrefs.useCriticalArticleBundle"))
+        XCTAssertTrue(builder.contains("criticalArticleBundleAsset = \"styles/critical-article.min.css\""))
+        let bundlePath = root.appendingPathComponent("shared/css/critical-article.min.css")
+        let css = try String(contentsOf: bundlePath, encoding: .utf8)
+        XCTAssertTrue(css.contains("AUTO-GENERATED"))
+        XCTAssertTrue(css.contains("infobox-bonuses") || css.contains("table-layout"))
+    }
+
+
+    func testTask8BonusesMinCellGuardrailProbeAndAntiCrushCssLocked() throws {
+        let root = try repositoryRoot()
+        let probe = try String(
+            contentsOf: root.appendingPathComponent("tools/qa/bonuses-min-cell-guardrail-probe.js"),
+            encoding: .utf8
+        )
+        XCTAssertTrue(probe.contains("table.infobox-bonuses"))
+        XCTAssertTrue(probe.contains("minW >= 28"))
+        XCTAssertTrue(probe.contains("getBoundingClientRect"))
+        XCTAssertTrue(probe.contains("minCellWidth"))
+
+        let guide = try String(
+            contentsOf: root.appendingPathComponent("tools/qa/article-load-fvs-task8-guardrail.md"),
+            encoding: .utf8
+        )
+        XCTAssertTrue(guide.contains("bonuses-min-cell-guardrail-probe.js"))
+        XCTAssertTrue(guide.contains("Abyssal whip"))
+
+        let fixesPath = root.appendingPathComponent("shared/css/fixes.css")
+        let fixes = try String(contentsOf: fixesPath, encoding: .utf8)
+        XCTAssertTrue(fixes.contains("--osrs-bonuses-min-inline-size"))
+        XCTAssertTrue(fixes.contains("table.infobox-bonuses:not(.main-infobox)"))
+        XCTAssertTrue(fixes.contains("min-width: var(--osrs-bonuses-min-inline-size)"))
+    }
+
+    func testFirstViewportSettledDoesNotTriggerReveal() throws {
+        let root = try repositoryRoot()
+        let articleWebView = try source(root, "platforms/ios/osrswiki/Views/ArticleWebView.swift")
+        
+        // Find the handleRenderTimelineMessage implementation
+        let handleBody = articleWebView
+            .components(separatedBy: "private func handleRenderTimelineMessage")
+            .dropFirst()
+            .first?
+            .components(separatedBy: "private static func loadGeneration")
+            .first ?? ""
+        
+        // Verify FirstViewportSettled handling exists
+        XCTAssertTrue(handleBody.contains("Event: FirstViewportSettled"))
+        
+        // Verify FirstViewportSettled branch does NOT call completeLoadingWithBodyReveal
+        let settledBranch = handleBody
+            .components(separatedBy: "Event: FirstViewportSettled")
+            .dropFirst()
+            .first?
+            .components(separatedBy: "} else if message.hasPrefix")
+            .first?
+            .components(separatedBy: "} else {")
+            .first ?? ""
+        
+        XCTAssertFalse(
+            settledBranch.contains("completeLoadingWithBodyReveal"),
+            "FirstViewportSettled must NOT trigger body reveal (reveal remains FirstViewPainted only)"
+        )
     }
 
     func testUnpaintedSystemFillIsWhiteNotThemedDark() {

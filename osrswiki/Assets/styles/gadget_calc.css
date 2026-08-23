@@ -177,12 +177,378 @@ html.theme-osrs-dark .osrs-calculator-layout .oo-ui-numberInputWidget-button {
     color: var(--ooui-text, var(--text-color)) !important;
 }
 
-/* Calculator header row: full width, vertically centered title. */
+/* Calculator header row: full width, vertically centered title.
+ * Wave2d: do NOT target all .oo-ui-labelElement-label — that forced
+ * buttonselect option labels to width:100% and stacked them vertically. */
 .osrs-calculator-layout .oo-ui-fieldsetLayout-header,
-.osrs-calculator-layout .oo-ui-labelElement-label {
+.osrs-calculator-layout .oo-ui-fieldsetLayout-header > .oo-ui-labelElement-label {
     display: flex;
     align-items: center;
     min-height: 2rem;
     width: 100%;
 }
 
+
+
+/* Overnight Wave1: keep explanatory text firmly above the form; shrink Templates Used. */
+.osrs-calculator-layout > .osrs-calculator-description {
+    order: -10 !important;
+    display: block !important;
+    margin: 0 0 0.5rem 0 !important;
+    max-width: 100%;
+}
+
+.osrs-calculator-layout .templatesUsed,
+.osrs-calculator-layout .mw-templatesUsedExplanation,
+.mw-footer .templatesUsed,
+#footer-info-templatesUsed,
+.templatesUsed {
+    font-size: 0.75em !important;
+    line-height: 1.2 !important;
+    margin-top: 0.5rem !important;
+    opacity: 0.75;
+}
+
+/* Efficiency / wide calc tables: allow horizontal scroll instead of viewport clip */
+.osrs-calculator-layout .jcTable,
+.osrs-calculator-layout table {
+    max-width: 100%;
+}
+
+
+
+/* Ensure images in calculator descriptions render properly (no dark blank blocks). */
+.osrs-calculator-layout .osrs-calculator-description img,
+.osrs-calculator-layout > .calculator-description img,
+.osrs-calculator-layout > p:first-child img {
+    max-width: 100% !important;
+    height: auto !important;
+    display: block !important;
+    margin: 0.25rem 0 !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    background: transparent !important;
+}
+
+/* Overnight Wave1b: collapse Templates Used on calc pages (wastes viewport). */
+.osrs-calculator-layout .templatesUsed,
+.osrs-calculator-layout .mw-templatesUsedExplanation,
+.mw-parser-output > .templatesUsed,
+.mw-footer-container .templatesUsed,
+div.templatesUsed {
+    display: none !important;
+}
+
+/* Skill-calc OOUI: stop Lookup / number fields from stretching or overlapping. */
+.osrs-calculator-layout .oo-ui-actionFieldLayout-input,
+.osrs-calculator-layout .oo-ui-actionFieldLayout-button {
+    vertical-align: middle !important;
+}
+.osrs-calculator-layout .oo-ui-actionFieldLayout-button {
+    flex: 0 0 auto !important;
+    max-width: 40% !important;
+}
+.osrs-calculator-layout .oo-ui-actionFieldLayout-input {
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+}
+.osrs-calculator-layout .oo-ui-actionFieldLayout-body,
+.osrs-calculator-layout .oo-ui-actionFieldLayout > .oo-ui-fieldLayout-body {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    gap: 0.35rem !important;
+    max-width: 100% !important;
+}
+.osrs-calculator-layout .oo-ui-numberInputWidget,
+.osrs-calculator-layout .oo-ui-textInputWidget,
+.osrs-calculator-layout .oo-ui-dropdownWidget,
+.osrs-calculator-layout .oo-ui-comboBoxInputWidget {
+    max-height: 3rem !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+}
+.osrs-calculator-layout .oo-ui-inputWidget-input,
+.osrs-calculator-layout input.oo-ui-inputWidget-input {
+    min-height: 2.25rem !important;
+    max-height: 2.75rem !important;
+    height: 2.5rem !important;
+    line-height: 1.25 !important;
+    box-sizing: border-box !important;
+}
+.osrs-calculator-layout .oo-ui-dropdownWidget-handle,
+.osrs-calculator-layout .oo-ui-comboBoxInputWidget-field {
+    min-height: 2.25rem !important;
+    max-height: 2.75rem !important;
+}
+
+/* Number input +/- button containers: prevent vertical stretch. */
+.osrs-calculator-layout .oo-ui-numberInputWidget-buttonsDecrement,
+.osrs-calculator-layout .oo-ui-numberInputWidget-buttonsIncrement {
+    max-height: 2.75rem !important;
+    display: flex !important;
+    align-items: center !important;
+    box-sizing: border-box !important;
+}
+.osrs-calculator-layout .oo-ui-numberInputWidget-minusButton,
+.osrs-calculator-layout .oo-ui-numberInputWidget-plusButton {
+    height: 2.5rem !important;
+    max-height: 2.5rem !important;
+    box-sizing: border-box !important;
+}
+
+/* Hide duplicate option label text that OOUI sometimes leaves visible under dropdowns. */
+.osrs-calculator-layout .oo-ui-dropdownWidget + .oo-ui-labelElement-label,
+.osrs-calculator-layout .oo-ui-dropdownInputWidget + label {
+    position: absolute !important;
+    width: 1px !important;
+    height: 1px !important;
+    overflow: hidden !important;
+    clip: rect(0 0 0 0) !important;
+}
+
+
+/* Right-aligned field labels: enforce consistent label/field column widths for grid alignment. */
+.osrs-calculator-layout .oo-ui-fieldLayout-align-right > .oo-ui-fieldLayout-body {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    align-items: flex-start !important;
+    max-width: 100% !important;
+}
+.osrs-calculator-layout .oo-ui-fieldLayout-align-right > .oo-ui-fieldLayout-body > .oo-ui-fieldLayout-header {
+    flex: 0 0 35% !important;
+    max-width: 35% !important;
+    text-align: right !important;
+    padding-right: 0.5rem !important;
+    box-sizing: border-box !important;
+}
+.osrs-calculator-layout .oo-ui-fieldLayout-align-right > .oo-ui-fieldLayout-body > .oo-ui-fieldLayout-field {
+    flex: 1 1 auto !important;
+    max-width: 60% !important;
+    box-sizing: border-box !important;
+}
+.osrs-calculator-layout .oo-ui-fieldLayout-align-right > .oo-ui-fieldLayout-body > .oo-ui-fieldLayout-help {
+    flex: 0 0 auto !important;
+    margin-left: 0.25rem !important;
+}
+
+/* Overnight Wave1c: Template:Calc_use renders table.archivelist "Templates used" */
+.mw-parser-output table.archivelist,
+.osrs-calculator-layout table.archivelist,
+table.archivelist {
+    display: none !important;
+}
+
+/* OOUI select: hide the phantom selected-value label under the handle */
+.osrs-calculator-layout .oo-ui-dropdownWidget-handle + .oo-ui-labelElement-label,
+.osrs-calculator-layout .oo-ui-dropdownInputWidget > .oo-ui-labelElement-label,
+.osrs-calculator-layout .jsCalc-field-select .oo-ui-labelElement-label:not(.oo-ui-fieldLayout-header *),
+.osrs-calculator-layout .oo-ui-dropdownWidget .oo-ui-labelElement-label:not(.oo-ui-dropdownWidget-handle *) {
+    /* keep handle label; hide stray siblings */
+}
+.osrs-calculator-layout .jsCalc-field .oo-ui-fieldLayout-field > .oo-ui-labelElement-label,
+.osrs-calculator-layout .jsCalc-field-select .oo-ui-fieldLayout-field > span.oo-ui-labelElement-label {
+    display: none !important;
+}
+
+/* buttonselect stacks: force horizontal wrap instead of huge vertical columns */
+.osrs-calculator-layout .oo-ui-buttonSelectWidget,
+.osrs-calculator-layout .oo-ui-buttonGroupWidget {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 0.25rem !important;
+    max-width: 100% !important;
+}
+.osrs-calculator-layout .oo-ui-buttonSelectWidget .oo-ui-buttonElement,
+.osrs-calculator-layout .oo-ui-buttonGroupWidget .oo-ui-buttonElement {
+    flex: 0 1 auto !important;
+    max-width: 100% !important;
+}
+
+
+/* Force-hide Calc_use archive list even if marked osrs-calculator-templates */
+table.archivelist,
+table.osrs-calculator-templates,
+.osrs-calculator-templates.archivelist {
+    display: none !important;
+    visibility: hidden !important;
+    height: 0 !important;
+    overflow: hidden !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+}
+
+
+/* Wave1d overnight: fix residual Cooking/Efficiency layout issues */
+/* Soften 35/60 split that clipped Lookup on ~360dp widths */
+.osrs-calculator-layout .oo-ui-fieldLayout-align-right > .oo-ui-fieldLayout-body > .oo-ui-fieldLayout-header {
+    flex: 0 1 auto !important;
+    max-width: min(42%, 11rem) !important;
+    min-width: 5.5rem !important;
+}
+.osrs-calculator-layout .oo-ui-fieldLayout-align-right > .oo-ui-fieldLayout-body > .oo-ui-fieldLayout-field {
+    flex: 1 1 0 !important;
+    max-width: none !important;
+    min-width: 0 !important;
+}
+/* Lookup action row: keep button fully visible */
+.osrs-calculator-layout .oo-ui-actionFieldLayout-button .oo-ui-buttonElement-button,
+.osrs-calculator-layout .oo-ui-actionFieldLayout-button .oo-ui-labelElement-label {
+    white-space: nowrap !important;
+}
+.osrs-calculator-layout .oo-ui-actionFieldLayout-button {
+    flex: 0 0 auto !important;
+    max-width: none !important;
+}
+.osrs-calculator-layout .oo-ui-actionFieldLayout-input {
+    flex: 1 1 0 !important;
+    min-width: 0 !important;
+}
+/* Efficiency / jcTable: avoid horizontal clip of right column */
+.osrs-calculator-layout,
+.osrs-calculator-layout .jcTable,
+.osrs-calculator-layout .oo-ui-panelLayout-framed,
+.osrs-calculator-layout .oo-ui-fieldsetLayout {
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+}
+.osrs-calculator-layout .jcTable {
+    width: 100% !important;
+}
+/* Fill previously-empty phantom-label rule; hide stray selected-value under dropdown */
+.osrs-calculator-layout .oo-ui-dropdownWidget-handle + .oo-ui-labelElement-label,
+.osrs-calculator-layout .oo-ui-dropdownInputWidget > .oo-ui-labelElement-label,
+.osrs-calculator-layout .jsCalc-field-select .oo-ui-fieldLayout-field > .oo-ui-labelElement-label,
+.osrs-calculator-layout .jsCalc-field .oo-ui-fieldLayout-field > span.oo-ui-labelElement-label {
+    display: none !important;
+    position: absolute !important;
+    width: 1px !important;
+    height: 1px !important;
+    overflow: hidden !important;
+    clip: rect(0 0 0 0) !important;
+}
+
+/* Wave2 residual: Efficiency form + tickets Player Name width */
+.osrs-calculator-layout .oo-ui-panelLayout-framed,
+.osrs-calculator-layout .oo-ui-fieldsetLayout-group,
+.osrs-calculator-layout form {
+    max-width: 100% !important;
+    overflow-x: auto !important;
+}
+.osrs-calculator-layout .oo-ui-fieldLayout-align-left > .oo-ui-fieldLayout-body,
+.osrs-calculator-layout .oo-ui-fieldLayout-align-top > .oo-ui-fieldLayout-body {
+    max-width: 100% !important;
+}
+/* Tickets / Name+Lookup: dont let label eat the input */
+.osrs-calculator-layout .oo-ui-actionFieldLayout > .oo-ui-fieldLayout-body > .oo-ui-fieldLayout-header {
+    flex: 0 1 auto !important;
+    max-width: 8.5rem !important;
+}
+.osrs-calculator-layout .oo-ui-actionFieldLayout > .oo-ui-fieldLayout-body > .oo-ui-fieldLayout-field {
+    flex: 1 1 0 !important;
+    min-width: 0 !important;
+}
+
+/* Wave2b: stack Efficiency/jcTable label+field on narrow viewports */
+.osrs-calculator-layout .jcTable,
+.osrs-calculator-layout table.jcTable {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    table-layout: auto !important;
+}
+.osrs-calculator-layout .jcTable tbody,
+.osrs-calculator-layout .jcTable tr,
+.osrs-calculator-layout .jcTable th,
+.osrs-calculator-layout .jcTable td {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+}
+.osrs-calculator-layout .jcTable th {
+    text-align: left !important;
+    padding-bottom: 0.15rem !important;
+}
+.osrs-calculator-layout .jcTable td {
+    padding-top: 0 !important;
+    padding-bottom: 0.55rem !important;
+}
+.osrs-calculator-layout .jcTable .oo-ui-widget,
+.osrs-calculator-layout .jcTable .oo-ui-inputWidget,
+.osrs-calculator-layout .jcTable .oo-ui-dropdownWidget,
+.osrs-calculator-layout .jcTable .oo-ui-numberInputWidget {
+    width: 100% !important;
+    max-width: 100% !important;
+}
+
+/* Wave2c: stack right-aligned OOUI fields when viewport is narrow (Efficiency etc.) */
+.osrs-calculator-layout .oo-ui-fieldLayout-align-right > .oo-ui-fieldLayout-body,
+.osrs-calculator-layout .oo-ui-fieldLayout-align-left > .oo-ui-fieldLayout-body {
+    flex-wrap: wrap !important;
+}
+.osrs-calculator-layout .oo-ui-fieldLayout-align-right > .oo-ui-fieldLayout-body > .oo-ui-fieldLayout-header,
+.osrs-calculator-layout .oo-ui-fieldLayout-align-left > .oo-ui-fieldLayout-body > .oo-ui-fieldLayout-header {
+    flex: 1 1 100% !important;
+    max-width: 100% !important;
+    text-align: left !important;
+    padding-right: 0 !important;
+}
+.osrs-calculator-layout .oo-ui-fieldLayout-align-right > .oo-ui-fieldLayout-body > .oo-ui-fieldLayout-field,
+.osrs-calculator-layout .oo-ui-fieldLayout-align-left > .oo-ui-fieldLayout-body > .oo-ui-fieldLayout-field {
+    flex: 1 1 100% !important;
+    max-width: 100% !important;
+}
+
+/* ===== Wave2d: hide toggled-off fields + buttonselect chip width ===== */
+/* OOUI toggle() adds .oo-ui-element-hidden; without this rule (or if RL
+ * styles miss), Level/XP dual Current rows both stay visible. */
+.osrs-calculator-layout .oo-ui-element-hidden,
+.jcTable .oo-ui-element-hidden,
+.oo-ui-element-hidden {
+    display: none !important;
+    visibility: hidden !important;
+    position: absolute !important;
+    width: 1px !important;
+    height: 1px !important;
+    overflow: hidden !important;
+    clip: rect(0 0 0 0) !important;
+    margin: -1px !important;
+    padding: 0 !important;
+    border: 0 !important;
+}
+
+.osrs-calculator-layout .oo-ui-buttonSelectWidget,
+.osrs-calculator-layout .oo-ui-buttonGroupWidget {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    align-items: stretch !important;
+    gap: 0.3rem !important;
+    max-width: 100% !important;
+    width: 100% !important;
+}
+.osrs-calculator-layout .oo-ui-buttonSelectWidget .oo-ui-buttonOptionWidget,
+.osrs-calculator-layout .oo-ui-buttonGroupWidget .oo-ui-buttonElement {
+    flex: 0 1 auto !important;
+    width: auto !important;
+    max-width: 100% !important;
+}
+.osrs-calculator-layout .oo-ui-buttonSelectWidget .oo-ui-buttonElement-button,
+.osrs-calculator-layout .oo-ui-buttonGroupWidget .oo-ui-buttonElement-button {
+    width: auto !important;
+    max-width: 100% !important;
+    white-space: normal !important;
+    height: auto !important;
+    min-height: 2.25rem !important;
+    line-height: 1.2 !important;
+    box-sizing: border-box !important;
+}
+.osrs-calculator-layout .oo-ui-buttonSelectWidget .oo-ui-labelElement-label,
+.osrs-calculator-layout .oo-ui-buttonGroupWidget .oo-ui-labelElement-label {
+    width: auto !important;
+    max-width: 100% !important;
+    display: inline !important;
+    white-space: normal !important;
+}

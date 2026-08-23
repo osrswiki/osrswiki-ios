@@ -127,6 +127,7 @@ final class osrsPreparedArticleWebViewStore: NSObject, WKNavigationDelegate, WKS
 
         let configuration = Self.makeConfiguration(sourceArticleURL: document.request.pageURL)
         configuration.userContentController.add(self, contentWorld: .page, name: "osrsFirstViewComplete")
+        configuration.userContentController.add(self, contentWorld: .page, name: "osrsFirstViewportSettled")
         configuration.userContentController.add(self, contentWorld: .page, name: "osrsLiveAssetWarm")
         let webView = WKWebView(frame: hostBounds, configuration: configuration)
         osrsWebViewThemePaint.apply(to: webView, usesDarkTheme: options.usesDarkTheme)
@@ -228,10 +229,12 @@ final class osrsPreparedArticleWebViewStore: NSObject, WKNavigationDelegate, WKS
     }
 
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
-        guard message.name == "osrsFirstViewComplete" else { return }
+        guard message.name == "osrsFirstViewComplete" || message.name == "osrsFirstViewportSettled" else { return }
         guard osrsWebKitSecurityPolicy.canAcceptScriptMessage(name: message.name, frameInfo: message.frameInfo) else {
             return
         }
+        // Stopwatch-only on prepared path; paint readiness stays on firstViewComplete.
+        guard message.name == "osrsFirstViewComplete" else { return }
         guard let webView = message.webView else { return }
         markPainted(webView)
     }
@@ -305,6 +308,7 @@ final class osrsPreparedArticleWebViewStore: NSObject, WKNavigationDelegate, WKS
     private func detachPreparedHandlers(_ webView: WKWebView) {
         let controller = webView.configuration.userContentController
         controller.removeScriptMessageHandler(forName: "osrsFirstViewComplete", contentWorld: .page)
+        controller.removeScriptMessageHandler(forName: "osrsFirstViewportSettled", contentWorld: .page)
         controller.removeScriptMessageHandler(forName: "osrsLiveAssetWarm", contentWorld: .page)
     }
 

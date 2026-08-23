@@ -1,3 +1,12 @@
+
+/* Overnight: Android System WebView may lack :has() — guard querySelectorAll. */
+(function(){
+  if (window.__osrsSafeQsa) return;
+  window.__osrsSafeQsa = function(root, sel) {
+    try { return root.querySelectorAll(sel); } catch (e) { return []; }
+  };
+})();
+
 (function () {
   'use strict';
 
@@ -70,7 +79,7 @@
       }
     });
 
-    root.querySelectorAll('p > span:has(img.osrs-inline-icon)').forEach((wrapper) => {
+    window.__osrsSafeQsa(root, 'p > span:has(img.osrs-inline-icon)').forEach((wrapper) => {
       if (hasOnlyInlineIconContent(wrapper)) {
         wrapper.classList.add('osrs-inline-lore-note');
       }
@@ -79,7 +88,7 @@
     /* Templates such as LoreSources wrap the icon and the sourced sentence in
        one span. That span is not icon chrome: keep its authored font-size and
        let wrapping lines size to a normal line-height. */
-    root.querySelectorAll('.osrs-inline-icon-wrapper, p span:has(img.osrs-inline-icon), li span:has(img.osrs-inline-icon)').forEach((wrapper) => {
+    window.__osrsSafeQsa(root, '.osrs-inline-icon-wrapper, p span:has(img.osrs-inline-icon), li span:has(img.osrs-inline-icon)').forEach((wrapper) => {
       if (!wrapper.querySelector('img')) return;
       if (osrsWrapperIsIconChrome(wrapper)) return;
       if (!osrsAuthoredPhrasingText(wrapper)) return;
@@ -89,7 +98,7 @@
 
     // Keep structurally isolated inline icons and following prose in one line box without
     // depending on a template name, page title, or presentation-style substring.
-    root.querySelectorAll('p:has(> .osrs-inline-lore-note), p:has(> .osrs-inline-icon-prose)').forEach((paragraph) => {
+    window.__osrsSafeQsa(root, 'p:has(> .osrs-inline-lore-note), p:has(> .osrs-inline-icon-prose)').forEach((paragraph) => {
       paragraph.classList.add('osrs-inline-lore-paragraph');
     });
   }
@@ -141,7 +150,7 @@
       }
     });
 
-    root.querySelectorAll('table:has(.mw-kartographer-map)').forEach((table) => {
+    window.__osrsSafeQsa(root, 'table:has(.mw-kartographer-map)').forEach((table) => {
       table.classList.add('osrs-map-table');
       const container = table.closest('.collapsible-container');
       if (container) container.classList.add('collapsible-map-table');

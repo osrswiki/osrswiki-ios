@@ -2442,6 +2442,9 @@ struct ArticleWebView: UIViewRepresentable {
                 } else {
                     parent.viewModel.completeLoadingWithBodyReveal()
                 }
+            case "osrsFirstViewportSettled":
+                // Stopwatch-only; body reveal stays on FirstViewPainted / osrsFirstViewComplete.
+                parent.viewModel.markFirstViewportSettled(loadGeneration: firstViewGeneration(from: body))
             case "safariDebugger":
                 handleSafariDebuggerMessage(body)
             default:
@@ -2450,6 +2453,13 @@ struct ArticleWebView: UIViewRepresentable {
         }
 
         private func handleCalculatorApiMessage(_ body: [String: Any]) {
+            // Check for choice picker action
+            if let action = body["action"] as? String, action == "showChoicePicker" {
+                handleCalculatorChoicePickerMessage(body)
+                return
+            }
+            
+            // Original calculator API request handler
             let requestId = body["id"] as? String ?? ""
             let method = body["method"] as? String ?? "GET"
             let urlString = body["url"] as? String ?? ""
@@ -2462,6 +2472,113 @@ struct ArticleWebView: UIViewRepresentable {
                 )
                 await MainActor.run {
                     self.completeCalculatorApi(id: requestId, result: result)
+                }
+            }
+        }
+
+        private func handleCalculatorChoicePickerMessage(_ body: [String: Any]) {
+            guard let label = body["label"] as? String,
+                  let optionsArray = body["options"] as? [[String: String]],
+                  !optionsArray.isEmpty else {
+                NSLog("osrsCalcApi: Invalid choice picker request")
+                return
+            }
+            
+            let currentValue = body["currentValue"] as? String ?? ""
+            let callbackId = body["callbackId"] as? String ?? ""
+            
+            NSLog("osrsCalcApi: showChoicePicker label=%@ options=%d currentValue=%@", label, optionsArray.count, currentValue)
+            
+            // Extract option labels and values
+            let options = optionsArray.compactMap { dict -> (label: String, value: String)? in
+                guard let optLabel = dict["label"], let optValue = dict["value"] else { return nil }
+                return (optLabel, optValue)
+            }
+            
+            guard !options.isEmpty else {
+                completeChoicePicker(callbackId: callbackId, selected: false, value: nil)
+                return
+            }
+            
+            // Show native iOS picker on main thread
+            DispatchQueue.main.async { [weak self] in
+                self?.showIOSChoicePicker(
+                    label: label,
+                    options: options,
+                    currentValue: currentValue,
+                    callbackId: callbackId
+                )
+            }
+        }
+
+        private func showIOSChoicePicker(label: String, options: [(label: String, value: String)], currentValue: String, callbackId: String) {
+            guard let webView else {
+                completeChoicePicker(callbackId: callbackId, selected: false, value: nil)
+                return
+            }
+            
+            // Find current selection index
+            var selectedIndex = options.firstIndex(where: { $0.value == currentValue || $0.label == currentValue }) ?? 0
+            
+            // Create action sheet with radio options
+            let alert = UIAlertController(title: label, message: nil, preferredStyle: .actionSheet)
+            
+            for (index, option) in options.enumerated() {
+                let action = UIAlertAction(
+                    title: option.label,
+                    style: .default
+                ) { [weak self] _ in
+                    self?.completeChoicePicker(callbackId: callbackId, selected: true, value: option.value)
+                }
+                
+                // Mark current selection (iOS doesn't have built-in radio buttons in action sheets,
+                // but we can add a checkmark)
+                if index == selectedIndex {
+                    action.setValue(true, forKey: "checked")
+                }
+                
+                alert.addAction(action)
+            }
+            
+            // Add cancel button
+            alert.addAction(UIAlertAction(title: "Cancel", style: .cancel) { [weak self] _ in
+                self?.completeChoicePicker(callbackId: callbackId, selected: false, value: nil)
+            })
+            
+            // For iPad: set popover presentation controller
+            if let popover = alert.popoverPresentationController {
+                popover.sourceView = webView
+                popover.sourceRect = CGRect(x: webView.bounds.midX, y: webView.bounds.midY, width: 0, height: 0)
+                popover.permittedArrowDirections = []
+            }
+            
+            // Present from the view controller that contains the webview
+            if let presentingVC = webView.findViewController() {
+                presentingVC.present(alert, animated: true, completion: nil)
+            } else {
+                NSLog("osrsCalcApi: Could not find view controller to present picker")
+                completeChoicePicker(callbackId: callbackId, selected: false, value: nil)
+            }
+        }
+
+        private func completeChoicePicker(callbackId: String, selected: Bool, value: String?) {
+            guard !callbackId.isEmpty, let webView else { return }
+            
+            let response: [String: Any] = [
+                "selected": selected,
+                "value": value ?? ""
+            ]
+            
+            guard let data = try? JSONSerialization.data(withJSONObject: response),
+                  let json = String(data: data, encoding: .utf8) else {
+                NSLog("osrsCalcApi: Failed to serialize picker response")
+                return
+            }
+            
+            let js = "if (window['\(callbackId)']) { window['\(callbackId)'](\(json)); }"
+            webView.evaluateJavaScript(js) { _, error in
+                if let error = error {
+                    NSLog("osrsCalcApi: Failed to call picker callback: %@", error.localizedDescription)
                 }
             }
         }
@@ -2505,8 +2622,14 @@ struct ArticleWebView: UIViewRepresentable {
                 let timeString = DateFormatter.timeFormatter.string(from: Date())
                 print("📊 [\(timeString)] 🎯 RenderTimeline: \(message)")
                 
+                // Stopwatch-only settled signal — must never reveal the body.
+                if message.hasPrefix("Event: FirstViewportSettled") {
+                    let loadGeneration = Self.loadGeneration(from: message)
+                    DispatchQueue.main.async {
+                        self.parent.viewModel.markFirstViewportSettled(loadGeneration: loadGeneration)
+                    }
                 // Handle first-viewport paint (primary reveal) and late styling-complete fallback
-                if message.hasPrefix("Event: FirstViewPainted") || message.hasPrefix("Event: StylingScriptsComplete") {
+                } else if message.hasPrefix("Event: FirstViewPainted") || message.hasPrefix("Event: StylingScriptsComplete") {
                     let loadGeneration = Self.loadGeneration(from: message)
                     // ANDROID PARITY: first-viewport paint unlocks reveal; styling-complete is a late fallback
                     DispatchQueue.main.async {
@@ -2534,7 +2657,11 @@ struct ArticleWebView: UIViewRepresentable {
         }
 
         private static func loadGeneration(from message: String) -> Int? {
-            let prefixes = ["Event: FirstViewPainted:", "Event: StylingScriptsComplete:"]
+            let prefixes = [
+                "Event: FirstViewPainted:",
+                "Event: StylingScriptsComplete:",
+                "Event: FirstViewportSettled:"
+            ]
             for prefix in prefixes {
                 guard message.hasPrefix(prefix) else { continue }
                 return Int(message.dropFirst(prefix.count).trimmingCharacters(in: .whitespacesAndNewlines))

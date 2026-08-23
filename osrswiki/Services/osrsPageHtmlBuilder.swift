@@ -26,6 +26,8 @@ class osrsPageHtmlBuilder {
         "styles/gadget_calc.css"
     ]
 
+    private let criticalArticleBundleAsset = "styles/critical-article.min.css"
+
     // Heavy wiki fidelity sheets. Downloaded immediately but applied after first paint.
     private let deferredStyleSheetAssets = [
         "styles/wiki-integration.css",
@@ -395,7 +397,9 @@ class osrsPageHtmlBuilder {
         // Clean title and prepare header
         let cleanedTitle = extractMainTitle(title)
         let documentTitle = cleanedTitle.isEmpty ? "OSRS Wiki" : cleanedTitle
-        let titleHeaderHtml = "<h1 class=\"page-header\">\(documentTitle)</h1>"
+        // Wave2c residual: short Calculator:Token titles mid-wrap under
+        // overflow-wrap:break-word; prefer break after namespace colon.
+        let titleHeaderHtml = "<h1 class=\"page-header\">\(softWrapNamespaceTitle(documentTitle))</h1>"
         let customScheme = UserDefaults.standard.string(forKey: "WKURLSchemeHandler_Scheme") ?? "app-assets"
 
         // Clean any existing page-header titles from bodyContent to prevent duplication
@@ -566,20 +570,46 @@ class osrsPageHtmlBuilder {
     ) -> String {
         let hrefPrefix = "\(customScheme)://localhost/"
         if inlineFirstPaintCss {
-            let inlined = styleSheetAssets.map { assetPath -> String in
+            let useBundle = osrsLoadPerformancePrefs.useCriticalArticleBundle
+            let criticalPart: String
+            if useBundle {
+                if let css = loadAssetText(criticalArticleBundleAsset) {
+                    criticalPart = "<style data-osrs-inline-css=\"\(criticalArticleBundleAsset)\">\(css)</style>"
+                } else {
+                    criticalPart = criticalStyleSheetAssets.map { assetPath -> String in
+                        if let css = loadAssetText(assetPath) {
+                            return "<style data-osrs-inline-css=\"\(assetPath)\">\(css)</style>"
+                        }
+                        return osrsPageHtmlBuilder.blockingStylesheetLink(asset: assetPath, hrefPrefix: hrefPrefix)
+                    }.joined(separator: "\n")
+                }
+            } else {
+                criticalPart = criticalStyleSheetAssets.map { assetPath -> String in
+                    if let css = loadAssetText(assetPath) {
+                        return "<style data-osrs-inline-css=\"\(assetPath)\">\(css)</style>"
+                    }
+                    return osrsPageHtmlBuilder.blockingStylesheetLink(asset: assetPath, hrefPrefix: hrefPrefix)
+                }.joined(separator: "\n")
+            }
+            let deferredPart = deferredStyleSheetAssets.map { assetPath -> String in
                 if let css = loadAssetText(assetPath) {
                     return "<style data-osrs-inline-css=\"\(assetPath)\">\(css)</style>"
                 }
                 return osrsPageHtmlBuilder.blockingStylesheetLink(asset: assetPath, hrefPrefix: hrefPrefix)
             }.joined(separator: "\n")
-            return inlined + "\n" + osrsPageHtmlBuilder.articleCssLoaderScript
+            return criticalPart + "\n" + deferredPart + "\n" + osrsPageHtmlBuilder.articleCssLoaderScript
         }
         if includeAssetLinks {
             print("\(logTag): 🔍 UserDefaults WKURLSchemeHandler_Scheme = '\(UserDefaults.standard.string(forKey: "WKURLSchemeHandler_Scheme") ?? "nil")'")
             print("\(logTag): 🔍 Using scheme: '\(customScheme)'")
-            let critical = criticalStyleSheetAssets.map { assetPath in
-                osrsPageHtmlBuilder.blockingStylesheetLink(asset: assetPath, hrefPrefix: hrefPrefix)
-            }.joined(separator: "\n")
+            let critical: String
+            if osrsLoadPerformancePrefs.useCriticalArticleBundle {
+                critical = osrsPageHtmlBuilder.blockingStylesheetLink(asset: criticalArticleBundleAsset, hrefPrefix: hrefPrefix)
+            } else {
+                critical = criticalStyleSheetAssets.map { assetPath in
+                    osrsPageHtmlBuilder.blockingStylesheetLink(asset: assetPath, hrefPrefix: hrefPrefix)
+                }.joined(separator: "\n")
+            }
             let deferred = deferredStyleSheetAssets.map { assetPath in
                 osrsPageHtmlBuilder.deferredStylesheetLinks(asset: assetPath, hrefPrefix: hrefPrefix)
             }.joined(separator: "\n")
@@ -695,7 +725,7 @@ class osrsPageHtmlBuilder {
                         margin-top: 0 !important;
                         margin-bottom: 0.6em !important;
                         padding-bottom: 0.2em !important;
-                        min-height: 1.3em;
+                        min-height: 0;
                         border-bottom: 1px solid var(--sidebar-color, currentColor);
                         box-sizing: border-box;
                     }
@@ -788,6 +818,21 @@ class osrsPageHtmlBuilder {
     private func extractMainTitle(_ title: String) -> String {
         // Use enhanced title cleaning that matches Android's functionality
         return osrsStringUtils.extractMainTitle(title)
+    }
+
+
+    /// Insert <wbr> after wiki namespace colons when the next char is non-space
+    /// so unbroken tokens like Calculator:Sailing wrap after the colon.
+    private func softWrapNamespaceTitle(_ title: String) -> String {
+        let pattern = #"\b([A-Za-z][A-Za-z ]{0,40}:)(?=\S)"#
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return title }
+        let range = NSRange(title.startIndex..<title.endIndex, in: title)
+        return regex.stringByReplacingMatches(
+            in: title,
+            options: [],
+            range: range,
+            withTemplate: "$1<wbr>"
+        )
     }
 
     private func removeDuplicatePageHeaders(_ htmlContent: String) -> String {
