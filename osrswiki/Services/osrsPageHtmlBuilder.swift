@@ -420,7 +420,7 @@ class osrsPageHtmlBuilder {
                            cleanedBodyContent.contains("GEdataprices")
 
         if needsGECharts {
-            print("\(logTag): Detected GE chart markers in content; will include highcharts widget script.")
+            print("\(logTag): Detected GE chart markers in content; will include Chart.js widget script.")
         }
 
         // Generate CSS links only if requested (disabled for WKUserScript injection)
@@ -445,7 +445,7 @@ class osrsPageHtmlBuilder {
         var dynamicJsAssets = jsAssetPaths
         if needsGECharts {
             dynamicJsAssets.append(contentsOf: [
-                "web/highcharts-stock.js",
+                "web/chart.umd.min.js",
                 "web/ge_charts_init.js"
             ])
         }
@@ -454,7 +454,9 @@ class osrsPageHtmlBuilder {
         if includeAssetLinks {
             jsScripts = dynamicJsAssets.map { assetPath in
                 let tag = "<script src=\"\(customScheme)://localhost/\(assetPath)\"></script>"
-                if assetPath.hasSuffix("highcharts-stock.js") {
+                if assetPath.hasSuffix("chart.umd.min.js") {
+                    // Chart.js UMD prefers AMD when present. MediaWiki defines `define`, so
+                    // window.Chart never appears unless we temporarily clear it.
                     return """
                     <script>window.__osrsAmdDefine=window.define;try{window.define=undefined;}catch(e){}</script>
                     \(tag)

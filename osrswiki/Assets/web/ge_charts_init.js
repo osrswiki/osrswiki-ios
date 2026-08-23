@@ -1,6 +1,6 @@
 // Minimal GE charts initializer for OSRS Wiki pages in the app
-// Finds elements with .GEChartBox and renders a Highcharts stock chart
-// using the OSRS Wiki price API.
+// Finds elements with .GEChartBox and renders a Chart.js line chart
+// using the OSRS Wiki price API. Chart.js version: see CHART_JS_VERSION (4.4.9).
 
 (function () {
   const LOG_TAG = 'GEChartInit';
@@ -23,18 +23,19 @@
     return null;
   }
 
-  function resolveHighcharts() {
-    if (window.Highcharts && typeof window.Highcharts.stockChart === 'function') {
-      return window.Highcharts;
-    }
-    // MediaWiki's AMD `define` captures Highcharts' UMD build, so the global
-    // never appears. Recover the module when requirejs is already on the page.
+  function resolveChart() {
+    if (typeof window.Chart === 'function') return window.Chart;
+    // MediaWiki's AMD `define` can capture Chart.js' UMD build.
     try {
       if (typeof require === 'function') {
-        const mod = require('highcharts/highstock') || require('highcharts');
-        if (mod && typeof mod.stockChart === 'function') {
-          window.Highcharts = mod;
+        const mod = require('chart.js') || require('Chart');
+        if (typeof mod === 'function') {
+          window.Chart = mod;
           return mod;
+        }
+        if (mod && typeof mod.Chart === 'function') {
+          window.Chart = mod.Chart;
+          return mod.Chart;
         }
       }
     } catch (e) {}
@@ -47,7 +48,7 @@
     for (const p of data) {
       const mid = toMidPrice(p);
       if (typeof mid === 'number' && typeof p.timestamp === 'number') {
-        series.push([p.timestamp * 1000, mid]);
+        series.push({ x: p.timestamp * 1000, y: mid });
       }
     }
     return series;
@@ -81,7 +82,7 @@
     const css = `
       .GEdatachart.smallChart { box-sizing:border-box; width:100% !important; max-width:100% !important; min-width:0 !important; overflow:hidden !important; height:220px !important; touch-action:pan-y; }
       .GEChartBox { box-sizing:border-box; width:100%; max-width:100%; min-width:0; overflow:hidden; margin:0 !important; padding:0 !important; }
-      .GEdatachart.smallChart svg, .GEdatachart.smallChart .highcharts-container { max-width:100% !important; overflow:hidden !important; }
+      .GEdatachart.smallChart canvas { display:block; width:100% !important; max-width:100% !important; height:100% !important; }
     `;
     const style = document.createElement('style');
     style.id = 'ge-charts-style';
@@ -96,96 +97,134 @@
     return String(n);
   }
 
+  function formatTickDate(epochMs) {
+    try {
+      const d = new Date(epochMs);
+      if (Number.isNaN(d.getTime())) return '';
+      const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      return months[d.getMonth()] + ' ' + d.getDate();
+    } catch (e) {
+      return '';
+    }
+  }
+
   function renderChart(container, series) {
-    if (!resolveHighcharts()) {
-      log('e', 'Highcharts.stockChart not available');
+    const ChartCtor = resolveChart();
+    if (!ChartCtor) {
+      log('e', 'Chart.js not available');
       return;
     }
     ensureStylesInjected();
 
-    const id = container.id || undefined;
     const bodyColor = getComputedStyle(document.body).color || '#333';
     const cs = getComputedStyle(container);
     const styleH = parseFloat(cs.height) || 0;
     const inlineH = parseFloat((container.style && container.style.height) || '') || 0;
-    const height = Math.max(styleH, inlineH, container.clientHeight || 0, 160);
-    const opts = {
-      chart: {
-        height,
-        backgroundColor: 'transparent',
-        reflow: true,
-        marginLeft: 48,
-        marginRight: 16,
-        marginTop: 22,
-        spacingTop: 18,
-        spacingBottom: 10,
-        spacing: [18, 4, 10, 4],
-        animation: false,
-        zoomType: 'x',
-        pinchType: 'x',
-        panning: { enabled: true, type: 'x' },
-        resetZoomButton: { position: { align: 'right', x: -4, y: 4 } }
-      },
-      title: { text: null },
-      subtitle: { text: null },
-      credits: { enabled: false },
-      rangeSelector: { enabled: false },
-      legend: { enabled: false },
-      navigator: { enabled: false },
-      scrollbar: { enabled: false },
-      xAxis: {
-        ordinal: false,
-        crosshair: { width: 1, color: '#8B7355', dashStyle: 'ShortDot' },
-        lineWidth: 1,
-        tickWidth: 0,
-        labels: { style: { color: bodyColor, fontSize: '11px' } }
-      },
-      tooltip: {
-        enabled: true,
-        shared: true,
-        followTouchMove: true,
-        valueDecimals: 0,
-        valueSuffix: ' gp'
-      },
-      yAxis: {
-        opposite: false,
-        title: { text: null },
-        gridLineWidth: 1,
-        tickAmount: 3,
-        startOnTick: true,
-        endOnTick: true,
-        lineWidth: 1,
-        lineColor: '#E0E0E0',
-        showLastLabel: true,
-        showFirstLabel: true,
-        labels: {
-          style: { color: bodyColor, fontSize: '11px' },
-          align: 'right',
-          x: -6,
-          reserveSpace: true,
-          formatter: function () { return formatCompact(this.value); }
-        }
-      },
-      series: [{
-        type: 'line',
-        name: 'Price',
-        data: series,
-        color: '#4572A7',
-        lineWidth: 2,
-        tooltip: { valueDecimals: 0, pointFormat: '<b>{point.y}</b> gp' }
-      }]
-    };
+    const height = Math.max(styleH, inlineH, container.clientHeight || 0, 220);
+
+    // Clear wiki "Loading" placeholder / prior canvas
+    container.textContent = '';
+    container.style.height = height + 'px';
+    const canvas = document.createElement('canvas');
+    canvas.setAttribute('aria-label', 'Grand Exchange price chart');
+    container.appendChild(canvas);
+
     try {
-      const chart = id ? window.Highcharts.stockChart(id, opts) : window.Highcharts.stockChart(container, opts);
+      if (container.__osrsChart && typeof container.__osrsChart.destroy === 'function') {
+        container.__osrsChart.destroy();
+      }
+      const chart = new ChartCtor(canvas, {
+        type: 'line',
+        data: {
+          datasets: [{
+            label: 'Price',
+            data: series,
+            borderColor: '#4572A7',
+            backgroundColor: 'transparent',
+            borderWidth: 2,
+            pointRadius: 0,
+            pointHoverRadius: 3,
+            tension: 0.1,
+            spanGaps: false
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          animation: false,
+          interaction: {
+            mode: 'index',
+            intersect: false
+          },
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              enabled: true,
+              callbacks: {
+                title: function (items) {
+                  if (!items || !items.length) return '';
+                  const x = items[0].parsed && items[0].parsed.x;
+                  if (typeof x !== 'number') return '';
+                  try {
+                    return new Date(x).toLocaleString();
+                  } catch (e) {
+                    return formatTickDate(x);
+                  }
+                },
+                label: function (item) {
+                  const y = item.parsed && item.parsed.y;
+                  if (typeof y !== 'number') return '';
+                  return y.toLocaleString() + ' gp';
+                }
+              }
+            }
+          },
+          scales: {
+            x: {
+              type: 'linear',
+              title: { display: false },
+              grid: { display: false },
+              ticks: {
+                color: bodyColor,
+                font: { size: 11 },
+                maxRotation: 0,
+                autoSkip: true,
+                maxTicksLimit: 5,
+                callback: function (value) {
+                  return formatTickDate(value);
+                }
+              }
+            },
+            y: {
+              title: { display: false },
+              grid: { color: 'rgba(128,128,128,0.25)' },
+              ticks: {
+                color: bodyColor,
+                font: { size: 11 },
+                maxTicksLimit: 4,
+                callback: function (value) {
+                  return formatCompact(value);
+                }
+              }
+            }
+          }
+        }
+      });
+
       container.setAttribute('role', 'application');
       container.setAttribute('aria-label', 'Interactive Grand Exchange price chart. Drag or pinch horizontally to inspect prices.');
       container.tabIndex = 0;
       if (window.ResizeObserver) {
-        const observer = new ResizeObserver(() => chart.reflow());
+        if (container.__osrsChartResizeObserver) {
+          try { container.__osrsChartResizeObserver.disconnect(); } catch (e) {}
+        }
+        const observer = new ResizeObserver(() => {
+          try { chart.resize(); } catch (e) {}
+        });
         observer.observe(container);
         container.__osrsChartResizeObserver = observer;
       }
-      container.__osrsHighchart = chart;
+      container.__osrsChart = chart;
     } catch (e) {
       log('e', 'Failed to render chart', e);
     }
@@ -201,7 +240,7 @@
       // Only skip work that already produced a chart. A failed or empty
       // fetch must remain retryable — marking rendered first left the
       // wiki "Loading" placeholder stuck forever.
-      if (chartEl.dataset.rendered === '1' && chartEl.__osrsHighchart) return;
+      if (chartEl.dataset.rendered === '1' && chartEl.__osrsChart) return;
       if (chartEl.dataset.osrsChartPending === '1') return;
       chartEl.dataset.osrsChartPending = '1';
       // Install swipe-back guard so horizontal drags inside the chart
@@ -231,7 +270,7 @@
               setTimeout(() => attempt(remaining - 1), 400);
             } else {
               delete chartEl.dataset.osrsChartPending;
-              if (!chartEl.__osrsHighchart) {
+              if (!chartEl.__osrsChart) {
                 chartEl.textContent = 'Price history unavailable';
               }
             }
@@ -246,15 +285,15 @@
   function markUnavailable(boxes) {
     boxes.forEach((box) => {
       const chartEl = box.querySelector('.GEdatachart');
-      if (chartEl && !chartEl.__osrsHighchart && chartEl.dataset.rendered !== '1') {
+      if (chartEl && !chartEl.__osrsChart && chartEl.dataset.rendered !== '1') {
         chartEl.textContent = 'Price history unavailable';
         chartEl.dataset.rendered = '0';
       }
     });
   }
 
-  let highchartsDeadline = 0;
-  let highchartsWaitQueued = false;
+  let chartjsDeadline = 0;
+  let chartjsWaitQueued = false;
   let initStartedAt = 0;
 
   function initAll() {
@@ -267,19 +306,19 @@
       markUnavailable(boxes);
       return;
     }
-    if (!resolveHighcharts()) {
+    if (!resolveChart()) {
       const now = Date.now();
-      if (!highchartsDeadline) highchartsDeadline = now + 4000;
-      if (now >= highchartsDeadline) {
-        log('e', 'Highcharts never became available');
+      if (!chartjsDeadline) chartjsDeadline = now + 4000;
+      if (now >= chartjsDeadline) {
+        log('e', 'Chart.js never became available');
         markUnavailable(boxes);
         return;
       }
-      if (!highchartsWaitQueued) {
-        highchartsWaitQueued = true;
-        log('w', 'Highcharts not yet loaded; delaying init');
+      if (!chartjsWaitQueued) {
+        chartjsWaitQueued = true;
+        log('w', 'Chart.js not yet loaded; delaying init');
         setTimeout(() => {
-          highchartsWaitQueued = false;
+          chartjsWaitQueued = false;
           initAll();
         }, 100);
       }
@@ -325,12 +364,11 @@
       if (!sent && dx > 6 && dx > dy) { sent = true; send(true); }
       if (sent) resetSoon();
     };
-    const onUp = () => { down = false; if (sent) { // keep guard for a short delay to beat fling race
+    const onUp = () => { down = false; if (sent) {
         if (resetTimer) clearTimeout(resetTimer);
         resetTimer = setTimeout(() => { sent = false; send(false); }, 250);
       } };
 
-    // Pointer events preferred
     if (window.PointerEvent) {
       el.addEventListener('pointerdown', (e) => onDown(e.clientX, e.clientY), { passive: true });
       el.addEventListener('pointermove', (e) => onMove(e.clientX, e.clientY), { passive: true });
@@ -338,7 +376,6 @@
       el.addEventListener('pointercancel', onUp, { passive: true });
       el.addEventListener('pointerleave', onUp, { passive: true });
     } else {
-      // Touch/mouse fallback
       el.addEventListener('touchstart', (e) => { const t = e.touches[0]; if (t) onDown(t.clientX, t.clientY); }, { passive: true });
       el.addEventListener('touchmove', (e) => { const t = e.touches[0]; if (t) onMove(t.clientX, t.clientY); }, { passive: true });
       el.addEventListener('touchend', onUp, { passive: true });
@@ -349,9 +386,8 @@
     }
   }
 
-  // Global, capture-phase guard to reliably catch events within inner Highcharts layers
-  // Keep the local guard for pointer events inside Highcharts, but the
-  // primary enforcement now happens in horizontal_scroll_interceptor.js
+  // Global, capture-phase guard for chart gesture layers.
+  // Primary enforcement also happens in horizontal_scroll_interceptor.js
   (function installGlobalChartGestureGuard() {
     const isInChart = (t) => !!(t && (t.closest && (t.closest('.GEdatachart') || t.closest('.GEChartBox'))));
     const send = (flag) => {

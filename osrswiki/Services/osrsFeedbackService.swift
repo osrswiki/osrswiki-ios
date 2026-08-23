@@ -8,29 +8,29 @@
 import Foundation
 import UIKit
 
-/// Service for securely submitting feedback via Google Cloud Function.
+/// Service for securely submitting feedback via the Cloudflare feedback Worker.
 /// This approach keeps the GitHub API token secure on the server side and routes
 /// iOS feedback to the appropriate repository (osrswiki-ios).
 class osrsFeedbackService {
     
     static let shared = osrsFeedbackService()
     
-    private static let defaultCloudFunctionURL = URL(string: "https://us-central1-osrs-459713.cloudfunctions.net/createGithubIssue")!
-    private let cloudFunctionURL: URL
+    private static let defaultFeedbackWorkerURL = URL(string: "https://osrswiki-feedback.omiyawaki.workers.dev/createGithubIssue")!
+    private let feedbackWorkerURL: URL
     private let session: URLSession
     private let systemInfoProvider: () -> osrsFeedbackSystemInfo
     
     init(
         session: URLSession = .shared,
-        cloudFunctionURL: URL = osrsFeedbackService.defaultCloudFunctionURL,
+        feedbackWorkerURL: URL = osrsFeedbackService.defaultFeedbackWorkerURL,
         systemInfoProvider: @escaping () -> osrsFeedbackSystemInfo = osrsFeedbackSystemInfo.current
     ) {
         self.session = session
-        self.cloudFunctionURL = cloudFunctionURL
+        self.feedbackWorkerURL = feedbackWorkerURL
         self.systemInfoProvider = systemInfoProvider
     }
     
-    /// Creates a bug report issue via secure Cloud Function
+    /// Creates a bug report issue via the feedback Worker
     func reportIssue(
         title: String,
         description: String,
@@ -44,7 +44,7 @@ class osrsFeedbackService {
         )
     }
     
-    /// Creates a feature request issue via secure Cloud Function
+    /// Creates a feature request issue via the feedback Worker
     func requestFeature(
         title: String,
         description: String,
@@ -58,7 +58,7 @@ class osrsFeedbackService {
         )
     }
     
-    /// Creates a general feedback issue via secure Cloud Function
+    /// Creates a general feedback issue via the feedback Worker
     func submitGeneralFeedback(
         title: String,
         description: String,
@@ -77,7 +77,8 @@ class osrsFeedbackService {
         description: String,
         label: String,
         includeSystemInfo: Bool
-    ) throws -> osrsCloudFunctionIssueRequest {
+    ) throws -> osrsFeedbackWorkerIssueRequest {
+        let systemInfo = systemInfoProvider()
         let body: String
         if includeSystemInfo {
             body = """
@@ -85,17 +86,18 @@ class osrsFeedbackService {
             
             ---
             **Device Information:**
-            \(systemInfoProvider().formattedForFeedback)
+            \(systemInfo.formattedForFeedback)
             """
         } else {
             body = description
         }
 
-        return osrsCloudFunctionIssueRequest(
+        return osrsFeedbackWorkerIssueRequest(
             title: title,
             body: body,
             labels: [label],
-            platform: "ios"
+            platform: "ios",
+            appVersion: "\(systemInfo.appVersion) (\(systemInfo.buildNumber))"
         )
     }
 
@@ -115,13 +117,13 @@ class osrsFeedbackService {
             
             let jsonData = try JSONEncoder().encode(requestBody)
 
-            var request = URLRequest(url: cloudFunctionURL)
+            var request = URLRequest(url: feedbackWorkerURL)
             request.httpMethod = "POST"
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             request.setValue("OSRSWikiApp-iOS/\(getAppVersion())", forHTTPHeaderField: "User-Agent")
             request.httpBody = jsonData
             
-            print("osrsFeedbackService: Submitting feedback via Cloud Function for iOS")
+            print("osrsFeedbackService: Submitting feedback via feedback Worker for iOS")
             
             let (data, response) = try await session.data(for: request)
             
@@ -131,7 +133,7 @@ class osrsFeedbackService {
             
             switch httpResponse.statusCode {
             case 200:
-                if let responseData = try? JSONDecoder().decode(osrsCloudFunctionResponse.self, from: data) {
+                if let responseData = try? JSONDecoder().decode(osrsFeedbackWorkerResponse.self, from: data) {
                     print("osrsFeedbackService: Feedback submitted successfully: \(responseData.message)")
                     return .success("Your feedback has been submitted successfully!")
                 } else {
@@ -203,14 +205,15 @@ struct osrsFeedbackSystemInfo: Equatable {
     }
 }
 
-struct osrsCloudFunctionIssueRequest: Codable {
+struct osrsFeedbackWorkerIssueRequest: Codable {
     let title: String
     let body: String
     let labels: [String]?
     let platform: String
+    let appVersion: String?
 }
 
-struct osrsCloudFunctionResponse: Codable {
+struct osrsFeedbackWorkerResponse: Codable {
     let message: String
 }
 
