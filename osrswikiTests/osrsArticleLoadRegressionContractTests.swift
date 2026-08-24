@@ -307,6 +307,35 @@ final class osrsArticleLoadRegressionContractTests: XCTestCase {
         XCTAssertTrue(htmlBuilder.contains("data-osrs-inline-css"))
     }
 
+    func testSlice2DeferLiveWikiFidelityCssDefaultOnAndWired() throws {
+        let root = try repositoryRoot()
+        let prefs = try source(root, "platforms/ios/osrswiki/Services/osrsLoadPerformancePrefs.swift")
+        XCTAssertTrue(prefs.contains("static var deferLiveWikiFidelityCss: Bool = true"))
+        let coord = try source(root, "platforms/ios/osrswiki/Services/osrsArticleDocumentCoordinator.swift")
+        XCTAssertTrue(coord.contains("deferWikiFidelityCss: osrsLoadPerformancePrefs.deferLiveWikiFidelityCss"))
+        let loader = try source(root, "platforms/ios/osrswiki/Services/osrsPageContentLoader.swift")
+        XCTAssertTrue(loader.contains("deferWikiFidelityCss: Bool = osrsLoadPerformancePrefs.deferLiveWikiFidelityCss"))
+        let viewModel = try source(root, "platforms/ios/osrswiki/ViewModels/ArticleViewModel.swift")
+        XCTAssertTrue(viewModel.contains("deferWikiFidelityCss: osrsLoadPerformancePrefs.deferLiveWikiFidelityCss"))
+        let persistPaint = viewModel
+            .components(separatedBy: "private func persistPaintHTML(")
+            .dropFirst()
+            .first?
+            .components(separatedBy: "private func lazyMaterializePaintHTMLIfNeeded(")
+            .first ?? ""
+        XCTAssertTrue(persistPaint.contains("inlineFirstPaintCss: true"))
+        XCTAssertFalse(
+            persistPaint.contains("deferWikiFidelityCss: osrsLoadPerformancePrefs.deferLiveWikiFidelityCss"),
+            "saved paint HTML must stay fully inlined"
+        )
+        let htmlBuilder = try source(root, "platforms/ios/osrswiki/Services/osrsPageHtmlBuilder.swift")
+        XCTAssertTrue(htmlBuilder.contains("wikiFidelityDeferredStyleSheetAssets"))
+        XCTAssertTrue(htmlBuilder.contains("paintedPlatformAestheticsAsset"))
+        XCTAssertTrue(htmlBuilder.contains("styles/ios-article-aesthetics.css"))
+        XCTAssertTrue(htmlBuilder.contains("data-osrs-defer-until"))
+        XCTAssertTrue(htmlBuilder.contains("osrs-first-view-complete"))
+    }
+
     func testTask10EarlyFirstViewSlotWarmWiredBeforeDocumentCommit() throws {
         let root = try repositoryRoot()
         let prefs = try source(root, "platforms/ios/osrswiki/Services/osrsLoadPerformancePrefs.swift")

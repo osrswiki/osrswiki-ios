@@ -106,6 +106,31 @@ final class osrsSavedPaintHtmlTests: XCTestCase {
         XCTAssertTrue(fixesIndex!.lowerBound < aestheticsIndex!.lowerBound)
     }
 
+    func testLiveInlineCriticalDefersWikiIntegrationAndKeepsAestheticsInline() {
+        let html = osrsPageHtmlBuilder().buildFullHtmlDocument(
+            title: "Abyssal whip",
+            bodyContent: "<table class=\"infobox infobox-bonuses\"></table>",
+            theme: osrsLightTheme(),
+            includeAssetLinks: true,
+            inlineFirstPaintCss: true,
+            deferWikiFidelityCss: true,
+            bakeChromeInsets: false
+        )
+        assertDeferredStylesheet(html, asset: "styles/wiki-integration.css")
+        assertDeferredStylesheet(html, asset: "styles/navbox_styles.css")
+        XCTAssertTrue(html.contains("data-osrs-defer-until=\"first-view\""))
+        XCTAssertTrue(html.contains("osrs-first-view-complete"))
+        XCTAssertFalse(html.contains("data-osrs-inline-css=\"styles/wiki-integration.css\""))
+        XCTAssertFalse(html.contains("data-osrs-inline-css=\"styles/navbox_styles.css\""))
+        XCTAssertTrue(html.contains("data-osrs-inline-css=\"styles/ios-article-aesthetics.css\""))
+        XCTAssertFalse(html.contains("data-osrs-css-href=\"styles/ios-article-aesthetics.css\""))
+        XCTAssertTrue(
+            html.contains("data-osrs-inline-css=\"styles/critical-article.min.css\"") ||
+                html.contains("data-osrs-inline-css=\"styles/fixes.css\"")
+        )
+        XCTAssertTrue(html.contains("osrsActivateDeferredStylesheet"))
+    }
+
     private func assertCriticalStylesheet(_ html: String, asset: String) {
         let stylesheet = stylesheetLinks(in: html, asset: asset)
         XCTAssertTrue(

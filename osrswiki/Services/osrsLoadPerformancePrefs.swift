@@ -29,4 +29,10 @@ enum osrsLoadPerformancePrefs {
     /// the full document URL list. Flip to false to roll back the post-Task-10
     /// painted-set cut. Reveal stays FirstViewPainted.
     static var narrowFirstViewportPaintedSet: Bool = true
+
+    /// When true, live HTML inlines the critical bundle (+ platform aesthetics)
+    /// and restores `wiki-integration.css` / `navbox_styles.css` to the existing
+    /// `media=print` onload deferred-link path. Saved/offline stays fully inlined.
+    /// Flip to false to roll back thousand-cuts slice 2.
+    static var deferLiveWikiFidelityCss: Bool = true
 }

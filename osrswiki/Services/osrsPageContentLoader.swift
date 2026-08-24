@@ -277,7 +277,8 @@ class osrsPageContentLoader {
         collapseTablesEnabled: Bool = true,
         articleTextScale: CGFloat = 1.0,
         wrapTableCellsEnabled: Bool = false,
-        inlineFirstPaintCss: Bool = osrsLoadPerformancePrefs.inlineLiveFirstPaintCss
+        inlineFirstPaintCss: Bool = osrsLoadPerformancePrefs.inlineLiveFirstPaintCss,
+        deferWikiFidelityCss: Bool = osrsLoadPerformancePrefs.deferLiveWikiFidelityCss
     ) -> String {
         let title = pageContent.parseResult.displaytitle ?? pageContent.parseResult.title ?? "OSRS Wiki"
         return htmlBuilder.buildFullHtmlDocument(
@@ -288,7 +289,8 @@ class osrsPageContentLoader {
             articleTextScale: articleTextScale,
             wrapTableCellsEnabled: wrapTableCellsEnabled,
             canonicalTitle: pageContent.parseResult.title,
-            inlineFirstPaintCss: inlineFirstPaintCss
+            inlineFirstPaintCss: inlineFirstPaintCss,
+            deferWikiFidelityCss: deferWikiFidelityCss
         )
     }
 }

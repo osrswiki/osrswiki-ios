@@ -28,12 +28,21 @@ class osrsPageHtmlBuilder {
 
     private let criticalArticleBundleAsset = "styles/critical-article.min.css"
 
-    // Heavy wiki fidelity sheets. Downloaded immediately but applied after first paint.
-    private let deferredStyleSheetAssets = [
+    // Heavy wiki fidelity sheets. Downloaded immediately but applied after first paint
+    // on the live path (media=print onload). Saved still inlines them.
+    private let wikiFidelityDeferredStyleSheetAssets = [
         "styles/wiki-integration.css",
-        "styles/navbox_styles.css",
-        "styles/ios-article-aesthetics.css"
+        "styles/navbox_styles.css"
     ]
+
+    // First-viewport polish (line-height, bonuses padding, switcher chips). Stay
+    // on the painted path even when wiki-integration is deferred.
+    private let paintedPlatformAestheticsAsset = "styles/ios-article-aesthetics.css"
+
+    // Heavy wiki fidelity sheets. Downloaded immediately but applied after first paint.
+    private var deferredStyleSheetAssets: [String] {
+        wikiFidelityDeferredStyleSheetAssets + [paintedPlatformAestheticsAsset]
+    }
 
     private var styleSheetAssets: [String] {
         criticalStyleSheetAssets + deferredStyleSheetAssets
@@ -397,6 +406,7 @@ class osrsPageHtmlBuilder {
         wrapTableCellsEnabled: Bool = false,
         canonicalTitle: String? = nil,
         inlineFirstPaintCss: Bool = false,
+        deferWikiFidelityCss: Bool = false,
         bakeChromeInsets: Bool = true
     ) -> String {
         let startTime = CFAbsoluteTimeGetCurrent()
@@ -456,6 +466,7 @@ class osrsPageHtmlBuilder {
         // Generate CSS links only if requested (disabled for WKUserScript injection)
         let cssLinks = stylesheetMarkup(
             inlineFirstPaintCss: inlineFirstPaintCss,
+            deferWikiFidelityCss: deferWikiFidelityCss,
             includeAssetLinks: includeAssetLinks,
             customScheme: customScheme
         )
@@ -566,13 +577,14 @@ class osrsPageHtmlBuilder {
 
         let elapsedTime = (CFAbsoluteTimeGetCurrent() - startTime) * 1000
         print("\(logTag): buildFullHtmlDocument() took \(Int(elapsedTime))ms")
-        print("LOAD-MINMAX html_ready buildMs=\(Int(elapsedTime)) htmlChars=\(finalHtml.count) inlineFirstPaintCss=\(inlineFirstPaintCss) includeAssetLinks=\(includeAssetLinks)")
+        print("LOAD-MINMAX html_ready buildMs=\(Int(elapsedTime)) htmlChars=\(finalHtml.count) inlineFirstPaintCss=\(inlineFirstPaintCss) deferWikiFidelityCss=\(deferWikiFidelityCss) includeAssetLinks=\(includeAssetLinks)")
 
         return finalHtml
     }
 
     private func stylesheetMarkup(
         inlineFirstPaintCss: Bool,
+        deferWikiFidelityCss: Bool,
         includeAssetLinks: Bool,
         customScheme: String
     ) -> String {
@@ -598,6 +610,26 @@ class osrsPageHtmlBuilder {
                     }
                     return osrsPageHtmlBuilder.blockingStylesheetLink(asset: assetPath, hrefPrefix: hrefPrefix)
                 }.joined(separator: "\n")
+            }
+            if deferWikiFidelityCss {
+                let aestheticsPart: String
+                if let css = loadAssetText(paintedPlatformAestheticsAsset) {
+                    aestheticsPart = "<style data-osrs-inline-css=\"\(paintedPlatformAestheticsAsset)\">\(css)</style>"
+                } else {
+                    aestheticsPart = osrsPageHtmlBuilder.blockingStylesheetLink(
+                        asset: paintedPlatformAestheticsAsset,
+                        hrefPrefix: hrefPrefix
+                    )
+                }
+                let fidelityPart = wikiFidelityDeferredStyleSheetAssets.map { assetPath in
+                    osrsPageHtmlBuilder.deferredStylesheetLinks(
+                        asset: assetPath,
+                        hrefPrefix: hrefPrefix,
+                        deferUntilFirstView: true
+                    )
+                }.joined(separator: "\n")
+                return criticalPart + "\n" + aestheticsPart + "\n" +
+                    osrsPageHtmlBuilder.articleCssLoaderScript + "\n" + fidelityPart
             }
             let deferredPart = deferredStyleSheetAssets.map { assetPath -> String in
                 if let css = loadAssetText(assetPath) {
@@ -645,20 +677,28 @@ class osrsPageHtmlBuilder {
           window.RenderTimeline.log('Event: DeferredCssApplied:' + href);
         }
       };
-      function osrsActivatePendingDeferredStylesheets() {
+      function osrsActivatePendingDeferredStylesheets(includeFirstView) {
         var nodes = document.querySelectorAll('link[data-osrs-css="deferred"]');
         for (var i = 0; i < nodes.length; i++) {
+          var until = nodes[i].getAttribute('data-osrs-defer-until');
+          if (!includeFirstView && until === 'first-view') {
+            continue;
+          }
           if (nodes[i].media !== 'all') {
             window.osrsActivateDeferredStylesheet(nodes[i]);
           }
         }
       }
       document.addEventListener('DOMContentLoaded', function() {
-        osrsActivatePendingDeferredStylesheets();
+        osrsActivatePendingDeferredStylesheets(false);
         if (window.RenderTimeline && typeof window.RenderTimeline.log === 'function') {
           window.RenderTimeline.log('Event: ParseReady');
         }
       });
+      window.addEventListener('osrs-first-view-complete', function() {
+        setTimeout(function() { osrsActivatePendingDeferredStylesheets(true); }, 0);
+      });
+      setTimeout(function() { osrsActivatePendingDeferredStylesheets(true); }, 2000);
       if (window.requestAnimationFrame) {
         requestAnimationFrame(function() {
           requestAnimationFrame(function() {
@@ -676,11 +716,17 @@ class osrsPageHtmlBuilder {
         "<link rel=\"stylesheet\" href=\"\(hrefPrefix)\(asset)\" data-osrs-css=\"critical\">"
     }
 
-    static func deferredStylesheetLinks(asset: String, hrefPrefix: String) -> String {
+    static func deferredStylesheetLinks(
+        asset: String,
+        hrefPrefix: String,
+        deferUntilFirstView: Bool = false
+    ) -> String {
         let href = "\(hrefPrefix)\(asset)"
+        let untilAttr = deferUntilFirstView ? " data-osrs-defer-until=\"first-view\"" : ""
+        let onloadAttr = deferUntilFirstView ? "" : " onload=\"osrsActivateDeferredStylesheet(this)\""
         return """
         <link rel="preload" as="style" href="\(href)">
-        <link rel="stylesheet" href="\(href)" media="print" onload="osrsActivateDeferredStylesheet(this)" data-osrs-css="deferred" data-osrs-css-href="\(asset)">
+        <link rel="stylesheet" href="\(href)" media="print"\(onloadAttr) data-osrs-css="deferred" data-osrs-css-href="\(asset)"\(untilAttr)>
         """
     }
 

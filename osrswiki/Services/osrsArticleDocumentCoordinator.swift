@@ -1398,7 +1398,8 @@ actor osrsArticleDocumentCoordinator {
                     : .gb,
                 wrapTableCellsEnabled: options.wrapTableCellsEnabled,
                 canonicalTitle: payload.payload.title,
-                inlineFirstPaintCss: osrsLoadPerformancePrefs.inlineLiveFirstPaintCss
+                inlineFirstPaintCss: osrsLoadPerformancePrefs.inlineLiveFirstPaintCss,
+                deferWikiFidelityCss: osrsLoadPerformancePrefs.deferLiveWikiFidelityCss
             )
             try Task.checkCancellation()
             return html

@@ -3236,7 +3236,8 @@ class ArticleViewModel: NSObject, ObservableObject {
             includeAssetLinks: true,  // This generates <link> and <script> tags
             articleTextScale: articleTextScale,
             wrapTableCellsEnabled: wrapTableCellsEnabled,
-            inlineFirstPaintCss: osrsLoadPerformancePrefs.inlineLiveFirstPaintCss
+            inlineFirstPaintCss: osrsLoadPerformancePrefs.inlineLiveFirstPaintCss,
+            deferWikiFidelityCss: osrsLoadPerformancePrefs.deferLiveWikiFidelityCss
         )
 
         // Replace href and src attributes to use ios-assets:// scheme for internal resources only
