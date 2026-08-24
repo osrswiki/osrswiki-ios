@@ -126,6 +126,96 @@ enum osrsOfflineArticleResourceSettlement {
         initialResourcePlan(from: html).map(\.url)
     }
 
+    /// Wiki-hosted HTML5 audio for explicit Save only. Prefer an MP3/mpeg source when an
+    /// `<audio>` element also offers ogg; never fed into first-view / infobox warm.
+    nonisolated static func wikiAudioURLs(from html: String) -> [URL] {
+        let baseURL = URL(string: "https://oldschool.runescape.wiki/")!
+
+        func attribute(_ name: String, in tag: String) -> String? {
+            let escapedName = NSRegularExpression.escapedPattern(for: name)
+            let pattern = #"(?:^|\s)"# + escapedName + #"\s*=\s*[\"']([^\"']+)[\"']"#
+            guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]),
+                  let match = regex.firstMatch(in: tag, range: NSRange(tag.startIndex..., in: tag)),
+                  match.numberOfRanges > 1,
+                  let range = Range(match.range(at: 1), in: tag) else { return nil }
+            return String(tag[range])
+        }
+
+        func isAllowedWikiHost(_ url: URL) -> Bool {
+            guard let host = url.host?.lowercased() else { return false }
+            let bare = host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
+            return bare == "oldschool.runescape.wiki" || bare == "runescape.wiki"
+        }
+
+        func isAudioExtension(_ url: URL) -> Bool {
+            ["mp3", "ogg", "oga", "m4a"].contains(url.pathExtension.lowercased())
+        }
+
+        func isAudioMIME(_ type: String?) -> Bool {
+            guard let type = type?.lowercased() else { return false }
+            return type.hasPrefix("audio/mpeg")
+                || type.hasPrefix("audio/ogg")
+                || type.hasPrefix("audio/mp4")
+        }
+
+        func isMpegPreferred(url: URL, type: String?) -> Bool {
+            if url.pathExtension.lowercased() == "mp3" { return true }
+            guard let type = type?.lowercased() else { return false }
+            return type.hasPrefix("audio/mpeg")
+        }
+
+        struct Candidate {
+            let url: URL
+            let type: String?
+        }
+
+        let audioPattern = #"<audio\b[^>]*(?:\/>|>[\s\S]*?<\/audio\s*>)"#
+        guard let audioRegex = try? NSRegularExpression(pattern: audioPattern, options: [.caseInsensitive]) else {
+            return []
+        }
+
+        var selected: [URL] = []
+        var seen: Set<URL> = []
+        for match in audioRegex.matches(in: html, range: NSRange(html.startIndex..., in: html)) {
+            guard let range = Range(match.range, in: html) else { continue }
+            let element = String(html[range])
+            guard let openEnd = element.firstIndex(of: ">") else { continue }
+            let openTag = String(element[..<openEnd])
+
+            var candidates: [Candidate] = []
+            if let src = attribute("src", in: openTag),
+               let url = normalizedNetworkURL(src, relativeTo: baseURL),
+               isAllowedWikiHost(url),
+               isAudioExtension(url) || isAudioMIME(attribute("type", in: openTag)) {
+                candidates.append(Candidate(url: url, type: attribute("type", in: openTag)))
+            }
+
+            let sourcePattern = #"<source\b[^>]*>"#
+            if let sourceRegex = try? NSRegularExpression(pattern: sourcePattern, options: [.caseInsensitive]) {
+                for sourceMatch in sourceRegex.matches(
+                    in: element,
+                    range: NSRange(element.startIndex..., in: element)
+                ) {
+                    guard let sourceRange = Range(sourceMatch.range, in: element) else { continue }
+                    let sourceTag = String(element[sourceRange])
+                    guard let src = attribute("src", in: sourceTag),
+                          let url = normalizedNetworkURL(src, relativeTo: baseURL),
+                          isAllowedWikiHost(url) else { continue }
+                    let type = attribute("type", in: sourceTag)
+                    guard isAudioExtension(url) || isAudioMIME(type) else { continue }
+                    candidates.append(Candidate(url: url, type: type))
+                }
+            }
+
+            guard !candidates.isEmpty else { continue }
+            let preferred = candidates.first { isMpegPreferred(url: $0.url, type: $0.type) } ?? candidates[0]
+            if seen.insert(preferred.url).inserted {
+                selected.append(preferred.url)
+            }
+        }
+        return selected
+    }
+
     nonisolated static func infoboxImageURLs(from html: String) -> [URL] {
         var seen: Set<URL> = []
         var urls: [URL] = []
@@ -484,6 +574,9 @@ enum osrsOfflineArticleResourceSettlement {
         try Task.checkCancellation()
         var pending = initialResourcePlan(from: html)
         var seen = Set(pending.map(\.url))
+        for url in wikiAudioURLs(from: html) where seen.insert(url).inserted {
+            pending.append(PlannedResource(url: url, stylesheetDepth: nil))
+        }
         var settled: [URL] = []
         var failureCount = 0
         var recursiveStylesheetResourceCount = 0

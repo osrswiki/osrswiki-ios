@@ -79,6 +79,7 @@ class ProxyInterceptorService: ObservableObject {
         }
         guard !Task.isCancelled else { return nil }
         currentPageId = pageId
+        activeAssetHandler?.setCacheLookupPageId(pageId)
         guard let localToken = localServer?.enableSaveMode(pageId: pageId) else {
             return nil
         }
@@ -116,6 +117,7 @@ class ProxyInterceptorService: ObservableObject {
             guard activeSessionToken == owner else { return nil }
             currentPageId = nil
             activeSessionToken = nil
+            activeAssetHandler?.setCacheLookupPageId(nil)
             localServer?.disableMode(owner: owner.localToken)
             NetworkManager.shared.configureProxyRouting(enabled: false)
         } else {
@@ -160,6 +162,7 @@ class ProxyInterceptorService: ObservableObject {
               explicitSaveSessionToken == nil,
               activeSessionToken == nil else { return nil }
         currentPageId = pageId
+        activeAssetHandler?.setCacheLookupPageId(pageId)
         guard let localToken = localServer?.enableSaveMode(
             pageId: pageId,
             saveGeneration: saveGeneration,
@@ -183,6 +186,9 @@ class ProxyInterceptorService: ObservableObject {
     /// Register an IOSAssetHandler for coordinated save mode management
     func registerAssetHandler(_ handler: IOSAssetHandler) {
         activeAssetHandler = handler
+        if let currentPageId {
+            handler.setCacheLookupPageId(currentPageId)
+        }
         print("📝 ProxyInterceptorService: Registered IOSAssetHandler for coordinated caching")
     }
     
@@ -206,7 +212,8 @@ class ProxyInterceptorService: ObservableObject {
         }
         guard !Task.isCancelled else { return nil }
         currentPageId = pageId
-        
+        activeAssetHandler?.setCacheLookupPageId(pageId)
+
         // Enable save mode to cache resources, but they won't be marked as "saved"
         // This is the key to lazy caching - cache everything, save nothing
         guard let localToken = localServer?.enableSaveMode(pageId: pageId) else {
@@ -241,6 +248,7 @@ class ProxyInterceptorService: ObservableObject {
         }
 
         currentPageId = nil
+        activeAssetHandler?.setCacheLookupPageId(nil)
         localServer?.disableSaveMode()
         
         // Also disable NetworkManager proxy routing
@@ -259,6 +267,7 @@ class ProxyInterceptorService: ObservableObject {
         if explicitSaveSessionToken == token {
             explicitSaveSessionToken = nil
         }
+        activeAssetHandler?.setCacheLookupPageId(nil)
         localServer?.disableMode(owner: token.localToken)
 
         NetworkManager.shared.configureProxyRouting(enabled: false)
@@ -311,6 +320,7 @@ class ProxyInterceptorService: ObservableObject {
         }
         guard !Task.isCancelled else { return nil }
         currentPageId = pageId
+        activeAssetHandler?.setCacheLookupPageId(pageId)
         // Set page ID context without enabling save mode (we want to serve, not save)
         guard let localToken = localServer?.setPageIdContext(
             pageId: pageId,
@@ -352,6 +362,7 @@ class ProxyInterceptorService: ObservableObject {
         }
         guard !Task.isCancelled else { return nil }
         currentPageId = pageId
+        activeAssetHandler?.setCacheLookupPageId(pageId)
         guard let localToken = localServer?.setPageIdContext(
             pageId: pageId,
             allowsOriginOnMiss: true
@@ -381,11 +392,30 @@ class ProxyInterceptorService: ObservableObject {
     }
     
     /// Get cached response for asset requests (bridge to LocalHTTPServer for IOSAssetHandler)
-    func getCachedAssetResponse(url: String, pageId: String) -> (data: Data, response: HTTPURLResponse)? {
-        print("🔍 ProxyInterceptorService: Bridge request for cached asset: \(url), pageId: \(pageId)")
+    func getCachedAssetResponse(url: String, pageId: String?) -> (data: Data, response: HTTPURLResponse)? {
+        print("🔍 ProxyInterceptorService: Bridge request for cached asset: \(url), pageId: \(pageId ?? "nil")")
+        let isImages = url.contains("/images/")
+        if isImages {
+            NSLog(
+                "osrsImagesLookup: bridge begin url=%@ pageId=%@ currentPageId=%@ localServer=%d mainThread=%d",
+                url,
+                pageId ?? "nil",
+                currentPageId ?? "nil",
+                localServer == nil ? 0 : 1,
+                Thread.isMainThread ? 1 : 0
+            )
+        }
         
         guard let cachedResponse = localServer?.getCachedResponseForAsset(url: url, pageId: pageId) else {
             print("❌ ProxyInterceptorService: No cached response found through LocalHTTPServer")
+            if isImages {
+                NSLog(
+                    "osrsImagesLookup: bridge miss url=%@ pageId=%@ localServer=%d",
+                    url,
+                    pageId ?? "nil",
+                    localServer == nil ? 0 : 1
+                )
+            }
             return nil
         }
         
@@ -398,10 +428,27 @@ class ProxyInterceptorService: ObservableObject {
                 headerFields: cachedResponse.headers
               ) else {
             print("❌ ProxyInterceptorService: Failed to create HTTPURLResponse from cached data")
+            if isImages {
+                NSLog(
+                    "osrsImagesLookup: bridge wrap failed cachedUrl=%@ status=%d headers=%d",
+                    cachedResponse.url,
+                    cachedResponse.statusCode,
+                    cachedResponse.headers.count
+                )
+            }
             return nil
         }
         
         print("✅ ProxyInterceptorService: Successfully bridged cached asset response (\(cachedResponse.data.count) bytes)")
+        if isImages {
+            NSLog(
+                "osrsImagesLookup: bridge hit bytes=%d status=%d cachedUrl=%@ pageId=%@",
+                cachedResponse.data.count,
+                cachedResponse.statusCode,
+                cachedResponse.url,
+                cachedResponse.pageId
+            )
+        }
         return (data: cachedResponse.data, response: httpResponse)
     }
 

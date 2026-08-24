@@ -149,6 +149,16 @@ class IOSAssetHandler: NSObject, WKURLSchemeHandler {
             if osrsWikiWebViewUrl.shouldProxy(url) {
                 let wikiURL = osrsWikiWebViewUrl.rewriteToWiki(url)
                 print("🌐 IOSAssetHandler: Proxying wiki calculator/API request: \(wikiURL.absoluteString)")
+                if url.path.contains("/images/") {
+                    NSLog(
+                        "osrsImagesLookup: shouldProxy=1 request=%@ wiki=%@ method=%@ range=%@ mainThread=%d",
+                        url.absoluteString,
+                        wikiURL.absoluteString,
+                        urlSchemeTask.request.httpMethod ?? "GET",
+                        urlSchemeTask.request.value(forHTTPHeaderField: "Range") ?? "none",
+                        Thread.isMainThread ? 1 : 0
+                    )
+                }
                 self.fetchAndHandleExternalResource(
                     urlSchemeTask: urlSchemeTask,
                     originalURL: wikiURL.absoluteString,
@@ -368,7 +378,7 @@ class IOSAssetHandler: NSObject, WKURLSchemeHandler {
                 print("🔴 [ASSET_HANDLER] Attempted bundle paths: \(attemptedPaths)")
                 
                 // FALLBACK: If not found in bundle, try external resource handling (offline architecture)
-                if self.shouldHandleExternalResource(assetPath: assetPath) {
+                if Self.shouldHandleExternalResource(assetPath: assetPath) {
                     print("🌐 [ASSET_HANDLER] Falling back to external resource handling for: \(assetPath)")
                     self.handleExternalResourceRequest(urlSchemeTask: urlSchemeTask, assetPath: assetPath)
                     return
@@ -600,6 +610,17 @@ class IOSAssetHandler: NSObject, WKURLSchemeHandler {
             self.currentSavePageId = pageId
         }
     }
+
+    /// Bind the snapshot/browsing namespace used for cache-only and cache-first lookups.
+    func setCacheLookupPageId(_ pageId: String?) {
+        interceptorQueue.async {
+            print("📦 IOSAssetHandler: Cache lookup pageId set to \(pageId ?? "nil")")
+            self.currentSavePageId = pageId
+            if pageId == nil {
+                self.isInOfflineSaveMode = false
+            }
+        }
+    }
     
     /// Disable save mode and return to normal operation
     func disableOfflineSaveMode() {
@@ -611,19 +632,41 @@ class IOSAssetHandler: NSObject, WKURLSchemeHandler {
     }
     
     /// Get cached HTTP response (Android OfflineCacheInterceptor equivalent)
-    private func getCachedHttpResponse(url: String, pageId: String) -> (data: Data, response: HTTPURLResponse)? {
-        print("🔍 IOSAssetHandler: Requesting cached response for URL: \(url), pageId: \(pageId)")
+    private func getCachedHttpResponse(url: String, pageId: String?) -> (data: Data, response: HTTPURLResponse)? {
+        print("🔍 IOSAssetHandler: Requesting cached response for URL: \(url), pageId: \(pageId ?? "nil")")
+        let isImages = url.contains("/images/")
+        if isImages {
+            NSLog(
+                "osrsImagesLookup: getCachedHttpResponse begin url=%@ pageId=%@ mainThread=%d",
+                url,
+                pageId ?? "nil",
+                Thread.isMainThread ? 1 : 0
+            )
+        }
         
         // Use ProxyInterceptorService to access LocalHTTPServer cached responses
         if #available(iOS 17.0, *) {
             if let cachedResponse = ProxyInterceptorService.shared.getCachedAssetResponse(url: url, pageId: pageId) {
                 print("✅ IOSAssetHandler: Retrieved cached response from LocalHTTPServer (\(cachedResponse.data.count) bytes)")
+                if isImages {
+                    NSLog(
+                        "osrsImagesLookup: getCachedHttpResponse hit bytes=%d status=%d",
+                        cachedResponse.data.count,
+                        cachedResponse.response.statusCode
+                    )
+                }
                 return cachedResponse
             } else {
                 print("❌ IOSAssetHandler: No cached response found in LocalHTTPServer for: \(url)")
+                if isImages {
+                    NSLog("osrsImagesLookup: getCachedHttpResponse miss url=%@ pageId=%@", url, pageId ?? "nil")
+                }
             }
         } else {
             print("⚠️ IOSAssetHandler: iOS 17+ required for proxy-based caching, falling back to legacy approach")
+            if isImages {
+                NSLog("osrsImagesLookup: getCachedHttpResponse skipped iOS<17")
+            }
             // Legacy fallback for iOS <17 could use OfflineContentService if needed
         }
         
@@ -638,12 +681,14 @@ class IOSAssetHandler: NSObject, WKURLSchemeHandler {
     }
     
     /// Determine if this is an external resource that should be cached (Android-style detection)
-    private func shouldHandleExternalResource(assetPath: String) -> Bool {
-        // Images
-        if assetPath.hasPrefix("images/") || 
-           assetPath.contains(".png") || assetPath.contains(".jpg") || 
-           assetPath.contains(".jpeg") || assetPath.contains(".gif") || 
-           assetPath.contains(".svg") {
+    static func shouldHandleExternalResource(assetPath: String) -> Bool {
+        // Images and wiki-hosted audio (infobox transcodes live under images/)
+        if assetPath.hasPrefix("images/") ||
+           assetPath.contains(".png") || assetPath.contains(".jpg") ||
+           assetPath.contains(".jpeg") || assetPath.contains(".gif") ||
+           assetPath.contains(".svg") || assetPath.contains(".mp3") ||
+           assetPath.contains(".ogg") || assetPath.contains(".oga") ||
+           assetPath.contains(".m4a") {
             return true
         }
         
@@ -672,53 +717,113 @@ class IOSAssetHandler: NSObject, WKURLSchemeHandler {
     /// Handle external resource with HTTP interceptor pattern (Android OfflineCacheInterceptor equivalent)
     private func handleExternalResourceRequest(urlSchemeTask: WKURLSchemeTask, assetPath: String) {
         let originalURL = reconstructOriginalURL(from: assetPath, originalRequest: urlSchemeTask.request)
+        let requestURL = urlSchemeTask.request.url
+        let digest = LocalHTTPServer.cacheKeyForRequest(pageId: nil, method: "GET", url: originalURL)
+        if assetPath.hasPrefix("images/") || originalURL.contains("/images/") {
+            let encodedQuery = requestURL.flatMap {
+                URLComponents(url: $0, resolvingAgainstBaseURL: false)?.percentEncodedQuery
+            } ?? "nil"
+            NSLog(
+                "osrsImagesLookup: start request=%@ path=%@ encodedPath=%@ query=%@ encodedQuery=%@ wiki=%@ digest=%@ method=%@ range=%@ mainThread=%d",
+                requestURL?.absoluteString ?? "nil",
+                requestURL?.path ?? "nil",
+                requestURL?.path(percentEncoded: true) ?? "nil",
+                requestURL?.query ?? "nil",
+                encodedQuery,
+                originalURL,
+                digest,
+                urlSchemeTask.request.httpMethod ?? "GET",
+                urlSchemeTask.request.value(forHTTPHeaderField: "Range") ?? "none",
+                Thread.isMainThread ? 1 : 0
+            )
+        }
         
         // Check if we're in save mode and should cache this resource
         interceptorQueue.async {
             let shouldSave = self.isInOfflineSaveMode
-            let pageId = self.currentSavePageId
-            
-            // Get pageId from local context or ProxyInterceptorService
-            let pageIdToUse: String?
-            if let localPageId = pageId {
-                pageIdToUse = localPageId
-                print("🔍 [ENHANCED_DIAGNOSTICS] Using local pageId: \(localPageId)")
-            } else if #available(iOS 17.0, *) {
-                pageIdToUse = ProxyInterceptorService.shared.getCurrentPageId()
-                if let proxyPageId = pageIdToUse {
-                    print("🔍 [ENHANCED_DIAGNOSTICS] Retrieved pageId from ProxyInterceptorService: \(proxyPageId)")
-                } else {
-                    print("🔍 [ENHANCED_DIAGNOSTICS] No pageId available from ProxyInterceptorService")
-                }
-            } else {
-                pageIdToUse = nil
-                print("🔍 [ENHANCED_DIAGNOSTICS] iOS 17+ required for ProxyInterceptorService pageId lookup")
+            let localPageId = self.currentSavePageId
+            var proxyPageId: String?
+            if #available(iOS 17.0, *) {
+                proxyPageId = ProxyInterceptorService.shared.getCurrentPageId()
             }
-            
-            // Always try to serve from cache first if we have a pageId
-            if let pageId = pageIdToUse {
-                print("🔍 [ENHANCED_DIAGNOSTICS] Checking cache for: \(originalURL) with pageId: \(pageId)")
-                if let cachedResponse = self.getCachedHttpResponse(url: originalURL, pageId: pageId) {
-                    print("✅ IOSAssetHandler: Serving \(originalURL) from cache (\(cachedResponse.data.count) bytes)")
-                    print("🔍 [ENHANCED_DIAGNOSTICS] Cache hit - Status: \(cachedResponse.response.statusCode)")
-                    
-                    // Check for potential cache corruption issues
-                    let resourceType = self.determineResourceType(from: originalURL)
-                    if cachedResponse.response.statusCode != 200 {
-                        print("⚠️ [ENHANCED_DIAGNOSTICS] Serving non-200 cached response: \(cachedResponse.response.statusCode)")
-                        if let contentType = cachedResponse.response.value(forHTTPHeaderField: "Content-Type"),
-                           contentType.contains("text/html") && (resourceType == "Image" || resourceType == "Font") {
-                            print("🚨 [ENHANCED_DIAGNOSTICS] CACHE CORRUPTION: HTML cached as \(resourceType)!")
-                        }
-                    }
-                    
-                    self.completeTask(urlSchemeTask, withResponse: cachedResponse.response, data: cachedResponse.data)
-                    return
-                } else {
-                    print("❌ [ENHANCED_DIAGNOSTICS] Cache miss for: \(originalURL) (pageId: \(pageId))")
-                }
+
+            var lookupPageIds: [String] = []
+            if let localPageId, !lookupPageIds.contains(localPageId) {
+                lookupPageIds.append(localPageId)
+            }
+            if let proxyPageId, !lookupPageIds.contains(proxyPageId) {
+                lookupPageIds.append(proxyPageId)
+            }
+            let pageIdToUse = lookupPageIds.first
+            if assetPath.hasPrefix("images/") || originalURL.contains("/images/") {
+                NSLog(
+                    "osrsImagesLookup: pageIds local=%@ proxy=%@ lookup=%@ saveMode=%d queueMainThread=%d",
+                    localPageId ?? "nil",
+                    proxyPageId ?? "nil",
+                    lookupPageIds.isEmpty ? "nil" : lookupPageIds.joined(separator: ","),
+                    shouldSave ? 1 : 0,
+                    Thread.isMainThread ? 1 : 0
+                )
+            }
+            if let pageIdToUse {
+                print("🔍 [ENHANCED_DIAGNOSTICS] Using lookup pageId: \(pageIdToUse)")
             } else {
-                print("🔍 [ENHANCED_DIAGNOSTICS] No pageId available for caching check")
+                print("🔍 [ENHANCED_DIAGNOSTICS] No explicit pageId; trying snapshot cache context")
+            }
+
+            let cachedResponse: (data: Data, response: HTTPURLResponse)?
+            if lookupPageIds.isEmpty {
+                cachedResponse = self.getCachedHttpResponse(url: originalURL, pageId: nil)
+            } else {
+                cachedResponse = lookupPageIds.lazy.compactMap {
+                    self.getCachedHttpResponse(url: originalURL, pageId: $0)
+                }.first
+            }
+
+            if let cachedResponse {
+                print("✅ IOSAssetHandler: Serving \(originalURL) from cache (\(cachedResponse.data.count) bytes)")
+                print("🔍 [ENHANCED_DIAGNOSTICS] Cache hit - Status: \(cachedResponse.response.statusCode)")
+
+                let resourceType = self.determineResourceType(from: originalURL)
+                if cachedResponse.response.statusCode != 200 {
+                    print("⚠️ [ENHANCED_DIAGNOSTICS] Serving non-200 cached response: \(cachedResponse.response.statusCode)")
+                    if let contentType = cachedResponse.response.value(forHTTPHeaderField: "Content-Type"),
+                       contentType.contains("text/html") && (resourceType == "Image" || resourceType == "Font") {
+                        print("🚨 [ENHANCED_DIAGNOSTICS] CACHE CORRUPTION: HTML cached as \(resourceType)!")
+                    }
+                }
+
+                guard let schemeResponse = self.osrsSchemeMatchedResponse(
+                    for: urlSchemeTask,
+                    upstream: cachedResponse.response,
+                    data: cachedResponse.data
+                ) else {
+                    print("❌ IOSAssetHandler: Failed to wrap cached wiki response for \(originalURL)")
+                    self.completeTask(
+                        urlSchemeTask,
+                        withError: NSError(domain: "IOSAssetHandler", code: 500, userInfo: nil)
+                    )
+                    return
+                }
+                self.completeTask(urlSchemeTask, withResponse: schemeResponse, data: cachedResponse.data)
+                NSLog(
+                    "osrsCalcProxy: status=%d bytes=%d request=%@ wiki=%@",
+                    cachedResponse.response.statusCode,
+                    cachedResponse.data.count,
+                    urlSchemeTask.request.url?.absoluteString ?? "",
+                    originalURL
+                )
+                return
+            }
+
+            print("❌ [ENHANCED_DIAGNOSTICS] Cache miss for: \(originalURL) (pageId: \(pageIdToUse ?? "nil"))")
+            if assetPath.hasPrefix("images/") || originalURL.contains("/images/") {
+                NSLog(
+                    "osrsImagesLookup: handler cache miss wiki=%@ digest=%@ pageIds=%@",
+                    originalURL,
+                    digest,
+                    lookupPageIds.isEmpty ? "nil" : lookupPageIds.joined(separator: ",")
+                )
             }
             
             // Fetch from network (either for saving or because not cached)
@@ -877,11 +982,10 @@ class IOSAssetHandler: NSObject, WKURLSchemeHandler {
             return (body, cachedResponse)
         }
         if osrsTestEnvironment.forcesNetworkOfflineForUITests {
-            throw NSError(
-                domain: "osrsCalculatorProxy",
-                code: -1009,
-                userInfo: [NSLocalizedDescriptionKey: "Forced offline: no cached calculator resource"]
-            )
+            if originalURL.contains("/images/") {
+                NSLog("osrsImagesLookup: forcedOffline throw wiki=%@", originalURL)
+            }
+            throw Self.forcedOfflineError(for: originalURL)
         }
 
         var request = URLRequest(url: url)
@@ -926,20 +1030,41 @@ class IOSAssetHandler: NSObject, WKURLSchemeHandler {
     }
 
     /// Reconstruct original URL from asset path and request context
-    private func reconstructOriginalURL(from assetPath: String, originalRequest: URLRequest) -> String {
-        // If this is a query-based URL, preserve query parameters
-        if let originalURL = originalRequest.url?.absoluteString,
-           originalURL.contains("?") {
-            return "https://oldschool.runescape.wiki/\(assetPath)?\(originalRequest.url?.query ?? "")"
-        }
-        
-        // Handle external domains
+    static func reconstructOriginalURL(from assetPath: String, requestURL: URL?) -> String {
         if assetPath.contains("cdn.") {
             return "https://\(assetPath)"
         }
-        
-        // Default: wiki resource
+
+        let query = requestURL.flatMap { url -> String? in
+            if let encoded = URLComponents(url: url, resolvingAgainstBaseURL: false)?.percentEncodedQuery,
+               !encoded.isEmpty {
+                return encoded
+            }
+            return url.query
+        }
+        if let query, !query.isEmpty {
+            return "https://oldschool.runescape.wiki/\(assetPath)?\(query)"
+        }
         return "https://oldschool.runescape.wiki/\(assetPath)"
+    }
+
+    static func forcedOfflineError(for originalURL: String) -> NSError {
+        if originalURL.contains("/images/") {
+            return NSError(
+                domain: "IOSAssetHandler",
+                code: -1009,
+                userInfo: [NSLocalizedDescriptionKey: "Forced offline: no cached wiki resource"]
+            )
+        }
+        return NSError(
+            domain: "osrsCalculatorProxy",
+            code: -1009,
+            userInfo: [NSLocalizedDescriptionKey: "Forced offline: no cached calculator resource"]
+        )
+    }
+
+    private func reconstructOriginalURL(from assetPath: String, originalRequest: URLRequest) -> String {
+        Self.reconstructOriginalURL(from: assetPath, requestURL: originalRequest.url)
     }
     
     // MARK: - Web Archive Request Handler
@@ -969,13 +1094,18 @@ class IOSAssetHandler: NSObject, WKURLSchemeHandler {
         case "woff2": return "font/woff2"
         case "ttf": return "font/ttf"
         case "json": return "application/json"
+        case "mp3": return "audio/mpeg"
+        case "ogg", "oga": return "audio/ogg"
+        case "m4a": return "audio/mp4"
         default: return "application/octet-stream"
         }
     }
     
     /// Enhanced diagnostics: Determine resource type for better logging
     private func determineResourceType(from url: String) -> String {
-        if url.contains(".png") || url.contains(".jpg") || url.contains(".jpeg") || url.contains(".gif") || url.contains(".svg") {
+        if url.contains(".mp3") || url.contains(".ogg") || url.contains(".oga") || url.contains(".m4a") {
+            return "Audio"
+        } else if url.contains(".png") || url.contains(".jpg") || url.contains(".jpeg") || url.contains(".gif") || url.contains(".svg") {
             return "Image"
         } else if url.contains(".ttf") || url.contains(".woff") || url.contains(".otf") {
             return "Font"

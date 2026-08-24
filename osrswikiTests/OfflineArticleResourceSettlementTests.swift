@@ -60,6 +60,7 @@ final class OfflineArticleResourceSettlementTests: XCTestCase {
         <style>.hero { background: url('/images/style-art.png') }</style>
         """
 
+        // Artwork/CSS plan stays image-only; wiki audio is enumerated separately for Save.
         XCTAssertEqual(
             osrsOfflineArticleResourceSettlement.requiredImageURLs(from: fixture).map(\.absoluteString),
             [
@@ -69,6 +70,57 @@ final class OfflineArticleResourceSettlementTests: XCTestCase {
                 "https://oldschool.runescape.wiki/images/vector.png"
             ]
         )
+    }
+
+    func testSaveEnumeratesPreferredWikiAudioAndStillSkipsVideoIframes() {
+        let fixture = """
+        <audio controls>
+          <source src="/images/Sea_Shanty_2.ogg?8e3b9" type="audio/ogg">
+          <source src="/images/transcoded/Sea_Shanty_2.ogg/Sea_Shanty_2.ogg.mp3?f5d67" type="audio/mpeg">
+        </audio>
+        <audio src="/images/Jingle.ogg"></audio>
+        <audio>
+          <source src="/images/Sea_Shanty_2.ogg?dup" type="audio/ogg">
+          <source src="/images/transcoded/Sea_Shanty_2.ogg/Sea_Shanty_2.ogg.mp3?dup" type="audio/mpeg">
+        </audio>
+        <audio src="https://www.youtube.com/watch?v=dQw4w9WgXcQ"></audio>
+        <video src="/media/movie.mp4" poster="/images/poster.jpg"><source src="/media/movie.webm"></video>
+        <iframe src="/interactive/frame"></iframe>
+        """
+        let urls = osrsOfflineArticleResourceSettlement.requiredImageURLs(from: fixture)
+            + osrsOfflineArticleResourceSettlement.wikiAudioURLs(from: fixture)
+        XCTAssertTrue(urls.map(\.absoluteString).contains(
+            "https://oldschool.runescape.wiki/images/transcoded/Sea_Shanty_2.ogg/Sea_Shanty_2.ogg.mp3?f5d67"
+        ))
+        XCTAssertTrue(urls.map(\.absoluteString).contains(
+            "https://oldschool.runescape.wiki/images/Jingle.ogg"
+        ))
+        XCTAssertFalse(urls.contains { $0.path.contains("Sea_Shanty_2.ogg") && !$0.path.contains("transcoded") })
+        XCTAssertFalse(urls.contains { $0.host?.contains("youtube") == true })
+        XCTAssertFalse(urls.contains { $0.path.contains("movie") })
+        XCTAssertEqual(
+            osrsOfflineArticleResourceSettlement.firstViewSlotURLs(from: fixture).filter {
+                $0.pathExtension.lowercased() == "mp3" || $0.pathExtension.lowercased() == "ogg"
+            }.count,
+            0
+        )
+    }
+
+    func testSettleDownloadsWikiAudioURLs() async throws {
+        let html = """
+        <img src="/images/a.png">
+        <audio><source src="/images/t.ogg" type="audio/ogg">
+               <source src="/images/transcoded/t.ogg/t.ogg.mp3" type="audio/mpeg"></audio>
+        """
+        let requested = LockedURLStrings()
+        let settled = try await osrsOfflineArticleResourceSettlement.settle(html: html) { url in
+            await requested.append(url.absoluteString)
+            return Data("ok".utf8)
+        }
+        let requestedValues = await requested.values
+        XCTAssertTrue(requestedValues.contains { $0.contains("t.ogg.mp3") })
+        XCTAssertFalse(requestedValues.contains { $0.hasSuffix(".ogg") && !$0.contains("transcoded") })
+        XCTAssertTrue(settled.contains { $0.path.hasSuffix(".mp3") })
     }
 
     func testSVGAndStylesheetFragmentsDeduplicateToNetworkResourceIdentity() async throws {

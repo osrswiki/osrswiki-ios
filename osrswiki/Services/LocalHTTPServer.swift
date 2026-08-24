@@ -680,39 +680,213 @@ final class LocalHTTPServer: @unchecked Sendable {
     }
     
     /// Get cached response for external asset requests (used by IOSAssetHandler)
-    func getCachedResponseForAsset(url: String, pageId: String) -> CachedHTTPResponse? {
-        print("🔍 LocalHTTPServer: Looking up cached asset for URL: \(url), pageId: \(pageId)")
+    func getCachedResponseForAsset(url: String, pageId: String? = nil) -> CachedHTTPResponse? {
+        print("🔍 LocalHTTPServer: Looking up cached asset for URL: \(url), pageId: \(pageId ?? "nil")")
         print("🔍 LocalHTTPServer: Current pageId context: \(currentPageId ?? "nil")")
-        
-        // Verify pageId context matches what we expect
-        if currentPageId != pageId {
-            print("⚠️ LocalHTTPServer: PageId mismatch! Expected: \(pageId), Current: \(currentPageId ?? "nil")")
-            print("🔧 LocalHTTPServer: Using provided pageId to ensure cache key matches")
-            
-            // Generate cache key directly with provided pageId to ensure consistency
-            let cacheKey = Self.cacheKey(pageId: pageId, method: "GET", url: url)
-            print("🔍 LocalHTTPServer: Generated cache key with provided pageId: \(cacheKey)")
-            
+        let isImages = url.contains("/images/")
+        let digest = Self.cacheKeyForRequest(pageId: nil, method: "GET", url: url)
+
+        var pageIds: [String] = []
+        if let pageId, !pageId.isEmpty {
+            pageIds.append(pageId)
+        }
+        if let currentPageId, !pageIds.contains(currentPageId) {
+            pageIds.append(currentPageId)
+        }
+
+        if isImages {
+            NSLog(
+                "osrsImagesLookup: server lookup url=%@ namedPageId=%@ currentPageId=%@ pageIds=%@ digest=%@ cacheDir=%@",
+                url,
+                pageId ?? "nil",
+                currentPageId ?? "nil",
+                pageIds.isEmpty ? "nil" : pageIds.joined(separator: ","),
+                digest,
+                cacheDirectory.path
+            )
+        }
+
+        for candidate in pageIds {
+            let cacheKey = Self.cacheKeyForRequest(pageId: candidate, method: "GET", url: url)
+            print("🔍 LocalHTTPServer: Generated cache key with pageId \(candidate): \(cacheKey)")
             if let cachedResponse = getCachedResponse(cacheKey: cacheKey) {
-                print("✅ LocalHTTPServer: Found cached asset response for: \(url)")
+                print("✅ LocalHTTPServer: Found cached asset response for: \(url) (pageId: \(candidate))")
+                if isImages {
+                    NSLog(
+                        "osrsImagesLookup: server named hit pageId=%@ bytes=%d key=%@",
+                        candidate,
+                        cachedResponse.data.count,
+                        cacheKey
+                    )
+                }
                 return cachedResponse
-            } else {
-                print("❌ LocalHTTPServer: No cached asset response found for: \(url)")
-                return nil
-            }
-        } else {
-            // PageId context is correct, use normal cache key generation
-            let cacheKey = generateCacheKey(method: "GET", url: url)
-            print("🔍 LocalHTTPServer: Generated cache key: \(cacheKey)")
-            
-            if let cachedResponse = getCachedResponse(cacheKey: cacheKey) {
-                print("✅ LocalHTTPServer: Found cached asset response for: \(url)")
-                return cachedResponse
-            } else {
-                print("❌ LocalHTTPServer: No cached asset response found for: \(url)")
-                return nil
             }
         }
+
+        if let snapshotResponse = getCachedSnapshotResponseForAssetDigest(url: url) {
+            print("✅ LocalHTTPServer: Found cached asset via snapshot digest fallback for: \(url) (pageId: \(snapshotResponse.pageId))")
+            if isImages {
+                NSLog(
+                    "osrsImagesLookup: server digest hit pageId=%@ bytes=%d",
+                    snapshotResponse.pageId,
+                    snapshotResponse.data.count
+                )
+            }
+            return snapshotResponse
+        }
+
+        if let transcodeResponse = getCachedSnapshotResponseForWikiAudioTranscode(url: url) {
+            print("✅ LocalHTTPServer: Found cached wiki audio transcode for ogg request: \(url) (pageId: \(transcodeResponse.pageId))")
+            if isImages {
+                NSLog(
+                    "osrsImagesLookup: ogg transcode hit pageId=%@ bytes=%d cachedUrl=%@",
+                    transcodeResponse.pageId,
+                    transcodeResponse.data.count,
+                    transcodeResponse.url
+                )
+            }
+            return transcodeResponse
+        }
+
+        print("❌ LocalHTTPServer: No cached asset response found for: \(url)")
+        if isImages {
+            NSLog("osrsImagesLookup: server miss url=%@ digest=%@", url, digest)
+        }
+        return nil
+    }
+
+    /// Infobox `<audio>` keeps the original `/images/*.ogg` source. Explicit Save persists the
+    /// preferred `/images/transcoded/…/.ogg.mp3` blob (different query, different digest).
+    static func wikiAudioTranscodePath(from url: String) -> String? {
+        guard let components = URLComponents(string: url) else { return nil }
+        let path = components.path
+        guard path.hasPrefix("/images/"), !path.contains("/transcoded/") else { return nil }
+        let ext = (path as NSString).pathExtension.lowercased()
+        guard ext == "ogg" || ext == "oga" else { return nil }
+        let filename = (path as NSString).lastPathComponent
+        guard !filename.isEmpty else { return nil }
+        return "/images/transcoded/\(filename)/\(filename).mp3"
+    }
+
+    /// Saved infobox media lives under `__snapshot__` even when the live handler still
+    /// looks up a browsing pageId and `currentPageId` is nil or browsing.
+    private func getCachedSnapshotResponseForAssetDigest(url: String) -> CachedHTTPResponse? {
+        let methodDigest = Self.cacheKeyForRequest(pageId: nil, method: "GET", url: url)
+        guard methodDigest.hasPrefix("GET_"), methodDigest.count == 4 + 64 else {
+            if url.contains("/images/") {
+                NSLog("osrsImagesLookup: digest key invalid methodDigest=%@", methodDigest)
+            }
+            return nil
+        }
+        let suffix = "_\(methodDigest).cache"
+
+        let cacheFiles: [URL]
+        do {
+            cacheFiles = try FileManager.default.contentsOfDirectory(
+                at: cacheDirectory,
+                includingPropertiesForKeys: nil
+            )
+        } catch {
+            print("⚠️ LocalHTTPServer: Error reading cache directory for snapshot digest fallback: \(error)")
+            NSLog(
+                "osrsImagesLookup: cacheDir list error dir=%@ err=%@",
+                cacheDirectory.path,
+                String(describing: error)
+            )
+            return nil
+        }
+
+        var suffixMatches = 0
+        var snapshotNames: [String] = []
+        for cacheFile in cacheFiles where cacheFile.pathExtension == "cache" {
+            let name = cacheFile.lastPathComponent
+            if name.contains("__snapshot__") {
+                snapshotNames.append(name)
+            }
+            guard name.contains("__snapshot__"), name.hasSuffix(suffix) else { continue }
+            suffixMatches += 1
+            let cacheKey = cacheFile.deletingPathExtension().lastPathComponent
+            if let cachedResponse = getCachedResponse(cacheKey: cacheKey) {
+                if url.contains("/images/") {
+                    NSLog(
+                        "osrsImagesLookup: digest suffix hit file=%@ bytes=%d",
+                        name,
+                        cachedResponse.data.count
+                    )
+                }
+                return cachedResponse
+            }
+            let decodeError = peekCachedResponseDecodeError(cacheKey: cacheKey)
+            NSLog(
+                "osrsImagesLookup: digest suffix match but decode nil file=%@ key=%@ decodeErr=%@",
+                name,
+                cacheKey,
+                decodeError ?? "nil"
+            )
+        }
+        if url.contains("/images/") {
+            let sample = snapshotNames.prefix(8).joined(separator: ",")
+            NSLog(
+                "osrsImagesLookup: digest scan miss suffix=%@ cacheFiles=%d snapshotFiles=%d suffixMatches=%d sample=%@",
+                suffix,
+                cacheFiles.count,
+                snapshotNames.count,
+                suffixMatches,
+                sample
+            )
+        }
+        return nil
+    }
+
+    /// Live infobox play requests `/images/Sea_Shanty_2.ogg?8e3b9` while Save stored
+    /// `/images/transcoded/Sea_Shanty_2.ogg/Sea_Shanty_2.ogg.mp3?f5d67`. Match the transcode
+    /// path on snapshot blobs, ignoring the cache-busting query.
+    private func getCachedSnapshotResponseForWikiAudioTranscode(url: String) -> CachedHTTPResponse? {
+        guard let transcodePath = Self.wikiAudioTranscodePath(from: url) else { return nil }
+        let needles = [
+            transcodePath,
+            transcodePath.replacingOccurrences(of: "/", with: "\\/")
+        ].compactMap { $0.data(using: .utf8) }
+
+        let cacheFiles: [URL]
+        do {
+            cacheFiles = try FileManager.default.contentsOfDirectory(
+                at: cacheDirectory,
+                includingPropertiesForKeys: nil
+            )
+        } catch {
+            NSLog(
+                "osrsImagesLookup: transcode cacheDir list error dir=%@ err=%@",
+                cacheDirectory.path,
+                String(describing: error)
+            )
+            return nil
+        }
+
+        for cacheFile in cacheFiles where cacheFile.pathExtension == "cache" {
+            let name = cacheFile.lastPathComponent
+            guard name.contains("__snapshot__") else { continue }
+            guard let fileData = try? Data(contentsOf: cacheFile),
+                  needles.contains(where: { fileData.firstRange(of: $0) != nil }) else {
+                continue
+            }
+            let cacheKey = cacheFile.deletingPathExtension().lastPathComponent
+            guard let cachedResponse = getCachedResponse(cacheKey: cacheKey) else { continue }
+            let cachedPath = URLComponents(string: cachedResponse.url)?.path
+            if cachedPath == transcodePath {
+                NSLog(
+                    "osrsImagesLookup: transcode path hit file=%@ ogg=%@ mp3=%@",
+                    name,
+                    url,
+                    cachedResponse.url
+                )
+                return cachedResponse
+            }
+        }
+        if url.contains("/images/") {
+            NSLog("osrsImagesLookup: transcode path miss ogg=%@ path=%@", url, transcodePath)
+        }
+        return nil
     }
 
     /// Offline availability is a durability contract, not merely a successful network response
@@ -1663,8 +1837,9 @@ final class LocalHTTPServer: @unchecked Sendable {
     }
     
     private static let nonHTMLResourceExtensions: Set<String> = [
-        "apng", "avif", "bmp", "css", "eot", "gif", "ico", "jpeg", "jpg", "otf",
-        "png", "svg", "tif", "tiff", "ttf", "webp", "woff", "woff2"
+        "apng", "avif", "bmp", "css", "eot", "gif", "ico", "jpeg", "jpg", "m4a",
+        "mp3", "oga", "ogg", "otf", "png", "svg", "tif", "tiff", "ttf", "webp",
+        "woff", "woff2"
     ]
 
     private static let imageResourceExtensions: Set<String> = [
@@ -1674,8 +1849,8 @@ final class LocalHTTPServer: @unchecked Sendable {
 
     /// Validate responses before publication or durable commit. Explicitly enumerated offline
     /// resources are non-HTML even when their URL has no useful extension; passive caching also
-    /// recognizes common artwork/font/stylesheet extensions from the parsed URL path. This keeps
-    /// captive-portal and upstream error documents from satisfying a save generation.
+    /// recognizes common artwork/font/stylesheet/audio extensions from the parsed URL path. This
+    /// keeps captive-portal and upstream error documents from satisfying a save generation.
     static func shouldCacheResponse(
         httpResponse: HTTPURLResponse,
         url: String,
@@ -1693,6 +1868,7 @@ final class LocalHTTPServer: @unchecked Sendable {
         let pathExtension = URL(string: url)?.pathExtension.lowercased() ?? ""
         let isKnownNonHTMLPath = nonHTMLResourceExtensions.contains(pathExtension)
         let contentTypeIsNonHTMLResource = contentType.hasPrefix("image/") ||
+            contentType.hasPrefix("audio/") ||
             contentType.hasPrefix("font/") ||
             contentType.hasPrefix("text/css") ||
             contentType.contains("application/font") ||
@@ -1711,7 +1887,7 @@ final class LocalHTTPServer: @unchecked Sendable {
 
         if requiresNonHTML && (contentTypeIsHTML || bodyLooksLikeHTML) {
             print("🚨 LocalHTTPServer: CACHE CORRUPTION PREVENTED - HTML response for non-HTML resource: \(url)")
-            print("🚨 Content-Type: \(contentType), Expected: artwork/font/stylesheet")
+            print("🚨 Content-Type: \(contentType), Expected: artwork/font/stylesheet/audio")
             if let htmlPreview = String(data: data.prefix(200), encoding: .utf8) {
                 print("🚨 HTML content preview: \(htmlPreview)")
             }
@@ -1739,6 +1915,11 @@ final class LocalHTTPServer: @unchecked Sendable {
                     print("🚨 LocalHTTPServer: Rejecting invalid artwork payload (type=\(contentType)): \(url)")
                     return false
                 }
+            } else if isExplicitWikiAudioResource(pathExtension: pathExtension, contentType: contentType) {
+                guard audioBodyMatchesExpectedMagic(data, pathExtension: pathExtension, contentType: contentType) else {
+                    print("🚨 LocalHTTPServer: Rejecting invalid audio payload (type=\(contentType)): \(url)")
+                    return false
+                }
             } else if contentType.hasPrefix("font/") ||
                         contentType.contains("application/font") ||
                         contentType.contains("application/vnd.ms-fontobject") {
@@ -1752,6 +1933,69 @@ final class LocalHTTPServer: @unchecked Sendable {
 
         print("✅ LocalHTTPServer: Response validation passed for: \(url) (status: \(httpResponse.statusCode), type: \(contentType))")
         return true
+    }
+
+    private static func isExplicitWikiAudioResource(pathExtension: String, contentType: String) -> Bool {
+        ["mp3", "ogg", "oga", "m4a"].contains(pathExtension) ||
+            contentType.hasPrefix("audio/") ||
+            contentType.contains("application/ogg")
+    }
+
+    private static func audioBodyMatchesExpectedMagic(
+        _ data: Data,
+        pathExtension: String,
+        contentType: String
+    ) -> Bool {
+        let expectsMPEG = pathExtension == "mp3" ||
+            contentType.hasPrefix("audio/mpeg") ||
+            contentType.hasPrefix("audio/mp3")
+        let expectsOgg = pathExtension == "ogg" ||
+            pathExtension == "oga" ||
+            contentType.hasPrefix("audio/ogg") ||
+            contentType.contains("application/ogg")
+        let expectsM4A = pathExtension == "m4a" ||
+            contentType.hasPrefix("audio/mp4") ||
+            contentType.hasPrefix("audio/x-m4a") ||
+            contentType.hasPrefix("audio/m4a")
+
+        if expectsMPEG {
+            return bodyLooksLikeMPEGAudio(data)
+        }
+        if expectsOgg {
+            return bodyLooksLikeOggAudio(data)
+        }
+        if expectsM4A {
+            return bodyLooksLikeM4AAudio(data)
+        }
+        // Generic audio/* with no more specific hint: accept any supported wiki audio magic.
+        return bodyLooksLikeMPEGAudio(data) || bodyLooksLikeOggAudio(data) || bodyLooksLikeM4AAudio(data)
+    }
+
+    private static func bodyLooksLikeMPEGAudio(_ data: Data) -> Bool {
+        let bytes = [UInt8](data.prefix(3))
+        if bytes.count >= 3 && Array(bytes.prefix(3)) == Array("ID3".utf8) {
+            return true
+        }
+        // MPEG frame sync: 11 set bits then layer bits (common wiki MP3 starts FF FB / FF FA / FF F3).
+        return bytes.count >= 2 && bytes[0] == 0xFF && (bytes[1] & 0xE0) == 0xE0
+    }
+
+    private static func bodyLooksLikeOggAudio(_ data: Data) -> Bool {
+        let bytes = [UInt8](data.prefix(4))
+        return bytes.count >= 4 && Array(bytes.prefix(4)) == Array("OggS".utf8)
+    }
+
+    private static func bodyLooksLikeM4AAudio(_ data: Data) -> Bool {
+        let prefix = [UInt8](data.prefix(12))
+        guard prefix.count >= 8 else { return false }
+        // ISO BMFF "ftyp" box typically at offset 4; accept "ftyp" anywhere in the first 12 bytes.
+        let needle = Array("ftyp".utf8)
+        for start in 0...(prefix.count - needle.count) {
+            if Array(prefix[start..<(start + needle.count)]) == needle {
+                return true
+            }
+        }
+        return false
     }
 
     private static func bodyLooksLikeSVG(_ data: Data) -> Bool {
@@ -2075,8 +2319,28 @@ final class LocalHTTPServer: @unchecked Sendable {
                 cachedResponses.set(response, forKey: cacheKey)
                 return response
             } catch {
+                if cacheKey.contains("__snapshot__") || cacheKey.contains("_GET_") {
+                    NSLog(
+                        "osrsImagesLookup: disk decode error key=%@ file=%@ exists=%d err=%@",
+                        cacheKey,
+                        cacheFile.lastPathComponent,
+                        FileManager.default.fileExists(atPath: cacheFile.path) ? 1 : 0,
+                        String(describing: error)
+                    )
+                }
                 return nil
             }
+        }
+    }
+
+    private func peekCachedResponseDecodeError(cacheKey: String) -> String? {
+        let cacheFile = cacheDirectory.appendingPathComponent("\(cacheKey).cache")
+        do {
+            let data = try Data(contentsOf: cacheFile)
+            _ = try JSONDecoder().decode(CachedHTTPResponse.self, from: data)
+            return nil
+        } catch {
+            return String(describing: error)
         }
     }
     

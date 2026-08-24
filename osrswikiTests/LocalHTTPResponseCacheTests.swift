@@ -1064,6 +1064,327 @@ final class LocalHTTPResponseCacheTests: XCTestCase {
         ))
     }
 
+    func testSnapshotWikiMp3LookupWithExactTranscodeURLReturnsBytes() throws {
+        let directory = try makeTemporaryCacheDirectory()
+        let server = LocalHTTPServer(port: 0, cacheDirectory: directory)
+        let snapshotPageId = "7714ADB9-446B-483E-890B-94C3EE6785AE__snapshot__105023615ee5a537d1560e2d"
+        let transcodeURL = "https://oldschool.runescape.wiki/images/transcoded/Sea_Shanty_2.ogg/Sea_Shanty_2.ogg.mp3?f5d67"
+        let body = Data("ID3".utf8) + Data(repeating: 0xFB, count: 64)
+        let response = try XCTUnwrap(HTTPURLResponse(
+            url: try XCTUnwrap(URL(string: transcodeURL)),
+            statusCode: 200,
+            httpVersion: "HTTP/1.1",
+            headerFields: ["Content-Type": "audio/mpeg"]
+        ))
+
+        XCTAssertTrue(server.cacheResponseDirect(
+            pageId: snapshotPageId,
+            url: transcodeURL,
+            data: body,
+            response: response
+        ))
+        XCTAssertTrue(
+            LocalHTTPServer.cacheKeyForRequest(
+                pageId: snapshotPageId,
+                method: "GET",
+                url: transcodeURL
+            ).contains("_GET_6fd76661b7c2b3624e6c1d1b47e125fdad8819f1225efd54bfaf32e46946df35"),
+            "Query-bearing transcode URL must keep the device persist digest"
+        )
+
+        let cached = server.getCachedResponseForAsset(url: transcodeURL, pageId: snapshotPageId)
+        XCTAssertEqual(cached?.data, body)
+        XCTAssertEqual(cached?.pageId, snapshotPageId)
+        XCTAssertEqual(cached?.headers["Content-Type"], "audio/mpeg")
+    }
+
+    func testSnapshotWikiMp3LookupFallsBackFromBrowsingPageIdWhenCacheOnlyContextIsSnapshot() throws {
+        let directory = try makeTemporaryCacheDirectory()
+        let server = LocalHTTPServer(port: 0, cacheDirectory: directory)
+        let snapshotPageId = "7714ADB9-446B-483E-890B-94C3EE6785AE__snapshot__105023615ee5a537d1560e2d"
+        let browsingPageId = ArticleViewModel.generatePageIdFromURL(
+            try XCTUnwrap(URL(string: "https://oldschool.runescape.wiki/w/Sea_Shanty_2"))
+        )
+        let transcodeURL = "https://oldschool.runescape.wiki/images/transcoded/Sea_Shanty_2.ogg/Sea_Shanty_2.ogg.mp3?f5d67"
+        let body = Data("ID3".utf8) + Data(repeating: 0xFB, count: 64)
+        let response = try XCTUnwrap(HTTPURLResponse(
+            url: try XCTUnwrap(URL(string: transcodeURL)),
+            statusCode: 200,
+            httpVersion: "HTTP/1.1",
+            headerFields: ["Content-Type": "audio/mpeg"]
+        ))
+
+        XCTAssertTrue(server.cacheResponseDirect(
+            pageId: snapshotPageId,
+            url: transcodeURL,
+            data: body,
+            response: response
+        ))
+        XCTAssertNotEqual(browsingPageId, snapshotPageId)
+
+        _ = server.setPageIdContext(pageId: snapshotPageId)
+        let cached = server.getCachedResponseForAsset(url: transcodeURL, pageId: browsingPageId)
+        XCTAssertEqual(
+            cached?.data,
+            body,
+            "Cache-only snapshot context must serve wiki MP3 when the handler passes the browsing pageId"
+        )
+        XCTAssertEqual(cached?.pageId, snapshotPageId)
+    }
+
+    func testSnapshotWikiMp3LookupFallsBackToOnDiskSnapshotDigestWhenCurrentPageIdIsNotSnapshot() throws {
+        let directory = try makeTemporaryCacheDirectory()
+        let server = LocalHTTPServer(port: 0, cacheDirectory: directory)
+        let snapshotPageId = "7714ADB9-446B-483E-890B-94C3EE6785AE__snapshot__105023615ee5a537d1560e2d"
+        let browsingPageId = ArticleViewModel.generatePageIdFromURL(
+            try XCTUnwrap(URL(string: "https://oldschool.runescape.wiki/w/Sea_Shanty_2"))
+        )
+        let transcodeURL = "https://oldschool.runescape.wiki/images/transcoded/Sea_Shanty_2.ogg/Sea_Shanty_2.ogg.mp3?f5d67"
+        let body = Data("ID3".utf8) + Data(repeating: 0xFB, count: 64)
+        let response = try XCTUnwrap(HTTPURLResponse(
+            url: try XCTUnwrap(URL(string: transcodeURL)),
+            statusCode: 200,
+            httpVersion: "HTTP/1.1",
+            headerFields: ["Content-Type": "audio/mpeg"]
+        ))
+
+        XCTAssertTrue(server.cacheResponseDirect(
+            pageId: snapshotPageId,
+            url: transcodeURL,
+            data: body,
+            response: response
+        ))
+        XCTAssertNotEqual(browsingPageId, snapshotPageId)
+        XCTAssertFalse(browsingPageId.contains("__snapshot__"))
+
+        let digestKey = LocalHTTPServer.cacheKeyForRequest(pageId: nil, method: "GET", url: transcodeURL)
+        XCTAssertEqual(
+            digestKey,
+            "GET_6fd76661b7c2b3624e6c1d1b47e125fdad8819f1225efd54bfaf32e46946df35"
+        )
+        let snapshotBlob = directory.appendingPathComponent(
+            "\(snapshotPageId)_\(digestKey).cache"
+        )
+        XCTAssertTrue(
+            FileManager.default.fileExists(atPath: snapshotBlob.path),
+            "Persist must leave *.__snapshot__*_GET_<digest>.cache on disk"
+        )
+
+        let reconstructed = IOSAssetHandler.reconstructOriginalURL(
+            from: "images/transcoded/Sea_Shanty_2.ogg/Sea_Shanty_2.ogg.mp3",
+            requestURL: try XCTUnwrap(URL(
+                string: "app-assets://localhost/images/transcoded/Sea_Shanty_2.ogg/Sea_Shanty_2.ogg.mp3?f5d67"
+            ))
+        )
+        XCTAssertEqual(reconstructed, transcodeURL)
+        XCTAssertEqual(
+            LocalHTTPServer.cacheKeyForRequest(pageId: nil, method: "GET", url: reconstructed),
+            digestKey
+        )
+
+        XCTAssertNil(server.activeCachePageIdForTesting)
+
+        let fromNilContext = server.getCachedResponseForAsset(url: transcodeURL, pageId: browsingPageId)
+        XCTAssertEqual(
+            fromNilContext?.data,
+            body,
+            "Named browsing pageId plus nil currentPageId must still load snapshot digest bytes"
+        )
+        XCTAssertEqual(fromNilContext?.pageId, snapshotPageId)
+
+        _ = server.setPageIdContext(pageId: browsingPageId)
+        XCTAssertEqual(server.activeCachePageIdForTesting, browsingPageId)
+        XCTAssertFalse((server.activeCachePageIdForTesting ?? "").contains("__snapshot__"))
+
+        let fromBrowsingContext = server.getCachedResponseForAsset(url: transcodeURL, pageId: browsingPageId)
+        XCTAssertEqual(
+            fromBrowsingContext?.data,
+            body,
+            "Named browsing pageId plus browsing currentPageId must still load snapshot digest bytes"
+        )
+        XCTAssertEqual(fromBrowsingContext?.pageId, snapshotPageId)
+    }
+
+    /// Live infobox play (Task 5 round 3): WK requests the original ogg source, not the
+    /// persisted transcode MP3. Digest `6fd76661…` is the MP3; ogg `?8e3b9` is `4edd7aee…`.
+    func testSnapshotWikiOggPlaybackLookupServesPersistedTranscodeMp3() throws {
+        let directory = try makeTemporaryCacheDirectory()
+        let server = LocalHTTPServer(port: 0, cacheDirectory: directory)
+        let snapshotPageId = "7714ADB9-446B-483E-890B-94C3EE6785AE__snapshot__105023615ee5a537d1560e2d"
+        let browsingPageId = ArticleViewModel.generatePageIdFromURL(
+            try XCTUnwrap(URL(string: "https://oldschool.runescape.wiki/w/Sea_Shanty_2"))
+        )
+        let transcodeURL = "https://oldschool.runescape.wiki/images/transcoded/Sea_Shanty_2.ogg/Sea_Shanty_2.ogg.mp3?f5d67"
+        let oggRequestURL = try XCTUnwrap(URL(
+            string: "app-assets://localhost/images/Sea_Shanty_2.ogg?8e3b9"
+        ))
+        let body = Data("ID3".utf8) + Data(repeating: 0xFB, count: 64)
+        let response = try XCTUnwrap(HTTPURLResponse(
+            url: try XCTUnwrap(URL(string: transcodeURL)),
+            statusCode: 200,
+            httpVersion: "HTTP/1.1",
+            headerFields: ["Content-Type": "audio/mpeg"]
+        ))
+
+        XCTAssertTrue(server.cacheResponseDirect(
+            pageId: snapshotPageId,
+            url: transcodeURL,
+            data: body,
+            response: response
+        ))
+
+        let reconstructed = IOSAssetHandler.reconstructOriginalURL(
+            from: "images/Sea_Shanty_2.ogg",
+            requestURL: oggRequestURL
+        )
+        XCTAssertEqual(
+            reconstructed,
+            "https://oldschool.runescape.wiki/images/Sea_Shanty_2.ogg?8e3b9"
+        )
+        XCTAssertEqual(
+            LocalHTTPServer.cacheKeyForRequest(pageId: nil, method: "GET", url: reconstructed),
+            "GET_4edd7aeef2fb762fc6075d117febb9a9e4fead1da2e10851c186eb5443a349fb"
+        )
+        XCTAssertNotEqual(
+            LocalHTTPServer.cacheKeyForRequest(pageId: nil, method: "GET", url: reconstructed),
+            LocalHTTPServer.cacheKeyForRequest(pageId: nil, method: "GET", url: transcodeURL)
+        )
+        XCTAssertNil(server.activeCachePageIdForTesting)
+
+        let cached = server.getCachedResponseForAsset(url: reconstructed, pageId: browsingPageId)
+        XCTAssertEqual(
+            cached?.data,
+            body,
+            "Live ogg infobox request must serve the persisted transcode MP3 snapshot bytes"
+        )
+        XCTAssertEqual(cached?.pageId, snapshotPageId)
+        XCTAssertEqual(cached?.headers["Content-Type"], "audio/mpeg")
+    }
+
+    func testReconstructOriginalURLPreservesWikiTranscodeQuery() throws {
+        let requestURL = try XCTUnwrap(URL(
+            string: "app-assets://localhost/images/transcoded/Sea_Shanty_2.ogg/Sea_Shanty_2.ogg.mp3?f5d67"
+        ))
+        let reconstructed = IOSAssetHandler.reconstructOriginalURL(
+            from: "images/transcoded/Sea_Shanty_2.ogg/Sea_Shanty_2.ogg.mp3",
+            requestURL: requestURL
+        )
+        XCTAssertEqual(
+            reconstructed,
+            "https://oldschool.runescape.wiki/images/transcoded/Sea_Shanty_2.ogg/Sea_Shanty_2.ogg.mp3?f5d67"
+        )
+        XCTAssertTrue(IOSAssetHandler.shouldHandleExternalResource(
+            assetPath: "images/transcoded/Sea_Shanty_2.ogg/Sea_Shanty_2.ogg.mp3"
+        ))
+        let error = IOSAssetHandler.forcedOfflineError(
+            for: "https://oldschool.runescape.wiki/images/transcoded/Sea_Shanty_2.ogg/Sea_Shanty_2.ogg.mp3?f5d67"
+        )
+        XCTAssertFalse(
+            error.localizedDescription.localizedCaseInsensitiveContains("calculator"),
+            "Forced-offline /images/ wiki media must not use the calculator miss error"
+        )
+    }
+
+    func testExplicitSaveAcceptsMPEGAudioWithID3OrFrameSyncMagic() throws {
+        let id3URL = "https://oldschool.runescape.wiki/images/transcoded/Sea_Shanty_2.ogg/Sea_Shanty_2.ogg.mp3?f5d67"
+        let id3Body = Data("ID3".utf8) + Data(repeating: 0, count: 16)
+        let id3Response = try XCTUnwrap(HTTPURLResponse(
+            url: try XCTUnwrap(URL(string: id3URL)),
+            statusCode: 200,
+            httpVersion: "HTTP/1.1",
+            headerFields: ["Content-Type": "audio/mpeg"]
+        ))
+        XCTAssertTrue(
+            LocalHTTPServer.shouldCacheResponse(
+                httpResponse: id3Response,
+                url: id3URL,
+                data: id3Body,
+                expectsNonHTMLResource: true
+            ),
+            "Explicit Save must accept ID3-tagged audio/mpeg"
+        )
+
+        let syncURL = "https://oldschool.runescape.wiki/images/Jingle.mp3"
+        let syncBody = Data([0xFF, 0xFB, 0x90, 0x00]) + Data(repeating: 0, count: 8)
+        let syncResponse = try XCTUnwrap(HTTPURLResponse(
+            url: try XCTUnwrap(URL(string: syncURL)),
+            statusCode: 200,
+            httpVersion: "HTTP/1.1",
+            headerFields: ["Content-Type": "audio/mpeg"]
+        ))
+        XCTAssertTrue(
+            LocalHTTPServer.shouldCacheResponse(
+                httpResponse: syncResponse,
+                url: syncURL,
+                data: syncBody,
+                expectsNonHTMLResource: true
+            ),
+            "Explicit Save must accept MPEG frame-sync audio/mpeg"
+        )
+    }
+
+    func testExplicitSaveAcceptsOggAudioAndRejectsHTMLDisguisedAsAudio() throws {
+        let oggURL = "https://oldschool.runescape.wiki/images/Sea_Shanty_2.ogg?8e3b9"
+        let oggBody = Data("OggS".utf8) + Data(repeating: 0, count: 12)
+        let oggResponse = try XCTUnwrap(HTTPURLResponse(
+            url: try XCTUnwrap(URL(string: oggURL)),
+            statusCode: 200,
+            httpVersion: "HTTP/1.1",
+            headerFields: ["Content-Type": "audio/ogg"]
+        ))
+        XCTAssertTrue(
+            LocalHTTPServer.shouldCacheResponse(
+                httpResponse: oggResponse,
+                url: oggURL,
+                data: oggBody,
+                expectsNonHTMLResource: true
+            ),
+            "Explicit Save must accept OggS audio/ogg"
+        )
+
+        let captiveURL = "https://oldschool.runescape.wiki/images/transcoded/Sea_Shanty_2.ogg/Sea_Shanty_2.ogg.mp3"
+        let htmlBody = Data("<!DOCTYPE html><html><body>Sign in</body></html>".utf8)
+        let audioMimeHTML = try XCTUnwrap(HTTPURLResponse(
+            url: try XCTUnwrap(URL(string: captiveURL)),
+            statusCode: 200,
+            httpVersion: "HTTP/1.1",
+            headerFields: ["Content-Type": "audio/mpeg"]
+        ))
+        XCTAssertFalse(
+            LocalHTTPServer.shouldCacheResponse(
+                httpResponse: audioMimeHTML,
+                url: captiveURL,
+                data: htmlBody,
+                expectsNonHTMLResource: true
+            ),
+            "HTML disguised as audio/mpeg must be rejected"
+        )
+    }
+
+    func testExplicitSaveAcceptsM4AWithFtypMagic() throws {
+        let url = "https://oldschool.runescape.wiki/images/Sample.m4a"
+        // ISO BMFF: size(4) + "ftyp"(4) within the first 12 bytes
+        var body = Data([0x00, 0x00, 0x00, 0x18])
+        body.append(Data("ftyp".utf8))
+        body.append(Data("M4A ".utf8))
+        body.append(Data(repeating: 0, count: 8))
+        let response = try XCTUnwrap(HTTPURLResponse(
+            url: try XCTUnwrap(URL(string: url)),
+            statusCode: 200,
+            httpVersion: "HTTP/1.1",
+            headerFields: ["Content-Type": "audio/mp4"]
+        ))
+        XCTAssertTrue(
+            LocalHTTPServer.shouldCacheResponse(
+                httpResponse: response,
+                url: url,
+                data: body,
+                expectsNonHTMLResource: true
+            ),
+            "Explicit Save must accept audio/mp4 with ftyp in the first 12 bytes"
+        )
+    }
+
     func testOwnerSwitchRejectsCapturedResponseInsteadOfStampingNewOwner() throws {
         let articleAOwner = LocalHTTPServerCacheSessionToken()
         let articleBOwner = LocalHTTPServerCacheSessionToken()
