@@ -398,10 +398,11 @@ body.page-Old_School_RuneScape_Wiki .mw-parser-output {
 
 .mw-body-content sup {
     font-size: 0.75em;
-    line-height: 0;
+    /* line-height:0 plus top:-0.5em raised cites into previous-line descenders. */
+    line-height: 1;
     position: relative;
-    top: -0.5em;
-    vertical-align: baseline;
+    top: 0;
+    vertical-align: super;
 }
 
 .mw-body-content sub {

@@ -55,6 +55,7 @@ struct SearchView: View {
                         historyContent
                     }
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
 
             }
             .navigationTitle("")

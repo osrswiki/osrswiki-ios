@@ -174,6 +174,8 @@ final class IOS08SearchHomeDiagnosticsTests: XCTestCase {
         )
         XCTAssertTrue(searchView.contains("exitActiveSearch()"))
 
+        try assertSearchEmptyQueryCanvasTopAnchorsRecentsUnderAccessory(in: searchView)
+
         let savedSource = try readSource("platforms/ios/osrswiki/Views/SavedPagesView.swift")
         XCTAssertTrue(savedSource.contains("osrsActiveSearchToolbar("))
         XCTAssertTrue(savedSource.contains("osrsInteractiveBackSwipe("))
@@ -303,6 +305,65 @@ final class IOS08SearchHomeDiagnosticsTests: XCTestCase {
             source.contains("print(\"🔍 NetworkManager") || source.contains("print(\"📄 NetworkManager"),
             "NetworkManager should not directly print search URLs or response bodies."
         )
+    }
+
+    func testSearchEmptyQueryCanvasTopAnchorsRecentsUnderAccessory() throws {
+        let searchView = try readSource("platforms/ios/osrswiki/Views/SearchView.swift")
+        try assertSearchEmptyQueryCanvasTopAnchorsRecentsUnderAccessory(in: searchView)
+    }
+
+    private func assertSearchEmptyQueryCanvasTopAnchorsRecentsUnderAccessory(in searchView: String) throws {
+        let bodyStart = try XCTUnwrap(
+            searchView.range(of: "var body: some View"),
+            "SearchView must expose a body that owns the empty-query canvas"
+        )
+        let accessoryStart = try XCTUnwrap(
+            searchView.range(of: ".osrsTabGlassAccessoryBar"),
+            "Search must keep the search field in the top glass accessory"
+        )
+        XCTAssertLessThan(
+            bodyStart.lowerBound,
+            accessoryStart.lowerBound,
+            "The empty-query canvas must be the inset content under the glass accessory, not the accessory itself"
+        )
+
+        let canvas = String(searchView[bodyStart.lowerBound..<accessoryStart.lowerBound])
+        XCTAssertTrue(
+            canvas.contains("recentSearchesSection"),
+            "Empty-query recents must live in the content slot under the search accessory"
+        )
+        XCTAssertTrue(
+            canvas.contains("historyContent"),
+            "Empty-query history must share the same content slot under the search accessory"
+        )
+        XCTAssertTrue(
+            canvas.contains("search_active_canvas"),
+            "The empty-query history canvas that shares the recents slot must stay under the accessory"
+        )
+        XCTAssertTrue(
+            canvas.contains(".frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top"),
+            "Empty-query recents/history must fill the area under the search accessory and stack from the top, not sit as an intrinsically sized ZStack-centered block."
+        )
+        XCTAssertFalse(
+            canvas.contains("ZStack(alignment: .center)"),
+            "Search must not explicitly center the empty-query recents/history canvas"
+        )
+
+        let accessory = String(searchView[accessoryStart.lowerBound...])
+        let accessoryUntilNextPrivate = accessory.components(separatedBy: "private var ").first ?? accessory
+        XCTAssertFalse(
+            accessoryUntilNextPrivate.contains("recentSearchesSection"),
+            "Recents must not be stuffed into the glass accessory, which would grow or break liquid glass chrome"
+        )
+        XCTAssertFalse(
+            accessoryUntilNextPrivate.contains("historyContent"),
+            "History must not be stuffed into the glass accessory"
+        )
+        XCTAssertTrue(
+            accessoryUntilNextPrivate.contains("activeSearchToolbar") || accessoryUntilNextPrivate.contains("searchLauncher"),
+            "The glass accessory must remain the search field chrome"
+        )
+        XCTAssertTrue(searchView.contains("osrsInteractiveBackSwipe("))
     }
 
     private func readSource(_ relativePath: String) throws -> String {

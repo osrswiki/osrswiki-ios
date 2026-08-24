@@ -83,21 +83,70 @@ final class SearchRecentsDuplicationUITests: XCTestCase {
         let launcher = app.buttons["search_history_launcher"]
         XCTAssertTrue(launcher.waitForExistence(timeout: 5), file: file, line: line)
         launcher.tap()
+        let input = app.textFields["search_input"]
+        XCTAssertTrue(input.waitForExistence(timeout: 10), file: file, line: line)
+        input.tap()
         XCTAssertTrue(app.staticTexts["Recent"].waitForExistence(timeout: 5), file: file, line: line)
         XCTAssertTrue(app.buttons["Blood moon"].waitForExistence(timeout: 5), file: file, line: line)
 
         let recentSearchesHeaders = app.staticTexts.matching(NSPredicate(format: "label == %@", "Recent"))
         let bloodMoonRows = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", "Blood moon"))
         let searchHeader = app.staticTexts["search_header"]
+        let recentHeader = recentSearchesHeaders.firstMatch
+        let recentRow = bloodMoonRows.firstMatch
 
         let screenshot = XCTAttachment(screenshot: app.screenshot())
         screenshot.name = screenshotName
         screenshot.lifetime = .keepAlways
         add(screenshot)
+        writePlacementScreenshot(app.screenshot(), name: screenshotName)
 
         XCTAssertEqual(recentSearchesHeaders.count, 1, "Search empty state should expose one Recent section", file: file, line: line)
         XCTAssertEqual(bloodMoonRows.count, 1, "Search empty state should expose one full-width row for each recent search", file: file, line: line)
         XCTAssertFalse(searchHeader.exists, "Active search should be a single compact toolbar without a separate heading", file: file, line: line)
-        XCTAssertGreaterThan(bloodMoonRows.firstMatch.frame.width, app.frame.width * 0.8, "Recent searches should be Android-like list rows, not compact chips", file: file, line: line)
+        XCTAssertGreaterThan(recentRow.frame.width, app.frame.width * 0.8, "Recent searches should be Android-like list rows, not compact chips", file: file, line: line)
+
+        let windowMidY = app.frame.midY
+        let gapBelowBar = recentHeader.frame.minY - input.frame.maxY
+        XCTAssertGreaterThanOrEqual(
+            gapBelowBar,
+            -4,
+            "Recent must not overlap the search field; header=\(recentHeader.frame) input=\(input.frame)",
+            file: file,
+            line: line
+        )
+        XCTAssertLessThan(
+            gapBelowBar,
+            72,
+            "Recent must sit just below the search bar, not mid-canvas; gap=\(gapBelowBar) header=\(recentHeader.frame) input=\(input.frame) windowMidY=\(windowMidY)",
+            file: file,
+            line: line
+        )
+        XCTAssertLessThan(
+            recentHeader.frame.minY,
+            windowMidY,
+            "Recent header must be well above the window midpoint, not vertically centered; header.minY=\(recentHeader.frame.minY) midY=\(windowMidY)",
+            file: file,
+            line: line
+        )
+        XCTAssertLessThan(
+            recentRow.frame.minY,
+            windowMidY,
+            "Recent rows must hug the search bar instead of sitting mid-screen; row.minY=\(recentRow.frame.minY) midY=\(windowMidY)",
+            file: file,
+            line: line
+        )
+    }
+
+    private func writePlacementScreenshot(_ screenshot: XCUIScreenshot, name: String) {
+        let directory = ProcessInfo.processInfo.environment["OSRS_RECENT_PLACEMENT_SCREENSHOT_DIR"]
+        guard let directory, !directory.isEmpty else { return }
+        let url = URL(fileURLWithPath: directory, isDirectory: true)
+            .appendingPathComponent("\(name).png")
+        try? FileManager.default.createDirectory(
+            at: URL(fileURLWithPath: directory, isDirectory: true),
+            withIntermediateDirectories: true
+        )
+        try? screenshot.pngRepresentation.write(to: url)
     }
 }
