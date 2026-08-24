@@ -3,7 +3,7 @@
  *
  * The wiki gadget builds OOUI forms from pre.jcConfig and parses results via
  * /api.php. App articles load from a local asset origin, so this file:
- *   - leaves the wiki gadget in charge of controls (no custom form replacement)
+ *   - leaves the wiki gadget in charge of controls unless native calc slot-replaces the form
  *   - wraps the template box + form for mobile layout
  *   - routes /api.php and /cors/ through the native calculator bridge
  */
@@ -65,6 +65,127 @@
         } catch (e) {}
     }
     window.osrsEnsureCalculatorPageVisible = osrsEnsureCalculatorPageVisible;
+
+    function osrsNativeCalcDocumentTop(el) {
+        if (!el) return 0;
+        var top = 0;
+        var node = el;
+        while (node) {
+            top += node.offsetTop || 0;
+            node = node.offsetParent;
+        }
+        return top;
+    }
+
+    function osrsNativeCalcHideGadget(node) {
+        if (!node) return;
+        node.setAttribute('data-osrs-native-calc-hidden', '1');
+        node.setAttribute('aria-hidden', 'true');
+        node.style.setProperty('display', 'none', 'important');
+    }
+
+    window.osrsInstallNativeCalcSlot = function (opts) {
+        opts = opts || {};
+        var formId = opts.formId || '';
+        var resultId = opts.resultId || '';
+        var height = Math.max(1, parseInt(opts.height, 10) || 420);
+        var form = (formId && document.getElementById(formId)) ||
+            document.querySelector('.jcTable, [id$="Calc"], [id$="Form"]');
+        var config = document.querySelector('pre.jcConfig');
+        var layout = document.querySelector('.osrs-calculator-layout');
+        var result = (resultId && document.getElementById(resultId)) ||
+            document.querySelector('.osrs-calculator-result, [id$="Results"]');
+
+        osrsNativeCalcHideGadget(config);
+        if (form && form !== result && !(result && form.contains && form.contains(result))) {
+            osrsNativeCalcHideGadget(form);
+        }
+        if (layout) {
+            layout.querySelectorAll('.jcTable, .jcSubmit, .oo-ui-fieldsetLayout, pre.jcConfig').forEach(function (node) {
+                if (result && (node === result || (result.contains && result.contains(node)))) return;
+                osrsNativeCalcHideGadget(node);
+            });
+        }
+
+        var slot = document.getElementById('osrs-native-calc-slot');
+        if (!slot) {
+            slot = document.createElement('div');
+            slot.id = 'osrs-native-calc-slot';
+            slot.setAttribute('data-osrs-native-calc-slot', '1');
+            var parent = layout ||
+                (form && form.parentNode) ||
+                (config && config.parentNode) ||
+                document.querySelector('.mw-parser-output') ||
+                document.body;
+            var anchor = form || config;
+            if (anchor && anchor.parentNode === parent) {
+                parent.insertBefore(slot, anchor);
+            } else if (result && result.parentNode) {
+                result.parentNode.insertBefore(slot, result);
+            } else if (parent) {
+                parent.appendChild(slot);
+            }
+        }
+        slot.style.display = 'block';
+        slot.style.width = '100%';
+        slot.style.boxSizing = 'border-box';
+        slot.style.minHeight = height + 'px';
+        if (window.osrsEnsureCalculatorPageVisible) {
+            window.osrsEnsureCalculatorPageVisible();
+        }
+        return JSON.stringify({
+            top: osrsNativeCalcDocumentTop(slot),
+            width: slot.offsetWidth || 0,
+            height: slot.offsetHeight || height
+        });
+    };
+
+    window.osrsNativeCalcSetSlotHeight = function (height) {
+        var slot = document.getElementById('osrs-native-calc-slot');
+        if (!slot) return;
+        slot.style.minHeight = Math.max(1, parseInt(height, 10) || 1) + 'px';
+        return osrsNativeCalcDocumentTop(slot);
+    };
+
+    window.osrsNativeCalcSetResult = function (resultId, html) {
+        var result = (resultId && document.getElementById(resultId)) ||
+            document.querySelector('.osrs-calculator-result, [id$="Results"]');
+        if (!result) {
+            result = document.createElement('div');
+            result.id = resultId || 'osrs-native-calc-result';
+            result.className = 'osrs-calculator-result';
+            var slot = document.getElementById('osrs-native-calc-slot');
+            if (slot && slot.parentNode) {
+                if (slot.nextSibling) {
+                    slot.parentNode.insertBefore(result, slot.nextSibling);
+                } else {
+                    slot.parentNode.appendChild(result);
+                }
+            } else {
+                var output = document.querySelector('.mw-parser-output') || document.body;
+                output.appendChild(result);
+            }
+        }
+        result.removeAttribute('data-osrs-native-calc-hidden');
+        result.removeAttribute('aria-hidden');
+        result.style.removeProperty('display');
+        result.innerHTML = html || '';
+        if (window.osrsEnsureCalculatorPageVisible) {
+            window.osrsEnsureCalculatorPageVisible();
+        }
+    };
+
+    window.osrsUninstallNativeCalcSlot = function () {
+        document.querySelectorAll('[data-osrs-native-calc-hidden]').forEach(function (node) {
+            node.style.removeProperty('display');
+            node.removeAttribute('data-osrs-native-calc-hidden');
+            node.removeAttribute('aria-hidden');
+        });
+        var slot = document.getElementById('osrs-native-calc-slot');
+        if (slot && slot.parentNode) {
+            slot.parentNode.removeChild(slot);
+        }
+    };
 
     function osrsInstallCalculatorKeyboardGuards() {
         if (window.__osrsCalcKeyboardGuardsInstalled) return;

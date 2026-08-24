@@ -1076,9 +1076,8 @@ private struct ArticleViewContent: View {
 
     @ViewBuilder
     private var contentView: some View {
-        let showNative = nativeCalc.phase == .loading ||
-            nativeCalc.phase == .native ||
-            nativeCalc.phase == .submitting
+        let hideArticleShell = osrsNativeCalcSession.hidesArticleShell(phase: nativeCalc.phase)
+        let showNativeForm = nativeCalc.phase == .native || nativeCalc.phase == .submitting
         ZStack {
         // WebView always present to allow loading completion and WebView fallback.
         ArticleWebView(
@@ -1124,11 +1123,11 @@ private struct ArticleViewContent: View {
         )
             .id(viewModel.webViewRenderGeneration)
             .background(Color.osrsBackground)
-            .opacity(showNative ? 0 : 1)
-            .allowsHitTesting(!showNative)
-            .accessibilityHidden(showNative)
-        if showNative {
-            osrsNativeCalcView(session: nativeCalc)
+            .opacity(hideArticleShell ? 0 : 1)
+            .allowsHitTesting(!hideArticleShell)
+            .accessibilityHidden(hideArticleShell)
+        if showNativeForm {
+            osrsNativeCalcSlotOverlay(session: nativeCalc, webView: viewModel.webView)
         }
         }
     }

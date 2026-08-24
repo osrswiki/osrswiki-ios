@@ -1,80 +1,43 @@
 import SwiftUI
-import WebKit
+import UIKit
 
 struct osrsNativeCalcView: View {
     @ObservedObject var session: osrsNativeCalcSession
     @Environment(\.osrsTheme) var osrsTheme
 
     var body: some View {
-        List {
-            Section {
-                Text(session.chromeTitle)
-                    .font(.title2.weight(.semibold))
-                    .foregroundStyle(osrsTheme.primaryTextColor)
-                    .accessibilityIdentifier("native-calc-title")
-                    .listRowBackground(rowBackground)
-                    .listRowSeparator(.hidden)
+        VStack(alignment: .leading, spacing: 12) {
+            Text(bannerError ?? "")
+                .foregroundStyle(osrsTheme.error)
+                .font(.body)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .opacity(bannerError == nil ? 0 : 1)
+                .accessibilityHidden(bannerError == nil)
+                .accessibilityIdentifier("native-calc-error")
+                .accessibilityValue(bannerError ?? "")
 
-                if let error = bannerError {
-                    Text(error)
-                        .foregroundStyle(osrsTheme.error)
-                        .font(.body)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .accessibilityIdentifier("native-calc-error")
-                        .listRowBackground(rowBackground)
-                }
-
-                if !session.introCopy.isEmpty {
-                    Text(session.introCopy)
-                        .font(.body)
-                        .foregroundStyle(osrsTheme.secondaryTextColor)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .accessibilityIdentifier("native-calc-copy")
-                        .listRowBackground(rowBackground)
-                }
+            ForEach(session.visibleInputs(), id: \.name) { input in
+                control(for: input)
             }
 
-            Section {
-                ForEach(session.visibleInputs(), id: \.name) { input in
-                    control(for: input)
-                        .listRowBackground(rowBackground)
-                }
+            Button("Submit") {
+                session.submitNow()
             }
+            .tint(osrsTheme.primary)
+            .accessibilityIdentifier("native-calc-submit")
 
-            Section {
-                Button("Submit") {
-                    session.submitNow()
-                }
-                .tint(osrsTheme.primary)
-                .accessibilityIdentifier("native-calc-submit")
-                .listRowBackground(rowBackground)
-
-                if !session.statusMessage.isEmpty {
-                    Text(session.statusMessage)
-                        .font(.footnote)
-                        .foregroundStyle(osrsTheme.secondaryTextColor)
-                        .listRowBackground(rowBackground)
-                }
-            }
-
-            if !session.resultHTML.isEmpty {
-                Section {
-                    osrsNativeCalcResultWebView(html: session.resultDocument)
-                        .frame(minHeight: 420)
-                        .listRowInsets(EdgeInsets())
-                        .listRowBackground(Color.clear)
-                        .accessibilityIdentifier("native-calc-result")
-                }
+            if !session.statusMessage.isEmpty {
+                Text(session.statusMessage)
+                    .font(.footnote)
+                    .foregroundStyle(osrsTheme.secondaryTextColor)
             }
         }
-        .listStyle(.insetGrouped)
-        .scrollContentBackground(.hidden)
-        .background(osrsTheme.background)
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .background(osrsTheme.background.opacity(0.97))
         .foregroundStyle(osrsTheme.primaryTextColor)
         .tint(osrsTheme.primary)
-        .scrollDismissesKeyboard(.interactively)
-        .contentMargins(.top, overlayClearance, for: .scrollContent)
-        .padding(.bottom, 96)
         .accessibilityIdentifier("native-calc-form")
     }
 
@@ -82,21 +45,6 @@ struct osrsNativeCalcView: View {
         if let error = session.hiscoresError, !error.isEmpty { return error }
         if let error = session.formError, !error.isEmpty { return error }
         return nil
-    }
-
-    private var rowBackground: Color {
-        osrsTheme.surfaceVariant
-    }
-
-    private var overlayClearance: CGFloat {
-        if #available(iOS 26.0, *) {
-            osrsOverlayChromeMetrics.topInset
-                + osrsSearchControlGeometry.compactHeight
-                + osrsOverlayChromeMetrics.pairedEdgeGap
-                + 8
-        } else {
-            0
-        }
     }
 
     @ViewBuilder
@@ -283,24 +231,5 @@ private struct osrsNativeCalcDraftField: View {
                     draft = value
                 }
             }
-            .id(name)
-    }
-}
-
-private struct osrsNativeCalcResultWebView: UIViewRepresentable {
-    let html: String
-
-    func makeUIView(context: Context) -> WKWebView {
-        let config = WKWebViewConfiguration()
-        let view = WKWebView(frame: .zero, configuration: config)
-        view.isOpaque = false
-        view.backgroundColor = .clear
-        view.scrollView.backgroundColor = .clear
-        view.accessibilityIdentifier = "native-calc-result-web"
-        return view
-    }
-
-    func updateUIView(_ uiView: WKWebView, context: Context) {
-        uiView.loadHTMLString(html, baseURL: URL(string: osrsWikiWebViewUrl.wikiOrigin))
     }
 }

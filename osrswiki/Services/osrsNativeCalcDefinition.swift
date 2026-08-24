@@ -270,6 +270,37 @@ enum osrsNativeCalcDefinition {
         }
     }
 
+    static func jsonEscape(_ value: String) -> String {
+        let data = (try? JSONSerialization.data(
+            withJSONObject: value,
+            options: [.fragmentsAllowed]
+        )) ?? Data("\"\"".utf8)
+        return String(data: data, encoding: .utf8) ?? "\"\""
+    }
+
+    static func installSlotJavaScript(formId: String, resultId: String, height: Int) -> String {
+        let payload: [String: Any] = [
+            "formId": formId,
+            "resultId": resultId,
+            "height": max(1, height)
+        ]
+        let data = (try? JSONSerialization.data(withJSONObject: payload, options: [])) ?? Data("{}".utf8)
+        let json = String(data: data, encoding: .utf8) ?? "{}"
+        return "window.osrsInstallNativeCalcSlot && window.osrsInstallNativeCalcSlot(\(json))"
+    }
+
+    static func setSlotHeightJavaScript(_ height: Int) -> String {
+        "window.osrsNativeCalcSetSlotHeight && window.osrsNativeCalcSetSlotHeight(\(max(1, height)))"
+    }
+
+    static func setResultJavaScript(resultId: String, html: String) -> String {
+        "window.osrsNativeCalcSetResult && window.osrsNativeCalcSetResult(\(jsonEscape(resultId)), \(jsonEscape(html)))"
+    }
+
+    static func uninstallSlotJavaScript() -> String {
+        "window.osrsUninstallNativeCalcSlot && window.osrsUninstallNativeCalcSlot()"
+    }
+
     enum HiscoresLookup: Equatable {
         case applied([String: String])
         case failed(String)

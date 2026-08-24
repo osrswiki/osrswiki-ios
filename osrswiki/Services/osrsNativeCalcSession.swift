@@ -13,7 +13,11 @@ final class osrsNativeCalcSession: ObservableObject {
 
     @Published private(set) var phase: Phase = .idle
     @Published private(set) var definition: osrsNativeCalcDefinitionModel?
-    @Published var values: [String: String] = [:]
+    private var storedValues: [String: String] = [:]
+    var values: [String: String] {
+        get { storedValues }
+        set { storedValues = newValue }
+    }
     @Published private(set) var introCopy: String = ""
     @Published private(set) var resultHTML: String = ""
     @Published private(set) var resultDocument: String = ""
@@ -38,6 +42,29 @@ final class osrsNativeCalcSession: ObservableObject {
         osrsNativeCalcDefinition.spikeNativeTitles.contains(title)
     }
 
+    /// Native calc never replaces the article WebView shell. The gadget form is
+    /// slot-replaced; heading/CSS/theme stay on the ordinary decorate path.
+    static func hidesArticleShell(phase: Phase) -> Bool {
+        false
+    }
+
+    func seedNativeStateForTesting(
+        definition: osrsNativeCalcDefinitionModel,
+        values: [String: String],
+        resultDocument: String,
+        resultHTML: String = ""
+    ) {
+        self.definition = definition
+        storedValues = values
+        self.resultDocument = resultDocument
+        self.resultHTML = resultHTML.isEmpty ? resultDocument : resultHTML
+        phase = .native
+        statusMessage = ""
+        hiscoresError = nil
+        formError = nil
+        fallbackReason = nil
+    }
+
     func start(title: String, usesDarkTheme: Bool) {
         pageTitle = title
         self.usesDarkTheme = usesDarkTheme
@@ -57,7 +84,7 @@ final class osrsNativeCalcSession: ObservableObject {
     }
 
     func setValue(_ name: String, _ value: String, submit: Bool? = nil) {
-        values[name] = value
+        storedValues[name] = value
         let type = definition?.inputs.first { $0.name == name }?.type ?? .string
         let shouldSubmit = submit ?? osrsNativeCalcDefinition.shouldAutosubmitOnEdit(type)
         if shouldSubmit {
@@ -119,24 +146,28 @@ final class osrsNativeCalcSession: ObservableObject {
             )
             let ok = (result["ok"] as? Bool) == true
             let body = result["body"] as? String ?? ""
-            switch osrsNativeCalcDefinition.interpretHiscoresLookup(
-                ok: ok,
-                body: body,
-                player: rawName,
-                mapping: hs.range
-            ) {
-            case .failed(let message):
-                hiscoresError = message
-                statusMessage = ""
-            case .applied(let updates):
-                for (key, value) in updates {
-                    values[key] = value
-                }
-                hiscoresError = nil
-                statusMessage = ""
-                objectWillChange.send()
-                scheduleSubmit()
+            applyLookupResult(ok: ok, body: body, player: rawName, mapping: hs.range)
+        }
+    }
+
+    func applyLookupResult(ok: Bool, body: String, player: String, mapping: String) {
+        switch osrsNativeCalcDefinition.interpretHiscoresLookup(
+            ok: ok,
+            body: body,
+            player: player,
+            mapping: mapping
+        ) {
+        case .failed(let message):
+            hiscoresError = message
+            statusMessage = ""
+        case .applied(let updates):
+            for (key, value) in updates {
+                storedValues[key] = value
             }
+            hiscoresError = nil
+            statusMessage = ""
+            objectWillChange.send()
+            scheduleSubmit()
         }
     }
 
@@ -171,7 +202,7 @@ final class osrsNativeCalcSession: ObservableObject {
             return
         }
         definition = parsed.definition
-        values = Dictionary(uniqueKeysWithValues: parsed.definition.inputs.map { ($0.name, $0.defaultValue) })
+        storedValues = Dictionary(uniqueKeysWithValues: parsed.definition.inputs.map { ($0.name, $0.defaultValue) })
         introCopy = osrsNativeCalcDefinition.introCopy(from: parsed.wikitext, title: title)
         phase = .native
         statusMessage = ""

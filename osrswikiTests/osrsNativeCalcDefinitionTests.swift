@@ -1,3 +1,4 @@
+import Combine
 import XCTest
 @testable import osrswiki
 
@@ -275,10 +276,23 @@ final class osrsNativeCalcDefinitionTests: XCTestCase {
         XCTAssertFalse(message.lowercased().contains("scribunto"))
     }
 
-    func testNativeCalcChromeUsesSettingsPickerAndArticleClearance() throws {
+    @MainActor
+    func testNativeCalcKeepsArticleWebViewAsPageShell() throws {
+        XCTAssertFalse(osrsNativeCalcSession.hidesArticleShell(phase: .idle))
+        XCTAssertFalse(osrsNativeCalcSession.hidesArticleShell(phase: .loading))
+        XCTAssertFalse(osrsNativeCalcSession.hidesArticleShell(phase: .native))
+        XCTAssertFalse(osrsNativeCalcSession.hidesArticleShell(phase: .submitting))
+        XCTAssertFalse(osrsNativeCalcSession.hidesArticleShell(phase: .fallback))
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
+        let articleView = try String(
+            contentsOf: root.appendingPathComponent("osrswiki/Views/ArticleView.swift"),
+            encoding: .utf8
+        )
+        XCTAssertTrue(articleView.contains("osrsNativeCalcSession.hidesArticleShell"))
+        XCTAssertFalse(articleView.contains(".opacity(showNative ? 0 : 1)"))
+        XCTAssertTrue(articleView.contains("osrsNativeCalcSlotOverlay"))
         let view = try String(
             contentsOf: root.appendingPathComponent("osrswiki/Views/osrsNativeCalcView.swift"),
             encoding: .utf8
@@ -286,8 +300,65 @@ final class osrsNativeCalcDefinitionTests: XCTestCase {
         XCTAssertTrue(view.contains("Picker(input.label"))
         XCTAssertFalse(view.contains("Menu {"))
         XCTAssertTrue(view.contains("osrsNativeCalcDraftField"))
-        XCTAssertTrue(view.contains("osrsOverlayChromeMetrics.topInset"))
-        XCTAssertTrue(view.contains("listStyle(.insetGrouped)"))
         XCTAssertTrue(view.contains("native-calc-error"))
+        XCTAssertFalse(view.contains("listStyle(.insetGrouped)"))
+        XCTAssertFalse(view.contains("osrsNativeCalcResultWebView"))
+        let runtime = try String(
+            contentsOf: root.appendingPathComponent("osrswiki/Assets/web/osrs_calculator_runtime.js"),
+            encoding: .utf8
+        )
+        XCTAssertTrue(runtime.contains("osrsInstallNativeCalcSlot"))
+        XCTAssertTrue(runtime.contains("osrs-native-calc-slot"))
+        XCTAssertTrue(runtime.contains("osrsNativeCalcSetResult"))
+        let script = osrsNativeCalcDefinition.installSlotJavaScript(
+            formId: "AgilityCalc",
+            resultId: "AgilityResults",
+            height: 420
+        )
+        XCTAssertTrue(script.contains("osrsInstallNativeCalcSlot"))
+        XCTAssertTrue(script.contains("AgilityCalc"))
+        XCTAssertTrue(script.contains("AgilityResults"))
+        let escaped = osrsNativeCalcDefinition.jsonEscape("<td>Plank</td>")
+        XCTAssertTrue(escaped.contains("Plank"))
+        let resultScript = osrsNativeCalcDefinition.setResultJavaScript(
+            resultId: "AgilityResults",
+            html: "<table><tr><td>Plank</td></tr></table>"
+        )
+        XCTAssertTrue(resultScript.contains("osrsNativeCalcSetResult"))
+        XCTAssertTrue(resultScript.contains("Plank"))
+    }
+
+    @MainActor
+    func testNameFieldEditsDoNotPublishOrClearArticleDocuments() throws {
+        let session = osrsNativeCalcSession()
+        let definition = try XCTUnwrap(osrsNativeCalcDefinition.parse(agilityConfig, title: "Calculator:Agility"))
+        session.seedNativeStateForTesting(
+            definition: definition,
+            values: Dictionary(uniqueKeysWithValues: definition.inputs.map { ($0.name, $0.defaultValue) }),
+            resultDocument: "<html>Plank</html>",
+            resultHTML: "<td>Plank</td>"
+        )
+        var publishes = 0
+        let cancellable = session.objectWillChange.sink { _ in publishes += 1 }
+        session.setValue("name", "osa", submit: false)
+        session.setValue("name", "osamo", submit: false)
+        XCTAssertEqual(publishes, 0)
+        XCTAssertEqual(session.phase, .native)
+        XCTAssertEqual(session.resultDocument, "<html>Plank</html>")
+        XCTAssertEqual(session.resultHTML, "<td>Plank</td>")
+        XCTAssertEqual(session.values["name"], "osamo")
+        session.applyLookupResult(
+            ok: false,
+            body: "",
+            player: "osamosis",
+            mapping: "XPInput,17,2;lvlInput,17,1"
+        )
+        XCTAssertEqual(session.phase, .native)
+        XCTAssertEqual(session.resultDocument, "<html>Plank</html>")
+        XCTAssertEqual(
+            session.hiscoresError,
+            osrsNativeCalcDefinition.hiscoresUnavailableMessage(player: "osamosis")
+        )
+        cancellable.cancel()
     }
 }
