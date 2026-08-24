@@ -400,6 +400,12 @@ struct SavedPagesSearchView: View {
         }
         .navigationTitle("")
         .navigationBarHidden(true)
+        .osrsInteractiveBackSwipe(
+            onBack: {
+                isSearchFieldFocused = false
+                dismiss()
+            }
+        )
         .onAppear {
             configureVoiceSearch()
             isSearchFieldFocused = true

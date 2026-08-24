@@ -650,18 +650,24 @@ private final class osrsLiveBackChromeView: UIView {
     }
 }
 
-// MARK: - Reusable full-width back swipe for pushed non-list destinations
+// MARK: - Reusable full-width back swipe for pushed destinations
 
 enum osrsInteractiveBackSwipeTouchPolicy {
-    /// Full-width back swipe must not steal slider/switch drags on settings pages.
+    /// Full-width back swipe must not steal slider/switch drags or a horizontal
+    /// scroller that owns the start point. Missing hits fail closed, matching
+    /// article pan policy (viewport coords, 4cf528b0).
     static func allowsBackSwipe(from touchView: UIView?) -> Bool {
-        var view = touchView
+        guard let touchView else { return false }
+        var view: UIView? = touchView
         while let current = view {
             if current is UIControl {
                 return false
             }
             let name = NSStringFromClass(type(of: current))
             if name.range(of: "slider", options: [.caseInsensitive, .diacriticInsensitive]) != nil {
+                return false
+            }
+            if isHorizontalScroller(current) {
                 return false
             }
             view = current.superview
@@ -672,10 +678,43 @@ enum osrsInteractiveBackSwipeTouchPolicy {
     static func allowsSimultaneousRecognition(with other: UIGestureRecognizer) -> Bool {
         allowsBackSwipe(from: other.view)
     }
+
+    /// Hit-test in window / viewport space so a UIScrollView whose bounds origin
+    /// equals contentOffset cannot mis-classify the start point.
+    static func hitView(for touch: UITouch, in host: UIView?) -> UIView? {
+        if let window = host?.window ?? touch.window {
+            let point = touch.location(in: window)
+            return window.hitTest(point, with: nil)
+        }
+        if let host {
+            return host.hitTest(touch.location(in: host), with: nil) ?? touch.view
+        }
+        return touch.view
+    }
+
+    static func isHorizontalScroller(_ view: UIView) -> Bool {
+        let name = NSStringFromClass(type(of: view))
+        if name.range(of: "WKScroll", options: [.caseInsensitive, .diacriticInsensitive]) != nil {
+            return true
+        }
+        guard let scroll = view as? UIScrollView else { return false }
+        let insetWidth = scroll.adjustedContentInset.left + scroll.adjustedContentInset.right
+        let extraWidth = scroll.contentSize.width - scroll.bounds.width + insetWidth
+        if extraWidth > 1 {
+            return true
+        }
+        if scroll.alwaysBounceHorizontal && !scroll.alwaysBounceVertical {
+            return true
+        }
+        if scroll.isPagingEnabled && scroll.alwaysBounceHorizontal {
+            return true
+        }
+        return false
+    }
 }
 
 /// Anchors a UIKit pan on the destination canvas so overlays, settings pages,
-/// and other non-webview hosts get the same interactive-back chrome as articles.
+/// list destinations, and other non-webview hosts get the same interactive-back chrome as articles.
 final class osrsInteractiveBackSwipeAnchorView: UIView {
     var installOnSuperview: ((UIView) -> Void)?
 
@@ -770,9 +809,8 @@ struct osrsInteractiveBackSwipeHost: UIViewRepresentable {
         }
 
         func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
-            let host = gestureRecognizer.view
-            let hit = host?.hitTest(touch.location(in: host), with: nil)
-            return osrsInteractiveBackSwipeTouchPolicy.allowsBackSwipe(from: hit ?? touch.view)
+            let hit = osrsInteractiveBackSwipeTouchPolicy.hitView(for: touch, in: gestureRecognizer.view)
+            return osrsInteractiveBackSwipeTouchPolicy.allowsBackSwipe(from: hit)
         }
 
         func gestureRecognizer(

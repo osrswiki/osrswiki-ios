@@ -232,11 +232,41 @@ final class osrsInteractiveArticleSwipeTests: XCTestCase {
         XCTAssertFalse(osrsInteractiveBackSwipeTouchPolicy.allowsBackSwipe(from: slider))
         XCTAssertFalse(osrsInteractiveBackSwipeTouchPolicy.allowsBackSwipe(from: UISwitch()))
         XCTAssertTrue(osrsInteractiveBackSwipeTouchPolicy.allowsBackSwipe(from: UIView()))
+        XCTAssertFalse(osrsInteractiveBackSwipeTouchPolicy.allowsBackSwipe(from: nil))
 
         let sliderPan = UIPanGestureRecognizer()
         slider.addGestureRecognizer(sliderPan)
         XCTAssertFalse(osrsInteractiveBackSwipeTouchPolicy.allowsSimultaneousRecognition(with: sliderPan))
-        XCTAssertTrue(osrsInteractiveBackSwipeTouchPolicy.allowsSimultaneousRecognition(with: UIPanGestureRecognizer()))
+
+        let canvas = UIView()
+        let canvasPan = UIPanGestureRecognizer()
+        canvas.addGestureRecognizer(canvasPan)
+        XCTAssertTrue(osrsInteractiveBackSwipeTouchPolicy.allowsSimultaneousRecognition(with: canvasPan))
+        XCTAssertFalse(osrsInteractiveBackSwipeTouchPolicy.allowsSimultaneousRecognition(with: UIPanGestureRecognizer()))
+    }
+
+    func testBackSwipeFailsClosedOnHorizontalScrollersAndAllowsVerticalLists() {
+        let horizontal = UIScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 120))
+        horizontal.contentSize = CGSize(width: 900, height: 120)
+        XCTAssertTrue(osrsInteractiveBackSwipeTouchPolicy.isHorizontalScroller(horizontal))
+        XCTAssertFalse(osrsInteractiveBackSwipeTouchPolicy.allowsBackSwipe(from: horizontal))
+
+        let nested = UIView(frame: CGRect(x: 0, y: 0, width: 40, height: 40))
+        horizontal.addSubview(nested)
+        XCTAssertFalse(osrsInteractiveBackSwipeTouchPolicy.allowsBackSwipe(from: nested))
+
+        let vertical = UIScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 480))
+        vertical.contentSize = CGSize(width: 320, height: 1400)
+        vertical.alwaysBounceVertical = true
+        XCTAssertFalse(osrsInteractiveBackSwipeTouchPolicy.isHorizontalScroller(vertical))
+        XCTAssertTrue(osrsInteractiveBackSwipeTouchPolicy.allowsBackSwipe(from: vertical))
+
+        let bounceHorizontal = UIScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 120))
+        bounceHorizontal.alwaysBounceHorizontal = true
+        bounceHorizontal.alwaysBounceVertical = false
+        bounceHorizontal.contentSize = CGSize(width: 320, height: 120)
+        XCTAssertTrue(osrsInteractiveBackSwipeTouchPolicy.isHorizontalScroller(bounceHorizontal))
+        XCTAssertFalse(osrsInteractiveBackSwipeTouchPolicy.allowsBackSwipe(from: bounceHorizontal))
     }
 
     func testDestinationCanvasPrefersThePushedNavigationPageNotARootHost() {

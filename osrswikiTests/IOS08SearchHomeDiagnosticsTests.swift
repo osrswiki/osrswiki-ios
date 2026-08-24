@@ -168,9 +168,15 @@ final class IOS08SearchHomeDiagnosticsTests: XCTestCase {
         XCTAssertTrue(searchView.contains("if isSearchMode"))
         XCTAssertTrue(searchView.contains("activeSearchToolbar"))
         XCTAssertTrue(searchView.contains("Clear History"))
+        XCTAssertTrue(
+            searchView.contains("osrsInteractiveBackSwipe("),
+            "Search query lists must support edge back-swipe wherever the back affordance exists."
+        )
+        XCTAssertTrue(searchView.contains("exitActiveSearch()"))
 
         let savedSource = try readSource("platforms/ios/osrswiki/Views/SavedPagesView.swift")
         XCTAssertTrue(savedSource.contains("osrsActiveSearchToolbar("))
+        XCTAssertTrue(savedSource.contains("osrsInteractiveBackSwipe("))
         XCTAssertTrue(savedSource.contains("inputAccessibilityIdentifier: \"saved_search_input\""))
         XCTAssertTrue(savedSource.contains("backAccessibilityIdentifier: \"saved_search_back_button\""))
         XCTAssertTrue(savedSource.contains("clearAccessibilityIdentifier: \"saved_search_clear_button\""))
@@ -182,6 +188,14 @@ final class IOS08SearchHomeDiagnosticsTests: XCTestCase {
         XCTAssertTrue(savedSource.contains(".lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)"))
         XCTAssertTrue(savedSource.contains(".accessibilityIdentifier(\"saved_row_preview\")"))
         XCTAssertFalse(savedSource.contains("arrow.down.circle.fill"))
+
+        let immediateSearch = try readSource("platforms/ios/osrswiki/Views/ImmediateStyledSearchView.swift")
+        XCTAssertTrue(
+            immediateSearch.contains("osrsInteractiveBackSwipe()"),
+            "View more / pushed search lists must support the same edge back-swipe as More destinations."
+        )
+        let dedicatedSearch = try readSource("platforms/ios/osrswiki/Views/DedicatedSearchView.swift")
+        XCTAssertTrue(dedicatedSearch.contains("osrsInteractiveBackSwipe("))
 
         for path in [
             "platforms/ios/osrswiki/Views/NewsView.swift",

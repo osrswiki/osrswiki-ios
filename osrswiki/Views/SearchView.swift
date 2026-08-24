@@ -59,6 +59,10 @@ struct SearchView: View {
             }
             .navigationTitle("")
             .navigationBarHidden(true)
+            .osrsInteractiveBackSwipe(
+                enabled: isSearchMode && appState.searchNavigationStack.isEmpty,
+                onBack: { exitActiveSearch() }
+            )
             .osrsTabGlassAccessoryBar {
                 if isSearchMode {
                     activeSearchToolbar
@@ -190,15 +194,7 @@ struct SearchView: View {
             clearAccessibilityIdentifier: "search_clear_button",
             voiceAccessibilityIdentifier: "search_voice_search",
             speechState: appState.speechManager.currentState,
-            onBack: {
-                isSearchFocused = false
-                clearSearch()
-                isSearchMode = false
-                if appState.returnFromActiveSearchIfNeeded() {
-                    return
-                }
-                historyViewModel.loadHistory()
-            },
+            onBack: { exitActiveSearch() },
             onClear: clearSearch,
             onVoiceTap: { appState.speechManager.startVoiceRecognition() },
             onSubmit: performSearch
@@ -470,6 +466,16 @@ struct SearchView: View {
         }
     }
     
+    private func exitActiveSearch() {
+        isSearchFocused = false
+        clearSearch()
+        isSearchMode = false
+        if appState.returnFromActiveSearchIfNeeded() {
+            return
+        }
+        historyViewModel.loadHistory()
+    }
+
     private func clearSearch() {
         searchText = ""
         viewModel.currentQuery = ""

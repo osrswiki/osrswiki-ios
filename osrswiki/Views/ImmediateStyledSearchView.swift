@@ -134,6 +134,8 @@ struct ImmediateStyledSearchView: View {
         .safeAreaPadding(.top)
         .navigationTitle("")
         .navigationBarHidden(true)
+        .environmentObject(themeManager)
+        .osrsInteractiveBackSwipe()
         .tint(Color(theme.primary))
         .onAppear {
             configureVoiceSearch()

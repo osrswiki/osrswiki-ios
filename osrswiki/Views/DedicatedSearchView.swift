@@ -38,6 +38,9 @@ struct DedicatedSearchView: View {
                 .foregroundStyle(Color(osrsTheme.primary))
             }
         }
+        .osrsInteractiveBackSwipe(
+            onBack: { appState.navigateBack() }
+        )
         .onAppear {
             configureVoiceSearch()
             // Focus immediately before any other setup
