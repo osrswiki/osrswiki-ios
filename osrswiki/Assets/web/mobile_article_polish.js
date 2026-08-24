@@ -321,7 +321,13 @@
     ));
   }
 
+  function isQuoteBoxTable(table) {
+    return !!(table && table.querySelector &&
+      table.querySelector('td.quotation-mark, th.quotation-mark'));
+  }
+
   function isProseBannerTable(table) {
+    if (isQuoteBoxTable(table)) return true;
     return !!(table && table.matches && table.matches(
       'table.messagebox, table.ambox, table.mbox, table.notebox, ' +
       'table.tmbox, table.cmbox, table.ombox, table.imbox, table.fmbox, ' +

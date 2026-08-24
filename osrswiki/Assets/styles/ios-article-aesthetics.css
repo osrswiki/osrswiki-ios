@@ -331,9 +331,8 @@ table.wikitable > tbody > tr > :is(th, td) {
     overflow-x: auto !important;
 }
 
-.collapsible-container.collapsible-primary-infobox:not(.collapsed) > .collapsible-content > .osrs-disclosure-body,
-.collapsible-container:not(.collapsed) > .collapsible-content > .osrs-disclosure-body:has(> table.infobox),
-.collapsible-container:not(.collapsed) > .collapsible-content > .osrs-disclosure-body:has(> .infobox-switch) {
+.collapsible-container.collapsible-bonuses-infobox:not(.collapsed) > .collapsible-content > .osrs-disclosure-body,
+.collapsible-container:not(.collapsed) > .collapsible-content > .osrs-disclosure-body:has(> table.infobox-bonuses) {
     overflow-x: auto !important;
 }
 
@@ -353,6 +352,13 @@ table.wikitable > tbody > tr > :is(th, td) {
 
 .collapsible-infobox:not(.collapsible-bonuses-infobox):not(.collapsed) > .collapsible-content > .osrs-disclosure-body:has(.mw-kartographer-map),
 .collapsible-primary-infobox:not(.collapsible-bonuses-infobox):not(.collapsed) > .collapsible-content > .osrs-disclosure-body:has(.mw-kartographer-map) {
+    max-width: 100% !important;
+}
+
+.collapsible-infobox:not(.collapsible-bonuses-infobox) .mw-kartographer-map,
+.collapsible-primary-infobox:not(.collapsible-bonuses-infobox) .mw-kartographer-map {
+    box-sizing: border-box !important;
+    width: min(18.75rem, 100%) !important;
     max-width: min(18.75rem, 100%) !important;
 }
 
@@ -363,6 +369,17 @@ table.wikitable > tbody > tr > :is(th, td) {
     width: max-content !important;
     max-width: 100% !important;
     margin-inline: 0 !important;
+}
+
+.collapsible-infobox:not(.collapsible-bonuses-infobox):not(.collapsed) > .collapsible-content,
+.collapsible-primary-infobox:not(.collapsible-bonuses-infobox):not(.collapsed) > .collapsible-content,
+.collapsible-infobox:not(.collapsible-bonuses-infobox):not(.collapsed) > .collapsible-content > .osrs-disclosure-body,
+.collapsible-primary-infobox:not(.collapsible-bonuses-infobox):not(.collapsed) > .collapsible-content > .osrs-disclosure-body,
+.collapsible-infobox:not(.collapsible-bonuses-infobox) table.infobox:not(.infobox-bonuses),
+.collapsible-primary-infobox:not(.collapsible-bonuses-infobox) table.infobox:not(.infobox-bonuses),
+.collapsible-infobox:not(.collapsible-bonuses-infobox) .infobox-switch,
+.collapsible-primary-infobox:not(.collapsible-bonuses-infobox) .infobox-switch {
+    overflow-x: visible !important;
 }
 
 .collapsible-infobox .infobox-full-width-content:not(.inventory-image) img,

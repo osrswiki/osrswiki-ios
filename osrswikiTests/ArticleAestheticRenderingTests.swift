@@ -1297,6 +1297,174 @@ final class ArticleAestheticRenderingTests: XCTestCase {
         XCTAssertEqual(state["mapCaptionColor"] as? String, "rgb(17, 34, 51)")
     }
 
+    func testWikiQuoteBoxesWrapInsideContentWidthInLightAndDark() async throws {
+        let polish = try readAsset("Assets/web/mobile_article_polish.js")
+        let interceptor = try readAsset("Assets/web/horizontal_scroll_interceptor.js")
+        let themes = try readAsset("Assets/styles/themes.css")
+        let base = try readAsset("Assets/styles/base.css")
+        let components = try readAsset("Assets/styles/components.css")
+        let fixes = try readAsset("Assets/styles/fixes.css")
+        let quoteText = """
+        The 60kB limit was still in place when I wrote "Sea Shanty 2", so it was a simple tune like all those early tracks — again, I was going for catchy. It came very quickly to me once I was in the shanty-writing groove. It has remained in the game for well over a decade, and has always enjoyed a degree of notoriety because it's a cheesy earworm. Since Old School RuneScape launched in 2013, we came to realise that the fanbase had re-embraced the track, and it has become a meme. There are plenty of silly videos featuring it, Rick-Rolling, etc. Although it makes me cringe a little, I don't mind it being a humorous song as it has charm. One of my ambitions in life is to write a novelty track and retire from the proceeds. "Sea Shanty 2" might be my best effort yet, but sadly I'm not close to retiring...
+        """
+        let html = """
+        <!doctype html>
+        <html class="theme-osrs-light">
+        <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <style>
+        html, body { margin: 0; width: 375px; }
+        \(themes)
+        \(base)
+        \(components)
+        \(fixes)
+        </style>
+        </head>
+        <body class="theme-osrs-light">
+          <div class="mw-parser-output">
+            <p>Ian Taylor later commented on its fame:</p>
+            <table id="sea-shanty-quote" align="center" style="border-collapse:collapse; border-style:none; background-color:transparent;">
+              <tbody><tr>
+                <td class="quotation-mark" style="width:20px; vertical-align:top; font-size:40px; font-family:serif; font-weight:bold; text-align:left; padding:10px 10px;">“</td>
+                <td id="quote-text" style="vertical-align:center; padding:4px 10px;">\(quoteText)</td>
+                <td class="quotation-mark" style="width:20px; vertical-align:top; font-size:40px; font-family:serif; font-weight:bold; text-align:right; padding:10px 10px;">”</td>
+              </tr></tbody>
+            </table>
+            <div id="toc" class="toc"><div class="toctitle"><h2>Contents</h2></div><ul><li>Versions</li></ul></div>
+            <blockquote id="quote-block">\(quoteText)</blockquote>
+            <pre id="code-sample"><code>UNBROKEN_TOKEN_THAT_SHOULD_STILL_BE_ALLOWED_TO_OVERFLOW_HORIZONTALLY_WHEN_IT_CANNOT_WRAP_BECAUSE_IT_HAS_NO_SPACES_OR_BREAKS_0123456789_ABCDEFGHIJKLMNOPQRSTUVWXYZ</code></pre>
+          </div>
+          <script>\(polish)</script>
+          <script>\(interceptor)</script>
+        </body>
+        </html>
+        """
+
+        try await load(html)
+        let state = try await evaluate("""
+        (() => {
+            function lineBoxHeight(el) {
+                const cs = getComputedStyle(el);
+                const parsed = parseFloat(cs.lineHeight);
+                if (cs.lineHeight !== 'normal' && Number.isFinite(parsed)) return parsed;
+                return parseFloat(cs.fontSize) * 1.2;
+            }
+            function measure(theme) {
+                document.documentElement.className = theme;
+                document.body.className = theme;
+                if (typeof window.OSRSApplyArticlePolish === 'function') {
+                    window.OSRSApplyArticlePolish();
+                }
+                const table = document.getElementById('sea-shanty-quote');
+                const cell = document.getElementById('quote-text');
+                const block = document.getElementById('quote-block');
+                const pre = document.getElementById('code-sample');
+                const viewport = document.documentElement.clientWidth;
+                return {
+                    viewportWidth: viewport,
+                    tableWidth: table.getBoundingClientRect().width,
+                    tableScrollWidth: table.scrollWidth,
+                    tableClientWidth: table.clientWidth,
+                    tableSurface: !!(table.closest('.osrs-local-scroll-surface') ||
+                        (table.parentElement && /osrs-local-scroll-surface|osrs-article-scroll-region/.test(table.parentElement.className || ''))),
+                    cellWhiteSpace: getComputedStyle(cell).whiteSpace,
+                    cellOverflowX: getComputedStyle(cell).overflowX,
+                    cellHeight: cell.getBoundingClientRect().height,
+                    cellLine: lineBoxHeight(cell),
+                    blockWidth: block.getBoundingClientRect().width,
+                    blockScrollWidth: block.scrollWidth,
+                    blockClientWidth: block.clientWidth,
+                    blockWhiteSpace: getComputedStyle(block).whiteSpace,
+                    blockOverflowX: getComputedStyle(block).overflowX,
+                    blockHeight: block.getBoundingClientRect().height,
+                    blockLine: lineBoxHeight(block),
+                    blockSurface: !!block.closest('.osrs-local-scroll-surface'),
+                    preOverflowX: getComputedStyle(pre).overflowX,
+                    rootScrollWidth: document.documentElement.scrollWidth
+                };
+            }
+            const light = measure('theme-osrs-light');
+            const dark = measure('theme-osrs-dark');
+            return {
+                lightViewport: light.viewportWidth,
+                lightTableWidth: light.tableWidth,
+                lightTableDelta: light.tableScrollWidth - light.tableClientWidth,
+                lightTableSurface: light.tableSurface,
+                lightCellWhiteSpace: light.cellWhiteSpace,
+                lightCellHeight: light.cellHeight,
+                lightCellLine: light.cellLine,
+                lightBlockWidth: light.blockWidth,
+                lightBlockDelta: light.blockScrollWidth - light.blockClientWidth,
+                lightBlockWhiteSpace: light.blockWhiteSpace,
+                lightBlockHeight: light.blockHeight,
+                lightBlockLine: light.blockLine,
+                lightBlockSurface: light.blockSurface,
+                lightPreOverflowX: light.preOverflowX,
+                lightRootScrollWidth: light.rootScrollWidth,
+                darkViewport: dark.viewportWidth,
+                darkTableWidth: dark.tableWidth,
+                darkTableDelta: dark.tableScrollWidth - dark.tableClientWidth,
+                darkTableSurface: dark.tableSurface,
+                darkCellWhiteSpace: dark.cellWhiteSpace,
+                darkCellHeight: dark.cellHeight,
+                darkCellLine: dark.cellLine,
+                darkBlockWidth: dark.blockWidth,
+                darkBlockDelta: dark.blockScrollWidth - dark.blockClientWidth,
+                darkBlockWhiteSpace: dark.blockWhiteSpace,
+                darkBlockHeight: dark.blockHeight,
+                darkBlockLine: dark.blockLine,
+                darkBlockSurface: dark.blockSurface,
+                darkPreOverflowX: dark.preOverflowX,
+                darkRootScrollWidth: dark.rootScrollWidth
+            };
+        })()
+        """)
+
+        for prefix in ["light", "dark"] {
+            let viewport = number(state, "\(prefix)Viewport")
+            XCTAssertGreaterThan(viewport, 0, "\(prefix) viewport")
+            XCTAssertLessThanOrEqual(
+                number(state, "\(prefix)TableWidth"),
+                viewport + 8,
+                "\(prefix) Cquote2 table must stay inside the phone content width"
+            )
+            XCTAssertLessThanOrEqual(
+                number(state, "\(prefix)TableDelta"),
+                2,
+                "\(prefix) Cquote2 table must wrap instead of scrolling horizontally"
+            )
+            XCTAssertEqual(state["\(prefix)TableSurface"] as? Bool, false, "\(prefix) Cquote2 must not become a local scroll surface")
+            XCTAssertNotEqual(state["\(prefix)CellWhiteSpace"] as? String, "nowrap", "\(prefix) quote text cell must wrap")
+            XCTAssertGreaterThan(
+                number(state, "\(prefix)CellHeight"),
+                number(state, "\(prefix)CellLine") * 1.5,
+                "\(prefix) Cquote2 text must wrap onto more than one line at 375px"
+            )
+            XCTAssertLessThanOrEqual(
+                number(state, "\(prefix)BlockWidth"),
+                viewport + 8,
+                "\(prefix) blockquote must stay inside the phone content width"
+            )
+            XCTAssertLessThanOrEqual(
+                number(state, "\(prefix)BlockDelta"),
+                2,
+                "\(prefix) blockquote must wrap instead of scrolling horizontally"
+            )
+            XCTAssertNotEqual(state["\(prefix)BlockWhiteSpace"] as? String, "nowrap", "\(prefix) blockquote must wrap")
+            XCTAssertEqual(state["\(prefix)BlockSurface"] as? Bool, false)
+            XCTAssertGreaterThan(
+                number(state, "\(prefix)BlockHeight"),
+                number(state, "\(prefix)BlockLine") * 1.5,
+                "\(prefix) blockquote text must wrap onto more than one line at 375px"
+            )
+            let preOverflow = state["\(prefix)PreOverflowX"] as? String ?? ""
+            XCTAssertTrue(
+                preOverflow == "auto" || preOverflow == "scroll",
+                "\(prefix) pre/code must keep overflow-x for unbroken tokens, got \(preOverflow)"
+            )
+        }
+    }
+
     func testMobileArticlePolishUsesSemanticTableRolesWithoutVisualScrollCues() async throws {
         let polish = try readAsset("Assets/web/mobile_article_polish.js")
         let horizontalScroll = try readAsset("Assets/web/horizontal_scroll_interceptor.js")

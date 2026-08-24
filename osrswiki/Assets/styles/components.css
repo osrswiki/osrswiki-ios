@@ -146,10 +146,15 @@ th[aria-sort="descending"]::after {
 
 /* --- Other Component Styles --- */
 blockquote {
-    margin: 1em 20px;
-    padding: 0.5em 10px;
+    margin: 1em 0;
+    padding: 0.5em 12px;
     border-left: 5px solid var(--body-border);
     background-color: var(--body-light);
+    max-width: 100%;
+    box-sizing: border-box;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    overflow-x: visible;
 }
 
 hr {

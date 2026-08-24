@@ -1118,10 +1118,10 @@ html body .osrs-calculator-panel .oo-ui-horizontalLayout.jsCalc-group {
     white-space: nowrap;
 }
 
-.osrs-local-scroll-surface > table:not(.infobox):not(.infobox-bonuses),
-.osrs-local-scroll-surface > .osrs-disclosure-body > table:not(.infobox):not(.infobox-bonuses),
-.collapsible-content.osrs-local-scroll-surface > table:not(.infobox):not(.infobox-bonuses),
-.collapsible-content.osrs-local-scroll-surface > .osrs-disclosure-body > table:not(.infobox):not(.infobox-bonuses) {
+.osrs-local-scroll-surface > table:not(.infobox):not(.infobox-bonuses):not(:has(td.quotation-mark)),
+.osrs-local-scroll-surface > .osrs-disclosure-body > table:not(.infobox):not(.infobox-bonuses):not(:has(td.quotation-mark)),
+.collapsible-content.osrs-local-scroll-surface > table:not(.infobox):not(.infobox-bonuses):not(:has(td.quotation-mark)),
+.collapsible-content.osrs-local-scroll-surface > .osrs-disclosure-body > table:not(.infobox):not(.infobox-bonuses):not(:has(td.quotation-mark)) {
     clear: none !important;
     float: none !important;
     margin-inline: 0 !important;
@@ -1855,9 +1855,8 @@ table.wikitable :is(th, td) > :is(
     clear: none !important;
 }
 
-.collapsible-container.collapsible-primary-infobox:not(.collapsed) > .collapsible-content > .osrs-disclosure-body,
-.collapsible-container:not(.collapsed) > .collapsible-content > .osrs-disclosure-body:has(> table.infobox),
-.collapsible-container:not(.collapsed) > .collapsible-content > .osrs-disclosure-body:has(> .infobox-switch) {
+.collapsible-container.collapsible-bonuses-infobox:not(.collapsed) > .collapsible-content > .osrs-disclosure-body,
+.collapsible-container:not(.collapsed) > .collapsible-content > .osrs-disclosure-body:has(> table.infobox-bonuses) {
     overflow-x: auto !important;
 }
 
@@ -1879,7 +1878,9 @@ table.wikitable :is(th, td) > :is(
 
 /* Item/switcher infoboxes shrink-wrap. The 12px chrome sits around the wiki
    table instead of being stolen from its ~300px column, so labels such as
-   Equipable stay one line. Location/map cards still cap nested media. */
+   Equipable stay one line. Nested maps stay capped so they cannot stretch
+   the card to a full-bleed column; the card itself may grow to the needed
+   width within the content column. */
 .collapsible-infobox:not(.collapsible-bonuses-infobox):not(.collapsed) > .collapsible-content > .osrs-disclosure-body,
 .collapsible-primary-infobox:not(.collapsible-bonuses-infobox):not(.collapsed) > .collapsible-content > .osrs-disclosure-body {
     margin-inline: auto !important;
@@ -1889,6 +1890,13 @@ table.wikitable :is(th, td) > :is(
 
 .collapsible-infobox:not(.collapsible-bonuses-infobox):not(.collapsed) > .collapsible-content > .osrs-disclosure-body:has(.mw-kartographer-map),
 .collapsible-primary-infobox:not(.collapsible-bonuses-infobox):not(.collapsed) > .collapsible-content > .osrs-disclosure-body:has(.mw-kartographer-map) {
+    max-width: 100% !important;
+}
+
+.collapsible-infobox:not(.collapsible-bonuses-infobox) .mw-kartographer-map,
+.collapsible-primary-infobox:not(.collapsible-bonuses-infobox) .mw-kartographer-map {
+    box-sizing: border-box !important;
+    width: min(18.75rem, 100%) !important;
     max-width: min(18.75rem, 100%) !important;
 }
 
@@ -2143,6 +2151,26 @@ ul.tabbernav > li {
     display: none !important;
     opacity: 0 !important;
 }
+
+/* A compact infobox whose max-content width fits the content column must use
+   that width. Nested overflow-x:auto around a 300px map/audio cap created a
+   scrollport (or crushed the player) while the column still had room. Bonuses
+   tables keep a single local horizontal scroller. */
+.collapsible-infobox:not(.collapsible-bonuses-infobox):not(.collapsed) > .collapsible-content,
+.collapsible-primary-infobox:not(.collapsible-bonuses-infobox):not(.collapsed) > .collapsible-content,
+.collapsible-infobox:not(.collapsible-bonuses-infobox):not(.collapsed) > .collapsible-content > .osrs-disclosure-body,
+.collapsible-primary-infobox:not(.collapsible-bonuses-infobox):not(.collapsed) > .collapsible-content > .osrs-disclosure-body,
+.collapsible-infobox:not(.collapsible-bonuses-infobox) table.infobox:not(.infobox-bonuses),
+.collapsible-primary-infobox:not(.collapsible-bonuses-infobox) table.infobox:not(.infobox-bonuses),
+.collapsible-infobox:not(.collapsible-bonuses-infobox) .infobox-switch,
+.collapsible-primary-infobox:not(.collapsible-bonuses-infobox) .infobox-switch {
+    overflow-x: visible !important;
+}
+
+.collapsible-infobox:not(.collapsible-bonuses-infobox),
+.collapsible-primary-infobox:not(.collapsible-bonuses-infobox) {
+    overflow-x: auto !important;
+}
 /* OSRS_SHARED_ARTICLE_SEMANTICS_END */
 
 /*
@@ -2388,11 +2416,50 @@ table.notebox th,
 .osrs-article-scroll-region:has(> table.ambox),
 .osrs-article-scroll-region:has(> table.mbox),
 .osrs-article-scroll-region:has(> table.notebox),
+.osrs-article-scroll-region:has(> table:has(td.quotation-mark)),
 .osrs-local-scroll-surface:has(> table.messagebox),
 .osrs-local-scroll-surface:has(> table.ambox),
 .osrs-local-scroll-surface:has(> table.mbox),
-.osrs-local-scroll-surface:has(> table.notebox) {
+.osrs-local-scroll-surface:has(> table.notebox),
+.osrs-local-scroll-surface:has(> table:has(td.quotation-mark)) {
     overflow-x: visible !important;
+}
+
+/* Wiki quote boxes (Cquote2 tables with td.quotation-mark, HTML blockquote)
+   wrap inside the article column. They are prose, not data tables. */
+blockquote {
+    margin-inline: 0 !important;
+    max-width: 100% !important;
+    box-sizing: border-box;
+    white-space: normal !important;
+    overflow-wrap: anywhere;
+    overflow-x: visible !important;
+}
+
+table:has(td.quotation-mark) {
+    table-layout: auto !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+    white-space: normal !important;
+    overflow-x: visible !important;
+}
+
+table:has(td.quotation-mark) td:not(.quotation-mark),
+table:has(td.quotation-mark) th:not(.quotation-mark) {
+    overflow-wrap: anywhere;
+    white-space: normal !important;
+    word-break: break-word;
+    min-width: 0 !important;
+    width: 100% !important;
+    max-width: 100%;
+}
+
+td.quotation-mark,
+th.quotation-mark {
+    width: auto !important;
+    white-space: nowrap !important;
+    box-sizing: border-box;
 }
 
 /* osrs-bonuses-overlap-guard: keep section labels and slot text from
