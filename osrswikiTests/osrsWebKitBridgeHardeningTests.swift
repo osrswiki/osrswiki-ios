@@ -569,6 +569,54 @@ final class osrsWebKitBridgeHardeningTests: XCTestCase {
         XCTAssertTrue(js.contains("data-osrs-youtube-id"))
     }
 
+    func testYouTubePresenterUsesThemedChromeAndContainThumbnail() throws {
+        let root = try repositoryRoot()
+        let youtubePlayer = try String(
+            contentsOf: root.appendingPathComponent("platforms/ios/osrswiki/Views/osrsInAppYouTubePlayer.swift"),
+            encoding: .utf8
+        )
+        let js = try String(
+            contentsOf: root.appendingPathComponent("shared/js/responsive_videos.js"),
+            encoding: .utf8
+        )
+        let note = try String(
+            contentsOf: root.appendingPathComponent("docs/internal/ios-youtube-in-webview.md"),
+            encoding: .utf8
+        )
+
+        XCTAssertTrue(youtubePlayer.contains("osrsLiveThemeApplier.apply"))
+        XCTAssertTrue(youtubePlayer.contains("presentationBackground"))
+        XCTAssertTrue(
+            youtubePlayer.contains("osrsTheme.background") || youtubePlayer.contains(".osrsBackground"),
+            "Video sheet background must use the app theme, not system dark gray"
+        )
+        XCTAssertTrue(
+            youtubePlayer.contains("osrsTheme.surface") || youtubePlayer.contains(".osrsSurface"),
+            "Video header must use themed surface chrome"
+        )
+        XCTAssertTrue(youtubePlayer.contains("aspectRatio"))
+        XCTAssertTrue(
+            youtubePlayer.contains("16.0 / 9.0") || youtubePlayer.contains("16/9") || youtubePlayer.contains("16 / 9"),
+            "Player box must be 16:9 so the pre-play thumbnail cannot cover-crop against a tall sheet"
+        )
+        XCTAssertFalse(
+            youtubePlayer.contains(".ignoresSafeArea(edges: .bottom)"),
+            "The player WKWebView must not stretch to the full sheet height"
+        )
+
+        XCTAssertTrue(js.contains("center/contain") || js.contains("background-size:contain") || js.contains("center/contain"))
+        XCTAssertFalse(js.contains("center/cover"))
+
+        XCTAssertEqual(osrsYouTubePlayerLayout.aspectRatio, 16.0 / 9.0, accuracy: 0.0001)
+        let fitted = osrsYouTubePlayerLayout.fittedSize(in: CGSize(width: 390, height: 800))
+        XCTAssertEqual(fitted.width, 390, accuracy: 0.5)
+        XCTAssertEqual(fitted.height, 219.375, accuracy: 0.5)
+        XCTAssertLessThan(fitted.height, 800)
+
+        XCTAssertTrue(note.localizedCaseInsensitiveContains("app-assets"))
+        XCTAssertTrue(note.localizedCaseInsensitiveContains("153"))
+    }
+
     func testArticleLifecyclePersistsScrollAndRecoversTerminatedWebContent() throws {
         let root = try repositoryRoot()
         let articleView = try String(
