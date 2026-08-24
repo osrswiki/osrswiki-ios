@@ -214,4 +214,80 @@ final class osrsNativeCalcDefinitionTests: XCTestCase {
         XCTAssertFalse(copy.contains("Agility"))
         XCTAssertFalse(osrsNativeCalcDefinition.parseResultIsError("<p>Your combat level is 3, balanced.</p>"))
     }
+
+    func testHiscoresUnavailableMessageMatchesWikiGadget() {
+        XCTAssertEqual(
+            osrsNativeCalcDefinition.hiscoresUnavailableMessage(player: "zzzznotaplayer"),
+            "The player \"zzzznotaplayer\" does not exist, is banned or unranked, or we couldn't fetch your hiscores. Please enter the data manually."
+        )
+        XCTAssertEqual(
+            osrsNativeCalcDefinition.hiscoresUnavailableMessage(player: "  Lynx Titan  "),
+            osrsNativeCalcDefinition.hiscoresUnavailableMessage(player: "Lynx Titan")
+        )
+    }
+
+    func testNameFieldEditsDoNotAutosubmit() {
+        XCTAssertFalse(osrsNativeCalcDefinition.shouldAutosubmitOnEdit(.hs))
+        XCTAssertFalse(osrsNativeCalcDefinition.shouldAutosubmitOnEdit(.rsn))
+        XCTAssertFalse(osrsNativeCalcDefinition.shouldAutosubmitOnEdit(.string))
+        XCTAssertTrue(osrsNativeCalcDefinition.shouldAutosubmitOnEdit(.select))
+        XCTAssertTrue(osrsNativeCalcDefinition.shouldAutosubmitOnEdit(.int))
+        XCTAssertTrue(osrsNativeCalcDefinition.shouldAutosubmitOnEdit(.toggleSwitch))
+    }
+
+    func testApplyHiscoresMapsAgilityLevelAndXp() {
+        var lines = Array(repeating: "-1,-1,-1", count: 24)
+        lines[17] = "100,60,273742"
+        let body = lines.joined(separator: "\n")
+        let applied = osrsNativeCalcDefinition.applyHiscores(
+            body: body,
+            mapping: "XPInput,17,2;lvlInput,17,1"
+        )
+        XCTAssertEqual(applied?["lvlInput"], "60")
+        XCTAssertEqual(applied?["XPInput"], "273742")
+    }
+
+    func testApplyHiscoresRejectsMissingPlayerPayloads() {
+        XCTAssertNil(osrsNativeCalcDefinition.applyHiscores(body: "", mapping: "lvlInput,17,1"))
+        XCTAssertNil(osrsNativeCalcDefinition.applyHiscores(body: "404", mapping: "lvlInput,17,1"))
+        XCTAssertNil(osrsNativeCalcDefinition.applyHiscores(
+            body: "<html>not found</html>",
+            mapping: "lvlInput,17,1"
+        ))
+        let lookup = osrsNativeCalcDefinition.interpretHiscoresLookup(
+            ok: false,
+            body: "",
+            player: "zzzznotaplayer",
+            mapping: "XPInput,17,2;lvlInput,17,1"
+        )
+        guard case .failed(let message) = lookup else {
+            return XCTFail("expected failed lookup")
+        }
+        XCTAssertTrue(message.contains("zzzznotaplayer"))
+        XCTAssertTrue(message.contains("does not exist"))
+    }
+
+    func testParseFailureStaysAsNativeBannerCopy() {
+        let message = osrsNativeCalcDefinition.parseFailureMessage(
+            "<p class=\"scribunto-error\">Lua error in Module:Skill_calc</p>"
+        )
+        XCTAssertFalse(message.isEmpty)
+        XCTAssertFalse(message.lowercased().contains("scribunto"))
+    }
+
+    func testNativeCalcChromeUsesSettingsPickerAndArticleClearance() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let view = try String(
+            contentsOf: root.appendingPathComponent("osrswiki/Views/osrsNativeCalcView.swift"),
+            encoding: .utf8
+        )
+        XCTAssertTrue(view.contains("Picker(input.label"))
+        XCTAssertFalse(view.contains("Menu {"))
+        XCTAssertTrue(view.contains("osrsNativeCalcDraftField"))
+        XCTAssertTrue(view.contains("osrsOverlayChromeMetrics.topInset"))
+        XCTAssertTrue(view.contains("listStyle(.insetGrouped)"))
+        XCTAssertTrue(view.contains("native-calc-error"))
+    }
 }

@@ -6,12 +6,23 @@ struct osrsNativeCalcView: View {
     @Environment(\.osrsTheme) var osrsTheme
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
+        List {
+            Section {
                 Text(session.chromeTitle)
                     .font(.title2.weight(.semibold))
                     .foregroundStyle(osrsTheme.primaryTextColor)
                     .accessibilityIdentifier("native-calc-title")
+                    .listRowBackground(rowBackground)
+                    .listRowSeparator(.hidden)
+
+                if let error = bannerError {
+                    Text(error)
+                        .foregroundStyle(osrsTheme.error)
+                        .font(.body)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("native-calc-error")
+                        .listRowBackground(rowBackground)
+                }
 
                 if !session.introCopy.isEmpty {
                     Text(session.introCopy)
@@ -19,84 +30,124 @@ struct osrsNativeCalcView: View {
                         .foregroundStyle(osrsTheme.secondaryTextColor)
                         .fixedSize(horizontal: false, vertical: true)
                         .accessibilityIdentifier("native-calc-copy")
+                        .listRowBackground(rowBackground)
                 }
+            }
 
+            Section {
                 ForEach(session.visibleInputs(), id: \.name) { input in
                     control(for: input)
+                        .listRowBackground(rowBackground)
                 }
+            }
 
-                if let error = session.hiscoresError, !error.isEmpty {
-                    Text(error)
-                        .foregroundStyle(osrsTheme.error)
-                        .font(.footnote)
-                }
-
+            Section {
                 Button("Submit") {
                     session.submitNow()
                 }
-                .buttonStyle(.borderedProminent)
                 .tint(osrsTheme.primary)
-                .foregroundStyle(osrsTheme.onPrimary)
                 .accessibilityIdentifier("native-calc-submit")
+                .listRowBackground(rowBackground)
 
                 if !session.statusMessage.isEmpty {
                     Text(session.statusMessage)
                         .font(.footnote)
                         .foregroundStyle(osrsTheme.secondaryTextColor)
+                        .listRowBackground(rowBackground)
                 }
+            }
 
-                if !session.resultHTML.isEmpty {
+            if !session.resultHTML.isEmpty {
+                Section {
                     osrsNativeCalcResultWebView(html: session.resultDocument)
                         .frame(minHeight: 420)
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        .listRowInsets(EdgeInsets())
+                        .listRowBackground(Color.clear)
                         .accessibilityIdentifier("native-calc-result")
                 }
             }
-            .padding(16)
-            .padding(.top, 72)
-            .padding(.bottom, 96)
         }
+        .listStyle(.insetGrouped)
+        .scrollContentBackground(.hidden)
         .background(osrsTheme.background)
+        .foregroundStyle(osrsTheme.primaryTextColor)
+        .tint(osrsTheme.primary)
+        .scrollDismissesKeyboard(.interactively)
+        .contentMargins(.top, overlayClearance, for: .scrollContent)
+        .padding(.bottom, 96)
         .accessibilityIdentifier("native-calc-form")
+    }
+
+    private var bannerError: String? {
+        if let error = session.hiscoresError, !error.isEmpty { return error }
+        if let error = session.formError, !error.isEmpty { return error }
+        return nil
+    }
+
+    private var rowBackground: Color {
+        osrsTheme.surfaceVariant
+    }
+
+    private var overlayClearance: CGFloat {
+        if #available(iOS 26.0, *) {
+            osrsOverlayChromeMetrics.topInset
+                + osrsSearchControlGeometry.compactHeight
+                + osrsOverlayChromeMetrics.pairedEdgeGap
+                + 8
+        } else {
+            0
+        }
     }
 
     @ViewBuilder
     private func control(for input: osrsNativeCalcInput) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(input.label)
-                .font(.subheadline.weight(.medium))
-                .foregroundStyle(osrsTheme.primaryTextColor)
-            switch input.type {
-            case .hs, .rsn, .string:
+        switch input.type {
+        case .hs, .rsn, .string:
+            VStack(alignment: .leading, spacing: 8) {
+                Text(input.label)
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(osrsTheme.primaryTextColor)
                 HStack {
-                    TextField(input.label, text: binding(input.name))
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .padding(10)
-                        .background(osrsTheme.surfaceVariant)
-                        .foregroundStyle(osrsTheme.onSurface)
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                    osrsNativeCalcDraftField(
+                        name: input.name,
+                        label: input.label,
+                        text: session.values[input.name] ?? input.defaultValue,
+                        onChange: { session.setValue(input.name, $0, submit: false) }
+                    )
                     if input.type == .hs {
-                        Button("Lookup") { session.lookupHiscores() }
-                            .buttonStyle(.bordered)
+                        Button("Lookup") {
+                            session.lookupHiscores()
+                        }
+                        .buttonStyle(.bordered)
+                        .accessibilityIdentifier("native-calc-lookup")
                     }
                 }
-            case .int, .number:
-                stepper(input)
-            case .select:
-                picker(input)
-            case .buttonSelect:
-                chips(input)
-            case .toggleSwitch, .toggleButton, .check:
-                Toggle(isOn: boolBinding(input.name)) {
-                    Text(input.label)
-                        .foregroundStyle(osrsTheme.primaryTextColor)
-                }
-                .labelsHidden()
-                .tint(osrsTheme.accent)
-            default:
-                EmptyView()
             }
+        case .int, .number:
+            VStack(alignment: .leading, spacing: 8) {
+                Text(input.label)
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(osrsTheme.primaryTextColor)
+                stepper(input)
+            }
+        case .select:
+            picker(input)
+        case .buttonSelect:
+            VStack(alignment: .leading, spacing: 8) {
+                Text(input.label)
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(osrsTheme.primaryTextColor)
+                chips(input)
+            }
+        case .toggleSwitch, .toggleButton, .check:
+            Toggle(isOn: boolBinding(input.name)) {
+                Text(input.label)
+                    .foregroundStyle(osrsTheme.primaryTextColor)
+            }
+            .tint(osrsTheme.accent)
+            .accessibilityIdentifier("native-calc-field-\(input.name)")
+        default:
+            EmptyView()
         }
     }
 
@@ -111,14 +162,15 @@ struct osrsNativeCalcView: View {
             .buttonStyle(.bordered)
             .accessibilityLabel("Decrease \(input.label)")
 
-            TextField(input.label, text: binding(input.name))
-                .keyboardType(.numberPad)
-                .multilineTextAlignment(.center)
-                .padding(10)
-                .background(osrsTheme.surfaceVariant)
-                .foregroundStyle(osrsTheme.onSurface)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-                .accessibilityIdentifier("native-calc-field-\(input.name)")
+            osrsNativeCalcDraftField(
+                name: input.name,
+                label: input.label,
+                text: session.values[input.name] ?? input.defaultValue,
+                keyboard: .numberPad,
+                centered: true,
+                onChange: { session.setValue(input.name, $0, submit: false) },
+                onCommit: { session.setValue(input.name, $0, submit: true) }
+            )
 
             Button {
                 session.step(input.name, delta: 1)
@@ -132,23 +184,16 @@ struct osrsNativeCalcView: View {
     }
 
     private func picker(_ input: osrsNativeCalcInput) -> some View {
-        Menu {
+        Picker(input.label, selection: pickerBinding(input)) {
             ForEach(input.options, id: \.self) { option in
-                Button(option) { session.setValue(input.name, option) }
+                Text(option)
+                    .foregroundStyle(osrsTheme.primaryTextColor)
+                    .tag(option)
             }
-        } label: {
-            HStack {
-                Text(session.values[input.name] ?? input.defaultValue)
-                    .foregroundStyle(osrsTheme.onSurface)
-                Spacer()
-                Image(systemName: "chevron.up.chevron.down")
-                    .foregroundStyle(osrsTheme.secondaryTextColor)
-            }
-            .padding(12)
-            .background(osrsTheme.surfaceVariant)
-            .clipShape(RoundedRectangle(cornerRadius: 8))
         }
+        .tint(osrsTheme.primaryTextColor)
         .accessibilityIdentifier("native-calc-field-\(input.name)")
+        .accessibilityHint("Menu")
     }
 
     private func chips(_ input: osrsNativeCalcInput) -> some View {
@@ -164,10 +209,10 @@ struct osrsNativeCalcView: View {
         .accessibilityIdentifier("native-calc-field-\(input.name)")
     }
 
-    private func binding(_ name: String) -> Binding<String> {
+    private func pickerBinding(_ input: osrsNativeCalcInput) -> Binding<String> {
         Binding(
-            get: { session.values[name] ?? "" },
-            set: { session.setValue(name, $0) }
+            get: { session.values[input.name] ?? input.defaultValue },
+            set: { session.setValue(input.name, $0) }
         )
     }
 
@@ -179,6 +224,66 @@ struct osrsNativeCalcView: View {
             },
             set: { session.setValue(name, $0 ? "true" : "false") }
         )
+    }
+}
+
+private struct osrsNativeCalcDraftField: View {
+    @Environment(\.osrsTheme) private var osrsTheme
+    let name: String
+    let label: String
+    let text: String
+    let keyboard: UIKeyboardType
+    let centered: Bool
+    let onChange: (String) -> Void
+    let onCommit: ((String) -> Void)?
+    @State private var draft: String
+    @FocusState private var focused: Bool
+
+    init(
+        name: String,
+        label: String,
+        text: String,
+        keyboard: UIKeyboardType = .default,
+        centered: Bool = false,
+        onChange: @escaping (String) -> Void,
+        onCommit: ((String) -> Void)? = nil
+    ) {
+        self.name = name
+        self.label = label
+        self.text = text
+        self.keyboard = keyboard
+        self.centered = centered
+        self.onChange = onChange
+        self.onCommit = onCommit
+        _draft = State(initialValue: text)
+    }
+
+    var body: some View {
+        TextField(label, text: $draft)
+            .textInputAutocapitalization(.never)
+            .autocorrectionDisabled()
+            .keyboardType(keyboard)
+            .multilineTextAlignment(centered ? .center : .leading)
+            .focused($focused)
+            .padding(10)
+            .background(osrsTheme.surfaceVariant)
+            .foregroundStyle(osrsTheme.onSurface)
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .accessibilityIdentifier("native-calc-field-\(name)")
+            .onChange(of: draft) { _, value in
+                onChange(value)
+            }
+            .onChange(of: focused) { _, isFocused in
+                if !isFocused {
+                    onCommit?(draft)
+                }
+            }
+            .onChange(of: text) { _, value in
+                if !focused, draft != value {
+                    draft = value
+                }
+            }
+            .id(name)
     }
 }
 

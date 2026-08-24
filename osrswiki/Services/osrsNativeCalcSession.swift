@@ -19,6 +19,7 @@ final class osrsNativeCalcSession: ObservableObject {
     @Published private(set) var resultDocument: String = ""
     @Published private(set) var statusMessage: String = ""
     @Published private(set) var hiscoresError: String?
+    @Published private(set) var formError: String?
     @Published var fallbackReason: osrsNativeCalcFallbackReason?
     @Published var usesDarkTheme: Bool = false
 
@@ -55,10 +56,14 @@ final class osrsNativeCalcSession: ObservableObject {
         Task { await loadDefinition() }
     }
 
-    func setValue(_ name: String, _ value: String) {
+    func setValue(_ name: String, _ value: String, submit: Bool? = nil) {
         values[name] = value
-        objectWillChange.send()
-        scheduleSubmit()
+        let type = definition?.inputs.first { $0.name == name }?.type ?? .string
+        let shouldSubmit = submit ?? osrsNativeCalcDefinition.shouldAutosubmitOnEdit(type)
+        if shouldSubmit {
+            objectWillChange.send()
+            scheduleSubmit()
+        }
     }
 
     func step(_ name: String, delta: Int) {
@@ -67,7 +72,7 @@ final class osrsNativeCalcSession: ObservableObject {
         var next = current + delta
         if let min = input?.minValue { next = max(min, next) }
         if let max = input?.maxValue { next = min(max, next) }
-        setValue(name, String(next))
+        setValue(name, String(next), submit: true)
     }
 
     func visibleInputs() -> [osrsNativeCalcInput] {
@@ -102,24 +107,36 @@ final class osrsNativeCalcSession: ObservableObject {
             return
         }
         hiscoresError = nil
+        formError = nil
         statusMessage = "Looking up hiscores…"
         Task {
             let player = rawName.replacingOccurrences(of: " ", with: "_")
+            let encoded = player.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? player
             let result = await osrsCalculatorWikiClient.request(
                 method: "GET",
-                urlString: "/cors/m=hiscore_oldschool/index_lite.ws?player=\(player)",
+                urlString: "/cors/m=hiscore_oldschool/index_lite.ws?player=\(encoded)",
                 data: nil
             )
-            guard (result["ok"] as? Bool) == true,
-                  let body = result["body"] as? String,
-                  !body.isEmpty else {
-                hiscoresError = "Could not fetch hiscores for \(rawName)."
+            let ok = (result["ok"] as? Bool) == true
+            let body = result["body"] as? String ?? ""
+            switch osrsNativeCalcDefinition.interpretHiscoresLookup(
+                ok: ok,
+                body: body,
+                player: rawName,
+                mapping: hs.range
+            ) {
+            case .failed(let message):
+                hiscoresError = message
                 statusMessage = ""
-                return
+            case .applied(let updates):
+                for (key, value) in updates {
+                    values[key] = value
+                }
+                hiscoresError = nil
+                statusMessage = ""
+                objectWillChange.send()
+                scheduleSubmit()
             }
-            applyHiscores(body, mapping: hs.range)
-            statusMessage = ""
-            scheduleSubmit()
         }
     }
 
@@ -178,7 +195,7 @@ final class osrsNativeCalcSession: ObservableObject {
             phase = .fallback
             return
         }
-        if phase != .fallback {
+        if phase == .loading {
             phase = .submitting
         }
         statusMessage = "Calculating…"
@@ -201,27 +218,22 @@ final class osrsNativeCalcSession: ObservableObject {
         )
         let html = parseHTML(from: result)
         if osrsNativeCalcDefinition.parseResultIsError(html) {
+            if definition != nil && (phase == .native || phase == .submitting) {
+                formError = osrsNativeCalcDefinition.parseFailureMessage(html)
+                phase = .native
+                statusMessage = ""
+                return
+            }
             fallbackReason = .parseError
             phase = .fallback
             statusMessage = ""
             return
         }
+        formError = nil
         resultHTML = html
         resultDocument = osrsNativeCalcDefinition.wrapResultHTML(html, dark: usesDarkTheme)
         phase = .native
         statusMessage = ""
-    }
-
-    private func applyHiscores(_ body: String, mapping: String) {
-        let lines = body.split(whereSeparator: \.isNewline).map(String.init)
-        for piece in mapping.split(separator: ";") {
-            let parts = piece.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
-            guard parts.count >= 3, let skill = Int(parts[1]), let field = Int(parts[2]) else { continue }
-            guard skill >= 0, skill < lines.count else { continue }
-            let cols = lines[skill].split(separator: ",").map(String.init)
-            guard field >= 0, field < cols.count else { continue }
-            values[parts[0]] = cols[field]
-        }
     }
 
     private func parseRevision(_ body: String, title: String) -> (definition: osrsNativeCalcDefinitionModel, wikitext: String)? {

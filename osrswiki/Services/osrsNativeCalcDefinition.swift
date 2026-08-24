@@ -247,6 +247,67 @@ enum osrsNativeCalcDefinition {
         return lowered.contains("scribunto-error") || lowered.contains("lua error")
     }
 
+    static func hiscoresUnavailableMessage(player: String) -> String {
+        let name = player.trimmingCharacters(in: .whitespacesAndNewlines)
+        return "The player \"\(name)\" does not exist, is banned or unranked, or we couldn't fetch your hiscores. Please enter the data manually."
+    }
+
+    static func parseFailureMessage(_ html: String?) -> String {
+        let body = (html ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        if let range = body.range(of: "Lua error[^<]*", options: [.regularExpression, .caseInsensitive]) {
+            let extracted = String(body[range]).trimmingCharacters(in: .whitespacesAndNewlines)
+            if !extracted.isEmpty { return extracted }
+        }
+        return "The wiki could not calculate a result. Please check your inputs and try again."
+    }
+
+    static func shouldAutosubmitOnEdit(_ type: osrsNativeCalcParamType) -> Bool {
+        switch type {
+        case .hs, .rsn, .string:
+            return false
+        default:
+            return true
+        }
+    }
+
+    enum HiscoresLookup: Equatable {
+        case applied([String: String])
+        case failed(String)
+    }
+
+    static func interpretHiscoresLookup(
+        ok: Bool,
+        body: String,
+        player: String,
+        mapping: String
+    ) -> HiscoresLookup {
+        guard ok, let applied = applyHiscores(body: body, mapping: mapping), !applied.isEmpty else {
+            return .failed(hiscoresUnavailableMessage(player: player))
+        }
+        return .applied(applied)
+    }
+
+    static func applyHiscores(body: String, mapping: String) -> [String: String]? {
+        let trimmed = body.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        let lowered = trimmed.lowercased()
+        if lowered.contains("<html") || lowered.contains("<!doctype") { return nil }
+        let lines = trimmed.split(whereSeparator: \.isNewline).map(String.init)
+        guard lines.count > 1 else { return nil }
+        var updates: [String: String] = [:]
+        for piece in mapping.split(separator: ";") {
+            let parts = piece.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+            guard parts.count >= 3, let skill = Int(parts[1]), let field = Int(parts[2]) else { continue }
+            guard skill >= 0, skill < lines.count else { continue }
+            let cols = lines[skill].split(separator: ",").map(String.init)
+            guard field >= 0, field < cols.count else { continue }
+            let value = cols[field].trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !value.isEmpty else { continue }
+            updates[parts[0]] = value
+        }
+        return updates.isEmpty ? nil : updates
+    }
+
     static func fallbackReason(
         title: String? = nil,
         definition: osrsNativeCalcDefinitionModel? = nil,
