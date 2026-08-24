@@ -1370,7 +1370,7 @@ actor osrsArticleDocumentCoordinator {
             try Task.checkCancellation()
             let result = osrsArticlePayloadPreparer.normalize(html)
             try Task.checkCancellation()
-            return result
+            return osrsArticleImageLazyPolicy.apply(result)
         }
         return try await withTaskCancellationHandler {
             try await worker.value

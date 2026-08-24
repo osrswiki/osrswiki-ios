@@ -445,6 +445,27 @@ final class osrsArticleLoadRegressionContractTests: XCTestCase {
         )
     }
 
+    func testLazyOffscreenArticleImagesDefaultOnAndWired() throws {
+        let root = try repositoryRoot()
+        let prefs = try source(root, "platforms/ios/osrswiki/Services/osrsLoadPerformancePrefs.swift")
+        XCTAssertTrue(prefs.contains("static var lazyOffscreenArticleImages: Bool = true"))
+        let htmlBuilder = try source(root, "platforms/ios/osrswiki/Services/osrsPageHtmlBuilder.swift")
+        XCTAssertTrue(htmlBuilder.contains("web/article_image_lazy.js"))
+        XCTAssertTrue(htmlBuilder.contains("osrsLoadPerformancePrefs.lazyOffscreenArticleImages"))
+        let warmer = try source(root, "platforms/ios/osrswiki/Services/osrsFirstViewAssetWarmer.swift")
+        XCTAssertTrue(warmer.contains("eagerOnly: osrsLoadPerformancePrefs.lazyOffscreenArticleImages"))
+        let coordinator = try source(root, "platforms/ios/osrswiki/Services/osrsArticleDocumentCoordinator.swift")
+        XCTAssertTrue(coordinator.contains("osrsArticleImageLazyPolicy.apply"))
+        let lazyJs = try source(root, "platforms/ios/osrswiki/Assets/web/article_image_lazy.js")
+        XCTAssertTrue(lazyJs.contains("osrsRestoreDeferredImage"))
+        let shared = try source(root, "shared/js/article_image_lazy.js")
+        XCTAssertEqual(shared, lazyJs)
+        let switcher = try source(root, "platforms/ios/osrswiki/Assets/web/switch_infobox.js")
+        XCTAssertTrue(switcher.contains("restoreDeferredImage"))
+        let chooser = try source(root, "platforms/ios/osrswiki/Services/osrsSrcsetParser.swift")
+        XCTAssertTrue(chooser.contains("static func choose("))
+    }
+
     func testCriticalArticleBundleFlagDefaultsOnAndWired() throws {
         let root = try repositoryRoot()
         let prefs = try source(root, "platforms/ios/osrswiki/Services/osrsLoadPerformancePrefs.swift")

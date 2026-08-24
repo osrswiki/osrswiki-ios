@@ -35,4 +35,9 @@ enum osrsLoadPerformancePrefs {
     /// `media=print` onload deferred-link path. Saved/offline stays fully inlined.
     /// Flip to false to roll back thousand-cuts slice 2.
     static var deferLiveWikiFidelityCss: Bool = true
+
+    /// When true, live HTML keeps `src` off hidden switcher panes and below-fold
+    /// thumbs until they intersect (or the user switches), and first-view srcset
+    /// is reduced to one density URL. Flip to false to roll back thousand-cuts #7/#14.
+    static var lazyOffscreenArticleImages: Bool = true
 }

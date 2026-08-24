@@ -84,6 +84,46 @@ final class osrsLiveArticleAssetQueueTests: XCTestCase {
         XCTAssertTrue(plan.low.contains(belowFold))
     }
 
+    func testEagerFirstViewSlotSkipsHiddenSwitcherPoolAndPicksOneSrcsetDensity() {
+        let html = """
+        <table class="infobox infobox-switch">
+          <tr><td>
+            <img src="/images/thumb/glory.png/140px-glory.png"
+                 srcset="/images/thumb/glory.png/140px-glory.png 1x, /images/thumb/glory.png/280px-glory.png 2x"
+                 width="140" height="140">
+          </td></tr>
+        </table>
+        <p>Lead</p>
+        <h2>Combat stats</h2>
+        <img src="/images/below-fold.png" width="40" height="40">
+        <div class="infobox-resources-glory infobox-switch-resources">
+          <div data-attr-param="version">
+            <div data-attr-index="0"><img src="/images/glory-4.png" width="40" height="40"></div>
+            <div data-attr-index="1"><img src="/images/glory-uncharged.png" width="40" height="40"></div>
+          </div>
+        </div>
+        """
+        let eager = osrsOfflineArticleResourceSettlement.firstViewSlotURLs(
+            from: html,
+            eagerOnly: true,
+            devicePixelRatio: 2
+        )
+        XCTAssertTrue(eager.contains(URL(string: "https://oldschool.runescape.wiki/images/thumb/glory.png/280px-glory.png")!))
+        XCTAssertFalse(eager.contains(URL(string: "https://oldschool.runescape.wiki/images/thumb/glory.png/140px-glory.png")!))
+        XCTAssertTrue(eager.contains(URL(string: "https://oldschool.runescape.wiki/images/glory-4.png")!))
+        XCTAssertFalse(eager.contains(gloryPool))
+        XCTAssertFalse(eager.contains(belowFold))
+        XCTAssertEqual(
+            osrsSrcsetParser.choose(
+                src: "/images/thumb/glory.png/140px-glory.png",
+                srcset: "/images/thumb/glory.png/140px-glory.png 1x, /images/thumb/glory.png/280px-glory.png 2x",
+                widthPx: 140,
+                devicePixelRatio: 2
+            ),
+            "/images/thumb/glory.png/280px-glory.png"
+        )
+    }
+
     func testQueueSkipsCachedAndPromoteMovesLowToHigh() {
         let queue = osrsLiveArticleAssetQueue(isCached: { [cached] in $0 == cached })
         queue.load(
@@ -150,7 +190,8 @@ final class osrsLiveArticleAssetQueueTests: XCTestCase {
             concurrency: 1
         )
         await completeWarmer.warm(html: gloryHTML)
-        XCTAssertTrue(completed.contains(gloryPool))
+        XCTAssertFalse(completed.contains(gloryPool))
+        XCTAssertTrue(completed.contains(URL(string: "https://oldschool.runescape.wiki/images/glory-default.png")!))
         XCTAssertFalse(completed.contains(belowFold))
 
         var remainder: [URL] = []

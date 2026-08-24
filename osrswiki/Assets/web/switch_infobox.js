@@ -66,12 +66,18 @@ function preloadSwitcherPool() {
     resourceContainers.forEach(container => {
         const images = container.querySelectorAll('img');
         images.forEach(img => {
+            restoreDeferredImage(img);
             const src = img.getAttribute('src');
-            if (src) { imageUrlsToPreload.add(src); }
+            if (src && src.indexOf('data:') !== 0) {
+                imageUrlsToPreload.add(src);
+                return;
+            }
             const srcset = img.getAttribute('srcset');
             if (srcset) {
-                const sources = srcset.split(',').map(s => s.trim().split(/\s+/)[0]);
-                sources.forEach(sourceUrl => imageUrlsToPreload.add(sourceUrl));
+                const first = srcset.split(',')[0].trim().split(/\s+/)[0];
+                if (first) {
+                    imageUrlsToPreload.add(first);
+                }
             }
         });
     });
@@ -245,21 +251,49 @@ function populatePlaceholders(container, resources, switchIndex) {
     });
 }
 
+function restoreDeferredImage(image) {
+    if (!image) {
+        return;
+    }
+    if (typeof window.osrsRestoreDeferredImage === 'function') {
+        window.osrsRestoreDeferredImage(image);
+        return;
+    }
+    const src = image.getAttribute('data-osrs-deferred-src');
+    if (src) {
+        image.setAttribute('src', src);
+        image.removeAttribute('data-osrs-deferred-src');
+    }
+    const srcset = image.getAttribute('data-osrs-deferred-srcset');
+    if (srcset) {
+        image.setAttribute('srcset', srcset);
+        image.removeAttribute('data-osrs-deferred-srcset');
+    }
+    const sizes = image.getAttribute('data-osrs-deferred-sizes');
+    if (sizes) {
+        image.setAttribute('sizes', sizes);
+        image.removeAttribute('data-osrs-deferred-sizes');
+    }
+    image.classList.remove('osrs-deferred-offscreen-image');
+}
+
 function replacePlaceholderFromResource(placeholder, newContentElement) {
     const incoming = fixUrls(newContentElement.innerHTML);
     const oldImg = placeholder.querySelector('img');
     const scratch = document.createElement('div');
     scratch.innerHTML = incoming;
+    scratch.querySelectorAll('img').forEach(restoreDeferredImage);
     const newImg = scratch.querySelector('img');
     if (oldImg && newImg) {
         updateExistingImage(oldImg, newImg);
         return;
     }
-    placeholder.innerHTML = incoming;
+    placeholder.innerHTML = scratch.innerHTML;
 }
 
 function updateExistingImage(oldImg, newImg) {
-    const copyAttrs = ['src', 'srcset', 'width', 'height', 'alt', 'class'];
+    restoreDeferredImage(newImg);
+    const copyAttrs = ['src', 'srcset', 'sizes', 'width', 'height', 'alt', 'class'];
     copyAttrs.forEach((attr) => {
         if (newImg.hasAttribute(attr)) {
             oldImg.setAttribute(attr, newImg.getAttribute(attr));

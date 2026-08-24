@@ -58,6 +58,7 @@ class osrsPageHtmlBuilder {
         "web/infobox_switcher_bootstrap.js",
         "web/switch_infobox.js",
         "web/collapsible_content.js",
+        "web/article_image_lazy.js",
         "web/first_viewport_assets.js",
         "web/live_article_asset_warm.js",
         "web/mobile_article_polish.js",
@@ -102,12 +103,14 @@ class osrsPageHtmlBuilder {
 
     private func createTableCollapseScript(collapseTablesEnabled: Bool) -> String {
         let narrowPainted = osrsLoadPerformancePrefs.narrowFirstViewportPaintedSet ? "true" : "false"
+        let lazyOffscreen = osrsLoadPerformancePrefs.lazyOffscreenArticleImages ? "true" : "false"
         return """
         <script>
             // Global variable for table collapse preference that collapsible_content.js can read
             window.OSRS_TABLE_COLLAPSED = \(collapseTablesEnabled ? "true" : "false");
             console.log('osrsPageHtmlBuilder: Set global collapse preference to ' + window.OSRS_TABLE_COLLAPSED);
             window.__osrsNarrowFirstViewportPaintedSet = \(narrowPainted);
+            window.__osrsLazyOffscreenArticleImages = \(lazyOffscreen);
         </script>
         """
     }

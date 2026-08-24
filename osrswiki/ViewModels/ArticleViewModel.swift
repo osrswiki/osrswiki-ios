@@ -137,12 +137,29 @@ enum osrsOfflineArticleResourceSettlement {
         return urls
     }
 
-    nonisolated static func firstViewSlotURLs(from html: String) -> [URL] {
+    nonisolated static func firstViewSlotURLs(
+        from html: String,
+        eagerOnly: Bool = false,
+        devicePixelRatio: CGFloat = 2
+    ) -> [URL] {
         var seen: Set<URL> = []
         var urls: [URL] = []
-        let chunks = infoboxFragments(from: html) + resourcePoolFragments(from: html) + [leadPrefix(from: html)]
+        let defaultIndex = osrsArticleImageLazyPolicy.authoredDefaultIndex(from: html)
+        var chunks = infoboxFragments(from: html)
+        if eagerOnly {
+            for pool in resourcePoolFragments(from: html) {
+                let defaults = dataAttrIndexFragments(from: pool, index: defaultIndex)
+                chunks.append(contentsOf: defaults.isEmpty ? [] : defaults)
+            }
+        } else {
+            chunks.append(contentsOf: resourcePoolFragments(from: html))
+        }
+        chunks.append(leadPrefix(from: html))
         for fragment in chunks {
-            for url in initialResourcePlan(from: fragment).map(\.url) where seen.insert(url).inserted {
+            let plan = eagerOnly
+                ? eagerImageURLs(from: fragment, devicePixelRatio: devicePixelRatio)
+                : initialResourcePlan(from: fragment).map(\.url)
+            for url in plan where seen.insert(url).inserted {
                 urls.append(url)
                 if urls.count >= osrsLiveArticleAssetPlan.firstViewCap {
                     return urls
@@ -233,6 +250,62 @@ enum osrsOfflineArticleResourceSettlement {
             }
         }
         return fragments
+    }
+
+    private nonisolated static func dataAttrIndexFragments(from html: String, index: String) -> [String] {
+        let escaped = NSRegularExpression.escapedPattern(for: index)
+        let pattern = #"<div[^>]*data-attr-index=["']\#(escaped)["'][^>]*>[\s\S]*?</div>"#
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
+            return []
+        }
+        return regex.matches(in: html, range: NSRange(html.startIndex..., in: html)).compactMap {
+            guard let range = Range($0.range, in: html) else { return nil }
+            return String(html[range])
+        }
+    }
+
+    private nonisolated static func eagerImageURLs(from html: String, devicePixelRatio: CGFloat) -> [URL] {
+        guard let regex = try? NSRegularExpression(pattern: #"<img\b[^>]*>"#, options: [.caseInsensitive]) else {
+            return []
+        }
+        let baseURL = URL(string: "https://oldschool.runescape.wiki/")!
+        var urls: [URL] = []
+        var seen: Set<URL> = []
+        for match in regex.matches(in: html, range: NSRange(html.startIndex..., in: html)) {
+            guard let range = Range(match.range, in: html) else { continue }
+            let tag = String(html[range])
+            if tag.range(of: "data-osrs-deferred-src", options: .caseInsensitive) != nil {
+                continue
+            }
+            func attribute(_ name: String) -> String? {
+                let escapedName = NSRegularExpression.escapedPattern(for: name)
+                let pattern = #"(?:^|\s)"# + escapedName + #"\s*=\s*[\"']([^\"']+)[\"']"#
+                guard let attrRegex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]),
+                      let attrMatch = attrRegex.firstMatch(in: tag, range: NSRange(tag.startIndex..., in: tag)),
+                      attrMatch.numberOfRanges > 1,
+                      let attrRange = Range(attrMatch.range(at: 1), in: tag) else {
+                    return nil
+                }
+                return String(tag[attrRange])
+            }
+            let src = attribute("src")
+            if src?.lowercased().hasPrefix("data:") == true {
+                continue
+            }
+            let chosen = osrsSrcsetParser.choose(
+                src: src,
+                srcset: attribute("srcset"),
+                widthPx: attribute("width").flatMap(Int.init),
+                devicePixelRatio: devicePixelRatio
+            )
+            guard let chosen,
+                  let url = normalizedNetworkURL(chosen, relativeTo: baseURL),
+                  seen.insert(url).inserted else {
+                continue
+            }
+            urls.append(url)
+        }
+        return urls
     }
 
     private nonisolated static func tableFragment(in html: String, from start: String.Index) -> String? {

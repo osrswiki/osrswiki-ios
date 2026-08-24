@@ -207,6 +207,7 @@ class osrsPageContentLoader {
         // Process any MediaWiki-specific content
         print("🔍 osrsPageContentLoader: HTML before processMediaWikiContent contains 'advanced-data': \(processedHtml.contains("advanced-data"))")
         processedHtml = processMediaWikiContent(processedHtml)
+        processedHtml = osrsArticleImageLazyPolicy.apply(processedHtml)
         print("🔍 osrsPageContentLoader: HTML after processMediaWikiContent contains 'advanced-data': \(processedHtml.contains("advanced-data"))")
         
         print("🔧 osrsPageContentLoader: Processed HTML content - found \(backgroundUrls.count) background URLs")
