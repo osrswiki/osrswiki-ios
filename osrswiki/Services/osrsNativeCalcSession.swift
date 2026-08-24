@@ -22,6 +22,10 @@ final class osrsNativeCalcSession: ObservableObject {
     @Published var fallbackReason: osrsNativeCalcFallbackReason?
     @Published var usesDarkTheme: Bool = false
 
+    var chromeTitle: String {
+        osrsNativeCalcDefinition.chromeTitle(for: definition?.id ?? pageTitle)
+    }
+
     private var submitTask: Task<Void, Never>?
     private var pageTitle: String = ""
 
@@ -151,7 +155,7 @@ final class osrsNativeCalcSession: ObservableObject {
         }
         definition = parsed.definition
         values = Dictionary(uniqueKeysWithValues: parsed.definition.inputs.map { ($0.name, $0.defaultValue) })
-        introCopy = osrsNativeCalcDefinition.introCopy(from: parsed.wikitext)
+        introCopy = osrsNativeCalcDefinition.introCopy(from: parsed.wikitext, title: title)
         phase = .native
         statusMessage = ""
         await submit()
@@ -269,10 +273,16 @@ final class osrsNativeCalcSession: ObservableObject {
 }
 
 extension osrsNativeCalcDefinition {
-    static func introCopy(from wikitext: String) -> String {
-        var lines: [String] = [
-            "Enter your current Agility level or XP and a goal. Methods come from the live wiki calculator, not formulas shipped in the app."
-        ]
+    static func introCopy(from wikitext: String, title: String = "") -> String {
+        let lead: String
+        if title == "Calculator:Combat level" {
+            lead = "Enter your combat stats, or look them up from hiscores. The wiki returns your combat level. Formulas stay on the wiki, not in the app."
+        } else if title == "Calculator:Agility" {
+            lead = "Enter your current Agility level or XP and a goal. Methods come from the live wiki calculator, not formulas shipped in the app."
+        } else {
+            lead = "Fill the fields below. Results come from the live wiki calculator, not formulas shipped in the app."
+        }
+        var lines: [String] = [lead]
         if let range = wikitext.range(of: "===Assumptions===") {
             let rest = wikitext[range.upperBound...]
             let end = rest.range(of: "===")?.lowerBound ?? rest.endIndex

@@ -70,7 +70,10 @@ struct osrsNativeCalcDefinitionModel: Equatable {
 }
 
 enum osrsNativeCalcDefinition {
-    static let spikeNativeTitles: Set<String> = ["Calculator:Agility"]
+    static let spikeNativeTitles: Set<String> = [
+        "Calculator:Agility",
+        "Calculator:Combat level"
+    ]
     static let kitTypes: Set<osrsNativeCalcParamType> = [
         .string, .int, .number, .select, .buttonSelect, .check,
         .toggleSwitch, .toggleButton, .hs, .rsn, .hidden, .fixed, .semiHidden
@@ -222,6 +225,19 @@ enum osrsNativeCalcDefinition {
         }
         parts.append("}}")
         return parts.joined()
+    }
+
+    static func chromeTitle(for calcId: String) -> String {
+        var rest = calcId
+        if rest.hasPrefix("Calculator:") {
+            rest = String(rest.dropFirst("Calculator:".count))
+        }
+        rest = rest.trimmingCharacters(in: .whitespacesAndNewlines)
+        if rest.isEmpty { rest = "Calculator" }
+        if rest.lowercased().hasSuffix("calculator") {
+            return rest
+        }
+        return "\(rest) calculator"
     }
 
     static func parseResultIsError(_ html: String?) -> Bool {

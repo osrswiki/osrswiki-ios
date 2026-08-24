@@ -173,4 +173,45 @@ final class osrsNativeCalcDefinitionTests: XCTestCase {
             .parseError
         )
     }
+
+    func testCombatLevelExtractAndDefaultInvokeReuseTheKit() throws {
+        let config = """
+        <pre class="jcConfig">
+         template = Calculator:Combat level/Template
+         form = combatCalcForm
+         result = combatCalcResult
+         param  = playername|Player name||hs|attack,1,1;strength,3,1;ranged,5,1;magic,7,1;defence,2,1;hitpoints,4,1;prayer,6,1
+         param = attack|Attack|1|int|1-99
+         param = strength|Strength|1|int|1-99
+         param = ranged|Ranged|1|int|1-99
+         param = magic|Magic|1|int|1-99
+         param = defence|Defence|1|int|1-99
+         param = hitpoints|Hitpoints|10|int|9-99
+         param = prayer|Prayer|1|int|1-99
+         autosubmit = enabled
+        </pre>
+        """
+        let definition = try XCTUnwrap(osrsNativeCalcDefinition.parse(config, title: "Calculator:Combat level"))
+        XCTAssertTrue(osrsNativeCalcDefinition.isNativeChromeEligible(definition))
+        XCTAssertEqual(osrsNativeCalcDefinition.chromeTitle(for: definition.id), "Combat level calculator")
+        XCTAssertEqual(definition.invoke.template, "Calculator:Combat level/Template")
+        XCTAssertEqual(definition.inputs.map(\.name), [
+            "playername", "attack", "strength", "ranged", "magic", "defence", "hitpoints", "prayer"
+        ])
+        XCTAssertFalse(definition.inputs.contains { $0.type == .hidden })
+        let hp = try XCTUnwrap(definition.inputs.first { $0.name == "hitpoints" })
+        XCTAssertEqual(hp.defaultValue, "10")
+        XCTAssertEqual(hp.minValue, 9)
+        XCTAssertEqual(hp.maxValue, 99)
+        let wikitext = try XCTUnwrap(osrsNativeCalcDefinition.invokeWikitext(definition))
+        XCTAssertEqual(
+            wikitext,
+            "{{Calculator:Combat level/Template|attack=1|strength=1|ranged=1|magic=1|defence=1|hitpoints=10|prayer=1}}"
+        )
+        XCTAssertFalse(wikitext.contains("|skill="))
+        let copy = osrsNativeCalcDefinition.introCopy(from: config, title: "Calculator:Combat level")
+        XCTAssertTrue(copy.lowercased().contains("combat"))
+        XCTAssertFalse(copy.contains("Agility"))
+        XCTAssertFalse(osrsNativeCalcDefinition.parseResultIsError("<p>Your combat level is 3, balanced.</p>"))
+    }
 }

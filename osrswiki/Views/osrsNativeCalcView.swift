@@ -8,17 +8,17 @@ struct osrsNativeCalcView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                Text("Agility calculator")
+                Text(session.chromeTitle)
                     .font(.title2.weight(.semibold))
                     .foregroundStyle(osrsTheme.primaryTextColor)
-                    .accessibilityIdentifier("native-calc-agility-title")
+                    .accessibilityIdentifier("native-calc-title")
 
                 if !session.introCopy.isEmpty {
                     Text(session.introCopy)
                         .font(.body)
                         .foregroundStyle(osrsTheme.secondaryTextColor)
                         .fixedSize(horizontal: false, vertical: true)
-                        .accessibilityIdentifier("native-calc-agility-copy")
+                        .accessibilityIdentifier("native-calc-copy")
                 }
 
                 ForEach(session.visibleInputs(), id: \.name) { input in
@@ -53,11 +53,11 @@ struct osrsNativeCalcView: View {
                 }
             }
             .padding(16)
-            .padding(.top, 56)
+            .padding(.top, 72)
             .padding(.bottom, 96)
         }
         .background(osrsTheme.background)
-        .accessibilityIdentifier("native-calc-agility")
+        .accessibilityIdentifier("native-calc-form")
     }
 
     @ViewBuilder
