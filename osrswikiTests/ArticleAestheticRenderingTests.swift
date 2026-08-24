@@ -1218,7 +1218,7 @@ final class ArticleAestheticRenderingTests: XCTestCase {
         XCTAssertGreaterThan(state["bodyFontSize"] as? Double ?? 0, 20)
     }
 
-    func testInArticleTocCaptionsAndProseBannersStayFullWidthThemedAndUnscrolled() async throws {
+    func testInArticleTocShrinkWrapsWhileProseBannersStayFullWidthThemedAndUnscrolled() async throws {
         let polish = try readAsset("Assets/web/mobile_article_polish.js")
         let interceptor = try readAsset("Assets/web/horizontal_scroll_interceptor.js")
         let fixes = try readAsset("Assets/styles/fixes.css")
@@ -1280,9 +1280,13 @@ final class ArticleAestheticRenderingTests: XCTestCase {
         })()
         """)
 
-        XCTAssertEqual(state["tocDisplay"] as? String, "block")
+        XCTAssertEqual(state["tocDisplay"] as? String, "table")
         XCTAssertEqual(state["tocClear"] as? String, "both")
-        XCTAssertGreaterThanOrEqual(state["tocWidth"] as? Double ?? 0, (state["viewportWidth"] as? Double ?? 0) - 8)
+        XCTAssertLessThan(
+            state["tocWidth"] as? Double ?? 999,
+            (state["viewportWidth"] as? Double ?? 0) * 0.7,
+            "In-article Contents must shrink-wrap instead of spanning the viewport"
+        )
         XCTAssertEqual(state["messageboxSurface"] as? Bool, false)
         XCTAssertFalse((state["messageboxParent"] as? String ?? "").contains("osrs-article-scroll-region"))
         XCTAssertLessThanOrEqual(
@@ -2644,10 +2648,10 @@ final class ArticleAestheticRenderingTests: XCTestCase {
         XCTAssertEqual(state["tocDisplay"] as? String, "block")
         XCTAssertTrue((state["tocHostClass"] as? String ?? "").contains("osrs-toc-layout-host"))
         XCTAssertEqual(state["tocHostFloat"] as? String, "none")
-        XCTAssertGreaterThan(
+        XCTAssertLessThan(
             number(state, "tocHostWidth"),
-            number(state, "viewportWidth") * 0.85,
-            "Floated Contents hosts must use the full article width"
+            number(state, "viewportWidth") * 0.7,
+            "Floated Contents hosts must shrink-wrap instead of using the full article width"
         )
         XCTAssertEqual(state["archiveFloat"] as? String, "none")
         XCTAssertGreaterThan(

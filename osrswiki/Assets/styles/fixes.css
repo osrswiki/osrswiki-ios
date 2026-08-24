@@ -2212,8 +2212,9 @@ html body a.external.text {
 
 /* In-article Contents stays visible even without a .mw-body-content wrapper.
    The native sidebar TOC is additional navigation, not a replacement.
-   display:table shrink-wraps and can sit in the leftover column beside a
-   floated vignette; keep it a full-width block on every platform. */
+   MediaWiki uses display:table so the box shrink-wraps. display:block plus
+   width:fit-content still stretches to the viewport on WebKit because the
+   inner block ul resolves against the available width. */
 #toc,
 .toc,
 .mw-parser-output #toc,
@@ -2222,12 +2223,13 @@ html body a.external.text {
     border: 1px solid var(--body-border, var(--wikitable-border, currentColor));
     box-sizing: border-box !important;
     clear: both !important;
-    display: block !important;
+    display: table !important;
     float: none !important;
     margin: 1em 0;
     max-width: 100% !important;
     padding: 1em;
-    width: 100% !important;
+    table-layout: auto !important;
+    width: auto !important;
 }
 
 #toc .toctitle,
@@ -2251,7 +2253,9 @@ html body a.external.text {
     display: block !important;
     list-style: none;
     margin: 0;
+    max-width: 100%;
     padding: 0;
+    width: max-content;
 }
 
 #toc li,
@@ -2265,10 +2269,9 @@ html body a.external.text {
 }
 
 /* Wiki calculator/skill pages often put Contents in a sibling table cell of a
-   floated infobox. Collapse that layout table so Contents is a full-width
-   banner instead of a half-width column overlapping the skills card.
-   The Calculators index (and similar list pages) float #toctemplate to the
-   right with width:auto; treat that host the same way. */
+   floated infobox. Collapse that layout table so Contents stacks instead of
+   sitting in a half-width column over the skills card. Hosts keep intrinsic
+   width so the Contents box is only as wide as its entries. */
 .osrs-toc-layout-table,
 .osrs-toc-layout-table > tbody,
 .osrs-toc-layout-table > thead,
@@ -2278,15 +2281,25 @@ html body a.external.text {
 .osrs-toc-layout-table > tr > :is(th, td),
 .osrs-toc-layout-table > :is(tbody, thead, tfoot) > tr > :is(th, td),
 .osrs-toc-layout-host,
-#toctemplate,
-#toctemplate #toc,
-#toctemplate .toc {
+#toctemplate {
     box-sizing: border-box !important;
     display: block !important;
     float: none !important;
     clear: both !important;
     max-width: 100% !important;
-    width: 100% !important;
+    width: fit-content !important;
+    margin-inline: 0 !important;
+}
+
+#toctemplate #toc,
+#toctemplate .toc {
+    box-sizing: border-box !important;
+    display: table !important;
+    float: none !important;
+    clear: both !important;
+    max-width: 100% !important;
+    table-layout: auto !important;
+    width: auto !important;
     margin-inline: 0 !important;
 }
 

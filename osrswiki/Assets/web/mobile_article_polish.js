@@ -214,7 +214,7 @@
       if (floated || host.id === 'toctemplate') {
         host.classList.add('osrs-toc-layout-host');
         host.style.setProperty('float', 'none', 'important');
-        host.style.setProperty('width', '100%', 'important');
+        host.style.setProperty('width', 'fit-content', 'important');
         host.style.setProperty('max-width', '100%', 'important');
         host.style.setProperty('margin-inline', '0', 'important');
       }
