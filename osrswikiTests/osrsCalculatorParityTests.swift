@@ -46,6 +46,27 @@ final class osrsCalculatorParityTests: XCTestCase {
         XCTAssertTrue(titles.contains("Calculator:Barrows"))
     }
 
+    func testSubpageCalculatorTitleInsertsWbrAfterColonAndSlash() {
+        let builder = osrsPageHtmlBuilder()
+        let html = builder.buildFullHtmlDocument(
+            title: "Calculator:Construction/Materials",
+            bodyContent: "<p>This is a static calculator.</p>",
+            theme: osrsLightTheme(),
+            includeAssetLinks: true,
+            canonicalTitle: "Calculator:Construction/Materials"
+        )
+        XCTAssertTrue(html.contains("Calculator:<wbr>Construction/<wbr>Materials"))
+        let sailing = builder.buildFullHtmlDocument(
+            title: "Calculator:Sailing",
+            bodyContent: "<p>Sailing.</p>",
+            theme: osrsLightTheme(),
+            includeAssetLinks: true,
+            canonicalTitle: "Calculator:Sailing"
+        )
+        XCTAssertTrue(sailing.contains("Calculator:<wbr>Sailing"))
+        XCTAssertFalse(sailing.contains("Sailing/<wbr>"))
+    }
+
     func testCalculatorParseTitleKeepsCalculatorNamespace() throws {
         let url = try XCTUnwrap(URL(string: "https://oldschool.runescape.wiki/w/Calculator:Combat_level"))
         XCTAssertEqual(

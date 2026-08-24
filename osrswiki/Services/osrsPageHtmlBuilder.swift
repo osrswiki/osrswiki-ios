@@ -397,8 +397,9 @@ class osrsPageHtmlBuilder {
         // Clean title and prepare header
         let cleanedTitle = extractMainTitle(title)
         let documentTitle = cleanedTitle.isEmpty ? "OSRS Wiki" : cleanedTitle
-        // Wave2c residual: short Calculator:Token titles mid-wrap under
-        // overflow-wrap:break-word; prefer break after namespace colon.
+        // Wave2c/wave4 residual: Calculator:Sailing mid-wraps under
+        // overflow-wrap:break-word. Wave6: also break after subpage slash
+        // (Construction/Materials). Spaced titles still wrap on spaces.
         let titleHeaderHtml = "<h1 class=\"page-header\">\(softWrapNamespaceTitle(documentTitle))</h1>"
         let customScheme = UserDefaults.standard.string(forKey: "WKURLSchemeHandler_Scheme") ?? "app-assets"
 
@@ -821,10 +822,15 @@ class osrsPageHtmlBuilder {
     }
 
 
-    /// Insert <wbr> after wiki namespace colons when the next char is non-space
-    /// so unbroken tokens like Calculator:Sailing wrap after the colon.
+    /// Insert <wbr> after wiki namespace colons and subpage slashes when the
+    /// next char is non-space so unbroken tokens wrap at those separators
+    /// (Calculator:Sailing, Calculator:Construction/Materials).
     private func softWrapNamespaceTitle(_ title: String) -> String {
-        let pattern = #"\b([A-Za-z][A-Za-z ]{0,40}:)(?=\S)"#
+        let colon = applyTitleWbr(title, pattern: #"\b([A-Za-z][A-Za-z ]{0,40}:)(?=\S)"#)
+        return applyTitleWbr(colon, pattern: #"(/)(?=[A-Za-z])"#)
+    }
+
+    private func applyTitleWbr(_ title: String, pattern: String) -> String {
         guard let regex = try? NSRegularExpression(pattern: pattern) else { return title }
         let range = NSRange(title.startIndex..<title.endIndex, in: title)
         return regex.stringByReplacingMatches(

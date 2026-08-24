@@ -16,7 +16,8 @@ h1.page-header {
     margin: 0.5em 1em 0.5em 0;
 }
 
-/* Long Calculator titles (e.g. Genie lamps…) must wrap, not clip */
+/* Long Calculator titles (e.g. Genie lamps…) must wrap, not clip.
+   Prefer <wbr> after namespace colon / subpage slash; never hyphenate. */
 .mw-page-title,
 .firstHeading,
 .page-title,
@@ -27,5 +28,6 @@ h1.page-header {
     white-space: normal;
     overflow-wrap: break-word;
     word-break: normal;
+    hyphens: none;
     overflow: visible;
 }

@@ -302,10 +302,10 @@ final class osrsArticleLoadRegressionContractTests: XCTestCase {
         XCTAssertTrue(htmlBuilder.contains("data-osrs-inline-css"))
     }
 
-    func testCriticalArticleBundleFlagDefaultsOffAndWired() throws {
+    func testCriticalArticleBundleFlagDefaultsOnAndWired() throws {
         let root = try repositoryRoot()
         let prefs = try source(root, "platforms/ios/osrswiki/Services/osrsLoadPerformancePrefs.swift")
-        XCTAssertTrue(prefs.contains("static var useCriticalArticleBundle: Bool = false"))
+        XCTAssertTrue(prefs.contains("static var useCriticalArticleBundle: Bool = true"))
         let builder = try source(root, "platforms/ios/osrswiki/Services/osrsPageHtmlBuilder.swift")
         XCTAssertTrue(builder.contains("osrsLoadPerformancePrefs.useCriticalArticleBundle"))
         XCTAssertTrue(builder.contains("criticalArticleBundleAsset = \"styles/critical-article.min.css\""))

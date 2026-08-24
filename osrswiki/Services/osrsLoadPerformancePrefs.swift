@@ -13,6 +13,8 @@ enum osrsLoadPerformancePrefs {
     static var inlineLiveFirstPaintCss: Bool = true
 
     /// When true, HTML uses one minified critical bundle instead of ten sheets.
-    /// Default false until Task 9 accepts the bundle (Phase B Task 7b).
-    static var useCriticalArticleBundle: Bool = false
+    /// Default true: production uses the Task 7b bundle on the Task 7 live inline path
+    /// (`inlineLiveFirstPaintCss`). Flip to false for one-commit rollback to per-file
+    /// critical sheets. Body reveal stays FirstViewPainted; settled is stopwatch-only.
+    static var useCriticalArticleBundle: Bool = true
 }
