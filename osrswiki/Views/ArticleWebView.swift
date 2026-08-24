@@ -1227,6 +1227,22 @@ enum osrsArticleWebPanPolicy {
     }
 }
 
+/// Whether article back / sidebar / TOC chrome may activate for a pan.
+/// A horizontal scroller that owns the start point, an in-flight classifyPoint,
+/// or a latched mid-horizontal-scroll / JS / native claim all veto chrome.
+enum osrsArticleChromeArbitration {
+    static func allowsChrome(
+        isLocalOwnerAtStartPoint: Bool,
+        classificationPending: Bool,
+        shouldBlockGestures: Bool
+    ) -> Bool {
+        if classificationPending { return false }
+        if isLocalOwnerAtStartPoint { return false }
+        if shouldBlockGestures { return false }
+        return true
+    }
+}
+
 struct ArticleWebView: UIViewRepresentable {
     @ObservedObject var viewModel: ArticleViewModel
     @EnvironmentObject var appState: AppState
@@ -1830,6 +1846,8 @@ struct ArticleWebView: UIViewRepresentable {
         private var pendingBackCommitGeneration: UInt64?
         private var articleChromeBlockedForSequence = false
         private var articleChromeClassificationPending = false
+        private var articleChromeStartIsLocalOwner = false
+        private var articleChromePendingFinish: (generation: UInt64, translation: CGPoint, velocity: CGPoint)?
         fileprivate var lastAppliedPageZoom: CGFloat?
         fileprivate var wasArticleRefreshing = false
         fileprivate var lastInjectedThemeIsDark: Bool?
@@ -2038,16 +2056,21 @@ struct ArticleWebView: UIViewRepresentable {
                 articleGestureStartPoint = recognizer.location(in: view)
                 articleChromeBlockedForSequence = false
                 articleChromeClassificationPending = true
+                articleChromeStartIsLocalOwner = false
+                articleChromePendingFinish = nil
                 osrsInteractiveSwipeFrameProbe.beginSequence()
                 publishSwipeFrameProbeToWebView()
+                if osrsGestureState.shared.shouldBlockGestures {
+                    articleChromeBlockedForSequence = true
+                    articleChromeClassificationPending = false
+                    return
+                }
                 if let webView, let startPoint = articleGestureStartPoint {
                     if mapHandler?.ownsArticleGesture(at: startPoint, in: webView) == true {
                         articleChromeBlockedForSequence = true
                         articleChromeClassificationPending = false
+                        articleChromeStartIsLocalOwner = true
                     } else {
-                        // Follow the finger immediately. Waiting on WK JS
-                        // classifyPoint stalls ProMotion on heavy articles.
-                        interactiveSwipe.begin(from: webView, contentsOpen: parent.isContentsOpen())
                         classifyArticleChromeStartPoint(
                             startPoint,
                             in: webView,
@@ -2057,19 +2080,24 @@ struct ArticleWebView: UIViewRepresentable {
                 }
             case .changed:
                 guard let webView else { return }
-                if articleChromeBlockedForSequence {
+                if articleChromeBlockedForSequence || articleChromeClassificationPending {
                     return
                 }
                 osrsInteractiveSwipeFrameProbe.recordPanFrame()
                 publishSwipeFrameProbeToWebView()
-                // A late map overlay attaching during an already-committed chrome swipe
-                // must not abort it. A local table/chart that claims before chrome is
-                // locked still wins so the table can scroll.
-                if osrsGestureState.shared.shouldBlockGestures {
+                if !osrsArticleChromeArbitration.allowsChrome(
+                    isLocalOwnerAtStartPoint: articleChromeStartIsLocalOwner,
+                    classificationPending: articleChromeClassificationPending,
+                    shouldBlockGestures: osrsGestureState.shared.shouldBlockGestures
+                ) {
+                    // A late map overlay attaching during an already-committed chrome swipe
+                    // must not abort it. A local table/chart that claims before chrome is
+                    // locked still wins so the table can scroll.
                     let chromeLocked = interactiveSwipe.isTracking &&
                         max(interactiveSwipe.contentsProgress, interactiveSwipe.backProgress) > 0.25
                     if !chromeLocked {
                         cancelInteractiveSwipe(restoreScroll: true)
+                        articleChromeBlockedForSequence = true
                         return
                     }
                 }
@@ -2088,99 +2116,41 @@ struct ArticleWebView: UIViewRepresentable {
             case .ended:
                 osrsInteractiveSwipeFrameProbe.finishSequence()
                 publishSwipeFrameProbeToWebView()
-                defer {
-                    articleGestureGeneration = nil
-                    articleGestureStartPoint = nil
-                    articleChromeBlockedForSequence = false
-                    articleChromeClassificationPending = false
-                }
                 if articleChromeBlockedForSequence {
                     osrsGestureState.shared.cancelArticleGesture(generation: articleGestureGeneration)
                     cancelInteractiveSwipe(restoreScroll: true)
+                    clearArticleGestureSequence()
                     return
                 }
                 guard let generation = articleGestureGeneration else {
                     osrsGestureState.shared.cancelArticleGesture()
                     cancelInteractiveSwipe(restoreScroll: true)
+                    clearArticleGestureSequence()
                     return
                 }
                 let translation = recognizer.translation(in: view.window ?? view)
                 let velocity = recognizer.velocity(in: view.window ?? view)
-                if let webView {
-                    interactiveSwipe.update(translation: translation, from: webView)
-                }
-                let finish = interactiveSwipe.finish(translation: translation, velocity: velocity)
-                restoreWebScroll()
-
-                switch finish {
-                case .cancel:
-                    if interactiveSwipe.lastAxis == .contents {
-                        settleSidebar(
-                            to: interactiveSwipe.contentsOpenAtStart ? 1 : 0,
-                            velocity: velocity.x
-                        )
-                    } else {
-                        restoreInteractiveOverlays()
-                    }
-                    osrsGestureState.shared.cancelArticleGesture(generation: generation)
-                    return
-                case .commitBack:
-                    guard parent.onBackGesture != nil else {
-                        interactiveSwipe.cancel(animated: true)
-                        restoreInteractiveOverlays()
-                        osrsGestureState.shared.cancelArticleGesture(generation: generation)
-                        return
-                    }
-                    beginPendingBackCommit(generation: generation, velocity: velocity)
-                    return
-                case .commitContents:
-                    guard parent.onSidebarGesture != nil || parent.onSidebarSettle != nil else {
-                        restoreInteractiveOverlays()
-                        osrsGestureState.shared.cancelArticleGesture(generation: generation)
-                        return
-                    }
-                    settleSidebar(to: 1, velocity: velocity.x)
-                    osrsGestureState.shared.cancelArticleGesture(generation: generation)
-                    interactiveSwipe.cleanup(resetTransform: false)
-                    return
-                case .commitContentsDismiss:
-                    settleSidebar(to: 0, velocity: velocity.x)
-                    osrsGestureState.shared.cancelArticleGesture(generation: generation)
-                    return
-                }
-
-                let direction: HorizontalGestureDirection = finish == .commitBack ? .start : .end
-                let action = articleNavigationAction(for: direction)
-                guard let webView,
-                      let startPoint = articleGestureStartPoint else {
-                    interactiveSwipe.cancel(animated: true)
-                    restoreInteractiveOverlays()
-                    osrsGestureState.shared.cancelArticleGesture(generation: generation)
-                    resetPendingBackCommit()
-                    return
-                }
-                if mapHandler?.ownsArticleGesture(at: startPoint, in: webView) == true {
-                    performArticleNavigationAfterOwnershipClassification(
+                if articleChromeClassificationPending {
+                    // Fail closed until classifyPoint returns. An unowned result
+                    // may still commit; a local horizontal owner never will.
+                    articleChromePendingFinish = (
                         generation: generation,
-                        isLocalOwnerAtStartPoint: true,
-                        action
+                        translation: translation,
+                        velocity: velocity
                     )
                     return
                 }
-                classifyArticleGestureStartPoint(
-                    startPoint,
-                    in: webView,
+                applyArticleChromeFinish(
                     generation: generation,
-                    action: action
+                    translation: translation,
+                    velocity: velocity
                 )
             case .cancelled, .failed:
                 osrsInteractiveSwipeFrameProbe.finishSequence()
                 publishSwipeFrameProbeToWebView()
                 osrsGestureState.shared.cancelArticleGesture(generation: articleGestureGeneration)
-                articleGestureGeneration = nil
-                articleGestureStartPoint = nil
-                articleChromeBlockedForSequence = false
-                articleChromeClassificationPending = false
+                articleChromePendingFinish = nil
+                clearArticleGestureSequence()
                 cancelInteractiveSwipe(restoreScroll: true)
             default:
                 break
@@ -2318,7 +2288,95 @@ struct ArticleWebView: UIViewRepresentable {
                 articleNavigationAction(for: direction)
             )
         }
+
+        func allowsArticleChromeForTesting(
+            isLocalOwnerAtStartPoint: Bool,
+            classificationPending: Bool
+        ) -> Bool {
+            osrsArticleChromeArbitration.allowsChrome(
+                isLocalOwnerAtStartPoint: isLocalOwnerAtStartPoint,
+                classificationPending: classificationPending,
+                shouldBlockGestures: osrsGestureState.shared.shouldBlockGestures
+            )
+        }
 #endif
+
+        private func clearArticleGestureSequence() {
+            articleGestureGeneration = nil
+            articleGestureStartPoint = nil
+            articleChromeBlockedForSequence = false
+            articleChromeClassificationPending = false
+            articleChromeStartIsLocalOwner = false
+            articleChromePendingFinish = nil
+        }
+
+        private func applyArticleChromeFinish(
+            generation: UInt64,
+            translation: CGPoint,
+            velocity: CGPoint
+        ) {
+            defer { clearArticleGestureSequence() }
+            if !osrsArticleChromeArbitration.allowsChrome(
+                isLocalOwnerAtStartPoint: articleChromeStartIsLocalOwner,
+                classificationPending: articleChromeClassificationPending,
+                shouldBlockGestures: osrsGestureState.shared.shouldBlockGestures
+            ) {
+                osrsGestureState.shared.cancelArticleGesture(generation: generation)
+                cancelInteractiveSwipe(restoreScroll: true)
+                return
+            }
+            if let webView {
+                if !interactiveSwipe.isTracking {
+                    interactiveSwipe.begin(from: webView, contentsOpen: parent.isContentsOpen())
+                }
+                interactiveSwipe.update(translation: translation, from: webView)
+            }
+            let finish = interactiveSwipe.finish(translation: translation, velocity: velocity)
+            restoreWebScroll()
+
+            switch finish {
+            case .cancel:
+                if interactiveSwipe.lastAxis == .contents {
+                    settleSidebar(
+                        to: interactiveSwipe.contentsOpenAtStart ? 1 : 0,
+                        velocity: velocity.x
+                    )
+                } else {
+                    restoreInteractiveOverlays()
+                }
+                osrsGestureState.shared.cancelArticleGesture(generation: generation)
+            case .commitBack:
+                guard parent.onBackGesture != nil else {
+                    interactiveSwipe.cancel(animated: true)
+                    restoreInteractiveOverlays()
+                    osrsGestureState.shared.cancelArticleGesture(generation: generation)
+                    return
+                }
+                performArticleNavigationAfterOwnershipClassification(
+                    generation: generation,
+                    isLocalOwnerAtStartPoint: articleChromeStartIsLocalOwner
+                ) { [weak self] in
+                    self?.beginPendingBackCommit(generation: generation, velocity: velocity)
+                }
+            case .commitContents:
+                guard parent.onSidebarGesture != nil || parent.onSidebarSettle != nil else {
+                    restoreInteractiveOverlays()
+                    osrsGestureState.shared.cancelArticleGesture(generation: generation)
+                    return
+                }
+                performArticleNavigationAfterOwnershipClassification(
+                    generation: generation,
+                    isLocalOwnerAtStartPoint: articleChromeStartIsLocalOwner
+                ) { [weak self] in
+                    guard let self else { return }
+                    self.settleSidebar(to: 1, velocity: velocity.x)
+                    self.interactiveSwipe.cleanup(resetTransform: false)
+                }
+            case .commitContentsDismiss:
+                settleSidebar(to: 0, velocity: velocity.x)
+                osrsGestureState.shared.cancelArticleGesture(generation: generation)
+            }
+        }
 
         private func classifyArticleChromeStartPoint(
             _ point: CGPoint,
@@ -2341,11 +2399,33 @@ struct ArticleWebView: UIViewRepresentable {
                     } else {
                         isLocalOwner = false
                     }
+                    self.articleChromeStartIsLocalOwner = isLocalOwner
                     self.articleChromeClassificationPending = false
                     if isLocalOwner {
+                        let hadPendingFinish = self.articleChromePendingFinish != nil
                         self.articleChromeBlockedForSequence = true
+                        self.articleChromePendingFinish = nil
                         self.cancelInteractiveSwipe(restoreScroll: true)
+                        if let generation {
+                            osrsGestureState.shared.cancelArticleGesture(generation: generation)
+                        }
+                        if hadPendingFinish {
+                            self.clearArticleGestureSequence()
+                        }
                         return
+                    }
+                    if let pending = self.articleChromePendingFinish,
+                       pending.generation == generation {
+                        self.articleChromePendingFinish = nil
+                        self.applyArticleChromeFinish(
+                            generation: pending.generation,
+                            translation: pending.translation,
+                            velocity: pending.velocity
+                        )
+                        return
+                    }
+                    if !self.interactiveSwipe.isTracking {
+                        self.interactiveSwipe.begin(from: webView, contentsOpen: self.parent.isContentsOpen())
                     }
                     if let recognizer = self.articleNavigationRecognizer {
                         self.interactiveSwipe.update(

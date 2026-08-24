@@ -414,6 +414,7 @@ struct WikiFeedContentView: View {
                                 .zIndex(1)
                             }
                             osrsHomeUpdatesViewMoreCap {
+                                osrsUpdatesListTiming.markOpen()
                                 appState.navigateToScopedSearch(.updates)
                             }
                         }

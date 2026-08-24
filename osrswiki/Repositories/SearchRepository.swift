@@ -8,8 +8,24 @@
 import Foundation
 
 @MainActor
+protocol osrsSearchDataClient: AnyObject {
+    func fetchSearchBytes(from url: URL) async throws -> (Data, URLResponse)
+}
+
+extension NetworkManager: osrsSearchDataClient {
+    func fetchSearchBytes(from url: URL) async throws -> (Data, URLResponse) {
+        try await performDataRequest(url: url)
+    }
+}
+
+@MainActor
 class SearchRepository {
     private let baseURL = "https://oldschool.runescape.wiki/api.php"
+    private let dataClient: osrsSearchDataClient
+
+    init(dataClient: osrsSearchDataClient? = nil) {
+        self.dataClient = dataClient ?? NetworkManager.shared
+    }
     
     func search(
         query: String,
@@ -25,7 +41,8 @@ class SearchRepository {
                 return try await browseNewestPages(
                     namespace: namespace,
                     limit: limit,
-                    continueToken: continueToken
+                    continueToken: continueToken,
+                    onPartialResults: onPartialResults
                 )
             }
             return SearchResponse(results: [], hasMore: false, totalCount: 0)
@@ -228,7 +245,7 @@ class SearchRepository {
             URLQueryItem(name: "limit", value: String(limit))
         ]
         guard let url = components.url else { throw SearchError.invalidURL }
-        let (data, response) = try await NetworkManager.shared.performDataRequest(url: url)
+        let (data, response) = try await dataClient.fetchSearchBytes(from: url)
         guard let httpResponse = response as? HTTPURLResponse else {
             throw SearchError.invalidResponse
         }
@@ -267,7 +284,8 @@ class SearchRepository {
         offset: Int,
         extraItems: [URLQueryItem],
         includeExtracts: Bool,
-        followRedirects: Bool = true
+        followRedirects: Bool = true,
+        enrichMissingPreviews: Bool = true
     ) async throws -> SearchGeneratorPageFetch {
         var components = URLComponents(string: baseURL)!
         var items: [URLQueryItem] = [
@@ -302,7 +320,7 @@ class SearchRepository {
             throw SearchError.invalidURL
         }
 
-        let (data, response) = try await NetworkManager.shared.performDataRequest(url: url)
+        let (data, response) = try await dataClient.fetchSearchBytes(from: url)
         guard let httpResponse = response as? HTTPURLResponse else {
             throw SearchError.invalidResponse
         }
@@ -321,7 +339,14 @@ class SearchRepository {
         let continueToken = decoded.continuation?.gsroffset.map(String.init)
             ?? decoded.continuation?.grccontinue
         let pages = decoded.query?.pages ?? []
-        let resolved = includeExtracts ? await enrichMissingPreviews(pages.map { $0.withPreviewFallback() }) : pages
+        let resolved: [WikiGeneratedSearchPage]
+        if includeExtracts && enrichMissingPreviews {
+            resolved = await self.enrichMissingPreviews(pages.map { $0.withPreviewFallback() })
+        } else if includeExtracts {
+            resolved = pages.map { $0.withPreviewFallback() }
+        } else {
+            resolved = pages
+        }
         return SearchGeneratorPageFetch(
             pages: resolved,
             hasMore: continueToken != nil,
@@ -374,7 +399,7 @@ class SearchRepository {
             URLQueryItem(name: "pageids", value: pageIds.map(String.init).joined(separator: "|"))
         ]
         guard let url = components.url else { throw SearchError.invalidURL }
-        let (data, response) = try await NetworkManager.shared.performDataRequest(url: url)
+        let (data, response) = try await dataClient.fetchSearchBytes(from: url)
         guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
             throw SearchError.invalidResponse
         }
@@ -399,7 +424,7 @@ class SearchRepository {
             URLQueryItem(name: "pageid", value: String(pageId))
         ]
         guard let url = components.url else { throw SearchError.invalidURL }
-        let (data, response) = try await NetworkManager.shared.performDataRequest(url: url)
+        let (data, response) = try await dataClient.fetchSearchBytes(from: url)
         guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
             throw SearchError.invalidResponse
         }
@@ -417,7 +442,8 @@ class SearchRepository {
     private func browseNewestPages(
         namespace: Int,
         limit: Int,
-        continueToken: String?
+        continueToken: String?,
+        onPartialResults: ((SearchResponse) -> Void)? = nil
     ) async throws -> SearchResponse {
         do {
             var extraItems = [
@@ -437,12 +463,22 @@ class SearchRepository {
                 offset: 0,
                 extraItems: extraItems,
                 includeExtracts: true,
-                followRedirects: false
+                followRedirects: false,
+                enrichMissingPreviews: false
             )
+            let firstPages = fetch.pages
+                .filter { $0.ns == namespace }
+                .map { $0.withPreviewFallback() }
+            let firstResponse = makeSearchResponse(
+                pages: firstPages,
+                offset: 0,
+                hasMore: fetch.hasMore,
+                continueToken: fetch.continueToken
+            )
+            onPartialResults?(firstResponse)
+            let enriched = await enrichMissingPreviews(firstPages)
             return makeSearchResponse(
-                pages: fetch.pages
-                    .filter { $0.ns == namespace }
-                    .map { $0.withPreviewFallback() },
+                pages: enriched,
                 offset: 0,
                 hasMore: fetch.hasMore,
                 continueToken: fetch.continueToken

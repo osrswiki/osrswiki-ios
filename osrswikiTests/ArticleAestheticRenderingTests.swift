@@ -1581,6 +1581,69 @@ final class ArticleAestheticRenderingTests: XCTestCase {
         XCTAssertEqual(state["cueCount"] as? Int, 0)
     }
 
+    func testStandaloneWideWikitableClassifyPointOwnsInteriorNotArticleEdge() async throws {
+        let polish = try readAsset("Assets/web/mobile_article_polish.js")
+        let horizontalScroll = try readAsset("Assets/web/horizontal_scroll_interceptor.js")
+        let html = """
+        <!doctype html>
+        <html>
+        <head>
+          <meta name="viewport" content="width=device-width, initial-scale=1">
+          <style>
+            body { margin: 0; }
+            .mw-parser-output { width: 320px; }
+            table.wikitable { min-width: 720px; border-collapse: collapse; }
+            table.wikitable td { white-space: nowrap; padding: 8px; }
+          </style>
+        </head>
+        <body>
+          <div class="mw-parser-output">
+            <table id="wideDrops" class="wikitable item-drops">
+              <tbody><tr>
+                <td id="wideCell">Long drop table cell that overflows the article column</td>
+                <td>More overflowing columns of item quantities and rarity</td>
+                <td>Still more columns so scrollWidth exceeds clientWidth</td>
+              </tr></tbody>
+            </table>
+            <p id="ordinaryArticleText">Ordinary article navigation content.</p>
+          </div>
+          <script>\(polish)</script>
+          <script>\(horizontalScroll)</script>
+        </body>
+        </html>
+        """
+
+        try await load(html)
+        let state = try await evaluate("""
+        (() => {
+          if (window.OSRSApplyArticlePolish) { window.OSRSApplyArticlePolish(); }
+          window.OSRSArticleMetrics.refreshHorizontalScrollAffordances();
+          const cell = document.getElementById('wideCell');
+          const ordinary = document.getElementById('ordinaryArticleText');
+          const classify = (element, xRatio) => {
+            const rect = element.getBoundingClientRect();
+            return window.OSRSArticleGestureOwnership.classifyPoint(
+              rect.left + Math.max(8, rect.width * xRatio),
+              rect.top + Math.min(12, rect.height / 2)
+            );
+          };
+          const interior = classify(cell, 0.35);
+          const ordinaryOwnership = classify(ordinary, 0.5);
+          const surfaces = Array.from(document.querySelectorAll('.osrs-local-scroll-surface, .osrs-article-scroll-region, table.wikitable'));
+          const overflow = Math.max(0, ...surfaces.map(s => s.scrollWidth - s.clientWidth));
+          return {
+            overflow,
+            interiorLocal: interior.isLocalOwner,
+            ordinaryLocal: ordinaryOwnership.isLocalOwner
+          };
+        })()
+        """)
+
+        XCTAssertGreaterThan(state["overflow"] as? Double ?? 0, 20)
+        XCTAssertEqual(state["interiorLocal"] as? Bool, true)
+        XCTAssertEqual(state["ordinaryLocal"] as? Bool, false)
+    }
+
     func testRecipeTablesBecomeOrderedAccessibleSemanticDisclosures() async throws {
         let collapsibleContent = try readAsset("Assets/web/collapsible_content.js")
         let fixes = try readAsset("Assets/styles/fixes.css")

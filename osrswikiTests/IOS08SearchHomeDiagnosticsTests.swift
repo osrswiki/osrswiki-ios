@@ -52,7 +52,9 @@ final class IOS08SearchHomeDiagnosticsTests: XCTestCase {
             "Publish one merged search page with extract fallbacks instead of painting title-only rows first."
         )
         XCTAssertTrue(
-            source.contains("NetworkManager.shared.performDataRequest"),
+            source.contains("NetworkManager.shared") &&
+            source.contains("fetchSearchBytes") &&
+            source.contains("performDataRequest"),
             "Search still loads snippets and thumbnails through NetworkManager."
         )
     }

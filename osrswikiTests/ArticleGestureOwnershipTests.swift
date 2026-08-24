@@ -181,6 +181,98 @@ final class ArticleGestureOwnershipTests: XCTestCase {
         XCTAssertFalse(state.hasPendingArticleNavigationForTesting)
     }
 
+    func testChromeArbitrationVetoesLocalOwnerPendingClassificationAndBlockedScroll() {
+        XCTAssertFalse(
+            osrsArticleChromeArbitration.allowsChrome(
+                isLocalOwnerAtStartPoint: true,
+                classificationPending: false,
+                shouldBlockGestures: false
+            )
+        )
+        XCTAssertFalse(
+            osrsArticleChromeArbitration.allowsChrome(
+                isLocalOwnerAtStartPoint: false,
+                classificationPending: true,
+                shouldBlockGestures: false
+            )
+        )
+        XCTAssertFalse(
+            osrsArticleChromeArbitration.allowsChrome(
+                isLocalOwnerAtStartPoint: false,
+                classificationPending: false,
+                shouldBlockGestures: true
+            )
+        )
+        XCTAssertTrue(
+            osrsArticleChromeArbitration.allowsChrome(
+                isLocalOwnerAtStartPoint: false,
+                classificationPending: false,
+                shouldBlockGestures: false
+            )
+        )
+    }
+
+    func testMidHorizontalScrollVetoesUnownedPointNavigation() {
+        var navigationCount = 0
+        state.isHorizontalScrollInProgress = true
+        let generation = state.beginArticleGesture()
+        state.performNavigationAfterPointClassification(
+            generation: generation,
+            isLocalOwnerAtStartPoint: false
+        ) { navigationCount += 1 }
+
+        XCTAssertEqual(navigationCount, 0)
+        XCTAssertFalse(state.hasPendingArticleNavigationForTesting)
+    }
+
+    func testCoordinatorChromeGateUsesLiveArbitrationIncludingMidScroll() throws {
+        let url = try XCTUnwrap(URL(string: "https://oldschool.runescape.wiki/w/Amulet_of_glory"))
+        let viewModel = ArticleViewModel(pageUrl: url, pageTitle: "Amulet of glory")
+        let parent = ArticleWebView(viewModel: viewModel, onBackGesture: {}, onSidebarGesture: {})
+        let coordinator = parent.makeCoordinator()
+
+        XCTAssertFalse(
+            coordinator.allowsArticleChromeForTesting(
+                isLocalOwnerAtStartPoint: true,
+                classificationPending: false
+            )
+        )
+        XCTAssertFalse(
+            coordinator.allowsArticleChromeForTesting(
+                isLocalOwnerAtStartPoint: false,
+                classificationPending: true
+            )
+        )
+        XCTAssertTrue(
+            coordinator.allowsArticleChromeForTesting(
+                isLocalOwnerAtStartPoint: false,
+                classificationPending: false
+            )
+        )
+
+        state.isHorizontalScrollInProgress = true
+        XCTAssertFalse(
+            coordinator.allowsArticleChromeForTesting(
+                isLocalOwnerAtStartPoint: false,
+                classificationPending: false
+            )
+        )
+        state.isHorizontalScrollInProgress = false
+
+        var backCount = 0
+        coordinator.parent = ArticleWebView(
+            viewModel: viewModel,
+            onBackGesture: { backCount += 1 },
+            onSidebarGesture: {}
+        )
+        state.isHorizontalScrollInProgress = true
+        coordinator.resolveArticleNavigationForTesting(
+            direction: .start,
+            isLocalOwnerAtStartPoint: false
+        )
+        XCTAssertEqual(backCount, 0)
+    }
+
     func testUIKitArticlePanPolicyAcceptsHorizontalDirectionsAndRejectsVertical() {
         XCTAssertEqual(
             osrsArticleWebPanPolicy.navigationDirection(
@@ -319,9 +411,12 @@ final class ArticleGestureOwnershipTests: XCTestCase {
         XCTAssertTrue(
             source.contains("interactiveSwipe.begin(from: webView, contentsOpen: parent.isContentsOpen())")
         )
-        XCTAssertFalse(
+        XCTAssertTrue(source.contains("osrsArticleChromeArbitration.allowsChrome"))
+        XCTAssertTrue(source.contains("articleChromePendingFinish"))
+        XCTAssertTrue(
             source.contains("if articleChromeBlockedForSequence || articleChromeClassificationPending")
         )
+        XCTAssertFalse(source.contains("Follow the finger immediately"))
     }
 
     func testHorizontalOverflowClaimsTheWholePointerSequence() throws {

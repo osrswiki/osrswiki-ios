@@ -137,11 +137,13 @@ struct ImmediateStyledSearchView: View {
         .tint(Color(theme.primary))
         .onAppear {
             configureVoiceSearch()
+            if scope.emptyQueryBrowsesNewest {
+                osrsUpdatesListTiming.markOpen(restart: false)
+            }
             guard !hasInitialized else { return }
             hasInitialized = true
-            
-            // Initialize view model after keyboard shows
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak appState, customNavigationClosure] in
+
+            let startViewModel = { [weak appState, customNavigationClosure] in
                 guard let appState = appState else { return }
                 
                 // DEBUG: Log which navigation context this view is in
@@ -185,6 +187,11 @@ struct ImmediateStyledSearchView: View {
                 }
                 viewModel = vm
                 vm.currentQuery = searchText
+            }
+            if scope.emptyQueryBrowsesNewest {
+                startViewModel()
+            } else {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05, execute: startViewModel)
             }
         }
         .onDisappear {
@@ -342,6 +349,16 @@ private struct SearchContentSection: View {
                 )
             } else {
                 searchResultsList
+            }
+        }
+        .onChange(of: viewModel.searchResults.count) { _, count in
+            if count > 0 {
+                osrsUpdatesListTiming.markFirstVisible(rowCount: count)
+            }
+        }
+        .onAppear {
+            if !viewModel.searchResults.isEmpty {
+                osrsUpdatesListTiming.markFirstVisible(rowCount: viewModel.searchResults.count)
             }
         }
         .alert("Search Error", isPresented: .constant(viewModel.errorMessage != nil)) {

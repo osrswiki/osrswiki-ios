@@ -20,7 +20,7 @@ class SearchViewModel: ObservableObject {
     @Published var currentQuery: String = ""
     @Published private(set) var hasCompletedCurrentQuery: Bool = false
     
-    private let searchRepository = SearchRepository()
+    private let searchRepository: SearchRepository
     private let historyRepository = HistoryRepository()
     private var cancellables = Set<AnyCancellable>()
     private var currentSearchTask: Task<Void, Never>?
@@ -34,8 +34,9 @@ class SearchViewModel: ObservableObject {
     // Navigation callback - will be set by the view
     var navigateToArticle: ((String, URL, SearchResult?) -> Void)?
     
-    init(scope: osrsSearchScope = .all) {
+    init(scope: osrsSearchScope = .all, searchRepository: SearchRepository? = nil) {
         self.scope = scope
+        self.searchRepository = searchRepository ?? SearchRepository()
         PerformanceTimer.shared.start("SearchViewModel.init")
         
         PerformanceTimer.shared.start("loadRecentSearches")
@@ -51,10 +52,12 @@ class SearchViewModel: ObservableObject {
     
     private func setupSearchDebouncing() {
         // Coalesce only the same keystroke burst; cancellation below prevents stale requests from
-        // replacing newer live results.
-        $currentQuery
-            .debounce(for: .milliseconds(80), scheduler: RunLoop.main)
-            .removeDuplicates()
+        // replacing newer live results. Empty browse-newest (Home View more) skips the debounce
+        // so first rows are not delayed 80ms after the destination appears.
+        let publisher = scope.emptyQueryBrowsesNewest
+            ? $currentQuery.removeDuplicates().eraseToAnyPublisher()
+            : $currentQuery.debounce(for: .milliseconds(80), scheduler: RunLoop.main).removeDuplicates().eraseToAnyPublisher()
+        publisher
             .sink { [weak self] query in
                 Task { @MainActor in
                     await self?.performSearch(query: query, isNewSearch: true)
@@ -97,7 +100,14 @@ class SearchViewModel: ObservableObject {
                     limit: searchLimit,
                     offset: searchOffset,
                     scope: scope,
-                    continueToken: isNewSearch ? nil : browseContinueToken
+                    continueToken: isNewSearch ? nil : browseContinueToken,
+                    onPartialResults: { [weak self] partial in
+                        self?.applyFirstPaint(
+                            partial,
+                            isNewSearch: isNewSearch,
+                            generation: generation
+                        )
+                    }
                 )
 
                 guard !Task.isCancelled, generation == searchGeneration else { return }
@@ -137,6 +147,20 @@ class SearchViewModel: ObservableObject {
         }
     }
 
+    func applyFirstPaint(
+        _ response: SearchResponse,
+        isNewSearch: Bool,
+        generation: Int
+    ) {
+        guard generation == searchGeneration else { return }
+        if isNewSearch {
+            searchResults = response.results
+            browseContinueToken = response.continueToken
+        }
+        totalResultCount = response.totalCount
+        hasMoreResults = response.hasMore
+    }
+
     private func applySearchResponse(
         _ response: SearchResponse,
         query: String,
@@ -144,6 +168,13 @@ class SearchViewModel: ObservableObject {
         generation: Int,
         completed: Bool
     ) async {
+        if isNewSearch {
+            searchResults = response.results
+            browseContinueToken = response.continueToken
+            if completed {
+                searchOffset = response.results.count
+            }
+        }
         let processedResults = await processSearchResultsInBackground(
             results: response.results,
             searchQuery: query,
@@ -151,12 +182,7 @@ class SearchViewModel: ObservableObject {
         )
         guard generation == searchGeneration else { return }
         if isNewSearch {
-            searchResults = response.results
             themedSearchResults = processedResults
-            browseContinueToken = response.continueToken
-            if completed {
-                searchOffset = response.results.count
-            }
         } else if completed {
             var updatedResults = searchResults
             var updatedThemedResults = themedSearchResults
