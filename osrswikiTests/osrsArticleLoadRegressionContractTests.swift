@@ -332,9 +332,83 @@ final class osrsArticleLoadRegressionContractTests: XCTestCase {
         XCTAssertTrue(coordinator.contains("osrsLoadPerformancePrefs.warmFirstViewportImagesEarly"))
         XCTAssertTrue(coordinator.contains("html: payload.normalizedHTML"))
         let firstViewport = try source(root, "platforms/ios/osrswiki/Assets/web/first_viewport_assets.js")
-        XCTAssertTrue(firstViewport.contains("notify(unique(slotUrls().concat(collectIntersecting())))"))
+        XCTAssertTrue(firstViewport.contains("notify(paintedUrls())"))
+        XCTAssertTrue(firstViewport.contains("function paintedUrls"))
+        XCTAssertTrue(firstViewport.contains("collectDefaultSwitcherPane"))
+        XCTAssertTrue(firstViewport.contains("chosenElementUrls"))
+        XCTAssertTrue(firstViewport.contains("currentSrc"))
+        XCTAssertTrue(firstViewport.contains("var urls = paintedUrls()"))
+        XCTAssertNil(
+            firstViewport.range(
+                of: #"function watchComplete\(\) \{[\s\S]{0,200}?slotUrls\(\)\.concat\(collectIntersecting\(\)\)"#,
+                options: .regularExpression
+            ),
+            "watchComplete must not union the full switcher pool as the default painted set"
+        )
         XCTAssertTrue(viewModel.contains("startLiveArticleAssetWarmIfNeeded"))
         XCTAssertTrue(viewModel.contains("articleRevealedForWarm"))
+    }
+
+    func testSlice1NarrowFirstViewportPaintedSetDefaultOnAndWired() throws {
+        let root = try repositoryRoot()
+        let prefs = try source(root, "platforms/ios/osrswiki/Services/osrsLoadPerformancePrefs.swift")
+        XCTAssertTrue(prefs.contains("static var narrowFirstViewportPaintedSet: Bool = true"))
+        let htmlBuilder = try source(root, "platforms/ios/osrswiki/Services/osrsPageHtmlBuilder.swift")
+        XCTAssertTrue(htmlBuilder.contains("window.__osrsNarrowFirstViewportPaintedSet"))
+        XCTAssertTrue(htmlBuilder.contains("osrsLoadPerformancePrefs.narrowFirstViewportPaintedSet"))
+        let firstViewport = try source(root, "platforms/ios/osrswiki/Assets/web/first_viewport_assets.js")
+        XCTAssertTrue(firstViewport.contains("collectDefaultSwitcherPane"))
+        XCTAssertTrue(firstViewport.contains("chosenElementUrls"))
+        XCTAssertTrue(firstViewport.contains("paintedUrls()"))
+        let switcher = try source(root, "platforms/ios/osrswiki/Assets/web/switch_infobox.js")
+        XCTAssertTrue(switcher.contains("scheduleSwitcherPoolDecode"))
+        XCTAssertTrue(switcher.contains("preloadSwitcherPool"))
+        XCTAssertTrue(switcher.contains("osrs-first-view-complete"))
+        XCTAssertTrue(switcher.contains("performSwitch(initialIndex)"))
+        let initBody = switcher
+            .components(separatedBy: "function initializePage()")
+            .dropFirst()
+            .first?
+            .components(separatedBy: "function preloadSwitcherPool")
+            .first ?? ""
+        XCTAssertTrue(initBody.contains("scheduleSwitcherPoolDecode()"))
+        XCTAssertTrue(initBody.contains("performSwitch(initialIndex)"))
+        XCTAssertLessThan(
+            initBody.range(of: "scheduleSwitcherPoolDecode()")?.lowerBound ?? initBody.endIndex,
+            initBody.range(of: "performSwitch(initialIndex)")?.lowerBound ?? initBody.startIndex
+        )
+        XCTAssertFalse(
+            initBody.contains("preloader.decode()"),
+            "full-pool Image()+decode must not run inline before performSwitch"
+        )
+        let warmer = try source(root, "platforms/ios/osrswiki/Services/osrsFirstViewAssetWarmer.swift")
+        XCTAssertTrue(warmer.contains("firstViewSlotURLs"))
+        XCTAssertTrue(warmer.contains("narrowFirstViewportPaintedSet"))
+        let defaultOn = warmer
+            .components(separatedBy: "narrowFirstViewportPaintedSet")
+            .dropFirst()
+            .first?
+            .components(separatedBy: "} else {")
+            .first ?? ""
+        XCTAssertFalse(
+            defaultOn.contains("requiredImageURLsInDocumentOrder"),
+            "early warmer default-on path must not walk the full document URL list"
+        )
+        let remainder = try source(root, "platforms/ios/osrswiki/Services/osrsLiveArticleAssetWarmer.swift")
+        XCTAssertTrue(remainder.contains("requiredImageURLsInDocumentOrder"))
+        let viewModel = try source(root, "platforms/ios/osrswiki/ViewModels/ArticleViewModel.swift")
+        XCTAssertTrue(viewModel.contains("startLiveArticleAssetWarmIfNeeded"))
+        XCTAssertTrue(viewModel.contains("articleRevealedForWarm"))
+        let prepared = try source(root, "platforms/ios/osrswiki/Services/osrsPreparedArticleWebViewStore.swift")
+        XCTAssertTrue(prepared.contains("private let maxEntries = 2"))
+        XCTAssertTrue(htmlBuilder.contains("fixes.css") || htmlBuilder.contains("gadget_calc.css"))
+        let articleWebView = try source(root, "platforms/ios/osrswiki/Views/ArticleWebView.swift")
+        XCTAssertNil(
+            articleWebView.range(
+                of: #"FirstViewportSettled[\s\S]{0,160}?completeLoadingWithBodyReveal"#,
+                options: .regularExpression
+            )
+        )
     }
 
     func testCriticalArticleBundleFlagDefaultsOnAndWired() throws {

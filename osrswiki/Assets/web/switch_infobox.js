@@ -16,29 +16,11 @@ function initializePage() {
         const mainButtons = mainInfobox.querySelectorAll('.infobox-buttons .button');
         if (mainButtons.length === 0) return;
 
-        // --- IMAGE PRELOADING (with srcset support) ---
-        const imageUrlsToPreload = new Set();
-        const resourceContainers = document.querySelectorAll('[class*="infobox-resources-"], .rsw-synced-switch');
-
-        resourceContainers.forEach(container => {
-            const images = container.querySelectorAll('img');
-            images.forEach(img => {
-                const src = img.getAttribute('src');
-                if (src) { imageUrlsToPreload.add(src); }
-                const srcset = img.getAttribute('srcset');
-                if (srcset) {
-                    const sources = srcset.split(',').map(s => s.trim().split(/\s+/)[0]);
-                    sources.forEach(sourceUrl => imageUrlsToPreload.add(sourceUrl));
-                }
-            });
-        });
-
-        imageUrlsToPreload.forEach(url => {
-            const preloader = new Image();
-            preloader.src = url;
-            preloader.decode().catch(() => {});
-        });
-        // --- END PRELOADER ---
+        // Full-pool decode is after FirstViewPainted when the slice-1 flag is on
+        // (default). Rollback (`window.__osrsNarrowFirstViewportPaintedSet === false`)
+        // keeps the historical pre-reveal pool decode. Default-pane performSwitch
+        // still runs synchronously below, before reveal.
+        scheduleSwitcherPoolDecode();
 
         bindSwitcherViewportPin();
 
@@ -54,7 +36,7 @@ function initializePage() {
 
         if (mainButtons.length > 0) {
             // Select the authored default synchronously before RenderTimeline reveals the body.
-            // Images for all states decode concurrently above; never click through hidden states.
+            // Hidden-state pool decode is scheduled after FirstViewPainted; never click through hidden states.
             const buttonsContainer = mainInfobox.querySelector('.infobox-buttons');
             const defaultIndex = buttonsContainer && buttonsContainer.getAttribute('data-default-version');
             const selectedButton = mainInfobox.querySelector('.button-selected');
@@ -71,6 +53,53 @@ function initializePage() {
     } catch (e) {
         console.error(`Switcher CRITICAL ERROR in initializePage: ${e.message}`);
     }
+}
+
+function preloadSwitcherPool() {
+    if (preloadSwitcherPool.ran) {
+        return;
+    }
+    preloadSwitcherPool.ran = true;
+    const imageUrlsToPreload = new Set();
+    const resourceContainers = document.querySelectorAll('[class*="infobox-resources-"], .rsw-synced-switch');
+
+    resourceContainers.forEach(container => {
+        const images = container.querySelectorAll('img');
+        images.forEach(img => {
+            const src = img.getAttribute('src');
+            if (src) { imageUrlsToPreload.add(src); }
+            const srcset = img.getAttribute('srcset');
+            if (srcset) {
+                const sources = srcset.split(',').map(s => s.trim().split(/\s+/)[0]);
+                sources.forEach(sourceUrl => imageUrlsToPreload.add(sourceUrl));
+            }
+        });
+    });
+
+    imageUrlsToPreload.forEach(url => {
+        const preloader = new Image();
+        preloader.src = url;
+        if (typeof preloader.decode === 'function') {
+            preloader.decode().catch(() => {});
+        }
+    });
+}
+
+function scheduleSwitcherPoolDecode() {
+    if (window.__osrsNarrowFirstViewportPaintedSet === false) {
+        preloadSwitcherPool();
+        return;
+    }
+    if (window.__osrsFirstViewPainted) {
+        preloadSwitcherPool();
+        return;
+    }
+    try {
+        window.addEventListener('osrs-first-view-complete', preloadSwitcherPool, { once: true });
+    } catch (ignore) {
+        window.addEventListener('osrs-first-view-complete', preloadSwitcherPool);
+    }
+    setTimeout(preloadSwitcherPool, 15000);
 }
 
 let pendingSwitcherScrollPin = null;

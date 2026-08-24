@@ -29,17 +29,24 @@ final class osrsFirstViewAssetWarmer: @unchecked Sendable {
 
     func warm(html: String) async {
         guard !html.isEmpty else { return }
-        let required = osrsOfflineArticleResourceSettlement.requiredImageURLsInDocumentOrder(from: html)
         let firstView = osrsOfflineArticleResourceSettlement.firstViewSlotURLs(from: html)
-        let plan = osrsLiveArticleAssetPlan.partition(required: required, firstView: firstView)
-        queue.load(high: plan.high, low: [])
-        NSLog("osrsFirstViewWarm: start page=%@ count=%d", pageId, plan.high.count)
+        let high: [URL]
+        if osrsLoadPerformancePrefs.narrowFirstViewportPaintedSet {
+            // Slice 1: slot extract only. Do not walk the full document URL list
+            // on the early path; remainder warm still does that after reveal.
+            high = Array(firstView.prefix(osrsLiveArticleAssetPlan.firstViewCap))
+        } else {
+            let required = osrsOfflineArticleResourceSettlement.requiredImageURLsInDocumentOrder(from: html)
+            high = osrsLiveArticleAssetPlan.partition(required: required, firstView: firstView).high
+        }
+        queue.load(high: high, low: [])
+        NSLog("osrsFirstViewWarm: start page=%@ count=%d", pageId, high.count)
         await withTaskGroup(of: Void.self) { group in
             for _ in 0..<concurrency {
                 group.addTask { await self.drain() }
             }
         }
-        NSLog("osrsFirstViewWarm: done page=%@ count=%d", pageId, plan.high.count)
+        NSLog("osrsFirstViewWarm: done page=%@ count=%d", pageId, high.count)
     }
 
     private func drain() async {

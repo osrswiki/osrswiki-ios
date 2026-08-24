@@ -22,4 +22,11 @@ enum osrsLoadPerformancePrefs {
     /// fetch them before `loadHTMLString`. Decode → FirstViewPainted is unchanged;
     /// this only requests slot URLs sooner. Flip to false to roll back Task 10.
     static var warmFirstViewportImagesEarly: Bool = true
+
+    /// When true, FirstViewPainted waits only on intersecting media plus the
+    /// authored-default switcher pane (not the full switcher pool / every srcset
+    /// candidate), and the early first-view warmer extracts the slot only — not
+    /// the full document URL list. Flip to false to roll back the post-Task-10
+    /// painted-set cut. Reveal stays FirstViewPainted.
+    static var narrowFirstViewportPaintedSet: Bool = true
 }

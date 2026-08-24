@@ -117,7 +117,7 @@ final class osrsLiveArticleAssetQueueTests: XCTestCase {
         XCTAssertFalse(fetched.contains(skip))
     }
 
-    func testFirstViewWarmerFetchesSlotOnlyAndCancelDropsWork() async {
+    func testFirstViewWarmerFetchesSlotOnlyAndCancelDropsWork() async throws {
         var fetched: [URL] = []
         let started = expectation(description: "first fetch started")
         let warmer = osrsFirstViewAssetWarmer(
@@ -152,6 +152,31 @@ final class osrsLiveArticleAssetQueueTests: XCTestCase {
         await completeWarmer.warm(html: gloryHTML)
         XCTAssertTrue(completed.contains(gloryPool))
         XCTAssertFalse(completed.contains(belowFold))
+
+        var remainder: [URL] = []
+        let remainderWarmer = osrsLiveArticleAssetWarmer(
+            pageId: "browsing_test",
+            isCached: { _ in false },
+            fetch: { url in remainder.append(url) },
+            highConcurrency: 1,
+            lowConcurrency: 1
+        )
+        await remainderWarmer.warm(html: gloryHTML)
+        XCTAssertTrue(remainder.contains(belowFold))
+
+        let warmerSource = try String(
+            contentsOf: try repositoryRoot()
+                .appendingPathComponent("platforms/ios/osrswiki/Services/osrsFirstViewAssetWarmer.swift"),
+            encoding: .utf8
+        )
+        let defaultOn = warmerSource
+            .components(separatedBy: "narrowFirstViewportPaintedSet")
+            .dropFirst()
+            .first?
+            .components(separatedBy: "} else {")
+            .first ?? ""
+        XCTAssertFalse(defaultOn.contains("requiredImageURLsInDocumentOrder"))
+        XCTAssertTrue(defaultOn.contains("firstViewSlotURLs") || defaultOn.contains("firstView"))
     }
 
     func testCancelDropsRemainingWork() async {
@@ -194,7 +219,11 @@ final class osrsLiveArticleAssetQueueTests: XCTestCase {
         XCTAssertTrue(shared.contains("domImageAlreadyDecoded"))
         XCTAssertTrue(shared.contains("naturalWidth"))
         XCTAssertTrue(shared.contains("new Image()"))
-        XCTAssertTrue(shared.contains("notify(unique(slotUrls().concat(collectIntersecting())))"))
+        XCTAssertTrue(shared.contains("notify(paintedUrls())"))
+        XCTAssertTrue(shared.contains("function paintedUrls"))
+        XCTAssertTrue(shared.contains("collectDefaultSwitcherPane"))
+        XCTAssertTrue(shared.contains("chosenElementUrls"))
+        XCTAssertTrue(shared.contains("var urls = paintedUrls()"))
         XCTAssertFalse(shared.contains("el.src ="))
         XCTAssertFalse(shared.contains("setAttribute('src'"))
     }

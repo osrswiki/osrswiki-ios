@@ -42,6 +42,40 @@
         return urls;
     }
 
+    // Painted completeness: one URL per element (currentSrc / src), not every srcset candidate.
+    function chosenElementUrls(el) {
+        var urls = [];
+        if (el.tagName === 'IMG' && el.currentSrc) {
+            urls.push(el.currentSrc);
+            return urls;
+        }
+        var src = el.getAttribute('src') || el.getAttribute('data-src') ||
+            el.getAttribute('data-original') || el.getAttribute('data-lazy-src');
+        if (src) {
+            urls.push(src);
+            return urls;
+        }
+        if (el.tagName === 'VIDEO') {
+            var poster = el.getAttribute('poster');
+            if (poster) {
+                urls.push(poster);
+            }
+            return urls;
+        }
+        var set = srcsetUrls(
+            el.getAttribute('srcset') || el.getAttribute('data-srcset') ||
+            el.getAttribute('data-osrs-deferred-srcset') || el.getAttribute('data-lazy-srcset')
+        );
+        if (set.length) {
+            urls.push(set[0]);
+        }
+        return urls;
+    }
+
+    function narrowPaintedEnabled() {
+        return window.__osrsNarrowFirstViewportPaintedSet !== false;
+    }
+
     function unique(urls) {
         var seen = Object.create(null);
         var out = [];
@@ -62,6 +96,82 @@
         node.querySelectorAll('img, picture > source, video[poster]').forEach(function (el) {
             Array.prototype.push.apply(urls, elementUrls(el));
         });
+    }
+
+    function addFromChosen(node, urls) {
+        if (!node || !node.querySelectorAll) {
+            return;
+        }
+        node.querySelectorAll('img, picture > source, video[poster]').forEach(function (el) {
+            Array.prototype.push.apply(urls, chosenElementUrls(el));
+        });
+    }
+
+    function authoredDefaultIndex(root) {
+        var infobox = root.querySelector(
+            '.infobox-switch, .collapsible-primary-infobox, .switch-infobox'
+        );
+        if (!infobox) {
+            return '0';
+        }
+        var buttonsContainer = infobox.querySelector('.infobox-buttons');
+        var defaultIndex = buttonsContainer && buttonsContainer.getAttribute('data-default-version');
+        if (defaultIndex) {
+            return defaultIndex;
+        }
+        var selectedButton = infobox.querySelector('.button-selected');
+        if (selectedButton && selectedButton.getAttribute('data-switch-index')) {
+            return selectedButton.getAttribute('data-switch-index');
+        }
+        var firstButton = infobox.querySelector('[data-switch-index]');
+        if (firstButton && firstButton.getAttribute('data-switch-index')) {
+            return firstButton.getAttribute('data-switch-index');
+        }
+        return '0';
+    }
+
+    function collectDefaultSwitcherPane(root) {
+        var urls = [];
+        var infobox = root.querySelector(
+            '.infobox-switch, .collapsible-primary-infobox, .switch-infobox, table.infobox, .infobox'
+        );
+        var index = authoredDefaultIndex(root);
+        if (infobox) {
+            addFromChosen(infobox, urls);
+            var resourceClass = infobox.getAttribute('data-resource-class');
+            if (resourceClass) {
+                try {
+                    var pool = root.querySelector(resourceClass);
+                    if (pool) {
+                        pool.querySelectorAll('[data-attr-index="' + index + '"]').forEach(function (node) {
+                            addFromChosen(node, urls);
+                        });
+                    }
+                } catch (ignore) {}
+            }
+        }
+        root.querySelectorAll('[data-attr-param] [data-attr-index="' + index + '"]').forEach(function (node) {
+            addFromChosen(node, urls);
+        });
+        var matchedItem = false;
+        root.querySelectorAll('.switch-infobox .item').forEach(function (node) {
+            var itemIndex = node.getAttribute('data-switch-index') || node.getAttribute('data-attr-index');
+            if (itemIndex === index) {
+                matchedItem = true;
+                addFromChosen(node, urls);
+            }
+        });
+        if (!matchedItem) {
+            var firstItem = root.querySelector('.switch-infobox .item');
+            if (firstItem) {
+                addFromChosen(firstItem, urls);
+            }
+        }
+        root.querySelectorAll('.infobox-bonuses-image.render-m, .infobox-bonuses-image.render-f').forEach(function (el) {
+            Array.prototype.push.apply(urls, chosenElementUrls(el));
+            addFromChosen(el, urls);
+        });
+        return urls;
     }
 
     function collectSwitcherSlot(root) {
@@ -126,8 +236,31 @@
         return urls;
     }
 
+    function collectIntersectingChosen() {
+        var urls = [];
+        var viewportHeight = window.innerHeight || 0;
+        document.querySelectorAll('img, picture > source, video[poster]').forEach(function (el) {
+            var rect = el.getBoundingClientRect();
+            if (rect.bottom <= 0 || rect.top >= viewportHeight) {
+                return;
+            }
+            if ((rect.width + rect.height) <= 0) {
+                return;
+            }
+            Array.prototype.push.apply(urls, chosenElementUrls(el));
+        });
+        return urls;
+    }
+
     function slotUrls() {
         return unique(collectSwitcherSlot(document).concat(collectLeadBeforeHeading(document)));
+    }
+
+    function paintedUrls() {
+        if (!narrowPaintedEnabled()) {
+            return unique(slotUrls().concat(collectIntersecting()));
+        }
+        return unique(collectDefaultSwitcherPane(document).concat(collectIntersectingChosen()));
     }
 
     function notify(urls) {
@@ -359,7 +492,7 @@
     }
 
     function watchComplete() {
-        var urls = unique(slotUrls().concat(collectIntersecting()));
+        var urls = paintedUrls();
         var timeout = setTimeout(reportComplete, 15000);
         var wait = urls.length ? Promise.all(urls.map(decodeUrl)) : Promise.resolve();
         wait.then(function () {
@@ -370,7 +503,7 @@
     }
 
     window.osrsCollectFirstViewportUrls = function () {
-        return unique(slotUrls().concat(collectIntersecting()));
+        return paintedUrls();
     };
 
     window.osrsNotifyFirstViewComplete = function () {
@@ -421,7 +554,7 @@
     }
 
     function start() {
-        notify(unique(slotUrls().concat(collectIntersecting())));
+        notify(paintedUrls());
         watchComplete();
         sampleLayoutStability();
     }

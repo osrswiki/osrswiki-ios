@@ -92,11 +92,13 @@ class osrsPageHtmlBuilder {
     }
 
     private func createTableCollapseScript(collapseTablesEnabled: Bool) -> String {
+        let narrowPainted = osrsLoadPerformancePrefs.narrowFirstViewportPaintedSet ? "true" : "false"
         return """
         <script>
             // Global variable for table collapse preference that collapsible_content.js can read
             window.OSRS_TABLE_COLLAPSED = \(collapseTablesEnabled ? "true" : "false");
             console.log('osrsPageHtmlBuilder: Set global collapse preference to ' + window.OSRS_TABLE_COLLAPSED);
+            window.__osrsNarrowFirstViewportPaintedSet = \(narrowPainted);
         </script>
         """
     }
