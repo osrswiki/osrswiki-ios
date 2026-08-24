@@ -51,6 +51,19 @@ enum osrsAppRoot {
             }
 #endif
         }
+#if DEBUG
+        if let idx = ProcessInfo.processInfo.arguments.firstIndex(of: "-osrsOpenPage"),
+           ProcessInfo.processInfo.arguments.indices.contains(idx + 1) {
+            let title = ProcessInfo.processInfo.arguments[idx + 1]
+            let path = title.replacingOccurrences(of: " ", with: "_")
+            if let url = URL(string: "https://oldschool.runescape.wiki/w/\(path)") {
+                Task { @MainActor in
+                    try? await Task.sleep(nanoseconds: 900_000_000)
+                    appState.navigateToArticle(title: title, url: url)
+                }
+            }
+        }
+#endif
     }
 
     @ViewBuilder

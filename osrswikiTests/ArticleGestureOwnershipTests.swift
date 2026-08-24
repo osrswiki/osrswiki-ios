@@ -273,6 +273,31 @@ final class ArticleGestureOwnershipTests: XCTestCase {
         XCTAssertEqual(backCount, 0)
     }
 
+    func testWebViewPointSubtractsScrollViewContentOffsetForClassifyPoint() {
+        let visible = osrsArticleWebPanPolicy.webViewPoint(
+            scrollViewLocation: CGPoint(x: 96, y: 1400),
+            contentOffset: CGPoint(x: 0, y: 1200),
+            zoomScale: 1
+        )
+        XCTAssertEqual(visible.x, 96, accuracy: 0.01)
+        XCTAssertEqual(visible.y, 200, accuracy: 0.01)
+
+        let zoomed = osrsArticleWebPanPolicy.webViewPoint(
+            scrollViewLocation: CGPoint(x: 80, y: 400),
+            contentOffset: CGPoint(x: 0, y: 0),
+            zoomScale: 2
+        )
+        XCTAssertEqual(zoomed.x, 40, accuracy: 0.01)
+        XCTAssertEqual(zoomed.y, 200, accuracy: 0.01)
+
+        let client = osrsArticleWebPanPolicy.javascriptClientPoint(
+            webViewLocation: CGPoint(x: 108, y: 216),
+            pageZoom: 1.08
+        )
+        XCTAssertEqual(client.x, 100, accuracy: 0.01)
+        XCTAssertEqual(client.y, 200, accuracy: 0.01)
+    }
+
     func testUIKitArticlePanPolicyAcceptsHorizontalDirectionsAndRejectsVertical() {
         XCTAssertEqual(
             osrsArticleWebPanPolicy.navigationDirection(
@@ -413,6 +438,9 @@ final class ArticleGestureOwnershipTests: XCTestCase {
         )
         XCTAssertTrue(source.contains("osrsArticleChromeArbitration.allowsChrome"))
         XCTAssertTrue(source.contains("articleChromePendingFinish"))
+        XCTAssertTrue(source.contains("osrsArticleWebPanPolicy.webViewPoint"))
+        XCTAssertTrue(source.contains("osrsArticleWebPanPolicy.javascriptClientPoint"))
+        XCTAssertTrue(source.contains("contentOffset: webView.scrollView.contentOffset"))
         XCTAssertTrue(
             source.contains("if articleChromeBlockedForSequence || articleChromeClassificationPending")
         )

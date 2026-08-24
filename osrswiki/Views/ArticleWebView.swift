@@ -1225,6 +1225,30 @@ enum osrsArticleWebPanPolicy {
         }
         return nil
     }
+
+    /// Convert a pan location sampled in WKScrollView (bounds origin = contentOffset)
+    /// into the WKWebView visible-bounds point used by overlay hit-testing.
+    static func webViewPoint(
+        scrollViewLocation: CGPoint,
+        contentOffset: CGPoint,
+        zoomScale: CGFloat
+    ) -> CGPoint {
+        let scale = zoomScale > 0 ? zoomScale : 1
+        return CGPoint(
+            x: (scrollViewLocation.x - contentOffset.x) / scale,
+            y: (scrollViewLocation.y - contentOffset.y) / scale
+        )
+    }
+
+    /// CSS `elementFromPoint` / `classifyPoint` client coordinates for a point
+    /// already in WKWebView visible-bounds space.
+    static func javascriptClientPoint(
+        webViewLocation: CGPoint,
+        pageZoom: CGFloat
+    ) -> CGPoint {
+        let zoom = pageZoom > 0 ? pageZoom : 1
+        return CGPoint(x: webViewLocation.x / zoom, y: webViewLocation.y / zoom)
+    }
 }
 
 /// Whether article back / sidebar / TOC chrome may activate for a pan.
@@ -2053,7 +2077,16 @@ struct ArticleWebView: UIViewRepresentable {
             switch recognizer.state {
             case .began:
                 articleGestureGeneration = osrsGestureState.shared.beginArticleGesture()
-                articleGestureStartPoint = recognizer.location(in: view)
+                let scrollLocation = recognizer.location(in: view)
+                if let webView {
+                    articleGestureStartPoint = osrsArticleWebPanPolicy.webViewPoint(
+                        scrollViewLocation: scrollLocation,
+                        contentOffset: webView.scrollView.contentOffset,
+                        zoomScale: webView.scrollView.zoomScale
+                    )
+                } else {
+                    articleGestureStartPoint = scrollLocation
+                }
                 articleChromeBlockedForSequence = false
                 articleChromeClassificationPending = true
                 articleChromeStartIsLocalOwner = false
@@ -2383,8 +2416,12 @@ struct ArticleWebView: UIViewRepresentable {
             in webView: WKWebView,
             generation: UInt64?
         ) {
-            let x = String(format: "%.3f", locale: Locale(identifier: "en_US_POSIX"), point.x)
-            let y = String(format: "%.3f", locale: Locale(identifier: "en_US_POSIX"), point.y)
+            let client = osrsArticleWebPanPolicy.javascriptClientPoint(
+                webViewLocation: point,
+                pageZoom: webView.pageZoom
+            )
+            let x = String(format: "%.3f", locale: Locale(identifier: "en_US_POSIX"), client.x)
+            let y = String(format: "%.3f", locale: Locale(identifier: "en_US_POSIX"), client.y)
             let script = "window.OSRSArticleGestureOwnership && window.OSRSArticleGestureOwnership.classifyPoint(\(x), \(y))"
             webView.evaluateJavaScript(script) { [weak self] result, error in
                 DispatchQueue.main.async {
@@ -2397,7 +2434,8 @@ struct ArticleWebView: UIViewRepresentable {
                        let classified = classification["isLocalOwner"] as? Bool {
                         isLocalOwner = classified
                     } else {
-                        isLocalOwner = false
+                        // Missing or unreadable classifyPoint must not authorize chrome.
+                        isLocalOwner = true
                     }
                     self.articleChromeStartIsLocalOwner = isLocalOwner
                     self.articleChromeClassificationPending = false
@@ -2443,8 +2481,12 @@ struct ArticleWebView: UIViewRepresentable {
             generation: UInt64,
             action: @escaping () -> Void
         ) {
-            let x = String(format: "%.3f", locale: Locale(identifier: "en_US_POSIX"), point.x)
-            let y = String(format: "%.3f", locale: Locale(identifier: "en_US_POSIX"), point.y)
+            let client = osrsArticleWebPanPolicy.javascriptClientPoint(
+                webViewLocation: point,
+                pageZoom: webView.pageZoom
+            )
+            let x = String(format: "%.3f", locale: Locale(identifier: "en_US_POSIX"), client.x)
+            let y = String(format: "%.3f", locale: Locale(identifier: "en_US_POSIX"), client.y)
             let script = "window.OSRSArticleGestureOwnership && window.OSRSArticleGestureOwnership.classifyPoint(\(x), \(y))"
             webView.evaluateJavaScript(script) { result, error in
                 DispatchQueue.main.async {

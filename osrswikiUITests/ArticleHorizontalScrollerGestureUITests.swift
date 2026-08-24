@@ -50,10 +50,7 @@ final class ArticleHorizontalScrollerGestureUITests: XCTestCase {
             withVelocity: XCUIGestureVelocity(220),
             thenHoldForDuration: 0.05
         )
-        XCTAssertTrue(
-            app.staticTexts["Amulet of glory"].waitForExistence(timeout: 2),
-            "A rightward drag inside a wide table must not pop back"
-        )
+        assertStillOnGloryArticle("A rightward drag inside a wide table must not pop back")
         XCTAssertFalse(
             contentsDrawerIsVisiblyOpen(),
             "A rightward drag inside a wide table must not open contents"
@@ -65,10 +62,7 @@ final class ArticleHorizontalScrollerGestureUITests: XCTestCase {
             withVelocity: XCUIGestureVelocity(220),
             thenHoldForDuration: 0.05
         )
-        XCTAssertTrue(
-            app.staticTexts["Amulet of glory"].waitForExistence(timeout: 2),
-            "A leftward drag inside a wide table must keep the article"
-        )
+        assertStillOnGloryArticle("A leftward drag inside a wide table must keep the article")
         XCTAssertFalse(
             contentsDrawerIsVisiblyOpen(),
             "A leftward drag inside a wide table must not open the contents drawer"
@@ -216,6 +210,25 @@ final class ArticleHorizontalScrollerGestureUITests: XCTestCase {
             endRight: coordinate(at: rightPoint),
             endLeft: coordinate(at: leftPoint),
             startXInWindow: startPoint.x
+        )
+    }
+
+    private func assertStillOnGloryArticle(_ message: String) {
+        XCTAssertTrue(
+            articleWebView().waitForExistence(timeout: 2),
+            "\(message): article_web_view must remain"
+        )
+        XCTAssertTrue(
+            app.buttons["article_back_button"].waitForExistence(timeout: 2),
+            "\(message): article back button must remain"
+        )
+        XCTAssertFalse(
+            app.staticTexts["Search History"].exists,
+            "\(message): Search History means the in-element drag popped"
+        )
+        XCTAssertFalse(
+            app.otherElements["search_screen"].exists,
+            "\(message): search_screen means the in-element drag popped"
         )
     }
 
