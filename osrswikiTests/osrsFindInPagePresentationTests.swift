@@ -60,12 +60,12 @@ final class osrsFindInPagePresentationTests: XCTestCase {
         )
         let presentText = try await documentContains(webView, "Varrock")
         XCTAssertTrue(presentText, "after present: article document lost Varrock")
-        try await Task.sleep(nanoseconds: 350_000_000)
-        viewModel.preserveRenderedArticleDuringFind(webView)
+        try await waitUntil(timeout: 2) {
+            !osrsWebViewThemePaint.isUniformFill(visibleSnapshot(webView))
+        }
         let presentSnapshot = visibleSnapshot(webView)
         XCTAssertFalse(
-            osrsWebViewThemePaint.isUniformFill(presentSnapshot)
-                || osrsWebViewThemePaint.isUnpaintedSystemFill(presentSnapshot),
+            osrsWebViewThemePaint.isUniformFill(presentSnapshot),
             "Find present must not blank the article compositor range=\(osrsWebViewThemePaint.luminanceRange(presentSnapshot))"
         )
 
@@ -198,6 +198,7 @@ final class osrsFindInPagePresentationTests: XCTestCase {
             try await Task.sleep(nanoseconds: 50_000_000)
         }
         XCTFail("condition not met within \(timeout)s")
+        throw NSError(domain: "osrsFindInPagePresentationTests", code: 1)
     }
 
     private func appWindows() -> [UIWindow] {

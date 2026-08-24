@@ -1,4 +1,5 @@
 import XCTest
+import UIKit
 
 final class ReaderSearchParityUITests: XCTestCase {
     private var app: XCUIApplication!
@@ -220,19 +221,22 @@ final class ReaderSearchParityUITests: XCTestCase {
         let findButton = waitForArticleFindButton()
         findButton.tap()
 
-        XCTAssertTrue(
-            app.keyboards.firstMatch.waitForExistence(timeout: 10)
-                || app.searchFields.firstMatch.waitForExistence(timeout: 2),
-            "Find must present keyboard or overlay\n\(app.debugDescription)"
-        )
+        assertFindChromeOpen("after Find tap")
         assertIdentifiedArticleWebViewUsable("after Find tap")
+        // Shipped present kicks compositor at 80ms and 250ms. Capture after that,
+        // then fail if the article region is still a uniform theme fill.
+        Thread.sleep(forTimeInterval: 0.45)
         attachFindScreenshot("find-present")
+        assertArticleRegionPainted("after Find tap")
 
         typeFindQuery("Varrock")
+        assertFindChromeOpen("after typing")
         assertIdentifiedArticleWebViewUsable("after typing")
-        stepFindMatchesIfAvailable()
+        stepFindMatches()
+        assertFindChromeOpen("after stepping matches")
         assertIdentifiedArticleWebViewUsable("after stepping matches")
         attachFindScreenshot("find-type-step")
+        assertArticleRegionPainted("after typing/step")
 
         dismissFindNavigator()
         assertIdentifiedArticleWebViewUsable("after dismiss")
@@ -560,74 +564,131 @@ final class ReaderSearchParityUITests: XCTestCase {
         )
     }
 
-    private func typeFindQuery(_ query: String) {
-        let named = app.searchFields["find.searchField"]
-        if named.waitForExistence(timeout: 3) {
-            named.tap()
-            named.typeText(query)
-            return
-        }
-        let searchField = app.searchFields.firstMatch
-        if searchField.waitForExistence(timeout: 2) {
-            searchField.tap()
-            searchField.typeText(query)
-            return
-        }
-        let textField = app.textFields.firstMatch
-        if textField.waitForExistence(timeout: 2) {
-            textField.tap()
-            textField.typeText(query)
-            return
-        }
-        if app.keyboards.firstMatch.exists {
-            app.typeText(query)
-        }
+    private func findSearchField() -> XCUIElement {
+        app.searchFields["find.searchField"]
     }
 
-    private func stepFindMatchesIfAvailable() {
-        let next = app.buttons["find.nextButton"].firstMatch
-        if next.exists {
-            next.tap()
-        } else {
-            for label in ["Next", "Next Result", "Find Next"] {
-                let button = app.buttons[label].firstMatch
-                if button.exists, button.isHittable {
-                    button.tap()
-                    break
-                }
-            }
-        }
-        let previous = app.buttons["find.previousButton"].firstMatch
-        if previous.exists {
-            previous.tap()
-        } else {
-            for label in ["Previous", "Previous Result", "Find Previous"] {
-                let button = app.buttons[label].firstMatch
-                if button.exists, button.isHittable {
-                    button.tap()
-                    break
-                }
-            }
-        }
+    private func assertFindChromeOpen(_ moment: String) {
+        let field = findSearchField()
+        XCTAssertTrue(
+            field.waitForExistence(timeout: 8),
+            "\(moment): find.searchField missing; Find overlay is not open"
+        )
+        XCTAssertTrue(
+            app.keyboards.firstMatch.exists || field.exists,
+            "\(moment): Find keyboard/overlay missing"
+        )
+    }
+
+    private func typeFindQuery(_ query: String) {
+        let field = findSearchField()
+        XCTAssertTrue(
+            field.waitForExistence(timeout: 8),
+            "find.searchField missing; cannot type \(query)"
+        )
+        field.tap()
+        field.typeText(query)
+        let entered = (field.value as? String) ?? ""
+        XCTAssertTrue(
+            entered.localizedCaseInsensitiveContains(query),
+            "Find query was not entered; field value=\(entered)"
+        )
+    }
+
+    private func stepFindMatches() {
+        assertFindChromeOpen("before step")
+        let next = app.buttons["find.nextButton"]
+        XCTAssertTrue(next.waitForExistence(timeout: 5), "find.nextButton missing; cannot step matches")
+        next.tap()
+        let previous = app.buttons["find.previousButton"]
+        XCTAssertTrue(
+            previous.waitForExistence(timeout: 3),
+            "find.previousButton missing after next"
+        )
+        previous.tap()
     }
 
     private func dismissFindNavigator() {
-        let done = app.buttons["find.doneButton"].firstMatch
-        if done.exists {
-            done.tap()
-            return
+        assertFindChromeOpen("before dismiss")
+        let done = app.buttons["find.doneButton"]
+        XCTAssertTrue(
+            done.waitForExistence(timeout: 5),
+            "find.doneButton missing; Find overlay already gone before dismiss"
+        )
+        done.tap()
+    }
+
+    private func assertArticleRegionPainted(_ moment: String) {
+        let sample = articlePaintSampleRect()
+        XCTAssertGreaterThan(sample.width, 40, "\(moment): article sample width \(sample.width)")
+        XCTAssertGreaterThan(sample.height, 40, "\(moment): article sample height \(sample.height)")
+        let image = app.screenshot().image
+        let crop = croppedImage(image, to: sample)
+        let range = luminanceRange(crop)
+        XCTAssertGreaterThan(
+            range,
+            16,
+            "\(moment): article region is uniform fill (luminance range=\(range) sample=\(sample))"
+        )
+    }
+
+    private func articlePaintSampleRect() -> CGRect {
+        let web = identifiedArticleWebView().frame
+        var minY = web.minY + 8
+        var maxY = web.maxY - 8
+        let back = app.buttons["article_back_button"]
+        if back.exists {
+            minY = max(minY, back.frame.maxY + 8)
         }
-        let dismissLabels = ["Done", "Cancel", "Close", "Dismiss"]
-        for label in dismissLabels {
-            let button = app.buttons[label].firstMatch
-            if button.exists, button.isHittable {
-                button.tap()
-                return
-            }
+        let field = findSearchField()
+        if field.exists {
+            maxY = min(maxY, field.frame.minY - 8)
         }
-        if app.keyboards.buttons["Hide keyboard"].exists {
-            app.keyboards.buttons["Hide keyboard"].tap()
+        if app.keyboards.firstMatch.exists {
+            maxY = min(maxY, app.keyboards.firstMatch.frame.minY - 8)
         }
+        let minX = web.minX + 12
+        let width = max(web.width - 24, 1)
+        let height = max(maxY - minY, 1)
+        return CGRect(x: minX, y: minY, width: width, height: height)
+    }
+
+    private func croppedImage(_ image: UIImage, to rect: CGRect) -> UIImage {
+        let scale = image.scale
+        let pixel = CGRect(
+            x: rect.minX * scale,
+            y: rect.minY * scale,
+            width: rect.width * scale,
+            height: rect.height * scale
+        ).integral
+        guard let cg = image.cgImage,
+              let cropped = cg.cropping(to: pixel) else {
+            return image
+        }
+        return UIImage(cgImage: cropped, scale: scale, orientation: image.imageOrientation)
+    }
+
+    private func luminanceRange(_ image: UIImage) -> Int {
+        let sample = CGSize(width: 16, height: 16)
+        UIGraphicsBeginImageContextWithOptions(sample, true, 1)
+        defer { UIGraphicsEndImageContext() }
+        image.draw(in: CGRect(origin: .zero, size: sample))
+        guard let tiny = UIGraphicsGetImageFromCurrentImageContext()?.cgImage,
+              let data = tiny.dataProvider?.data,
+              let bytes = CFDataGetBytePtr(data) else {
+            return 0
+        }
+        let count = tiny.width * tiny.height
+        guard count > 0 else { return 0 }
+        var minLuminance = 255
+        var maxLuminance = 0
+        for index in 0..<count {
+            let offset = index * 4
+            let luminance = (Int(bytes[offset]) + Int(bytes[offset + 1]) + Int(bytes[offset + 2])) / 3
+            minLuminance = min(minLuminance, luminance)
+            maxLuminance = max(maxLuminance, luminance)
+        }
+        return maxLuminance - minLuminance
     }
 
     private func contentsDrawer() -> XCUIElement {

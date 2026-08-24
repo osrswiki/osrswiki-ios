@@ -5567,6 +5567,7 @@ extension ArticleViewModel: WKNavigationDelegate {
             })();
             """
         )
+        CATransaction.flush()
     }
 
     private func unhideWebKitLayers(_ view: UIView) {
