@@ -11,6 +11,130 @@ final class osrsCalculatorLiveUserUITests: XCTestCase {
         continueAfterFailure = false
     }
 
+    func testAgilityNativeNameTypingKeepsKeyboardAndParseTable() throws {
+        let app = makeApp(
+            extraArguments: articleArguments(
+                title: "Calculator:Agility",
+                path: "Calculator:Agility"
+            )
+        )
+        app.launch()
+        XCTAssertTrue(app.wait(for: .runningForeground, timeout: launchTimeout))
+        XCTAssertTrue(
+            app.webViews["article_web_view"].waitForExistence(timeout: articleLoadTimeout) ||
+                app.webViews.firstMatch.waitForExistence(timeout: 2),
+            app.debugDescription
+        )
+        let namedById = app.textFields["native-calc-field-name"].firstMatch
+        let namedByPlaceholder = app.textFields["Name"].firstMatch
+        let nameField = namedById.exists ? namedById : namedByPlaceholder
+        var appeared = namedById.waitForExistence(timeout: articleLoadTimeout)
+            || namedByPlaceholder.waitForExistence(timeout: 2)
+        if !appeared {
+            let webView = articleWebView(in: app)
+            for _ in 0..<10 {
+                webView.swipeUp()
+                if nameField.waitForExistence(timeout: 2) {
+                    appeared = true
+                    break
+                }
+            }
+        }
+        XCTAssertTrue(appeared, "Native Name field missing on Calculator:Agility. \(app.debugDescription)")
+        if !nameField.isHittable {
+            let webView = articleWebView(in: app)
+            for _ in 0..<8 where !nameField.isHittable {
+                webView.swipeUp()
+            }
+        }
+        saveEvidence(from: app, name: "ios-agility-chrome")
+        saveEvidence(from: app, name: "ios-name-before")
+
+        if nameField.isHittable {
+            nameField.tap()
+        } else {
+            nameField.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        }
+        XCTAssertTrue(
+            app.keyboards.firstMatch.waitForExistence(timeout: 8),
+            "Software keyboard did not appear after tapping Name. Connect Hardware Keyboard must be off. \(app.debugDescription)"
+        )
+        saveEvidence(from: app, name: "ios-name-focused")
+
+        try enterWithSoftwareKeyboard("osamo", in: app, numeric: false)
+        XCTAssertTrue(app.keyboards.firstMatch.exists, "Keyboard disappeared after typing Name")
+        XCTAssertTrue(
+            articleWebView(in: app).exists,
+            "Article web view vanished while typing Name"
+        )
+        let typed = (nameField.value as? String) ?? ""
+        XCTAssertTrue(typed.contains("osamo") || typed.contains("osa"), "Typed Name characters missing: \(typed)")
+        saveEvidence(from: app, name: "ios-name-typed")
+
+        dismissSoftwareKeyboard(in: app)
+        let increaseGoal = app.buttons["Increase Goal (per choice above)"].firstMatch
+        if increaseGoal.waitForExistence(timeout: 4) {
+            for _ in 0..<10 {
+                if increaseGoal.isHittable {
+                    increaseGoal.tap()
+                } else {
+                    increaseGoal.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+                }
+            }
+        }
+        let submitById = app.buttons["native-calc-submit"].firstMatch
+        let submitByLabel = app.buttons["Submit"].firstMatch
+        let submit = submitById.exists ? submitById : submitByLabel
+        XCTAssertTrue(
+            submitById.waitForExistence(timeout: 4) || submitByLabel.waitForExistence(timeout: 8),
+            "Missing native Submit"
+        )
+        let webView = articleWebView(in: app)
+        if !submit.isHittable {
+            if app.scrollViews.firstMatch.exists {
+                app.scrollViews.firstMatch.swipeUp()
+            } else {
+                webView.swipeUp()
+            }
+        }
+        if submit.isHittable {
+            submit.tap()
+        } else {
+            submit.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        }
+        var sawTable = waitForCalculatorText("Plank", in: app, timeout: resultTimeout)
+            || waitForCalculatorText("Low wall", in: app, timeout: 2)
+        if !sawTable {
+            for _ in 0..<8 {
+                webView.swipeUp()
+                if waitForCalculatorText("Plank", in: app, timeout: 2)
+                    || waitForCalculatorText("Low wall", in: app, timeout: 2) {
+                    sawTable = true
+                    break
+                }
+            }
+        }
+        if sawTable {
+            let heading = app.staticTexts["Calculator"].firstMatch
+            for _ in 0..<8 {
+                if heading.exists {
+                    heading.swipeUp()
+                } else {
+                    webView.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.18))
+                        .press(
+                            forDuration: 0.05,
+                            thenDragTo: webView.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.75))
+                        )
+                }
+            }
+        }
+        saveEvidence(from: app, name: "ios-agility-table")
+        XCTAssertTrue(
+            sawTable,
+            "Agility parse table should show Plank/Low wall. \(app.debugDescription)"
+        )
+    }
+
     func testCombatLevelCalculatorRendersWikiForm() throws {
         _ = try openCalculator(
             title: "Calculator:Combat level",
@@ -321,10 +445,14 @@ final class osrsCalculatorLiveUserUITests: XCTestCase {
         webButton.tap()
     }
 
-    private func waitForCalculatorText(_ snippet: String, in app: XCUIApplication) -> Bool {
+    private func waitForCalculatorText(
+        _ snippet: String,
+        in app: XCUIApplication,
+        timeout: TimeInterval? = nil
+    ) -> Bool {
         let predicate = NSPredicate(format: "label CONTAINS[c] %@ OR value CONTAINS[c] %@", snippet, snippet)
         let match = app.descendants(matching: .any).matching(predicate).firstMatch
-        return match.waitForExistence(timeout: resultTimeout)
+        return match.waitForExistence(timeout: timeout ?? resultTimeout)
     }
 
     private func saveCurrentArticle(
@@ -391,6 +519,15 @@ final class osrsCalculatorLiveUserUITests: XCTestCase {
             file: file,
             line: line
         )
+    }
+
+    private func saveEvidence(from app: XCUIApplication, name: String) {
+        attachScreenshot(from: app, name: name)
+        guard let dir = ProcessInfo.processInfo.environment["OSRS_EVIDENCE_DIR"], !dir.isEmpty else {
+            return
+        }
+        let url = URL(fileURLWithPath: dir).appendingPathComponent("\(name).png")
+        try? app.screenshot().pngRepresentation.write(to: url)
     }
 
     private func attachScreenshot(from app: XCUIApplication, name: String) {

@@ -38,6 +38,7 @@ struct osrsNativeCalcView: View {
         .background(osrsTheme.background.opacity(0.97))
         .foregroundStyle(osrsTheme.primaryTextColor)
         .tint(osrsTheme.primary)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("native-calc-form")
     }
 

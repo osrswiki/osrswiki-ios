@@ -9,18 +9,28 @@ struct osrsNativeCalcSlotOverlay: View {
     @State private var formHeight: CGFloat = 420
 
     var body: some View {
-        VStack(spacing: 0) {
-            Color.clear
-                .frame(height: max(0, slotY))
-                .allowsHitTesting(false)
-            osrsNativeCalcView(session: session)
-                .background(
-                    GeometryReader { geo in
-                        Color.clear.preference(key: osrsNativeCalcFormHeightKey.self, value: geo.size.height)
-                    }
-                )
+        GeometryReader { page in
+            let top = max(0, slotY)
+            let visible = max(160, page.size.height - top)
+            VStack(spacing: 0) {
+                Color.clear
+                    .frame(height: top)
+                    .allowsHitTesting(false)
+                ScrollView {
+                    osrsNativeCalcView(session: session)
+                        .background(
+                            GeometryReader { geo in
+                                Color.clear.preference(
+                                    key: osrsNativeCalcFormHeightKey.self,
+                                    value: min(max(geo.size.height, 160), visible)
+                                )
+                            }
+                        )
+                }
+                .frame(height: min(max(formHeight, 160), visible))
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .onPreferenceChange(osrsNativeCalcFormHeightKey.self) { formHeight = $0 }
         .background(
             osrsNativeCalcSlotProbe(

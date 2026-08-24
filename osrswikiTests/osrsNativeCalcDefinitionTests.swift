@@ -1,4 +1,5 @@
 import Combine
+import WebKit
 import XCTest
 @testable import osrswiki
 
@@ -360,5 +361,169 @@ final class osrsNativeCalcDefinitionTests: XCTestCase {
             osrsNativeCalcDefinition.hiscoresUnavailableMessage(player: "osamosis")
         )
         cancellable.cancel()
+    }
+
+    @MainActor
+    func testInstallSlotHidesLeftoverGadgetChromeBetweenHeadingAndName() async throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let runtime = try String(
+            contentsOf: root.appendingPathComponent("osrswiki/Assets/web/osrs_calculator_runtime.js"),
+            encoding: .utf8
+        )
+        XCTAssertTrue(runtime.contains("osrs-native-calc-slot-active"))
+        XCTAssertTrue(runtime.contains("osrs-native-calc-slot-style"))
+        XCTAssertTrue(runtime.contains(".osrs-calculator-panel"))
+        XCTAssertTrue(runtime.contains(".oo-ui-textInputWidget"))
+
+        let html = """
+        <!DOCTYPE html>
+        <html>
+        <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <style>
+          body { margin: 0; background: #e2dbc8; }
+          h2 { margin: 12px 0; }
+          .osrs-calculator-panel {
+            border: 1px solid #94866d;
+            background: #d8ccb4;
+            padding: 8px;
+            min-height: 40px;
+            border-radius: 6px;
+          }
+          .oo-ui-textInputWidget, input.oo-ui-inputWidget-input {
+            display: block;
+            width: 100%;
+            height: 36px;
+            border: 1px solid #94866d;
+            background: #e9e3d6;
+            border-radius: 6px;
+          }
+        </style>
+        </head>
+        <body>
+          <div class="mw-parser-output">
+            <h2>Calculator</h2>
+            <pre class="jcConfig">form=AgilityCalc</pre>
+            <div class="osrs-calculator-layout">
+              <div class="osrs-calculator-panel">
+                <fieldset class="jcTable oo-ui-fieldsetLayout" id="jsForm-AgilityCalc">
+                  <div class="jsCalc-field">
+                    <div class="oo-ui-textInputWidget leftover-gadget-name">
+                      <input class="oo-ui-inputWidget-input" type="text">
+                    </div>
+                  </div>
+                </fieldset>
+              </div>
+              <div id="AgilityResults" class="osrs-calculator-result"></div>
+            </div>
+          </div>
+        </body>
+        </html>
+        """
+
+        let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        let window = UIWindow(frame: webView.bounds)
+        window.addSubview(webView)
+        window.makeKeyAndVisible()
+        try await loadHTML(html, in: webView)
+        _ = try await webView.evaluateJavaScript(runtime)
+
+        let probe = """
+        (function () {
+          function vis(sel) {
+            var n = document.querySelector(sel);
+            if (!n) return { exists: false, visible: false, height: 0, display: '' };
+            var cs = window.getComputedStyle(n);
+            var r = n.getBoundingClientRect();
+            return {
+              exists: true,
+              visible: cs.display !== 'none' && cs.visibility !== 'hidden' && r.height > 2 && r.width > 2,
+              height: r.height,
+              display: cs.display,
+              border: cs.borderTopWidth
+            };
+          }
+          function visibleGadgetChrome() {
+            var slot = document.getElementById('osrs-native-calc-slot');
+            var found = [];
+            document.querySelectorAll(
+              '.osrs-calculator-panel, .jcTable, .jcSubmit, .oo-ui-fieldsetLayout, .oo-ui-textInputWidget, .jsCalc-field, pre.jcConfig, input, select, button'
+            ).forEach(function (n) {
+              if (!n || n.id === 'osrs-native-calc-slot') return;
+              if (slot && (n === slot || (slot.contains && slot.contains(n)))) return;
+              if (n.id === 'AgilityResults' || (n.classList && n.classList.contains('osrs-calculator-result'))) return;
+              var cs = window.getComputedStyle(n);
+              var r = n.getBoundingClientRect();
+              if (cs.display === 'none' || cs.visibility === 'hidden') return;
+              if (r.height <= 2 || r.width <= 2) return;
+              found.push({ tag: n.tagName, id: n.id || '', cls: String(n.className || ''), height: r.height });
+            });
+            return found;
+          }
+          window.osrsInstallNativeCalcSlot({
+            formId: 'AgilityCalc',
+            resultId: 'AgilityResults',
+            height: 420
+          });
+          var layout = document.querySelector('.osrs-calculator-layout');
+          var late = document.createElement('div');
+          late.className = 'oo-ui-textInputWidget leftover-late';
+          late.innerHTML = '<input class="oo-ui-inputWidget-input" type="text">';
+          layout.insertBefore(late, layout.firstChild);
+          var slot = document.getElementById('osrs-native-calc-slot');
+          var slotCs = slot ? window.getComputedStyle(slot) : null;
+          return {
+            heading: (document.querySelector('h2') || {}).textContent || '',
+            leftover: vis('.leftover-gadget-name'),
+            panel: vis('.osrs-calculator-panel'),
+            late: vis('.leftover-late'),
+            jcTable: vis('.jcTable'),
+            gadget: visibleGadgetChrome(),
+            slotExists: !!slot,
+            slotBorder: slotCs ? slotCs.borderTopWidth : '',
+            result: vis('#AgilityResults')
+          };
+        })()
+        """
+
+        let raw = try await webView.evaluateJavaScript(probe)
+        let payload = try XCTUnwrap(raw as? [String: Any])
+        XCTAssertEqual(payload["heading"] as? String, "Calculator")
+        XCTAssertEqual(payload["slotExists"] as? Bool, true)
+        let leftover = try XCTUnwrap(payload["leftover"] as? [String: Any])
+        XCTAssertEqual(leftover["visible"] as? Bool, false, "gadget Name field must not remain between heading and native form")
+        let panel = try XCTUnwrap(payload["panel"] as? [String: Any])
+        XCTAssertEqual(panel["visible"] as? Bool, false, "empty calculator panel must not paint leftover chrome")
+        let late = try XCTUnwrap(payload["late"] as? [String: Any])
+        XCTAssertEqual(late["visible"] as? Bool, false, "late gadget paint must stay hidden")
+        let jcTable = try XCTUnwrap(payload["jcTable"] as? [String: Any])
+        XCTAssertEqual(jcTable["visible"] as? Bool, false)
+        let gadget = try XCTUnwrap(payload["gadget"] as? [Any])
+        XCTAssertTrue(gadget.isEmpty, "leftover gadget chrome still visible: \(gadget)")
+        XCTAssertEqual(payload["slotBorder"] as? String, "0px")
+        let result = try XCTUnwrap(payload["result"] as? [String: Any])
+        XCTAssertEqual(result["exists"] as? Bool, true)
+        window.isHidden = true
+    }
+
+    @MainActor
+    private func loadHTML(_ html: String, in webView: WKWebView) async throws {
+        let ready = expectation(description: "html")
+        let delegate = osrsNativeCalcHTMLDelegate(expectation: ready)
+        webView.navigationDelegate = delegate
+        webView.loadHTMLString(html, baseURL: nil)
+        await fulfillment(of: [ready], timeout: 5)
+    }
+}
+
+private final class osrsNativeCalcHTMLDelegate: NSObject, WKNavigationDelegate {
+    let expectation: XCTestExpectation
+    init(expectation: XCTestExpectation) {
+        self.expectation = expectation
+    }
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        expectation.fulfill()
     }
 }
