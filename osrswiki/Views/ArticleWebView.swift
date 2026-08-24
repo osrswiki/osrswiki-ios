@@ -1381,15 +1381,7 @@ struct ArticleWebView: UIViewRepresentable {
         // ArticleView owns the full-width back gesture. WebKit's edge-only navigation gesture
         // competes with local tables/maps and leaves the system transition outline half-open.
         webView.allowsBackForwardNavigationGestures = false
-        webView.scrollView.bounces = true
-        if #available(iOS 26.0, *) {
-            // The system tab bar/article safe-area bar now owns its measured inset.
-            webView.scrollView.contentInset.bottom = 0
-            webView.scrollView.verticalScrollIndicatorInsets.bottom = 0
-        } else {
-            webView.scrollView.contentInset.bottom = 64
-            webView.scrollView.verticalScrollIndicatorInsets.bottom = 64
-        }
+        osrsArticleRefreshSettlement.configure(webView.scrollView)
         if viewModel.needsContentProcessRecovery {
             osrsWebViewThemePaint.apply(to: webView, theme: themeManager.currentTheme)
         } else {
@@ -1436,14 +1428,7 @@ struct ArticleWebView: UIViewRepresentable {
         let finalDelegate = navigationDelegate ?? viewModel
         webView.navigationDelegate = finalDelegate
         webView.allowsBackForwardNavigationGestures = false
-        webView.scrollView.bounces = true
-        if #available(iOS 26.0, *) {
-            webView.scrollView.contentInset.bottom = 0
-            webView.scrollView.verticalScrollIndicatorInsets.bottom = 0
-        } else {
-            webView.scrollView.contentInset.bottom = 64
-            webView.scrollView.verticalScrollIndicatorInsets.bottom = 64
-        }
+        osrsArticleRefreshSettlement.configure(webView.scrollView)
         osrsWebViewThemePaint.apply(to: webView, theme: themeManager.currentTheme)
         webView.accessibilityIdentifier = "article_web_view"
         if #available(iOS 16.4, *) {
@@ -1474,9 +1459,15 @@ struct ArticleWebView: UIViewRepresentable {
             context.coordinator.lastInjectedThemeIsDark = isDark
             viewModel.applyLiveTheme(themeManager.currentTheme, themeManager: themeManager)
         }
-        if !viewModel.isRefreshing {
-            webView.scrollView.refreshControl?.endRefreshing()
+        let refreshing = viewModel.isRefreshing
+        if !refreshing {
+            if context.coordinator.wasArticleRefreshing {
+                osrsArticleRefreshSettlement.settle(webView)
+            } else {
+                webView.scrollView.refreshControl?.endRefreshing()
+            }
         }
+        context.coordinator.wasArticleRefreshing = refreshing
         context.coordinator.maybeRunSyntheticSwipeFPSProbe(on: webView)
     }
 
@@ -1840,6 +1831,7 @@ struct ArticleWebView: UIViewRepresentable {
         private var articleChromeBlockedForSequence = false
         private var articleChromeClassificationPending = false
         fileprivate var lastAppliedPageZoom: CGFloat?
+        fileprivate var wasArticleRefreshing = false
         fileprivate var lastInjectedThemeIsDark: Bool?
         private var didRunSyntheticSwipeFPSProbe = false
         private var syntheticSwipeDisplayLink: CADisplayLink?
@@ -1851,7 +1843,7 @@ struct ArticleWebView: UIViewRepresentable {
         
         func setupMapHandler(webView: WKWebView) {
             self.webView = webView
-            webView.scrollView.contentInsetAdjustmentBehavior = .always
+            osrsArticleRefreshSettlement.configure(webView.scrollView)
             mapHandler = osrsNativeMapHandler(webView: webView)
             installCalculatorKeyboardRecovery(on: webView)
             print("✅ iOS ArticleWebView: Map handler initialized")

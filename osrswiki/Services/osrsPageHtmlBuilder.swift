@@ -269,8 +269,24 @@ class osrsPageHtmlBuilder {
             console.log('🚨 [INLINE-BRIDGE] Inline map bridge executing...');
             console.log('🚨 [INLINE-BRIDGE] Document ready state:', document.readyState);
 
+            function osrsInstallFetchText(target) {
+                if (!target || typeof target.fetchText === 'function') return;
+                target.fetchText = function(url) {
+                    try {
+                        var xhr = new XMLHttpRequest();
+                        xhr.open('GET', url, false);
+                        xhr.setRequestHeader('Accept', 'application/json');
+                        xhr.send(null);
+                        return (xhr.status >= 200 && xhr.status < 300) ? (xhr.responseText || '') : '';
+                    } catch (e) {
+                        return '';
+                    }
+                };
+            }
+
             if (window.OsrsWikiBridge) {
-                console.log('🚨 [INLINE-BRIDGE] Bridge already exists, skipping...');
+                osrsInstallFetchText(window.OsrsWikiBridge);
+                console.log('🚨 [INLINE-BRIDGE] Bridge already exists; ensured fetchText');
                 return;
             }
 
@@ -345,18 +361,6 @@ class osrsPageHtmlBuilder {
                     }
                 },
 
-                fetchText: function(url) {
-                    try {
-                        var xhr = new XMLHttpRequest();
-                        xhr.open('GET', url, false);
-                        xhr.setRequestHeader('Accept', 'application/json');
-                        xhr.send(null);
-                        return (xhr.status >= 200 && xhr.status < 300) ? (xhr.responseText || '') : '';
-                    } catch (e) {
-                        return '';
-                    }
-                },
-
                 openFloorNumberingSettings: function() {
                     if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.mapBridge) {
                         window.webkit.messageHandlers.mapBridge.postMessage({
@@ -366,6 +370,7 @@ class osrsPageHtmlBuilder {
                 }
             };
 
+            osrsInstallFetchText(window.OsrsWikiBridge);
             console.log('🗺️ iOS OsrsWikiBridge initialized and ready');
             console.log('🚨 [INLINE-BRIDGE] Bridge object created:', typeof window.OsrsWikiBridge);
 
@@ -466,29 +471,27 @@ class osrsPageHtmlBuilder {
             mediawikiScripts = "<!-- MediaWiki scripts injected via WKUserScript -->"
         }
 
-        // Build the JS list, conditionally appending the GE charts widget
-        var dynamicJsAssets = jsAssetPaths
-        if needsGECharts {
-            dynamicJsAssets.append(contentsOf: [
-                "web/chart.umd.min.js",
-                "web/ge_charts_init.js"
-            ])
+        // Keep Chart.js + ge_charts_init off the MediaWiki startup.js tail.
+        // startup.js is large and blocking; first-open can leave the wiki
+        // "Loading..." placeholder forever if those scripts never run.
+        let geChartScripts: String
+        if needsGECharts && includeAssetLinks {
+            geChartScripts = """
+            <script>window.__osrsAmdDefine=window.define;try{window.define=undefined;}catch(e){}</script>
+            <script src="\(customScheme)://localhost/web/chart.umd.min.js"></script>
+            <script>if(typeof window.__osrsAmdDefine!=='undefined'){window.define=window.__osrsAmdDefine;}</script>
+            <script src="\(customScheme)://localhost/web/ge_charts_init.js"></script>
+            """
+        } else if needsGECharts {
+            geChartScripts = "<!-- GE chart scripts injected via WKUserScript -->"
+        } else {
+            geChartScripts = ""
         }
 
         let jsScripts: String
         if includeAssetLinks {
-            jsScripts = dynamicJsAssets.map { assetPath in
-                let tag = "<script src=\"\(customScheme)://localhost/\(assetPath)\"></script>"
-                if assetPath.hasSuffix("chart.umd.min.js") {
-                    // Chart.js UMD prefers AMD when present. MediaWiki defines `define`, so
-                    // window.Chart never appears unless we temporarily clear it.
-                    return """
-                    <script>window.__osrsAmdDefine=window.define;try{window.define=undefined;}catch(e){}</script>
-                    \(tag)
-                    <script>if(typeof window.__osrsAmdDefine!=='undefined'){window.define=window.__osrsAmdDefine;}</script>
-                    """
-                }
-                return tag
+            jsScripts = jsAssetPaths.map { assetPath in
+                "<script src=\"\(customScheme)://localhost/\(assetPath)\"></script>"
             }.joined(separator: "\n")
         } else {
             jsScripts = "<!-- JS assets injected via WKUserScript -->"
@@ -547,9 +550,11 @@ class osrsPageHtmlBuilder {
             \(createThemeUtilityScript())
             \(tableCollapseScript)
             \(smartMediawikiVariables)
+            \(createInlineMapBridge())
         </head>
         <body class="\(themeClass) \(floorConvention.bodyClass) \(wrapClass)">
             \(finalBodyContent)
+            \(geChartScripts)
             \(createInternalArticleLinkNormalizationScript(customScheme: customScheme))
             \(transformScripts)
             \(mediawikiScripts)

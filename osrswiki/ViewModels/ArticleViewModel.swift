@@ -2048,6 +2048,18 @@ class ArticleViewModel: NSObject, ObservableObject {
         loadArticle(theme: theme)
     }
 
+    func settleArticleScrollAfterRefresh() {
+        guard let webView else { return }
+        osrsArticleRefreshSettlement.settle(webView)
+    }
+
+#if DEBUG
+    func seedCommittedArticleHTMLForTests(_ html: String, theme: (any osrsThemeProtocol)? = nil) {
+        lastCommittedArticleHTML = html
+        lastAppliedArticleTheme = theme ?? osrsAppRoot.themeManager.currentTheme
+    }
+#endif
+
     /// Refresh page with Android-parity behavior: show progress bar over blank page
     /// Uses SwiftUI view state management with WebView overlay approach
     func refreshPage(theme: (any osrsThemeProtocol)? = nil) {
@@ -3693,7 +3705,11 @@ class ArticleViewModel: NSObject, ObservableObject {
                     self.loadingProgress = 1.0
                     self.loadingProgressText = "Complete!"
                     self.isLoading = false
+                    let wasRefreshing = self.isRefreshing
                     self.isRefreshing = false
+                    if wasRefreshing {
+                        self.settleArticleScrollAfterRefresh()
+                    }
                     print("✅ ArticleViewModel: Loading completed for generation \(generation)!")
                     self.addToHistory(generation: generation)
                     self.startRenderedArticleIdentityProbe(for: generation)

@@ -54,12 +54,38 @@
     return series;
   }
 
+  function withTimeout(promise, ms) {
+    let timer = null;
+    return Promise.race([
+      Promise.resolve(promise),
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error('timeout')), ms);
+      })
+    ]).finally(() => {
+      if (timer) clearTimeout(timer);
+    });
+  }
+
+  async function readBridgeText(url) {
+    const bridge = window.OsrsWikiBridge;
+    if (!bridge || typeof bridge.fetchText !== 'function') return '';
+    try {
+      const raw = bridge.fetchText(url);
+      if (raw && typeof raw.then === 'function') {
+        const text = await withTimeout(raw, 4000);
+        return text ? String(text) : '';
+      }
+      return raw ? String(raw) : '';
+    } catch (e) {
+      log('w', 'fetchText failed', e);
+      return '';
+    }
+  }
+
   async function fetchSeries(itemId) {
     const url = `https://prices.runescape.wiki/api/v1/osrs/timeseries?timestep=24h&id=${encodeURIComponent(itemId)}`;
-    if (window.OsrsWikiBridge && typeof window.OsrsWikiBridge.fetchText === 'function') {
-      const raw = window.OsrsWikiBridge.fetchText(url);
-      if (raw) return seriesFromPayload(JSON.parse(raw));
-    }
+    const bridged = await readBridgeText(url);
+    if (bridged) return seriesFromPayload(JSON.parse(bridged));
     const controller = typeof AbortController === 'function' ? new AbortController() : null;
     const timer = controller ? setTimeout(() => controller.abort(), 4000) : null;
     try {
@@ -112,7 +138,7 @@
     const ChartCtor = resolveChart();
     if (!ChartCtor) {
       log('e', 'Chart.js not available');
-      return;
+      return false;
     }
     ensureStylesInjected();
 
@@ -225,8 +251,10 @@
         container.__osrsChartResizeObserver = observer;
       }
       container.__osrsChart = chart;
+      return true;
     } catch (e) {
       log('e', 'Failed to render chart', e);
+      return false;
     }
   }
 
@@ -241,27 +269,55 @@
       // fetch must remain retryable — marking rendered first left the
       // wiki "Loading" placeholder stuck forever.
       if (chartEl.dataset.rendered === '1' && chartEl.__osrsChart) return;
-      if (chartEl.dataset.osrsChartPending === '1') return;
+      const pendingAt = Number(chartEl.dataset.osrsChartPendingAt || '0');
+      if (chartEl.dataset.osrsChartPending === '1' && pendingAt && (Date.now() - pendingAt) < 5000) return;
       chartEl.dataset.osrsChartPending = '1';
+      chartEl.dataset.osrsChartPendingAt = String(Date.now());
       // Install swipe-back guard so horizontal drags inside the chart
       // don't trigger the app's back gesture.
       installSwipeBackGuard(chartEl);
+
+      const clearPending = () => {
+        delete chartEl.dataset.osrsChartPending;
+        delete chartEl.dataset.osrsChartPendingAt;
+      };
+      const markUnavailable = () => {
+        clearPending();
+        if (!chartEl.__osrsChart) {
+          chartEl.textContent = 'Price history unavailable';
+          chartEl.dataset.rendered = '0';
+        }
+      };
+      if (!chartEl.__osrsChartWatchdog) {
+        chartEl.__osrsChartWatchdog = setTimeout(() => {
+          chartEl.__osrsChartWatchdog = null;
+          if (chartEl.__osrsChart || chartEl.querySelector('canvas')) return;
+          log('e', 'GE chart watchdog expired still showing placeholder', itemId);
+          markUnavailable();
+        }, 7000);
+      }
 
       const attempt = (remaining) => {
         fetchSeries(itemId)
           .then(series => {
             if (series.length) {
-              renderChart(chartEl, series);
-              chartEl.dataset.rendered = '1';
-              delete chartEl.dataset.osrsChartPending;
-              return;
+              if (renderChart(chartEl, series)) {
+                chartEl.dataset.rendered = '1';
+                clearPending();
+                if (chartEl.__osrsChartWatchdog) {
+                  clearTimeout(chartEl.__osrsChartWatchdog);
+                  chartEl.__osrsChartWatchdog = null;
+                }
+                return;
+              }
+              log('w', 'renderChart did not produce a canvas', itemId);
+            } else {
+              log('w', 'No series data for item', itemId);
             }
-            log('w', 'No series data for item', itemId);
             if (remaining > 0) {
               setTimeout(() => attempt(remaining - 1), 400);
             } else {
-              delete chartEl.dataset.osrsChartPending;
-              chartEl.textContent = 'Price history unavailable';
+              markUnavailable();
             }
           })
           .catch(err => {
@@ -269,10 +325,7 @@
             if (remaining > 0) {
               setTimeout(() => attempt(remaining - 1), 400);
             } else {
-              delete chartEl.dataset.osrsChartPending;
-              if (!chartEl.__osrsChart) {
-                chartEl.textContent = 'Price history unavailable';
-              }
+              markUnavailable();
             }
           });
       };
@@ -335,11 +388,26 @@
     }
   }
 
-  // Kickoff
+  function kick(resetBudget) {
+    if (resetBudget) {
+      initStartedAt = 0;
+      chartjsDeadline = 0;
+    }
+    initAll();
+  }
+
+  // Kickoff. First-open of an adopted/pre-rendered WKWebView can miss
+  // DOMContentLoaded and leave fetch pending; pageshow/visibility retry.
   ready(initAll);
+  window.addEventListener('pageshow', () => kick(true));
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') kick(true);
+  });
   // Also observe late-added content
   const mo = new MutationObserver(() => initAll());
-  ready(() => mo.observe(document.body, { childList: true, subtree: true }));
+  ready(() => {
+    if (document.body) mo.observe(document.body, { childList: true, subtree: true });
+  });
 
   // --- Swipe-back guard helpers ---
   function installSwipeBackGuard(el) {

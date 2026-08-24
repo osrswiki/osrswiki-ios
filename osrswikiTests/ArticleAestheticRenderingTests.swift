@@ -1961,14 +1961,18 @@ final class ArticleAestheticRenderingTests: XCTestCase {
         let htmlBuilder = try readSource("Services/osrsPageHtmlBuilder.swift")
 
         XCTAssertTrue(chart.contains("overflow:hidden !important"))
-        XCTAssertTrue(chart.contains("zoomType: 'x'"))
-        XCTAssertTrue(chart.contains("pinchType: 'x'"))
-        XCTAssertTrue(chart.contains("panning: { enabled: true, type: 'x' }"))
-        XCTAssertTrue(chart.contains("followTouchMove: true"))
+        XCTAssertTrue(chart.contains("type: 'line'"))
+        XCTAssertTrue(chart.contains("type: 'linear'"))
+        XCTAssertTrue(chart.contains("role', 'application'"))
         XCTAssertTrue(chart.contains("ResizeObserver"))
-        XCTAssertTrue(chart.contains("resolveHighcharts"))
+        XCTAssertTrue(chart.contains("resolveChart"))
         XCTAssertTrue(chart.contains("AbortController"))
-        XCTAssertTrue(chart.contains("Highcharts never became available"))
+        XCTAssertTrue(chart.contains("Chart.js never became available"))
+        XCTAssertTrue(chart.contains("Price history unavailable"))
+        XCTAssertTrue(chart.contains("osrsChartPendingAt"))
+        XCTAssertTrue(chart.contains("pageshow"))
+        XCTAssertFalse(chart.contains("resolveHighcharts"))
+        XCTAssertFalse(chart.contains("Highcharts.stockChart"))
         XCTAssertTrue(switcher.contains("data-default-version"))
         XCTAssertTrue(switcher.contains("preloader.decode()"))
         XCTAssertTrue(switcher.contains("updateExistingImage"))
@@ -1999,6 +2003,124 @@ final class ArticleAestheticRenderingTests: XCTestCase {
         let iosAesthetics = try readAsset("Assets/styles/ios-article-aesthetics.css")
         XCTAssertTrue(iosAesthetics.contains("var(--osrs-article-safe-area-top, 0px)"))
         XCTAssertFalse(iosAesthetics.contains("env(safe-area-inset-top"))
+    }
+
+    func testGEChartScriptsLoadBeforeMediaWikiStartup() throws {
+        let html = osrsPageHtmlBuilder().buildFullHtmlDocument(
+            title: "Abyssal whip",
+            bodyContent: """
+            <div class="GEChartBox">
+              <div class="GEdataprices" data-itemid="4151"></div>
+              <div class="GEdatachart smallChart">Loading...</div>
+            </div>
+            """,
+            theme: osrsLightTheme(),
+            includeAssetLinks: true
+        )
+        let chartRange = try XCTUnwrap(html.range(of: "web/chart.umd.min.js"))
+        let initRange = try XCTUnwrap(html.range(of: "web/ge_charts_init.js"))
+        let startupRange = try XCTUnwrap(html.range(of: "startup.js"))
+        XCTAssertLessThan(chartRange.lowerBound, startupRange.lowerBound)
+        XCTAssertLessThan(initRange.lowerBound, startupRange.lowerBound)
+        XCTAssertTrue(html.contains("osrsInstallFetchText"))
+        XCTAssertTrue(html.contains("fetchText"))
+    }
+
+    func testGEChartFirstOpenReplacesLoadingPlaceholder() async throws {
+        attachWebViewToWindow()
+        let shippedChart = iosRoot.appendingPathComponent("osrswiki/Assets/web/chart.umd.min.js")
+        let shippedInit = iosRoot.appendingPathComponent("osrswiki/Assets/web/ge_charts_init.js")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: shippedChart.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: shippedInit.path))
+
+        let tmp = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ge-chart-first-open-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tmp) }
+        try FileManager.default.copyItem(at: shippedChart, to: tmp.appendingPathComponent("chart.umd.min.js"))
+        try FileManager.default.copyItem(at: shippedInit, to: tmp.appendingPathComponent("ge_charts_init.js"))
+
+        let html = """
+        <!DOCTYPE html>
+        <html>
+        <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head>
+        <body>
+          <div class="GEChartBox">
+            <div class="GEdataprices" data-itemid="4151"></div>
+            <div class="GEdatachart smallChart">Loading...</div>
+          </div>
+          <script>
+            window.OsrsWikiBridge = {
+              fetchText: function(url) {
+                return JSON.stringify({
+                  data: [
+                    { timestamp: 1700000000, avgHighPrice: 100000, avgLowPrice: 90000 },
+                    { timestamp: 1700086400, avgHighPrice: 120000, avgLowPrice: 110000 },
+                    { timestamp: 1700172800, avgHighPrice: 115000, avgLowPrice: 105000 }
+                  ]
+                });
+              }
+            };
+          </script>
+          <script src="chart.umd.min.js"></script>
+          <script src="ge_charts_init.js"></script>
+        </body>
+        </html>
+        """
+        let index = tmp.appendingPathComponent("index.html")
+        try html.write(to: index, atomically: true, encoding: .utf8)
+
+        func probe() async throws -> [String: Any] {
+            try await evaluate("""
+            (() => {
+                const el = document.querySelector('.GEdatachart');
+                if (!el) return { text: '', canvas: false, role: '', chart: false };
+                const text = String(el.innerText || el.textContent || '').replace(/\\s+/g, ' ').trim();
+                return {
+                    text: text.slice(0, 80),
+                    canvas: !!el.querySelector('canvas'),
+                    role: el.getAttribute('role') || '',
+                    chart: !!(el.__osrsChart),
+                    typeofChart: typeof window.Chart
+                };
+            })()
+            """)
+        }
+
+        func waitSettled() async throws -> [String: Any] {
+            var last: [String: Any] = [:]
+            for _ in 0..<50 {
+                last = try await probe()
+                let canvas = boolValue(last["canvas"])
+                let text = last["text"] as? String ?? ""
+                if canvas || text.localizedCaseInsensitiveContains("unavailable") {
+                    return last
+                }
+                try await Task.sleep(nanoseconds: 100_000_000)
+            }
+            return last
+        }
+
+        func assertNotStuck(_ state: [String: Any], label: String) {
+            let text = state["text"] as? String ?? ""
+            let canvas = boolValue(state["canvas"])
+            XCTAssertFalse(
+                text.localizedCaseInsensitiveContains("Loading"),
+                "\(label) still shows Loading...: \(state)"
+            )
+            XCTAssertTrue(
+                canvas || text.localizedCaseInsensitiveContains("unavailable"),
+                "\(label) expected canvas or empty/error, got \(state)"
+            )
+        }
+
+        try await loadFile(index, allowingReadAccessTo: tmp)
+        let firstOpen = try await waitSettled()
+        assertNotStuck(firstOpen, label: "first open")
+
+        try await loadFile(index, allowingReadAccessTo: tmp)
+        let refresh = try await waitSettled()
+        assertNotStuck(refresh, label: "refresh analogue")
     }
 
     func testFirstPaintReservesPageTitleAndChromeClearance() async throws {
@@ -2984,6 +3106,21 @@ final class ArticleAestheticRenderingTests: XCTestCase {
         webView.navigationDelegate = delegate
         webView.loadHTMLString(html, baseURL: URL(string: "https://oldschool.runescape.wiki/"))
         await fulfillment(of: [didFinish], timeout: 10.0)
+    }
+
+    private func loadFile(_ url: URL, allowingReadAccessTo readAccessURL: URL) async throws {
+        let didFinish = expectation(description: "WebView file loaded")
+        let delegate = ArticleAestheticNavigationDelegate(didFinish: didFinish)
+        navigationDelegate = delegate
+        webView.navigationDelegate = delegate
+        webView.loadFileURL(url, allowingReadAccessTo: readAccessURL)
+        await fulfillment(of: [didFinish], timeout: 10.0)
+    }
+
+    private func boolValue(_ value: Any?) -> Bool {
+        if let flag = value as? Bool { return flag }
+        if let number = value as? NSNumber { return number.boolValue }
+        return false
     }
 
     private func number(_ state: [String: Any], _ key: String) -> Double {

@@ -214,6 +214,20 @@ class osrsWebViewBridge: NSObject, WKScriptMessageHandler {
                         console.warn('Failed to open YouTube video:', e);
                     }
                 }
+            },
+
+            // Synchronous XHR so GE chart init can replace "Loading..." on first
+            // paint without waiting for a CORS fetch from the custom-scheme origin.
+            fetchText: function(url) {
+                try {
+                    var xhr = new XMLHttpRequest();
+                    xhr.open('GET', url, false);
+                    xhr.setRequestHeader('Accept', 'application/json');
+                    xhr.send(null);
+                    return (xhr.status >= 200 && xhr.status < 300) ? (xhr.responseText || '') : '';
+                } catch (e) {
+                    return '';
+                }
             }
         };
         

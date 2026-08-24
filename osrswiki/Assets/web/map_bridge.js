@@ -9,7 +9,11 @@
     console.log('🟢 [MAP_BRIDGE] Document ready state:', document.readyState);
     console.log('🟢 [MAP_BRIDGE] Window object:', typeof window);
     
-    // Create OsrsWikiBridge equivalent for iOS MapLibre integration
+    var existingBridge = window.OsrsWikiBridge || {};
+
+    // Create OsrsWikiBridge equivalent for iOS MapLibre integration.
+    // Preserve fetchText from the documentStart / inline bridge — replacing
+    // the whole object used to drop it and leave GE charts on CORS fetch().
     window.OsrsWikiBridge = {
         onMapPlaceholderMeasured: function(id, rectJson, mapDataJson) {
             console.log('🟢 [MAP_BRIDGE] onMapPlaceholderMeasured called with id:', id);
@@ -80,6 +84,18 @@
                 window.webkit.messageHandlers.mapBridge.postMessage({
                     action: 'openFloorNumberingSettings'
                 });
+            }
+        },
+
+        fetchText: (typeof existingBridge.fetchText === 'function') ? existingBridge.fetchText : function(url) {
+            try {
+                var xhr = new XMLHttpRequest();
+                xhr.open('GET', url, false);
+                xhr.setRequestHeader('Accept', 'application/json');
+                xhr.send(null);
+                return (xhr.status >= 200 && xhr.status < 300) ? (xhr.responseText || '') : '';
+            } catch (e) {
+                return '';
             }
         }
     };

@@ -215,6 +215,7 @@ private struct ArticleViewContent: View {
             }
             .onChange(of: viewModel.isRefreshing) { _, isRefreshing in
                 if !isRefreshing {
+                    viewModel.settleArticleScrollAfterRefresh()
                     restoreCapturedArticleScrollIfNeeded()
                 }
             }
