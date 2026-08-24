@@ -194,6 +194,7 @@ final class osrsLiveArticleAssetQueueTests: XCTestCase {
         XCTAssertTrue(shared.contains("domImageAlreadyDecoded"))
         XCTAssertTrue(shared.contains("naturalWidth"))
         XCTAssertTrue(shared.contains("new Image()"))
+        XCTAssertTrue(shared.contains("notify(unique(slotUrls().concat(collectIntersecting())))"))
         XCTAssertFalse(shared.contains("el.src ="))
         XCTAssertFalse(shared.contains("setAttribute('src'"))
     }

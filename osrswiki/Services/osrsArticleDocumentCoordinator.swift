@@ -848,6 +848,13 @@ actor osrsArticleDocumentCoordinator {
             guard let self else { throw CancellationError() }
             let payload = try await self.preparedPayload(for: request, purpose: purpose)
             try Task.checkCancellation()
+            if osrsLoadPerformancePrefs.warmFirstViewportImagesEarly {
+                osrsFirstViewPrewarmStore.shared.start(
+                    identity: request.identity.value,
+                    pageURL: request.pageURL,
+                    html: payload.normalizedHTML
+                )
+            }
             let buildStart = clock()
             let html = try await builder(payload, renderOptions)
             eventSink(Self.event(.build, request.identity, since: buildStart, clock: clock, detail: "characters=\(html.count)"))

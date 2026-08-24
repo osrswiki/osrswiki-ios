@@ -302,6 +302,41 @@ final class osrsArticleLoadRegressionContractTests: XCTestCase {
         XCTAssertTrue(htmlBuilder.contains("data-osrs-inline-css"))
     }
 
+    func testTask10EarlyFirstViewSlotWarmWiredBeforeDocumentCommit() throws {
+        let root = try repositoryRoot()
+        let prefs = try source(root, "platforms/ios/osrswiki/Services/osrsLoadPerformancePrefs.swift")
+        XCTAssertTrue(prefs.contains("static var warmFirstViewportImagesEarly: Bool = true"))
+        let viewModel = try source(root, "platforms/ios/osrswiki/ViewModels/ArticleViewModel.swift")
+        XCTAssertTrue(viewModel.contains("startFirstViewSlotWarmEarly"))
+        XCTAssertTrue(viewModel.contains("osrsLoadPerformancePrefs.warmFirstViewportImagesEarly"))
+        XCTAssertTrue(viewModel.contains("LOAD-MINMAX first_view_slot_warm_start"))
+        let successBranch = viewModel
+            .components(separatedBy: "case .success(let pageContent):")
+            .dropFirst()
+            .first?
+            .components(separatedBy: "case .failure(let error):")
+            .first ?? ""
+        XCTAssertTrue(successBranch.contains("startFirstViewSlotWarmEarly(html: pageContent.processedHtml)"))
+        let loadCustom = viewModel
+            .components(separatedBy: "private func loadCustomHtml(")
+            .dropFirst()
+            .first?
+            .components(separatedBy: "private func startDeferredMapPreloadAfterWebKitReady(")
+            .first ?? ""
+        XCTAssertTrue(loadCustom.contains("startFirstViewSlotWarmEarly(html: html)"))
+        XCTAssertTrue(
+            (loadCustom.range(of: "startFirstViewSlotWarmEarly(html: html)")?.lowerBound ?? loadCustom.endIndex) <
+                (loadCustom.range(of: "webView.loadHTMLString")?.lowerBound ?? loadCustom.startIndex)
+        )
+        let coordinator = try source(root, "platforms/ios/osrswiki/Services/osrsArticleDocumentCoordinator.swift")
+        XCTAssertTrue(coordinator.contains("osrsLoadPerformancePrefs.warmFirstViewportImagesEarly"))
+        XCTAssertTrue(coordinator.contains("html: payload.normalizedHTML"))
+        let firstViewport = try source(root, "platforms/ios/osrswiki/Assets/web/first_viewport_assets.js")
+        XCTAssertTrue(firstViewport.contains("notify(unique(slotUrls().concat(collectIntersecting())))"))
+        XCTAssertTrue(viewModel.contains("startLiveArticleAssetWarmIfNeeded"))
+        XCTAssertTrue(viewModel.contains("articleRevealedForWarm"))
+    }
+
     func testCriticalArticleBundleFlagDefaultsOnAndWired() throws {
         let root = try repositoryRoot()
         let prefs = try source(root, "platforms/ios/osrswiki/Services/osrsLoadPerformancePrefs.swift")

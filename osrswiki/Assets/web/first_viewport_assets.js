@@ -421,7 +421,7 @@
     }
 
     function start() {
-        notify(unique(collectIntersecting()));
+        notify(unique(slotUrls().concat(collectIntersecting())));
         watchComplete();
         sampleLayoutStability();
     }

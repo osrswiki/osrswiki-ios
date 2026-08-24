@@ -1439,6 +1439,25 @@ class ArticleViewModel: NSObject, ObservableObject {
         let urls = rawValues.compactMap(osrsOfflineArticleResourceSettlement.networkURL(from:))
         guard !urls.isEmpty else { return }
         liveAssetWarmer?.promote(urls)
+        osrsFirstViewPrewarmStore.shared.promote(
+            identity: osrsArticleDocumentIdentity(pageURL: pageUrl, pageTitle: pageTitle).value,
+            urls: urls
+        )
+    }
+
+    private func startFirstViewSlotWarmEarly(html: String) {
+        guard osrsLoadPerformancePrefs.warmFirstViewportImagesEarly, !html.isEmpty else { return }
+        if let started = articleOpenAt {
+            let elapsedMs = Int((CFAbsoluteTimeGetCurrent() - started) * 1000)
+            NSLog("LOAD-MINMAX first_view_slot_warm_start elapsedMs=%d htmlChars=%d", elapsedMs, html.count)
+        } else {
+            NSLog("LOAD-MINMAX first_view_slot_warm_start htmlChars=%d", html.count)
+        }
+        osrsFirstViewPrewarmStore.shared.start(
+            identity: osrsArticleDocumentIdentity(pageURL: pageUrl, pageTitle: pageTitle).value,
+            pageURL: pageUrl,
+            html: html
+        )
     }
 
     func noteBackgroundWorkUserInteraction() {
@@ -2138,6 +2157,8 @@ class ArticleViewModel: NSObject, ObservableObject {
             print("✅ ArticleViewModel: Successfully loaded page content")
             // Progress updated automatically by WebKit observer
 
+            startFirstViewSlotWarmEarly(html: pageContent.processedHtml)
+
             // FREEZE FIX: Get content loader async - defer heavy initialization until needed
             let loader = await getContentLoader()
 
@@ -2184,6 +2205,7 @@ class ArticleViewModel: NSObject, ObservableObject {
 
         print("🌐 ArticleViewModel: Loading custom HTML in WebView")
         print("🌐 ArticleViewModel: HTML content length: \(html.count) characters")
+        startFirstViewSlotWarmEarly(html: html)
         lastCommittedArticleHTML = html
         lastAppliedArticleTheme = theme
         if forceDocumentReload {
