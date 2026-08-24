@@ -505,13 +505,24 @@ final class osrsWebKitBridgeHardeningTests: XCTestCase {
         }
     }
 
-    func testProductionBridgePolicyLimitsHandlersAndDebugSurfaces() {
+    func testProductionBridgePolicyLimitsHandlersAndDebugSurfaces() throws {
         XCTAssertTrue(osrsWebKitSecurityPolicy.productionHandlerNames.contains("clipboardBridge"))
         XCTAssertTrue(osrsWebKitSecurityPolicy.productionHandlerNames.contains("mapBridge"))
         XCTAssertTrue(osrsWebKitSecurityPolicy.productionHandlerNames.contains("linkHandler"))
         XCTAssertTrue(osrsWebKitSecurityPolicy.productionHandlerNames.contains("renderTimeline"))
         XCTAssertTrue(osrsWebKitSecurityPolicy.productionHandlerNames.contains("osrsYouTube"))
         XCTAssertTrue(osrsWebKitSecurityPolicy.productionHandlerNames.contains("osrsCalculatorApi"))
+        let articleWebView = try String(
+            contentsOf: repositoryRoot().appendingPathComponent("platforms/ios/osrswiki/Views/ArticleWebView.swift"),
+            encoding: .utf8
+        )
+        XCTAssertTrue(articleWebView.contains("osrsCalculatorPickerOptions"))
+        XCTAssertTrue(articleWebView.contains("osrsCalculatorChoicePickerController"))
+        XCTAssertTrue(articleWebView.contains("osrsPresentingViewController"))
+        XCTAssertTrue(articleWebView.contains("restoreWebViewAfterCalculatorKeyboard"))
+        XCTAssertTrue(articleWebView.contains("wakeLiveArticleWebView"))
+        XCTAssertTrue(articleWebView.contains("osrsEnsureCalculatorPageVisible"))
+        XCTAssertFalse(articleWebView.contains("as? [[String: String]]"))
         XCTAssertTrue(osrsWebKitSecurityPolicy.productionHandlerNames.contains("osrsLiveAssetWarm"))
         XCTAssertTrue(osrsWebKitSecurityPolicy.productionHandlerNames.contains("osrsFirstViewComplete"))
         XCTAssertTrue(osrsWebKitSecurityPolicy.productionHandlerNames.contains("osrsFirstViewportSettled"))

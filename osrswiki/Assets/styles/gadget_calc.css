@@ -300,7 +300,9 @@ div.templatesUsed {
 
 /* Hide duplicate option label text that OOUI sometimes leaves visible under dropdowns. */
 .osrs-calculator-layout .oo-ui-dropdownWidget + .oo-ui-labelElement-label,
-.osrs-calculator-layout .oo-ui-dropdownInputWidget + label {
+.osrs-calculator-layout .oo-ui-dropdownInputWidget + label,
+.osrs-calculator-layout .oo-ui-dropdownInputWidget > .oo-ui-labelElement-label,
+.osrs-calculator-layout .jsCalc-field-select .oo-ui-fieldLayout-field > .oo-ui-labelElement-label {
     position: absolute !important;
     width: 1px !important;
     height: 1px !important;
@@ -551,4 +553,126 @@ table.osrs-calculator-templates,
     max-width: 100% !important;
     display: inline !important;
     white-space: normal !important;
+}
+
+/* Device-retest: deterministic mobile calc chrome (must win over late OOUI/load.php). */
+html body .osrs-calculator-layout,
+html body .osrs-calculator-panel {
+    max-width: 100% !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+}
+
+html body .osrs-calculator-layout .oo-ui-fieldsetLayout,
+html body .osrs-calculator-panel.oo-ui-panelLayout-framed,
+html body .osrs-calculator-layout .oo-ui-panelLayout-framed {
+    overflow: visible !important;
+}
+
+html body .osrs-calculator-layout .oo-ui-fieldsetLayout-header,
+html body .osrs-calculator-layout .oo-ui-fieldsetLayout-header > .oo-ui-labelElement-label {
+    display: flex !important;
+    align-items: center !important;
+    overflow: visible !important;
+    height: auto !important;
+    max-height: none !important;
+    min-height: 2.85rem !important;
+    line-height: 1.45 !important;
+    padding: 0.55em 0.35em 0.4em !important;
+    clip: auto !important;
+    clip-path: none !important;
+}
+
+html body .osrs-calculator-panel .oo-ui-fieldLayout.oo-ui-labelElement {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 0.2em 0 !important;
+}
+
+html body .osrs-calculator-panel .oo-ui-fieldLayout.oo-ui-labelElement > .oo-ui-fieldLayout-body > .oo-ui-fieldLayout-header,
+html body .osrs-calculator-panel .oo-ui-fieldLayout.oo-ui-labelElement > .oo-ui-fieldLayout-body > .oo-ui-fieldLayout-field {
+    grid-column: 1 !important;
+    max-width: 100% !important;
+}
+
+html body .osrs-calculator-panel .oo-ui-fieldLayout.oo-ui-labelElement > .oo-ui-fieldLayout-body > .oo-ui-fieldLayout-header {
+    grid-row: 1 !important;
+}
+
+html body .osrs-calculator-panel .oo-ui-fieldLayout.oo-ui-labelElement > .oo-ui-fieldLayout-body > .oo-ui-fieldLayout-field {
+    grid-row: 2 !important;
+}
+
+html body .osrs-calculator-layout .oo-ui-buttonElement-button,
+html body .osrs-calculator-layout .oo-ui-buttonElement-button .oo-ui-labelElement-label {
+    color: var(--ooui-text, var(--text-color)) !important;
+    -webkit-text-fill-color: var(--ooui-text, var(--text-color)) !important;
+}
+
+html body .osrs-calculator-layout .jcSubmit.oo-ui-buttonElement > .oo-ui-buttonElement-button,
+html body .osrs-calculator-layout .oo-ui-flaggedElement-primary.oo-ui-flaggedElement-progressive > .oo-ui-buttonElement-button {
+    background-color: var(--ooui-progressive) !important;
+    border-color: var(--ooui-progressive) !important;
+    color: var(--ooui-on-progressive, #fff) !important;
+    -webkit-text-fill-color: var(--ooui-on-progressive, #fff) !important;
+}
+
+html.theme-osrs-dark .osrs-calculator-layout .jcSubmit .oo-ui-buttonElement-button,
+html body.theme-osrs-dark .osrs-calculator-layout .jcSubmit .oo-ui-buttonElement-button,
+html body.wgl-theme-dark .osrs-calculator-layout .jcSubmit .oo-ui-buttonElement-button,
+html.theme-osrs-dark .osrs-calculator-layout .oo-ui-flaggedElement-primary.oo-ui-flaggedElement-progressive > .oo-ui-buttonElement-button,
+html.theme-osrs-dark .osrs-calculator-layout .jcSubmit .oo-ui-buttonElement-button .oo-ui-labelElement-label,
+html body.wgl-theme-dark .osrs-calculator-layout .jcSubmit .oo-ui-buttonElement-button .oo-ui-labelElement-label {
+    color: #f4efe6 !important;
+    -webkit-text-fill-color: #f4efe6 !important;
+}
+
+html.theme-osrs-dark .osrs-calculator-layout .oo-ui-buttonElement-button,
+html body.theme-osrs-dark .osrs-calculator-layout .oo-ui-buttonElement-button,
+html body.wgl-theme-dark .osrs-calculator-layout .oo-ui-buttonElement-button,
+html.theme-osrs-dark .osrs-calculator-layout .oo-ui-numberInputWidget-button {
+    color: var(--ooui-text, #f2e6d5) !important;
+    -webkit-text-fill-color: var(--ooui-text, #f2e6d5) !important;
+}
+
+html.theme-osrs-dark .osrs-calculator-layout .oo-ui-iconElement-icon,
+html body.theme-osrs-dark .osrs-calculator-layout .oo-ui-iconElement-icon,
+html body.wgl-theme-dark .osrs-calculator-layout .oo-ui-iconElement-icon,
+html.theme-osrs-dark .osrs-calculator-layout .oo-ui-indicatorElement-indicator,
+html body.theme-osrs-dark .osrs-calculator-layout .oo-ui-indicatorElement-indicator,
+html body.wgl-theme-dark .osrs-calculator-layout .oo-ui-indicatorElement-indicator {
+    filter: invert(1) brightness(1.15) !important;
+    opacity: 1 !important;
+}
+
+html body .osrs-calculator-layout .oo-ui-numberInputWidget-field {
+    display: flex !important;
+    flex-direction: row !important;
+    max-width: 100% !important;
+    width: 100% !important;
+}
+
+html body .osrs-calculator-layout .oo-ui-numberInputWidget-minusButton,
+html body .osrs-calculator-layout .oo-ui-numberInputWidget-plusButton {
+    flex: 0 0 2.25rem !important;
+    min-width: 2.25rem !important;
+    max-width: 2.25rem !important;
+}
+
+html body .osrs-calculator-layout .oo-ui-numberInputWidget .oo-ui-inputWidget-input {
+    flex: 1 1 0 !important;
+    min-width: 0 !important;
+}
+
+html body .osrs-calculator-layout .jsCalc-field-fixed > .oo-ui-fieldLayout-body > .oo-ui-fieldLayout-field > .oo-ui-labelElement-label:empty,
+html body .osrs-calculator-layout .osrs-calculator-result:empty,
+html body .osrs-calculator-layout [id$="Result"]:empty,
+html body #osrs-calculator-status:empty {
+    display: none !important;
+    background: none !important;
+    border: 0 !important;
+    min-height: 0 !important;
+    height: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
 }

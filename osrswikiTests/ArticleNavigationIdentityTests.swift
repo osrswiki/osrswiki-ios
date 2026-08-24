@@ -580,6 +580,30 @@ final class ArticleNavigationIdentityTests: XCTestCase {
     }
 
     @MainActor
+    func testWebViewArticleNavigationDoesNotPromoteWikiHostOrUnderscoreAliases() throws {
+        let pageURL = try XCTUnwrap(URL(string: "https://oldschool.runescape.wiki/w/Calculator:Agility/Agility_arena_tickets"))
+        let assetAlias = try XCTUnwrap(URL(string: "app-assets://localhost/w/Calculator:Agility/Agility arena tickets"))
+        let spaceAlias = try XCTUnwrap(URL(string: "https://oldschool.runescape.wiki/w/Calculator:Agility/Agility arena tickets"))
+
+        XCTAssertFalse(
+            ArticleViewModel.osrsShouldPromoteWebViewArticleNavigation(
+                candidateURL: assetAlias,
+                pageURL: pageURL
+            )
+        )
+        XCTAssertFalse(
+            ArticleViewModel.osrsShouldPromoteWebViewArticleNavigation(
+                candidateURL: spaceAlias,
+                pageURL: pageURL
+            )
+        )
+        XCTAssertEqual(
+            ArticleViewModel.osrsArticleHistoryIdentity(for: pageURL),
+            ArticleViewModel.osrsArticleHistoryIdentity(for: assetAlias)
+        )
+    }
+
+    @MainActor
     func testContentsScrollScriptKeepsSelectedHeadingBelowNativeChrome() {
         let script = ArticleViewModel.osrsScrollToSectionScript(for: "Other_Fixes_&_What's_Next")
 

@@ -1851,8 +1851,57 @@ struct ArticleWebView: UIViewRepresentable {
         
         func setupMapHandler(webView: WKWebView) {
             self.webView = webView
+            webView.scrollView.contentInsetAdjustmentBehavior = .always
             mapHandler = osrsNativeMapHandler(webView: webView)
+            installCalculatorKeyboardRecovery(on: webView)
             print("✅ iOS ArticleWebView: Map handler initialized")
+        }
+
+        private var keyboardObservers: [NSObjectProtocol] = []
+
+        func installCalculatorKeyboardRecovery(on webView: WKWebView) {
+            removeCalculatorKeyboardObservers()
+            let center = NotificationCenter.default
+            let restore: (Notification) -> Void = { [weak self] _ in
+                self?.restoreWebViewAfterCalculatorKeyboard()
+            }
+            keyboardObservers.append(center.addObserver(forName: UIResponder.keyboardWillShowNotification, object: nil, queue: .main) { [weak self] _ in
+                Task { @MainActor in
+                    self?.parent.viewModel.isArticleSoftwareKeyboardVisible = true
+                }
+            })
+            keyboardObservers.append(center.addObserver(forName: UIResponder.keyboardWillHideNotification, object: nil, queue: .main, using: restore))
+            keyboardObservers.append(center.addObserver(forName: UIResponder.keyboardDidHideNotification, object: nil, queue: .main) { [weak self] _ in
+                Task { @MainActor in
+                    self?.parent.viewModel.isArticleSoftwareKeyboardVisible = false
+                    self?.restoreWebViewAfterCalculatorKeyboard()
+                }
+            })
+        }
+
+        func restoreWebViewAfterCalculatorKeyboard() {
+            guard let webView else { return }
+            webView.isHidden = false
+            webView.alpha = 1
+            webView.scrollView.isHidden = false
+            webView.scrollView.alpha = 1
+            osrsSceneCompositor.wakeLiveArticleWebView(webView)
+            let scroll = webView.scrollView
+            let inset = scroll.adjustedContentInset
+            let maxY = max(0, scroll.contentSize.height - scroll.bounds.height + inset.bottom)
+            let minY = -inset.top
+            if scroll.contentOffset.y < minY - 1 || scroll.contentOffset.y > maxY + 1 {
+                let y = min(max(scroll.contentOffset.y, minY), maxY)
+                scroll.setContentOffset(CGPoint(x: 0, y: y), animated: false)
+            }
+            webView.evaluateJavaScript(
+                "window.osrsEnsureCalculatorPageVisible && window.osrsEnsureCalculatorPageVisible();"
+            )
+        }
+
+        func removeCalculatorKeyboardObservers() {
+            keyboardObservers.forEach { NotificationCenter.default.removeObserver($0) }
+            keyboardObservers.removeAll()
         }
 
         func installArticleNavigationGesture(on webView: WKWebView) {
@@ -2362,6 +2411,7 @@ struct ArticleWebView: UIViewRepresentable {
         
         func cleanup() {
             print("🧹 ArticleWebView.Coordinator: Starting cleanup")
+            removeCalculatorKeyboardObservers()
 
             osrsGestureState.shared.cancelArticleGesture(generation: articleGestureGeneration)
             articleGestureGeneration = nil
@@ -2477,30 +2527,20 @@ struct ArticleWebView: UIViewRepresentable {
         }
 
         private func handleCalculatorChoicePickerMessage(_ body: [String: Any]) {
-            guard let label = body["label"] as? String,
-                  let optionsArray = body["options"] as? [[String: String]],
-                  !optionsArray.isEmpty else {
-                NSLog("osrsCalcApi: Invalid choice picker request")
-                return
-            }
-            
-            let currentValue = body["currentValue"] as? String ?? ""
+            let rawLabel = (body["label"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            let label = rawLabel.isEmpty ? "Choose option" : rawLabel
             let callbackId = body["callbackId"] as? String ?? ""
-            
-            NSLog("osrsCalcApi: showChoicePicker label=%@ options=%d currentValue=%@", label, optionsArray.count, currentValue)
-            
-            // Extract option labels and values
-            let options = optionsArray.compactMap { dict -> (label: String, value: String)? in
-                guard let optLabel = dict["label"], let optValue = dict["value"] else { return nil }
-                return (optLabel, optValue)
-            }
-            
+            let currentValue = Self.osrsStringValue(body["currentValue"]) ?? ""
+            let options = Self.osrsCalculatorPickerOptions(from: body["options"])
+
             guard !options.isEmpty else {
+                NSLog("osrsCalcApi: Invalid choice picker request")
                 completeChoicePicker(callbackId: callbackId, selected: false, value: nil)
                 return
             }
-            
-            // Show native iOS picker on main thread
+
+            NSLog("osrsCalcApi: showChoicePicker label=%@ options=%d currentValue=%@", label, options.count, currentValue)
+
             DispatchQueue.main.async { [weak self] in
                 self?.showIOSChoicePicker(
                     label: label,
@@ -2511,53 +2551,68 @@ struct ArticleWebView: UIViewRepresentable {
             }
         }
 
+        static func osrsCalculatorPickerOptions(from raw: Any?) -> [(label: String, value: String)] {
+            guard let items = raw as? [Any] else { return [] }
+            return items.compactMap { item in
+                if let dict = item as? [String: Any] {
+                    let label = osrsStringValue(dict["label"]) ?? osrsStringValue(dict["value"])
+                    let value = osrsStringValue(dict["value"]) ?? label
+                    guard let label, let value, !label.isEmpty else { return nil }
+                    return (label, value)
+                }
+                if let dict = item as? [String: String] {
+                    let label = dict["label"] ?? dict["value"]
+                    let value = dict["value"] ?? label
+                    guard let label, let value, !label.isEmpty else { return nil }
+                    return (label, value)
+                }
+                if let label = osrsStringValue(item), !label.isEmpty {
+                    return (label, label)
+                }
+                return nil
+            }
+        }
+
+        static func osrsStringValue(_ raw: Any?) -> String? {
+            if let value = raw as? String { return value }
+            if let value = raw as? NSNumber { return value.stringValue }
+            if let value = raw as? NSString { return value as String }
+            return nil
+        }
+
         private func showIOSChoicePicker(label: String, options: [(label: String, value: String)], currentValue: String, callbackId: String) {
             guard let webView else {
                 completeChoicePicker(callbackId: callbackId, selected: false, value: nil)
                 return
             }
-            
-            // Find current selection index
-            var selectedIndex = options.firstIndex(where: { $0.value == currentValue || $0.label == currentValue }) ?? 0
-            
-            // Create action sheet with radio options
-            let alert = UIAlertController(title: label, message: nil, preferredStyle: .actionSheet)
-            
-            for (index, option) in options.enumerated() {
-                let action = UIAlertAction(
-                    title: option.label,
-                    style: .default
-                ) { [weak self] _ in
-                    self?.completeChoicePicker(callbackId: callbackId, selected: true, value: option.value)
-                }
-                
-                // Mark current selection (iOS doesn't have built-in radio buttons in action sheets,
-                // but we can add a checkmark)
-                if index == selectedIndex {
-                    action.setValue(true, forKey: "checked")
-                }
-                
-                alert.addAction(action)
+
+            let picker = osrsCalculatorChoicePickerController(
+                titleText: label,
+                options: options,
+                currentValue: currentValue
+            ) { [weak self] selected, value in
+                self?.completeChoicePicker(callbackId: callbackId, selected: selected, value: value)
             }
-            
-            // Add cancel button
-            alert.addAction(UIAlertAction(title: "Cancel", style: .cancel) { [weak self] _ in
-                self?.completeChoicePicker(callbackId: callbackId, selected: false, value: nil)
-            })
-            
-            // For iPad: set popover presentation controller
-            if let popover = alert.popoverPresentationController {
-                popover.sourceView = webView
-                popover.sourceRect = CGRect(x: webView.bounds.midX, y: webView.bounds.midY, width: 0, height: 0)
-                popover.permittedArrowDirections = []
+
+            let nav = UINavigationController(rootViewController: picker)
+            nav.modalPresentationStyle = .pageSheet
+            if let sheet = nav.sheetPresentationController {
+                sheet.detents = options.count > 8 ? [.medium(), .large()] : [.medium()]
+                sheet.prefersGrabberVisible = true
+                sheet.preferredCornerRadius = 16
             }
-            
-            // Present from the view controller that contains the webview
-            if let presentingVC = webView.findViewController() {
-                presentingVC.present(alert, animated: true, completion: nil)
-            } else {
+
+            guard let presentingVC = webView.osrsPresentingViewController() else {
                 NSLog("osrsCalcApi: Could not find view controller to present picker")
                 completeChoicePicker(callbackId: callbackId, selected: false, value: nil)
+                return
+            }
+            if presentingVC.presentedViewController != nil {
+                presentingVC.dismiss(animated: false) {
+                    presentingVC.present(nav, animated: true)
+                }
+            } else {
+                presentingVC.present(nav, animated: true)
             }
         }
 
@@ -2824,6 +2879,115 @@ struct ArticleWebView: UIViewRepresentable {
                 print("🔍 Safari Debugger: Unknown message type: \(type)")
             }
         }
+    }
+}
+
+private final class osrsCalculatorChoicePickerController: UITableViewController {
+    private let options: [(label: String, value: String)]
+    private let currentValue: String
+    private let onComplete: (Bool, String?) -> Void
+    private var didComplete = false
+
+    init(
+        titleText: String,
+        options: [(label: String, value: String)],
+        currentValue: String,
+        onComplete: @escaping (Bool, String?) -> Void
+    ) {
+        self.options = options
+        self.currentValue = currentValue
+        self.onComplete = onComplete
+        super.init(style: .insetGrouped)
+        title = titleText
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        nil
+    }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        tableView.register(UITableViewCell.self, forCellReuseIdentifier: "option")
+        navigationItem.leftBarButtonItem = UIBarButtonItem(
+            barButtonSystemItem: .cancel,
+            target: self,
+            action: #selector(cancelTapped)
+        )
+    }
+
+    override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
+        options.count
+    }
+
+    override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+        let cell = tableView.dequeueReusableCell(withIdentifier: "option", for: indexPath)
+        let option = options[indexPath.row]
+        var content = cell.defaultContentConfiguration()
+        content.text = option.label
+        cell.contentConfiguration = content
+        cell.accessoryType = (option.value == currentValue || option.label == currentValue) ? .checkmark : .none
+        return cell
+    }
+
+    override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+        tableView.deselectRow(at: indexPath, animated: true)
+        finish(selected: true, value: options[indexPath.row].value)
+    }
+
+    @objc private func cancelTapped() {
+        finish(selected: false, value: nil)
+    }
+
+    private func finish(selected: Bool, value: String?) {
+        guard !didComplete else { return }
+        didComplete = true
+        dismiss(animated: true) { [onComplete] in
+            onComplete(selected, value)
+        }
+    }
+}
+
+private extension UIView {
+    func osrsNearestViewController() -> UIViewController? {
+        var responder: UIResponder? = self
+        while let current = responder {
+            if let viewController = current as? UIViewController {
+                return viewController
+            }
+            responder = current.next
+        }
+        return window?.rootViewController
+    }
+
+    func osrsPresentingViewController() -> UIViewController? {
+        func topMost(from root: UIViewController?) -> UIViewController? {
+            var current = root
+            while let presented = current?.presentedViewController {
+                current = presented
+            }
+            if let nav = current as? UINavigationController {
+                return nav.visibleViewController ?? nav
+            }
+            if let tabs = current as? UITabBarController {
+                return topMost(from: tabs.selectedViewController) ?? tabs
+            }
+            return current
+        }
+
+        if let nearest = osrsNearestViewController(), nearest.view.window != nil {
+            return topMost(from: nearest) ?? nearest
+        }
+        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+        for scene in scenes {
+            let windows = scene.windows.filter { $0.isKeyWindow || $0.isHidden == false }
+            for window in windows {
+                if let top = topMost(from: window.rootViewController), top.view.window != nil {
+                    return top
+                }
+            }
+        }
+        return window?.rootViewController
     }
 }
 

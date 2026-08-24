@@ -347,6 +347,7 @@ private struct ArticleViewContent: View {
             }
             .onReceive(NotificationCenter.default.publisher(for: .osrsSceneCompositorLooksBlank)) { _ in
                 guard viewModel.hasCommittedArticleHTML else { return }
+                if viewModel.isArticleSoftwareKeyboardVisible { return }
                 // Prefer exact interactive wake over HTML rewrite. Full reload here
                 // intermittently left a chrome-less themed blank after resume.
                 print("⚠️ ArticleView: compositor-blank signal; waking existing WKWebView")

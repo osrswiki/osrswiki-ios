@@ -582,6 +582,7 @@ struct osrsDeferredMapPreloadState {
 @MainActor
 class ArticleViewModel: NSObject, ObservableObject {
     @Published var isLoading: Bool = false
+    var isArticleSoftwareKeyboardVisible = false
     @Published var pendingYouTubeEmbedURL: URL?
     @Published var needsContentProcessRecovery: Bool = false
     /// Incremented when the on-screen WKWebView must be rebuilt after a compositor-blank resume.
@@ -1162,7 +1163,7 @@ class ArticleViewModel: NSObject, ObservableObject {
         return currentIdentity != pageIdentity
     }
 
-    private static func osrsArticleHistoryIdentity(for url: URL) -> String? {
+    static func osrsArticleHistoryIdentity(for url: URL) -> String? {
         guard let articleURL = osrsArticleLinkRouter.appArticleURL(for: url),
               var components = URLComponents(url: articleURL, resolvingAgainstBaseURL: false) else {
             return nil
@@ -1170,12 +1171,19 @@ class ArticleViewModel: NSObject, ObservableObject {
 
         components.fragment = nil
 
-        let scheme = components.scheme?.lowercased() ?? ""
-        let host = components.host?.lowercased() ?? ""
-        let decodedPath = components.percentEncodedPath.removingPercentEncoding ?? components.path
-        let decodedQuery = components.percentEncodedQuery?.removingPercentEncoding ?? components.query ?? ""
-
-        return "\(scheme)://\(host)\(decodedPath)?\(decodedQuery)"
+        let decodedPath = (components.percentEncodedPath.removingPercentEncoding ?? components.path)
+            .replacingOccurrences(of: "_", with: " ")
+            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+            .lowercased()
+        let title: String
+        if let wikiIndex = decodedPath.range(of: "w/") {
+            title = String(decodedPath[wikiIndex.upperBound...])
+        } else if let wikiIndex = decodedPath.range(of: "wiki/") {
+            title = String(decodedPath[wikiIndex.upperBound...])
+        } else {
+            title = decodedPath
+        }
+        return title
     }
 
     nonisolated static func decodeParsePayload(_ data: Data, requestedTitle: String? = nil) throws -> osrsArticleParsePayload {

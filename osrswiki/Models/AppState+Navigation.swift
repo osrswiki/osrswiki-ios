@@ -152,7 +152,12 @@ extension AppState {
             }
         }
 
-        return existingDestination?.url != articleDestination.url
+        guard let existingDestination else { return true }
+        if existingDestination.url == articleDestination.url {
+            return false
+        }
+        return ArticleViewModel.osrsArticleHistoryIdentity(for: existingDestination.url) !=
+            ArticleViewModel.osrsArticleHistoryIdentity(for: articleDestination.url)
     }
 
     // Navigate to article from current tab context using appropriate destination type

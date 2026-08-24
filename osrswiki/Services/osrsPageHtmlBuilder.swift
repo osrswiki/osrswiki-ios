@@ -22,8 +22,8 @@ class osrsPageHtmlBuilder {
         "web/collapsible_tables.css",
         "web/collapsible_sections.css",
         "web/switch_infobox_styles.css",
-        "styles/fixes.css",
-        "styles/gadget_calc.css"
+        "styles/gadget_calc.css",
+        "styles/fixes.css"
     ]
 
     private let criticalArticleBundleAsset = "styles/critical-article.min.css"

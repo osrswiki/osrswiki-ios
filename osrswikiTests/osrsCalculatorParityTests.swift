@@ -186,6 +186,13 @@ final class osrsCalculatorParityTests: XCTestCase {
         XCTAssertTrue(runtime.contains("/load.php?modules=jquery&only=scripts"))
         XCTAssertTrue(runtime.contains("osrsHideCalculatorJsPlaceholder"))
         XCTAssertTrue(runtime.contains("osrsReassertCalculatorThemeSheets"))
+        XCTAssertTrue(runtime.contains("osrs-calc-skin"))
+        XCTAssertTrue(runtime.contains("osrsEnsureCalculatorPageVisible"))
+        XCTAssertTrue(runtime.contains("osrsDedupeHiscoreRows"))
+        XCTAssertTrue(runtime.contains("pointerdown"))
+        XCTAssertTrue(runtime.contains("touchstart"))
+        XCTAssertTrue(runtime.contains("mousedown"))
+        XCTAssertTrue(runtime.contains("__osrsOpenCalcDropdown"))
         XCTAssertTrue(runtime.contains(".osrs-article-scroll-region, .osrs-local-scroll-surface"))
         if let gadgetRange = runtime.range(of: "'gadget_calc.css'"),
            let fixesRange = runtime.range(of: "'fixes.css'") {
@@ -224,6 +231,7 @@ final class osrsCalculatorParityTests: XCTestCase {
         XCTAssertTrue(calcCore.contains("mw.html.escape"))
         XCTAssertTrue(runtime.contains("osrsEnsureJQueryAlias"))
         XCTAssertTrue(calcCore.contains("setupCalc:"))
+        XCTAssertTrue(calcCore.contains("data-osrs-calc-built"))
         XCTAssertTrue(calcCore.contains("ToggleSwitchWidget"))
         XCTAssertTrue(calcCore.contains("__osrsRebuildCalcs"))
         XCTAssertTrue(calcCore.contains("__osrsCalculatorPatched"))

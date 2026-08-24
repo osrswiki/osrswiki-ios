@@ -2230,7 +2230,14 @@ Calc.prototype.getId = function (id) {
  */
 Calc.prototype.setupCalc = function () {
     var self = this,
-        fieldset = new OO.ui.FieldsetLayout({label: self.name, classes: ['jcTable'], id: 'jsForm-'+self.form}),
+        existingHost = $(document.getElementById('bodyContent') || document.body).find('#' + self.form);
+    if (!existingHost.length) {
+        existingHost = $(document.getElementById(self.form));
+    }
+    if (existingHost.attr('data-osrs-calc-built') === '1' && existingHost.find('.jsCalc-field').length) {
+        return;
+    }
+    var fieldset = new OO.ui.FieldsetLayout({label: self.name, classes: ['jcTable'], id: 'jsForm-'+self.form}),
 		submitButton, submitButtonAction, paramChangeAction, timeout,
         groupkeys = {};
 
@@ -2346,7 +2353,8 @@ Calc.prototype.setupCalc = function () {
     }
     formHost
         .empty()
-        .append(fieldset.$element);
+        .append(fieldset.$element)
+        .attr('data-osrs-calc-built', '1');
     
     // make buttonselects all the same height
     self.tParams.filter(e=>e.type==='buttonselect').forEach(e=>{
@@ -2370,6 +2378,10 @@ function lookupCalc(calcId) {
  * @todo
  */
 function init() {
+    if (document.documentElement.getAttribute('data-osrs-calc-inited') === '1' &&
+        document.querySelector('.jsCalc-field')) {
+        return;
+    }
     // Initialises class changes
     helper.initClasses();
 
@@ -2387,6 +2399,7 @@ function init() {
         }
     });
     
+    document.documentElement.setAttribute('data-osrs-calc-inited', '1');
     // allow scripts to hook into calc setup completion
     mw.hook('rscalc.setupComplete').fire();
 }
