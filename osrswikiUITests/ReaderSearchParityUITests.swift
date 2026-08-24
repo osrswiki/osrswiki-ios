@@ -205,6 +205,51 @@ final class ReaderSearchParityUITests: XCTestCase {
         add(attachment)
     }
 
+    func testFindInPageKeepsIdentifiedArticleWebViewThroughTypeStepDismiss() throws {
+        app.launchArguments = commonArguments + [
+            "-startTab", "search",
+            "-startArticleTitle", "Varrock",
+            "-startArticleURL", "https://oldschool.runescape.wiki/w/Varrock"
+        ]
+        app.launch()
+
+        let webView = identifiedArticleWebView()
+        XCTAssertTrue(webView.waitForExistence(timeout: 25), app.debugDescription)
+        assertIdentifiedArticleWebViewUsable("loaded")
+
+        let findButton = waitForArticleFindButton()
+        findButton.tap()
+
+        XCTAssertTrue(
+            app.keyboards.firstMatch.waitForExistence(timeout: 10)
+                || app.searchFields.firstMatch.waitForExistence(timeout: 2),
+            "Find must present keyboard or overlay\n\(app.debugDescription)"
+        )
+        assertIdentifiedArticleWebViewUsable("after Find tap")
+        attachFindScreenshot("find-present")
+
+        typeFindQuery("Varrock")
+        assertIdentifiedArticleWebViewUsable("after typing")
+        stepFindMatchesIfAvailable()
+        assertIdentifiedArticleWebViewUsable("after stepping matches")
+        attachFindScreenshot("find-type-step")
+
+        dismissFindNavigator()
+        assertIdentifiedArticleWebViewUsable("after dismiss")
+        attachFindScreenshot("find-dismiss")
+
+        let back = app.buttons["article_back_button"]
+        _ = back.waitForExistence(timeout: 5)
+        let restoredFind = articleFindButton()
+        _ = restoredFind.waitForExistence(timeout: 3)
+        let usableChrome = (restoredFind.exists && restoredFind.isHittable)
+            || (back.exists && back.isHittable)
+        XCTAssertTrue(
+            usableChrome,
+            "Dismiss must restore article chrome (back and/or bottom-bar Find). find=\(restoredFind.exists)/\(restoredFind.isHittable) back=\(back.exists)/\(back.isHittable) web=\(identifiedArticleWebView().frame)"
+        )
+    }
+
     func testFindInPageKeepsArticleBottomBarHiddenForTheWholeSession() throws {
         app.launchArguments = commonArguments + [
             "-startTab", "search",
@@ -434,9 +479,155 @@ final class ReaderSearchParityUITests: XCTestCase {
         ]
     }
 
+    private func waitForArticleFindButton() -> XCUIElement {
+        let identified = app.buttons["article_find_button"]
+        if identified.waitForExistence(timeout: 4) {
+            return identified
+        }
+        let labeled = app.buttons.matching(NSPredicate(format: "label == %@", "Find"))
+        XCTAssertTrue(
+            labeled.firstMatch.waitForExistence(timeout: 8),
+            "Bottom-bar Find must appear"
+        )
+        guard labeled.count > 0 else {
+            return labeled.firstMatch
+        }
+        let matches = labeled.allElementsBoundByIndex
+        let bottomMost = matches.max(by: { $0.frame.minY < $1.frame.minY })
+        return bottomMost ?? labeled.firstMatch
+    }
+
+    private func articleFindButton() -> XCUIElement {
+        let identified = app.buttons["article_find_button"]
+        if identified.exists {
+            return identified
+        }
+        let labeled = app.buttons.matching(NSPredicate(format: "label == %@", "Find"))
+        guard labeled.count > 0 else {
+            return identified
+        }
+        return labeled.allElementsBoundByIndex.max(by: { $0.frame.minY < $1.frame.minY })
+            ?? labeled.firstMatch
+    }
+
+    private func attachFindScreenshot(_ name: String) {
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = name
+        attachment.lifetime = .keepAlways
+        add(attachment)
+        let web = identifiedArticleWebView()
+        let find = app.buttons["article_find_button"]
+        let back = app.buttons["article_back_button"]
+        let summary = """
+        moment=\(name)
+        article_web_view exists=\(web.exists) frame=\(web.exists ? "\(web.frame)" : "missing")
+        keyboard=\(app.keyboards.firstMatch.exists)
+        searchField=\(app.searchFields.firstMatch.exists)
+        find exists=\(find.exists)
+        back exists=\(back.exists)
+        """
+        let dump = XCTAttachment(string: summary)
+        dump.name = "\(name)-hierarchy"
+        dump.lifetime = .keepAlways
+        add(dump)
+    }
+
+    private func identifiedArticleWebView() -> XCUIElement {
+        app.webViews["article_web_view"]
+    }
+
     private func articleWebView() -> XCUIElement {
-        let identified = app.webViews["article_web_view"]
+        let identified = identifiedArticleWebView()
         return identified.exists ? identified : app.webViews.firstMatch
+    }
+
+    private func assertIdentifiedArticleWebViewUsable(_ moment: String) {
+        let webView = identifiedArticleWebView()
+        XCTAssertTrue(
+            webView.exists,
+            "\(moment): identified article_web_view missing from hierarchy\n\(app.debugDescription)"
+        )
+        let frame = webView.frame
+        XCTAssertGreaterThan(
+            frame.width,
+            1,
+            "\(moment): article_web_view width=\(frame.width) height=\(frame.height)\n\(app.debugDescription)"
+        )
+        XCTAssertGreaterThan(
+            frame.height,
+            1,
+            "\(moment): article_web_view width=\(frame.width) height=\(frame.height)\n\(app.debugDescription)"
+        )
+    }
+
+    private func typeFindQuery(_ query: String) {
+        let named = app.searchFields["find.searchField"]
+        if named.waitForExistence(timeout: 3) {
+            named.tap()
+            named.typeText(query)
+            return
+        }
+        let searchField = app.searchFields.firstMatch
+        if searchField.waitForExistence(timeout: 2) {
+            searchField.tap()
+            searchField.typeText(query)
+            return
+        }
+        let textField = app.textFields.firstMatch
+        if textField.waitForExistence(timeout: 2) {
+            textField.tap()
+            textField.typeText(query)
+            return
+        }
+        if app.keyboards.firstMatch.exists {
+            app.typeText(query)
+        }
+    }
+
+    private func stepFindMatchesIfAvailable() {
+        let next = app.buttons["find.nextButton"].firstMatch
+        if next.exists {
+            next.tap()
+        } else {
+            for label in ["Next", "Next Result", "Find Next"] {
+                let button = app.buttons[label].firstMatch
+                if button.exists, button.isHittable {
+                    button.tap()
+                    break
+                }
+            }
+        }
+        let previous = app.buttons["find.previousButton"].firstMatch
+        if previous.exists {
+            previous.tap()
+        } else {
+            for label in ["Previous", "Previous Result", "Find Previous"] {
+                let button = app.buttons[label].firstMatch
+                if button.exists, button.isHittable {
+                    button.tap()
+                    break
+                }
+            }
+        }
+    }
+
+    private func dismissFindNavigator() {
+        let done = app.buttons["find.doneButton"].firstMatch
+        if done.exists {
+            done.tap()
+            return
+        }
+        let dismissLabels = ["Done", "Cancel", "Close", "Dismiss"]
+        for label in dismissLabels {
+            let button = app.buttons[label].firstMatch
+            if button.exists, button.isHittable {
+                button.tap()
+                return
+            }
+        }
+        if app.keyboards.buttons["Hide keyboard"].exists {
+            app.keyboards.buttons["Hide keyboard"].tap()
+        }
     }
 
     private func contentsDrawer() -> XCUIElement {

@@ -35,7 +35,8 @@ struct osrsArticleBottomBar: View {
                 isEnabled: saveState != .downloading,
                 tintColor: saveButtonTintColor,
                 dynamicTypeSize: dynamicTypeSize,
-                barHeight: barHeight
+                barHeight: barHeight,
+                accessibilityIdentifier: "article_save_button"
             )
 
             osrsBottomBarButton(
@@ -43,7 +44,8 @@ struct osrsArticleBottomBar: View {
                 text: "Find",
                 action: onFindInPageAction,
                 dynamicTypeSize: dynamicTypeSize,
-                barHeight: barHeight
+                barHeight: barHeight,
+                accessibilityIdentifier: "article_find_button"
             )
 
             osrsBottomBarButton(
@@ -51,7 +53,8 @@ struct osrsArticleBottomBar: View {
                 text: "Appearance",
                 action: onAppearanceAction,
                 dynamicTypeSize: dynamicTypeSize,
-                barHeight: barHeight
+                barHeight: barHeight,
+                accessibilityIdentifier: "article_appearance_button"
             )
 
             osrsBottomBarButton(
@@ -60,7 +63,8 @@ struct osrsArticleBottomBar: View {
                 action: onContentsAction,
                 isEnabled: true,
                 dynamicTypeSize: dynamicTypeSize,
-                barHeight: barHeight
+                barHeight: barHeight,
+                accessibilityIdentifier: "article_contents_button"
             )
             .accessibilityValue(hasTableOfContents ? "Ready" : "Loading")
         }
@@ -70,6 +74,7 @@ struct osrsArticleBottomBar: View {
             fallback: Color(osrsTheme.surface)
         )
         .padding(.horizontal, 16)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("article_bottom_bar")
     }
     
@@ -127,6 +132,7 @@ struct osrsBottomBarButton: View {
     let tintColor: Color?
     let dynamicTypeSize: DynamicTypeSize
     let barHeight: CGFloat
+    let accessibilityIdentifier: String
     
     init(
         iconName: String,
@@ -135,7 +141,8 @@ struct osrsBottomBarButton: View {
         isEnabled: Bool = true,
         tintColor: Color? = nil,
         dynamicTypeSize: DynamicTypeSize,
-        barHeight: CGFloat
+        barHeight: CGFloat,
+        accessibilityIdentifier: String
     ) {
         self.iconName = iconName
         self.text = text
@@ -144,6 +151,7 @@ struct osrsBottomBarButton: View {
         self.tintColor = tintColor
         self.dynamicTypeSize = dynamicTypeSize
         self.barHeight = barHeight
+        self.accessibilityIdentifier = accessibilityIdentifier
     }
     
     var body: some View {
@@ -174,6 +182,7 @@ struct osrsBottomBarButton: View {
         .buttonStyle(PlainButtonStyle())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(text)
+        .accessibilityIdentifier(accessibilityIdentifier)
         .accessibilityAddTraits(.isButton)
     }
     

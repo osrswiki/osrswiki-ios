@@ -225,15 +225,18 @@ private struct ArticleViewContent: View {
                 savedCachePreparationTask?.cancel()
                 savedCachePreparationTask = nil
                 captureCurrentArticleScroll()
-                findSession += 1
-                viewModel.hideFindInPageAction()
+                let stillThisArticle = appState.activeArticleDestination?.navigationIdentity == articleIdentity
+                let stillShowingArticle = appState.activeArticleDestination != nil
+                let sceneIsBackgrounded = scenePhase != .active
+                if !(sceneIsBackgrounded || stillThisArticle) {
+                    findSession += 1
+                    viewModel.hideFindInPageAction()
+                    isShowingFindInPage = false
+                }
                 if #available(iOS 17.0, *), let savedCacheSessionToken {
                     ProxyInterceptorService.shared.disableMode(owner: savedCacheSessionToken)
                     self.savedCacheSessionToken = nil
                 }
-                let stillThisArticle = appState.activeArticleDestination?.navigationIdentity == articleIdentity
-                let stillShowingArticle = appState.activeArticleDestination != nil
-                let sceneIsBackgrounded = scenePhase != .active
                 if sceneIsBackgrounded || stillThisArticle {
                     // Scene background can fire onDisappear without leaving the article.
                     // Keep SwiftUI chrome claimed so resume is not a cream empty shell.
@@ -360,7 +363,7 @@ private struct ArticleViewContent: View {
             }
             .onReceive(NotificationCenter.default.publisher(for: .osrsSceneCompositorLooksBlank)) { _ in
                 guard viewModel.hasCommittedArticleHTML else { return }
-                if viewModel.isArticleSoftwareKeyboardVisible { return }
+                if viewModel.shouldSkipDocumentWakeDuringFindOrKeyboard { return }
                 // Prefer exact interactive wake over HTML rewrite. Full reload here
                 // intermittently left a chrome-less themed blank after resume.
                 print("⚠️ ArticleView: compositor-blank signal; waking existing WKWebView")
@@ -576,19 +579,22 @@ private struct ArticleViewContent: View {
 
     @ViewBuilder
     private var articleLayout: some View {
-        if #available(iOS 26.0, *) {
-            articleCanvas
-                .ignoresSafeArea()
-                .osrsPairedEdgeChrome(edge: .top) {
+        Group {
+            if #available(iOS 26.0, *) {
+                articleCanvas
+                    .ignoresSafeArea()
+                    .osrsPairedEdgeChrome(edge: .top) {
+                        articleTopChrome
+                    }
+            } else {
+                VStack(spacing: 0) {
+                    articleDebugMarker
                     articleTopChrome
+                    articleContentCanvas
                 }
-        } else {
-            VStack(spacing: 0) {
-                articleDebugMarker
-                articleTopChrome
-                articleContentCanvas
             }
         }
+        .ignoresSafeArea(.keyboard)
     }
 
     private var articleCanvas: some View {

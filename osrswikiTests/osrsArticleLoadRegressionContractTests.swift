@@ -16,6 +16,11 @@ final class osrsArticleLoadRegressionContractTests: XCTestCase {
 
         XCTAssertTrue(viewModel.contains("recommitCachedArticleAfterBackground"))
         XCTAssertTrue(viewModel.contains("wakeLiveArticleWebView"))
+        XCTAssertTrue(viewModel.contains("shouldSkipDocumentWakeDuringFindOrKeyboard"))
+        XCTAssertTrue(viewModel.contains("isFindInPageActive"))
+        XCTAssertTrue(articleView.contains("shouldSkipDocumentWakeDuringFindOrKeyboard"))
+        XCTAssertTrue(articleView.contains(".ignoresSafeArea(.keyboard)"))
+        XCTAssertTrue(articleWebView.contains("shouldSkipDocumentWakeDuringFindOrKeyboard"))
         let recommitBody = viewModel
             .components(separatedBy: "func recommitCachedArticleAfterBackground")
             .dropFirst()

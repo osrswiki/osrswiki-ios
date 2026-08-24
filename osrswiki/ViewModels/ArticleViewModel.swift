@@ -749,6 +749,12 @@ struct osrsDeferredMapPreloadState {
 class ArticleViewModel: NSObject, ObservableObject {
     @Published var isLoading: Bool = false
     var isArticleSoftwareKeyboardVisible = false
+    /// Find session owns keyboard/focus. Compositor-blank wake must not reparent WK while this is true.
+    var isFindInPageActive = false
+
+    var shouldSkipDocumentWakeDuringFindOrKeyboard: Bool {
+        isFindInPageActive || isArticleSoftwareKeyboardVisible || isNativeFindNavigatorVisible()
+    }
     @Published var pendingYouTubeEmbedURL: URL?
     @Published var needsContentProcessRecovery: Bool = false
     /// Incremented when the on-screen WKWebView must be rebuilt after a compositor-blank resume.
@@ -911,6 +917,10 @@ class ArticleViewModel: NSObject, ObservableObject {
     /// WKWebView can go blank after backgrounding without firing the terminate callback.
     /// Probe the live document on foreground and recover when it is empty.
     func wakeRenderedDocumentAfterBackground() {
+        if shouldSkipDocumentWakeDuringFindOrKeyboard {
+            print("🔁 [RESUME-WAKE] skipped; find or software keyboard is active")
+            return
+        }
         print("🔁 [RESUME-WAKE] waking rendered document (hasHTML=\(hasCommittedArticleHTML), terminated=\(contentProcessDidTerminate))")
         guard let webView else {
             guard contentProcessDidTerminate else { return }
@@ -5482,6 +5492,7 @@ extension ArticleViewModel: WKNavigationDelegate {
     /// Find in page action - matches Android FindInPageManager functionality
     func performFindInPageAction(onPresented: (() -> Void)? = nil) {
         guard let webView = webView else { return }
+        isFindInPageActive = true
 
         // Expand collapsible sections like Android does
         let expandScript = """
@@ -5509,8 +5520,15 @@ extension ArticleViewModel: WKNavigationDelegate {
         guard let webView = webView else { return }
 
         if #available(iOS 16.0, *) {
-            // Use native UIFindInteraction for iOS 16+
+            webView.isFindInteractionEnabled = true
             webView.findInteraction?.presentFindNavigator(showingReplace: false)
+            preserveRenderedArticleDuringFind(webView)
+            for delayNs in [80_000_000, 250_000_000] as [UInt64] {
+                DispatchQueue.main.asyncAfter(deadline: .now() + .nanoseconds(Int(delayNs))) { [weak self, weak webView] in
+                    guard let self, let webView, self.isFindInPageActive else { return }
+                    self.preserveRenderedArticleDuringFind(webView)
+                }
+            }
             print("🔍 ArticleViewModel: Presented native find interface (iOS 16+)")
         } else {
             // Fallback for iOS 14-15: Use basic findString API
@@ -5519,15 +5537,113 @@ extension ArticleViewModel: WKNavigationDelegate {
         }
     }
 
+    /// Keep the hosted article painting while Find/keyboard take first responder.
+    /// Do not reparent WK: `removeFromSuperview` during UIFindInteraction blanks
+    /// the compositor and can stick the navigator.
+    func preserveRenderedArticleDuringFind(_ webView: WKWebView) {
+        webView.isHidden = false
+        webView.alpha = 1
+        webView.isOpaque = true
+        webView.scrollView.isHidden = false
+        webView.scrollView.alpha = 1
+        unhideWebKitLayers(webView)
+        webView.layer.setNeedsDisplay()
+        webView.setNeedsLayout()
+        webView.layoutIfNeeded()
+        let offset = webView.scrollView.contentOffset
+        webView.scrollView.setContentOffset(
+            CGPoint(x: offset.x, y: offset.y + 1),
+            animated: false
+        )
+        webView.scrollView.setContentOffset(offset, animated: false)
+        webView.evaluateJavaScript(
+            """
+            (function() {
+              if (!document.body) return;
+              document.body.style.visibility = 'visible';
+              document.body.style.opacity = '1';
+              document.documentElement.style.visibility = 'visible';
+              void document.body.offsetHeight;
+            })();
+            """
+        )
+    }
+
+    private func unhideWebKitLayers(_ view: UIView) {
+        let name = NSStringFromClass(type(of: view))
+        if name.contains("WK") || name.contains("Web") {
+            view.isHidden = false
+            view.alpha = 1
+            view.layer.setNeedsDisplay()
+        }
+        view.subviews.forEach(unhideWebKitLayers)
+    }
+
     /// Hide find in page interface - matches Android toggle behavior
     func hideFindInPageAction() {
+        defer { isFindInPageActive = false }
         guard let webView = webView else { return }
 
         if #available(iOS 16.0, *) {
-            // Dismiss the native find interface
+            if !webView.isFirstResponder {
+                _ = webView.becomeFirstResponder()
+            }
             webView.findInteraction?.dismissFindNavigator()
-            print("🔍 ArticleViewModel: Dismissed native find interface")
+            for window in Self.appContentWindows() {
+                activateFindNavigatorDoneControl(in: window)
+            }
+            if webView.findInteraction?.isFindNavigatorVisible == true
+                || Self.appContentWindows().contains(where: { Self.findNavigatorView(in: $0) != nil }) {
+                // iOS 26 can leave `_UIFindNavigatorView` up after dismissFindNavigator.
+                // Tearing down the interaction is the supported way to drop that chrome.
+                webView.isFindInteractionEnabled = false
+                webView.isFindInteractionEnabled = true
+            }
+            print("🔍 ArticleViewModel: Dismissed native find interface visible=\(webView.findInteraction?.isFindNavigatorVisible ?? false)")
         }
+        webView.window?.endEditing(true)
+    }
+
+    private func activateFindNavigatorDoneControl(in root: UIView?) {
+        guard let navigator = Self.findNavigatorView(in: root) else { return }
+        let buttons = Self.controlButtons(in: navigator)
+        let done = buttons.first { button in
+            let title = (button.title(for: .normal) ?? button.accessibilityLabel ?? "").lowercased()
+            return title.contains("done") || title.contains("cancel") || title.contains("close")
+        }
+        (done ?? buttons.last)?.sendActions(for: .touchUpInside)
+    }
+
+    private static func appContentWindows() -> [UIWindow] {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap(\.windows)
+    }
+
+    private static func findNavigatorView(in root: UIView?) -> UIView? {
+        guard let root else { return nil }
+        let name = NSStringFromClass(type(of: root))
+        if name.contains("FindNavigator") || name.contains("UIFindBar") {
+            return root
+        }
+        for child in root.subviews {
+            if let found = findNavigatorView(in: child) {
+                return found
+            }
+        }
+        return nil
+    }
+
+    private static func controlButtons(in root: UIView) -> [UIButton] {
+        var buttons: [UIButton] = []
+        func walk(_ view: UIView) {
+            if let button = view as? UIButton {
+                buttons.append(button)
+            }
+            view.subviews.forEach(walk)
+        }
+        walk(root)
+        return buttons
     }
 
     func isNativeFindNavigatorVisible() -> Bool {

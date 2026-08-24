@@ -2136,6 +2136,9 @@ struct ArticleWebView: UIViewRepresentable {
             webView.alpha = 1
             webView.scrollView.isHidden = false
             webView.scrollView.alpha = 1
+            if parent.viewModel.shouldSkipDocumentWakeDuringFindOrKeyboard {
+                return
+            }
             osrsSceneCompositor.wakeLiveArticleWebView(webView)
             let scroll = webView.scrollView
             let inset = scroll.adjustedContentInset
