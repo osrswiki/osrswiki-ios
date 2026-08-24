@@ -3259,6 +3259,7 @@ class ArticleViewModel: NSObject, ObservableObject {
             "horizontal_scroll_interceptor.js",
             "image_area_cap.js",
             "responsive_videos.js",
+            "article_audio_player.js",
             "mobile_article_polish.js",
             "clipboard_bridge.js"
         ]
@@ -3602,6 +3603,7 @@ class ArticleViewModel: NSObject, ObservableObject {
             "web/horizontal_scroll_interceptor.js",
             "web/image_area_cap.js",
             "web/responsive_videos.js",
+            "web/article_audio_player.js",
             "web/mobile_article_polish.js",
             "web/clipboard_bridge.js"
         ]

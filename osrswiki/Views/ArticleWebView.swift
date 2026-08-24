@@ -65,6 +65,57 @@ class IOSAssetHandler: NSObject, WKURLSchemeHandler {
     /// Historical HTML documents linked a few stylesheets from `styles/` after they
     /// moved under `web/`. Resolve those aliases before the bundle walk so a
     /// prepared article does not wait on 404 fallbacks.
+    struct WikiMediaSchemePayload {
+        let status: Int
+        let headers: [String: String]
+        let body: Data
+    }
+
+    /// WKWebView media requests Range. Serving 200 + full body for a custom-scheme
+    /// audio URL can leave the infobox player on its loading spinner forever.
+    /// Empty packaged bytes are a miss (nil), not a successful empty 200.
+    static func wikiMediaSchemePayload(
+        requestURL: URL,
+        rangeHeader: String?,
+        data: Data,
+        contentType: String
+    ) -> WikiMediaSchemePayload? {
+        guard !data.isEmpty else { return nil }
+        var headers: [String: String] = [
+            "Content-Type": contentType,
+            "Accept-Ranges": "bytes"
+        ]
+        let total = data.count
+        guard let rangeHeader,
+              let byteRange = parseByteRange(rangeHeader, totalLength: total) else {
+            headers["Content-Length"] = "\(total)"
+            return WikiMediaSchemePayload(status: 200, headers: headers, body: data)
+        }
+        let slice = data.subdata(in: byteRange.lowerBound..<byteRange.upperBound)
+        let last = byteRange.upperBound - 1
+        headers["Content-Range"] = "bytes \(byteRange.lowerBound)-\(last)/\(total)"
+        headers["Content-Length"] = "\(slice.count)"
+        return WikiMediaSchemePayload(status: 206, headers: headers, body: slice)
+    }
+
+    static func parseByteRange(_ header: String, totalLength: Int) -> Range<Int>? {
+        let trimmed = header.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.lowercased().hasPrefix("bytes=") else { return nil }
+        let spec = trimmed.dropFirst("bytes=".count)
+        let parts = spec.split(separator: "-", maxSplits: 1, omittingEmptySubsequences: false)
+        guard let startToken = parts.first else { return nil }
+        let start = Int(startToken) ?? 0
+        guard start >= 0, start < totalLength else { return nil }
+        let end: Int
+        if parts.count > 1, !parts[1].isEmpty, let parsedEnd = Int(parts[1]) {
+            end = min(parsedEnd, totalLength - 1)
+        } else {
+            end = totalLength - 1
+        }
+        guard end >= start else { return nil }
+        return start..<(end + 1)
+    }
+
     static func canonicalAssetPath(_ path: String) -> String {
         switch path {
         case "styles/collapsible_tables.css":
@@ -793,7 +844,7 @@ class IOSAssetHandler: NSObject, WKURLSchemeHandler {
                     }
                 }
 
-                guard let schemeResponse = self.osrsSchemeMatchedResponse(
+                guard let scheme = self.osrsSchemeMatchedResponse(
                     for: urlSchemeTask,
                     upstream: cachedResponse.response,
                     data: cachedResponse.data
@@ -801,11 +852,15 @@ class IOSAssetHandler: NSObject, WKURLSchemeHandler {
                     print("❌ IOSAssetHandler: Failed to wrap cached wiki response for \(originalURL)")
                     self.completeTask(
                         urlSchemeTask,
-                        withError: NSError(domain: "IOSAssetHandler", code: 500, userInfo: nil)
+                        withError: NSError(
+                            domain: "IOSAssetHandler",
+                            code: cachedResponse.data.isEmpty ? 404 : 500,
+                            userInfo: [NSLocalizedDescriptionKey: "Cached wiki media missing or unservable"]
+                        )
                     )
                     return
                 }
-                self.completeTask(urlSchemeTask, withResponse: schemeResponse, data: cachedResponse.data)
+                self.completeTask(urlSchemeTask, withResponse: scheme.response, data: scheme.body)
                 NSLog(
                     "osrsCalcProxy: status=%d bytes=%d request=%@ wiki=%@",
                     cachedResponse.response.statusCode,
@@ -897,21 +952,28 @@ class IOSAssetHandler: NSObject, WKURLSchemeHandler {
                 // and resurrect a namespace after the article disappears.
                 print("🔍 [ENHANCED_DIAGNOSTICS] Persistence owned by request routing; handler direct write disabled (save=\(shouldSave), page=\(pageId ?? "none"))")
 
-                guard let schemeResponse = self.osrsSchemeMatchedResponse(
+                guard let scheme = self.osrsSchemeMatchedResponse(
                     for: urlSchemeTask,
                     upstream: httpResponse,
                     data: data
                 ) else {
                     print("❌ IOSAssetHandler: Failed to wrap wiki proxy response for \(originalURL)")
                     await MainActor.run {
-                        self.completeTask(urlSchemeTask, withError: NSError(domain: "IOSAssetHandler", code: 500, userInfo: nil))
+                        self.completeTask(
+                            urlSchemeTask,
+                            withError: NSError(
+                                domain: "IOSAssetHandler",
+                                code: data.isEmpty ? 404 : 500,
+                                userInfo: [NSLocalizedDescriptionKey: "Wiki media missing or unservable"]
+                            )
+                        )
                     }
                     return
                 }
                 
                 // Serve to WebView
                 await MainActor.run {
-                    self.completeTask(urlSchemeTask, withResponse: schemeResponse, data: data)
+                    self.completeTask(urlSchemeTask, withResponse: scheme.response, data: scheme.body)
                     print("📱 IOSAssetHandler: Served external resource \(originalURL) (\(data.count) bytes)")
                     NSLog(
                         "osrsCalcProxy: status=%d bytes=%d request=%@ wiki=%@",
@@ -935,27 +997,52 @@ class IOSAssetHandler: NSObject, WKURLSchemeHandler {
         for urlSchemeTask: WKURLSchemeTask,
         upstream: HTTPURLResponse,
         data: Data
-    ) -> HTTPURLResponse? {
+    ) -> (response: HTTPURLResponse, body: Data)? {
         guard let requestUrl = urlSchemeTask.request.url else {
             return nil
         }
-        var headers: [String: String] = [:]
-        if let contentType = upstream.value(forHTTPHeaderField: "Content-Type"), !contentType.isEmpty {
-            headers["Content-Type"] = contentType
+        var contentType: String
+        if let upstreamType = upstream.value(forHTTPHeaderField: "Content-Type"), !upstreamType.isEmpty {
+            contentType = upstreamType
         } else if requestUrl.path.hasSuffix("/load.php") {
-            headers["Content-Type"] = "text/javascript; charset=utf-8"
+            contentType = "text/javascript; charset=utf-8"
         } else if requestUrl.path.hasSuffix("/api.php") {
-            headers["Content-Type"] = "application/json; charset=utf-8"
+            contentType = "application/json; charset=utf-8"
         } else {
-            headers["Content-Type"] = upstream.mimeType ?? "application/octet-stream"
+            contentType = upstream.mimeType ?? "application/octet-stream"
         }
+        let path = requestUrl.path.lowercased()
+        let isAudio = contentType.lowercased().hasPrefix("audio/") ||
+            path.contains(".mp3") || path.contains(".ogg") ||
+            path.contains(".oga") || path.contains(".m4a")
+        if isAudio {
+            guard let payload = Self.wikiMediaSchemePayload(
+                requestURL: requestUrl,
+                rangeHeader: urlSchemeTask.request.value(forHTTPHeaderField: "Range"),
+                data: data,
+                contentType: contentType
+            ),
+            let response = HTTPURLResponse(
+                url: requestUrl,
+                statusCode: payload.status,
+                httpVersion: "HTTP/1.1",
+                headerFields: payload.headers
+            ) else {
+                return nil
+            }
+            return (response, payload.body)
+        }
+        var headers: [String: String] = ["Content-Type": contentType]
         headers["Content-Length"] = "\(data.count)"
-        return HTTPURLResponse(
+        guard let response = HTTPURLResponse(
             url: requestUrl,
             statusCode: upstream.statusCode,
             httpVersion: "HTTP/1.1",
             headerFields: headers
-        )
+        ) else {
+            return nil
+        }
+        return (response, data)
     }
     
     private func osrsFetchWikiResource(

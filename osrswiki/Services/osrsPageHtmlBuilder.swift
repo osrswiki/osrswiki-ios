@@ -75,6 +75,7 @@ class osrsPageHtmlBuilder {
         "web/osrs_calculator_runtime.js",
         "web/tabber_init.js",
         "web/responsive_videos.js",
+        "web/article_audio_player.js",
         "web/clipboard_bridge.js",
         "web/table_column_normalize.js"
     ]

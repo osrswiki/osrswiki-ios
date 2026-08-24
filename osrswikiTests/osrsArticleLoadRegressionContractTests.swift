@@ -466,6 +466,20 @@ final class osrsArticleLoadRegressionContractTests: XCTestCase {
         XCTAssertTrue(chooser.contains("static func choose("))
     }
 
+    func testArticleAudioPlayerPrefersMpegAndIsWiredIntoHtmlBuilder() throws {
+        let root = try repositoryRoot()
+        let htmlBuilder = try source(root, "platforms/ios/osrswiki/Services/osrsPageHtmlBuilder.swift")
+        let audioJs = try source(root, "platforms/ios/osrswiki/Assets/web/article_audio_player.js")
+        let sharedAudio = try source(root, "shared/js/article_audio_player.js")
+        XCTAssertEqual(sharedAudio, audioJs)
+        XCTAssertTrue(htmlBuilder.contains("web/article_audio_player.js"))
+        XCTAssertTrue(audioJs.contains("preferredMpegSource"))
+        XCTAssertTrue(audioJs.contains("osrs-article-audio-error"))
+        XCTAssertTrue(audioJs.contains("Audio unavailable"))
+        XCTAssertTrue(audioJs.contains("osrsArticleAudioLoadingTimeoutMs"))
+        XCTAssertTrue(audioJs.contains("infobox-media-player"))
+    }
+
     func testCriticalArticleBundleFlagDefaultsOnAndWired() throws {
         let root = try repositoryRoot()
         let prefs = try source(root, "platforms/ios/osrswiki/Services/osrsLoadPerformancePrefs.swift")

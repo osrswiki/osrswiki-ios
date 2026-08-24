@@ -343,10 +343,16 @@ class osrsThemeManager: ObservableObject {
     }
 
     private func updateCurrentTheme() {
-        applyPersistedThemeToWindows(discardPrewarmedWebViewsIfThemeChanged: true)
+        applyPersistedThemeToWindows(
+            discardPrewarmedWebViewsIfThemeChanged: true,
+            isLiveSelectionChange: true
+        )
     }
 
-    private func applyPersistedThemeToWindows(discardPrewarmedWebViewsIfThemeChanged: Bool) {
+    private func applyPersistedThemeToWindows(
+        discardPrewarmedWebViewsIfThemeChanged: Bool,
+        isLiveSelectionChange: Bool = false
+    ) {
         let previousScheme = currentColorScheme
         let previousWasDark = currentTheme is osrsDarkTheme
         let resolvedColorScheme = selectedTheme == .automatic ? systemColorScheme : nil
@@ -357,13 +363,16 @@ class osrsThemeManager: ObservableObject {
         if discardPrewarmedWebViewsIfThemeChanged && themeChanged {
             osrsPreparedArticleWebViewStore.shared.removeAll()
         }
-        paintWindows()
+        let restoreSceneCompositor = osrsArticleAppearanceThemeApply.shouldRestoreSceneCompositorOnThemePaint(
+            isLiveSelectionChange: isLiveSelectionChange
+        )
+        paintWindows(restoreSceneCompositor: restoreSceneCompositor)
         osrsLiveThemeApplier.apply(currentTheme, colorScheme: currentColorScheme)
         UIApplication.refreshFloatingTabBarMaterial()
         print("🎨 [THEME MANAGER] Theme updated: \(selectedTheme.displayName)")
     }
 
-    private func paintWindows() {
+    private func paintWindows(restoreSceneCompositor: Bool) {
         let style: UIUserInterfaceStyle = currentColorScheme == .dark ? .dark : .light
         let background = UIColor(currentTheme.background)
         UIApplication.shared.connectedScenes
@@ -372,7 +381,7 @@ class osrsThemeManager: ObservableObject {
             .forEach { window in
                 window.overrideUserInterfaceStyle = style
                 window.backgroundColor = background
-                if osrsSceneCompositor.isAppContentWindow(window) {
+                if restoreSceneCompositor, osrsSceneCompositor.isAppContentWindow(window) {
                     osrsSceneCompositor.restore(window)
                 }
             }

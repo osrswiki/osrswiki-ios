@@ -1385,6 +1385,51 @@ final class LocalHTTPResponseCacheTests: XCTestCase {
         )
     }
 
+    func testWikiMediaSchemePayloadServesByteRangeAndRejectsEmptyBody() throws {
+        let requestURL = try XCTUnwrap(URL(
+            string: "app-assets://localhost/images/transcoded/Sea_Shanty_2.ogg/Sea_Shanty_2.ogg.mp3?f5d67"
+        ))
+        let body = Data("ID3".utf8) + Data(repeating: 0xFB, count: 64)
+
+        XCTAssertNil(
+            IOSAssetHandler.wikiMediaSchemePayload(
+                requestURL: requestURL,
+                rangeHeader: nil,
+                data: Data(),
+                contentType: "audio/mpeg"
+            ),
+            "A missing packaged blob must be an error/miss, not a successful empty body"
+        )
+
+        let full = try XCTUnwrap(
+            IOSAssetHandler.wikiMediaSchemePayload(
+                requestURL: requestURL,
+                rangeHeader: nil,
+                data: body,
+                contentType: "audio/mpeg"
+            )
+        )
+        XCTAssertEqual(full.status, 200)
+        XCTAssertEqual(full.body, body)
+        XCTAssertEqual(full.headers["Content-Type"], "audio/mpeg")
+        XCTAssertEqual(full.headers["Accept-Ranges"], "bytes")
+        XCTAssertEqual(full.headers["Content-Length"], "\(body.count)")
+
+        let ranged = try XCTUnwrap(
+            IOSAssetHandler.wikiMediaSchemePayload(
+                requestURL: requestURL,
+                rangeHeader: "bytes=0-1",
+                data: body,
+                contentType: "audio/mpeg"
+            )
+        )
+        XCTAssertEqual(ranged.status, 206)
+        XCTAssertEqual(ranged.body.count, 2)
+        XCTAssertEqual(ranged.body, body.prefix(2))
+        XCTAssertEqual(ranged.headers["Content-Range"], "bytes 0-1/\(body.count)")
+        XCTAssertEqual(ranged.headers["Content-Length"], "2")
+    }
+
     func testOwnerSwitchRejectsCapturedResponseInsteadOfStampingNewOwner() throws {
         let articleAOwner = LocalHTTPServerCacheSessionToken()
         let articleBOwner = LocalHTTPServerCacheSessionToken()

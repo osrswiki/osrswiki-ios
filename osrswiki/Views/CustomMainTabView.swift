@@ -190,6 +190,7 @@ struct CustomMainTabView: View {
                 }
                 .offset(x: overlayManager.articleBottomBarExitProgress * UIScreen.main.bounds.width)
                 .opacity(overlayManager.articleBottomBarCovered ? 0 : 1)
+                .allowsHitTesting(!overlayManager.articleBottomBarCovered)
             }
         }
     }
@@ -246,6 +247,7 @@ struct CustomMainTabView: View {
                 .ignoresSafeArea(edges: .bottom)
                 .offset(x: overlayManager.articleBottomBarExitProgress * UIScreen.main.bounds.width)
                 .opacity(overlayManager.articleBottomBarCovered ? 0 : 1)
+                .allowsHitTesting(!overlayManager.articleBottomBarCovered)
             }
         }
     }

@@ -95,8 +95,7 @@ private struct ArticleViewContent: View {
     @State private var contentsSettleGeneration = 0
     @State private var isShowingFindInPage = false
     @State private var findSession = 0
-    @State private var isShowingAppearanceSettings = false
-    @State private var highlightFloorNumberingOnAppearance = false
+    @StateObject private var appearancePresentation = osrsArticleAppearancePresentation()
     @State private var isShowingFeedback = false
     @State private var isShowingOfflineCacheBanner = false
     @State private var hasLoadedBefore = false
@@ -278,22 +277,28 @@ private struct ArticleViewContent: View {
                 )
                 .ignoresSafeArea()
             }
-            .sheet(isPresented: $isShowingAppearanceSettings, onDismiss: {
-                highlightFloorNumberingOnAppearance = false
+            .sheet(isPresented: appearancePresentation.isPresentedBinding, onDismiss: {
+                appearancePresentation.dismiss()
             }) {
                 NavigationStack {
                     AppearanceSettingsView(
-                        highlightFloorNumbering: highlightFloorNumberingOnAppearance,
+                        highlightFloorNumbering: appearancePresentation.highlightFloorNumbering,
                         usesLargeTitle: false
                     )
                         .environmentObject(themeManager)
                         .toolbar {
                             ToolbarItem(placement: .navigationBarTrailing) {
                                 Button("Done") {
-                                    isShowingAppearanceSettings = false
+                                    appearancePresentation.dismiss()
                                 }
                             }
                         }
+                }
+            }
+            .onChange(of: appearancePresentation.isPresented) { _, presented in
+                overlayManager?.setArticleBottomBarCovered(presented)
+                if !presented {
+                    updateArticleBottomBar()
                 }
             }
             .sheet(isPresented: $isShowingFeedback) {
@@ -325,8 +330,13 @@ private struct ArticleViewContent: View {
     private var articleSessionChrome: some View {
         articlePresentedChrome
             .onChange(of: osrsTheme as? osrsLightTheme != nil) { _, _ in
-                viewModel.applyLiveTheme(osrsTheme, themeManager: themeManager)
-                UIApplication.refreshFloatingTabBarMaterial()
+                applyAppearanceThemeToExistingArticle()
+            }
+            .onChange(of: themeManager.selectedTheme) { _, _ in
+                applyAppearanceThemeToExistingArticle()
+            }
+            .onChange(of: themeManager.currentColorScheme) { _, _ in
+                applyAppearanceThemeToExistingArticle()
             }
             .osrsArticleSceneRestore(
                 needsRecovery: $viewModel.needsContentProcessRecovery,
@@ -357,21 +367,13 @@ private struct ArticleViewContent: View {
                 viewModel.wakeRenderedDocumentAfterBackground()
             }
             .onReceive(NotificationCenter.default.publisher(for: .showAppearanceSettings)) { notification in
-                highlightFloorNumberingOnAppearance =
-                    (notification.userInfo?["highlightFloorNumbering"] as? Bool) == true
-                isShowingAppearanceSettings = true
+                appearancePresentation.handleShowAppearanceNotification(notification)
             }
             .onAppear {
                 viewModel.navigateToInternalArticle = { url in
                     appState.routeInternalArticleLink(url, sourceArticleURL: pageUrl)
                 }
-#if DEBUG
-                if ProcessInfo.processInfo.arguments.contains("-startArticleShowAppearance") {
-                    highlightFloorNumberingOnAppearance =
-                        ProcessInfo.processInfo.arguments.contains("-highlightFloorNumberingOnAppearance")
-                    isShowingAppearanceSettings = true
-                }
-#endif
+                appearancePresentation.handleArticleChromeUpdate()
             }
             .onDisappear {
                 viewModel.navigateToInternalArticle = nil
@@ -389,6 +391,17 @@ private struct ArticleViewContent: View {
         updateArticleBottomBar()
         viewModel.recommitCachedArticleAfterBackground(force: forceDocumentRecommit)
         restoreCapturedArticleScrollIfNeeded()
+    }
+
+    private func applyAppearanceThemeToExistingArticle() {
+        osrsArticleAppearanceThemeApply.applyToExistingArticle(
+            theme: osrsTheme,
+            themeManager: themeManager,
+            viewModel: viewModel
+        )
+        if isArticleVisible {
+            updateArticleBottomBar()
+        }
     }
 
     private func beginAppearanceLoad() {
