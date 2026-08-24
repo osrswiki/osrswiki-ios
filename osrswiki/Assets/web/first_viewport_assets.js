@@ -559,9 +559,12 @@
         sampleLayoutStability();
     }
 
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', start);
-    } else {
+    // Article HTML is already in the document when this classic script runs
+    // (it sits after the body content). readyState is still "loading" until
+    // later parser-blocking tags finish — do not wait for DCL when body exists.
+    if (document.body) {
         start();
+    } else {
+        document.addEventListener('DOMContentLoaded', start);
     }
 })();

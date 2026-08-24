@@ -505,6 +505,29 @@ final class osrsArticleLoadRegressionContractTests: XCTestCase {
         XCTAssertTrue(fixes.contains("min-width: var(--osrs-bonuses-min-inline-size)"))
     }
 
+    func testFirstViewportWatcherStartsWhenBodyExistsNotOnlyAtDcl() throws {
+        let root = try repositoryRoot()
+        let shared = try source(root, "shared/js/first_viewport_assets.js")
+        let ios = try source(root, "platforms/ios/osrswiki/Assets/web/first_viewport_assets.js")
+        XCTAssertEqual(shared, ios)
+        let startTail = shared.components(separatedBy: "function start()").dropFirst().joined()
+        XCTAssertNotNil(
+            startTail.range(
+                of: #"if\s*\(\s*document\.body\s*\)\s*\{\s*start\(\s*\)\s*;"#,
+                options: .regularExpression
+            ),
+            "start() must run when document.body already exists (article HTML is above this script)"
+        )
+        XCTAssertTrue(startTail.contains("document.addEventListener('DOMContentLoaded', start)"))
+        XCTAssertNil(
+            startTail.range(
+                of: #"if\s*\(\s*document\.readyState\s*===\s*'loading'\s*\)\s*\{\s*document\.addEventListener\('DOMContentLoaded',\s*start\)"#,
+                options: .regularExpression
+            ),
+            "must not wait for DCL solely because readyState is still loading"
+        )
+    }
+
     func testFirstViewportSettledDoesNotTriggerReveal() throws {
         let root = try repositoryRoot()
         let articleWebView = try source(root, "platforms/ios/osrswiki/Views/ArticleWebView.swift")
