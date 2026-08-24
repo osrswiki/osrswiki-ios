@@ -17,7 +17,8 @@
     scrollRegions: 0,
     primaryInfoboxes: 0,
     intrinsicRecipes: 0,
-    mapTables: 0
+    mapTables: 0,
+    relocatedLeads: 0
   };
   window.__osrsArticlePolishDiagnostics = diagnostics;
 
@@ -127,6 +128,156 @@
       figure.dataset.osrsAspect = String(height / width);
       diagnostics.vignettes += 1;
     });
+  }
+
+  const NARROW_ARTICLE_VIEWPORT_PX = 768;
+  const LEAD_HOME_MARKER = 'osrs-lead-image-home';
+
+  function isNarrowArticleViewport() {
+    const width = document.documentElement.clientWidth || window.innerWidth || 0;
+    return width > 0 && width < NARROW_ARTICLE_VIEWPORT_PX;
+  }
+
+  function isSkippableLeadChrome(element) {
+    if (!element || element.nodeType !== 1) return true;
+    if (element.hidden || element.getAttribute('aria-hidden') === 'true') return true;
+    if (element.classList.contains('hatnote') ||
+        element.classList.contains('dablink') ||
+        element.classList.contains('rellink') ||
+        element.getAttribute('role') === 'note') {
+      return true;
+    }
+    if (element.classList.contains('rs-external-header-links')) return true;
+    if (element.classList.contains('noprint') && element.classList.contains('nomobile')) return true;
+    const style = element.getAttribute('style') || '';
+    return /display\s*:\s*none/i.test(style);
+  }
+
+  function nextSignificantSibling(element) {
+    let sibling = element && element.nextElementSibling;
+    while (sibling && isSkippableLeadChrome(sibling)) {
+      sibling = sibling.nextElementSibling;
+    }
+    return sibling;
+  }
+
+  function firstSignificantChild(host) {
+    let child = host && host.firstElementChild;
+    while (child && isSkippableLeadChrome(child)) {
+      child = child.nextElementSibling;
+    }
+    return child;
+  }
+
+  function isFloatedLeadVignette(figure) {
+    if (!figure || !figure.matches) return false;
+    if (!figure.matches(
+      'figure.mw-halign-left, figure.mw-halign-right, .thumb.tleft, .thumb.tright, .floatleft, .floatright'
+    )) {
+      return false;
+    }
+    if (figure.closest('.infobox, .gallery, .navbox, .mw-kartographer-map, .GEChartBox')) return false;
+    const images = figure.querySelectorAll('img.mw-file-element');
+    if (images.length !== 1) return false;
+    const image = images[0];
+    const width = numericAttribute(image, 'width') || image.naturalWidth;
+    const height = numericAttribute(image, 'height') || image.naturalHeight;
+    // Decorative lead art, including nearly-square diary logos. Do not reuse the
+    // tall-portrait osrs-balanced-vignette aspect gate (height/width >= 1.25).
+    return width >= 72 && height >= 72;
+  }
+
+  function isCaptionedLeadFigure(figure) {
+    if (!figure || !figure.matches) return false;
+    if (figure.matches(
+      'figure.mw-halign-left, figure.mw-halign-right, .thumb.tleft, .thumb.tright, .floatleft, .floatright'
+    )) {
+      return false;
+    }
+    if (figure.closest('.infobox, .gallery, .navbox')) return false;
+    const typeOf = figure.getAttribute('typeof') || '';
+    if (typeOf.indexOf('mw:File/Frame') === -1 && typeOf.indexOf('mw:File/Thumb') === -1) return false;
+    const caption = figure.querySelector(':scope > figcaption, :scope > .thumbcaption');
+    if (!caption || !normalizeText(caption.textContent)) return false;
+    return !!figure.querySelector('img.mw-file-element');
+  }
+
+  function isLeadProseParagraph(element) {
+    return !!(element && element.tagName === 'P' && osrsAuthoredPhrasingText(element));
+  }
+
+  function firstProseParagraphAfter(element) {
+    let sibling = element && element.nextElementSibling;
+    while (sibling) {
+      if (isSkippableLeadChrome(sibling)) {
+        sibling = sibling.nextElementSibling;
+        continue;
+      }
+      if (isLeadProseParagraph(sibling)) return sibling;
+      return null;
+    }
+    return null;
+  }
+
+  function findVignetteLeadPair(root) {
+    const host = (root && root.querySelector && root.querySelector('.mw-parser-output')) ||
+      root ||
+      document.body;
+    if (!host) return null;
+    const vignette = firstSignificantChild(host);
+    if (!isFloatedLeadVignette(vignette)) return null;
+    const lead = nextSignificantSibling(vignette);
+    if (!isCaptionedLeadFigure(lead)) return null;
+    const paragraph = firstProseParagraphAfter(lead);
+    if (!paragraph) return null;
+    return { vignette: vignette, lead: lead, paragraph: paragraph };
+  }
+
+  function leadHomeMarkerFor(lead) {
+    const parent = lead && lead.parentNode;
+    if (!parent) return null;
+    for (let node = parent.firstChild; node; node = node.nextSibling) {
+      if (node.nodeType === 8 && node.nodeValue === LEAD_HOME_MARKER) return node;
+    }
+    return null;
+  }
+
+  function placeLeadHomeMarker(lead) {
+    if (!lead || !lead.parentNode) return;
+    if (leadHomeMarkerFor(lead)) return;
+    lead.parentNode.insertBefore(document.createComment(LEAD_HOME_MARKER), lead);
+  }
+
+  function restoreRelocatedLead(lead) {
+    const marker = leadHomeMarkerFor(lead);
+    if (!marker || !marker.parentNode) return;
+    marker.parentNode.insertBefore(lead, marker.nextSibling);
+    marker.parentNode.removeChild(marker);
+    delete lead.dataset.osrsLeadRelocated;
+  }
+
+  function relocateLeadAwayFromVignette(root) {
+    const host = (root && root.querySelector && root.querySelector('.mw-parser-output')) ||
+      (root && root.body) ||
+      root ||
+      document.body;
+    if (!host) return;
+
+    if (!isNarrowArticleViewport()) {
+      const relocated = host.querySelectorAll
+        ? host.querySelectorAll('[data-osrs-lead-relocated="true"]')
+        : [];
+      Array.from(relocated).forEach(restoreRelocatedLead);
+      return;
+    }
+
+    const pair = findVignetteLeadPair(host);
+    if (!pair) return;
+    if (pair.paragraph.nextElementSibling === pair.lead) return;
+    placeLeadHomeMarker(pair.lead);
+    pair.paragraph.parentNode.insertBefore(pair.lead, pair.paragraph.nextSibling);
+    pair.lead.dataset.osrsLeadRelocated = 'true';
+    diagnostics.relocatedLeads += 1;
   }
 
   function markSemanticTableRoles(root) {
@@ -465,6 +616,7 @@
     scheduled = false;
     markInlineImages(document);
     markBalancedImages(document);
+    relocateLeadAwayFromVignette(document);
     markSemanticTableRoles(document);
     markTocLayoutTables(document);
     expandProseBanners(document);
@@ -474,6 +626,8 @@
   window.OSRSApplyArticlePolish = applyPolish;
   window.OSRSArticlePolish = {
     apply: applyPolish,
+    findVignetteLeadPair: findVignetteLeadPair,
+    isNarrowArticleViewport: isNarrowArticleViewport,
     localScrollOwnerForTarget: localScrollOwnerForTarget,
     classifyTouchOwner: function(target) {
       const owner = localScrollOwnerForTarget(target);
