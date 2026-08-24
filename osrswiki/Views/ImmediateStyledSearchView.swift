@@ -106,34 +106,31 @@ struct ImmediateStyledSearchView: View {
     }
     
     var body: some View {
-        VStack(spacing: 0) {
-            // Search input section at the very top
-            searchInputSection
-            
-            // Content section below - always fill remaining space
-            Group {
-                if let vm = viewModel {
-                    SearchContentSection(
-                        viewModel: vm,
-                        searchText: $searchText,
-                        theme: theme,
-                        appState: appState,
-                        showsBrowseResultsWhenEmpty: scope.emptyQueryBrowsesNewest
-                    )
-                } else if !searchText.isEmpty || scope.emptyQueryBrowsesNewest {
-                    Color(theme.background)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else {
-                    emptySearchState
-                }
+        Group {
+            if let vm = viewModel {
+                SearchContentSection(
+                    viewModel: vm,
+                    searchText: $searchText,
+                    theme: theme,
+                    appState: appState,
+                    showsBrowseResultsWhenEmpty: scope.emptyQueryBrowsesNewest
+                )
+            } else if !searchText.isEmpty || scope.emptyQueryBrowsesNewest {
+                Color(theme.background)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                emptySearchState
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(theme.background))
         .ignoresSafeArea(.keyboard)
-        .safeAreaPadding(.top)
+        .osrsTabGlassAccessoryBar {
+            searchInputSection
+        }
         .navigationTitle("")
         .navigationBarHidden(true)
+        .toolbar(.hidden, for: .navigationBar)
         .environmentObject(themeManager)
         .osrsInteractiveBackSwipe()
         .tint(Color(theme.primary))

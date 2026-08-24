@@ -466,9 +466,11 @@ class SearchRepository {
                 followRedirects: false,
                 enrichMissingPreviews: false
             )
-            let firstPages = fetch.pages
-                .filter { $0.ns == namespace }
-                .map { $0.withPreviewFallback() }
+            let firstPages = osrsUpdatesBrowseOrder.sort(
+                fetch.pages
+                    .filter { $0.ns == namespace }
+                    .map { $0.withPreviewFallback() }
+            )
             let firstResponse = makeSearchResponse(
                 pages: firstPages,
                 offset: 0,

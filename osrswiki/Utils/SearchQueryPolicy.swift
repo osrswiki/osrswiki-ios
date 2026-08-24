@@ -63,7 +63,7 @@ enum SearchQueryPolicy {
 
     static func rank(_ results: [WikiGeneratedSearchPage], for rawQuery: String) -> [WikiGeneratedSearchPage] {
         let query = normalize(apiQuery(rawQuery))
-        guard !query.isEmpty else { return results.sorted { $0.index < $1.index } }
+        guard !query.isEmpty else { return osrsUpdatesBrowseOrder.sort(results) }
         let queryTokens = tokens(query)
 
         return results.enumerated().sorted { left, right in

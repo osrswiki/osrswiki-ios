@@ -125,9 +125,9 @@ private final class FakeUpdatesSearchDataClient: osrsSearchDataClient {
 
     private static let recentChangesJSON = Data("""
     {"continue":{"grccontinue":"next-token"},"query":{"pages":[
-      {"ns":112,"pageid":11,"title":"Update:Blank intro","index":1},
-      {"ns":112,"pageid":12,"title":"Update:Has snippet","index":2,"snippet":"already"},
-      {"ns":112,"pageid":13,"title":"Update:Chrome snippet","index":3,"snippet":"CLICK HERE TO SHOW THIS CONTENT","extract":"If you can't see the podcast, click here."}
+      {"ns":112,"pageid":12,"title":"Update:Has snippet","index":2,"snippet":"already","timestamp":"2025-06-01T00:00:00Z"},
+      {"ns":112,"pageid":13,"title":"Update:Chrome snippet","index":3,"snippet":"CLICK HERE TO SHOW THIS CONTENT","extract":"If you can't see the podcast, click here.","timestamp":"2024-01-01T00:00:00Z"},
+      {"ns":112,"pageid":11,"title":"Update:Blank intro","index":1,"timestamp":"2026-08-01T00:00:00Z"}
     ]}}
     """.utf8)
 

@@ -78,16 +78,16 @@ struct SearchResultRowView: View {
                     // CRASH FIX: Use pre-processed display properties - no expensive operations
                     Text(displayTitle)
                         .font(.osrsListTitle) // Ensure AttributedString font attributes are respected
-                        .lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
                         .multilineTextAlignment(.leading)
                         // NO .foregroundStyle() - let AttributedString colors show through
                     
-                    if result.processedSnippet != nil {
-                        Text(displaySnippet)
-                            .font(.subheadline)
-                            .lineLimit(2)
-                            .multilineTextAlignment(.leading)
-                    }
+                    Text(displaySnippet)
+                        .font(.subheadline)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                        .frame(minHeight: osrsSearchResultSnippetReserve.height, alignment: .top)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .clipped()

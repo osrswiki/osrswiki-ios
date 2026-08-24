@@ -143,16 +143,47 @@ final class SearchQueryPolicyTests: XCTestCase {
         }
     }
 
-    private func page(_ title: String, _ index: Int, snippet: String? = nil) -> WikiGeneratedSearchPage {
+    func testEmptyQueryBrowseIsReverseChronologicalByGeneratorIndexThenTimestampThenPageId() {
+        let shuffled = [
+            page("Update:Oldest", 3, timestamp: "2024-01-01T00:00:00Z", pageId: 10),
+            page("Update:Newest", 1, timestamp: "2026-08-01T00:00:00Z", pageId: 30),
+            page("Update:Middle", 2, timestamp: "2025-06-01T00:00:00Z", pageId: 20)
+        ]
+        XCTAssertEqual(
+            osrsUpdatesBrowseOrder.sort(shuffled).map(\.title),
+            ["Update:Newest", "Update:Middle", "Update:Oldest"]
+        )
+        XCTAssertEqual(
+            SearchQueryPolicy.rank(shuffled, for: "").map(\.title),
+            ["Update:Newest", "Update:Middle", "Update:Oldest"]
+        )
+
+        let missingIndex = [
+            page("Update:Later", 0, timestamp: "2026-08-02T00:00:00Z", pageId: 2),
+            page("Update:Earlier", 0, timestamp: "2026-08-01T00:00:00Z", pageId: 9)
+        ]
+        XCTAssertEqual(
+            osrsUpdatesBrowseOrder.sort(missingIndex).map(\.title),
+            ["Update:Later", "Update:Earlier"]
+        )
+    }
+
+    private func page(
+        _ title: String,
+        _ index: Int,
+        snippet: String? = nil,
+        timestamp: String? = nil,
+        pageId: Int? = nil
+    ) -> WikiGeneratedSearchPage {
         WikiGeneratedSearchPage(
             ns: 0,
-            pageid: index,
+            pageid: pageId ?? index,
             title: title,
             index: index,
             snippet: snippet,
             size: nil,
             wordcount: nil,
-            timestamp: nil,
+            timestamp: timestamp,
             thumbnail: nil
         )
     }

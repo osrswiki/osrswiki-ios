@@ -154,7 +154,9 @@ class SearchViewModel: ObservableObject {
     ) {
         guard generation == searchGeneration else { return }
         if isNewSearch {
-            searchResults = response.results
+            searchResults = scope.emptyQueryBrowsesNewest
+                ? osrsUpdatesBrowseOrder.sort(response.results)
+                : response.results
             browseContinueToken = response.continueToken
         }
         totalResultCount = response.totalCount
@@ -169,10 +171,12 @@ class SearchViewModel: ObservableObject {
         completed: Bool
     ) async {
         if isNewSearch {
-            searchResults = response.results
+            searchResults = scope.emptyQueryBrowsesNewest
+                ? osrsUpdatesBrowseOrder.sort(response.results)
+                : response.results
             browseContinueToken = response.continueToken
             if completed {
-                searchOffset = response.results.count
+                searchOffset = searchResults.count
             }
         }
         let processedResults = await processSearchResultsInBackground(
