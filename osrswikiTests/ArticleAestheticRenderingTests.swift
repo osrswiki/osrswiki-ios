@@ -2331,6 +2331,9 @@ final class ArticleAestheticRenderingTests: XCTestCase {
         XCTAssertTrue(switcher.contains("captureSwitcherScrollPin"))
         XCTAssertTrue(switcher.contains("bindSwitcherViewportPin"))
         XCTAssertTrue(switcher.contains("osrsSwitcherScrollingElement"))
+        XCTAssertTrue(switcher.contains("osrsSwitcherMeasureHost"))
+        XCTAssertTrue(switcher.contains("osrs-switcher-measure-host"))
+        XCTAssertTrue(switcher.contains("switcherViewportWidth"))
         XCTAssertTrue(switcher.contains("watchSwitcherHostSize"))
         XCTAssertTrue(switcher.contains("th.scrollWidth"))
         XCTAssertTrue(switcher.contains("setProperty('table-layout'"))
@@ -2771,6 +2774,201 @@ final class ArticleAestheticRenderingTests: XCTestCase {
             accuracy: 2.0,
             "Select switcher pin jumped from \(before) to \(after)"
         )
+    }
+
+    func testMidPageGloryBonusesSwitcherKeepsTablePutDuringSwitch() async throws {
+        attachWebViewToWindow()
+        let bootstrap = try readAsset("Assets/web/infobox_switcher_bootstrap.js")
+        let switcher = try readAsset("Assets/web/switch_infobox.js")
+        let html = """
+        <!doctype html>
+        <html>
+        <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <style>
+        html, body { margin: 0; width: 375px; max-width: 375px; }
+        table.infobox, table.infobox-bonuses { width: 375px; max-width: 375px; border-collapse: collapse; box-sizing: border-box; }
+        table.infobox-bonuses th, table.infobox-bonuses td { min-width: 28px; padding: 4px; }
+        .tall { height: 280px; background: #c00; }
+        .short { height: 48px; background: #0c0; }
+        </style>
+        </head>
+        <body>
+        <table class="infobox infobox-switch" id="glory" data-resource-class=".infobox-resources-glory">
+            <caption>
+                <div class="infobox-buttons" data-default-version="0">
+                    <span data-switch-index="0" class="button">Uncharged</span>
+                    <span data-switch-index="1" class="button">6</span>
+                </div>
+            </caption>
+            <tbody>
+                <tr><th class="infobox-header" data-attr-param="name">Amulet of glory</th></tr>
+                <tr><td data-attr-param="block"><div class="short"></div></td></tr>
+            </tbody>
+        </table>
+        <div class="infobox-resources-glory infobox-switch-resources">
+            <div data-attr-param="name">
+                <span data-attr-index="0">Amulet of glory</span>
+                <span data-attr-index="1">Amulet of glory (6)</span>
+            </div>
+            <div data-attr-param="block">
+                <span data-attr-index="0"><div class="short"></div></span>
+                <span data-attr-index="1"><div class="tall"></div></span>
+            </div>
+        </div>
+        <p>Combat stats filler so Equipment bonuses sits below the first screen.</p>
+        <div style="height: 420px"></div>
+        <table class="infobox infobox-switch infobox-bonuses" id="combatStats" data-resource-class=".infobox-resources-bonuses">
+            <caption>
+                <div class="infobox-buttons" id="mid-page-switcher" data-default-version="0">
+                    <span data-switch-index="0" class="button">Uncharged</span>
+                    <span data-switch-index="1" class="button" id="mid-charged">6</span>
+                </div>
+            </caption>
+            <tbody>
+                <tr>
+                    <th class="infobox-subheader">Attack bonuses</th>
+                    <th class="infobox-bonuses-image">Stab</th>
+                    <th class="infobox-bonuses-image">Slash</th>
+                    <th class="infobox-bonuses-image">Crush</th>
+                </tr>
+                <tr>
+                    <td>Attack</td>
+                    <td data-attr-param="stab">+0</td>
+                    <td>+0</td>
+                    <td>+0</td>
+                </tr>
+            </tbody>
+        </table>
+        <div class="infobox-resources-bonuses infobox-switch-resources">
+            <div data-attr-param="stab">
+                <span data-attr-index="0">+0</span>
+                <span data-attr-index="1">+0</span>
+            </div>
+        </div>
+        <div style="height: 2000px">scrollable tail</div>
+        <script>\(bootstrap)</script>
+        <script>\(switcher)</script>
+        <script>initializeInfoboxSwitcher();</script>
+        </body>
+        </html>
+        """
+        try await load(html)
+        try await Task.sleep(nanoseconds: 250_000_000)
+        _ = try await evaluate("""
+        (() => {
+            const pin = document.getElementById('mid-page-switcher');
+            const table = document.getElementById('combatStats');
+            const charged = document.getElementById('mid-charged');
+            const scroller = document.scrollingElement || document.documentElement;
+            pin.scrollIntoView();
+            const samples = [];
+            window.__osrsSwitcherMidpage = { done: false, samples: samples, selected: '', gloryName: '' };
+            const measure = (tag) => {
+                const pinBox = pin.getBoundingClientRect();
+                const tableBox = table.getBoundingClientRect();
+                samples.push({
+                    tag: tag,
+                    pinTop: Math.round(pinBox.top * 100) / 100,
+                    tableTop: Math.round(tableBox.top * 100) / 100,
+                    tableHeight: Math.round(tableBox.height * 100) / 100,
+                    tableWidth: Math.round(tableBox.width * 100) / 100,
+                    scrollTop: Math.round((scroller.scrollTop || 0) * 100) / 100
+                });
+            };
+            const origRestore = restoreSwitcherScrollPin;
+            restoreSwitcherScrollPin = function(nextPin) {
+                measure('pre-restore');
+                origRestore(nextPin);
+                measure('post-restore');
+            };
+            measure('before');
+            charged.click();
+            measure('sync-after-click');
+            let frames = 0;
+            const onFrame = () => {
+                measure('raf-' + frames);
+                frames += 1;
+                if (frames < 6) {
+                    requestAnimationFrame(onFrame);
+                    return;
+                }
+                const selected = document.querySelector('#mid-page-switcher .button-selected');
+                window.__osrsSwitcherMidpage.selected = (selected && selected.textContent) || '';
+                window.__osrsSwitcherMidpage.gloryName = (document.querySelector('#glory [data-attr-param="name"]').textContent || '').trim();
+                window.__osrsSwitcherMidpage.done = true;
+            };
+            requestAnimationFrame(onFrame);
+            return { ok: true };
+        })()
+        """)
+        var payload: [String: Any] = [:]
+        for _ in 0..<40 {
+            let probe = try await evaluate("""
+            (() => {
+                const state = window.__osrsSwitcherMidpage || { done: false };
+                return {
+                    done: !!state.done,
+                    json: JSON.stringify({
+                        samples: state.samples || [],
+                        selected: state.selected || '',
+                        gloryName: state.gloryName || ''
+                    })
+                };
+            })()
+            """)
+            if boolValue(probe["done"]), let json = probe["json"] as? String,
+               let data = json.data(using: .utf8),
+               let parsed = try JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                payload = parsed
+                break
+            }
+            try await Task.sleep(nanoseconds: 20_000_000)
+        }
+        let samples = payload["samples"] as? [[String: Any]] ?? []
+        XCTAssertGreaterThanOrEqual(samples.count, 4, "Need before/during/after samples, got \(samples)")
+        XCTAssertEqual(payload["selected"] as? String, "6")
+        XCTAssertEqual(payload["gloryName"] as? String, "Amulet of glory (6)")
+        let baseline = samples.first { ($0["tag"] as? String) == "before" } ?? samples[0]
+        let baselinePin = number(baseline, "pinTop")
+        let baselineTable = number(baseline, "tableTop")
+        let baselineHeight = number(baseline, "tableHeight")
+        let baselineWidth = number(baseline, "tableWidth")
+        let baselineScroll = number(baseline, "scrollTop")
+        XCTAssertGreaterThan(baselineWidth, 48)
+        for sample in samples {
+            let tag = sample["tag"] as? String ?? "?"
+            XCTAssertEqual(
+                number(sample, "pinTop"),
+                baselinePin,
+                accuracy: 2.0,
+                "Pin jumped at \(tag): \(sample) vs before \(baseline)"
+            )
+            XCTAssertEqual(
+                number(sample, "tableTop"),
+                baselineTable,
+                accuracy: 2.0,
+                "Bonuses table jumped at \(tag): \(sample) vs before \(baseline)"
+            )
+            XCTAssertEqual(
+                number(sample, "tableHeight"),
+                baselineHeight,
+                accuracy: 2.0,
+                "Bonuses table height changed at \(tag): \(sample) vs before \(baseline)"
+            )
+            XCTAssertEqual(
+                number(sample, "tableWidth"),
+                baselineWidth,
+                accuracy: 2.0,
+                "Bonuses table width changed at \(tag): \(sample) vs before \(baseline)"
+            )
+            XCTAssertEqual(
+                number(sample, "scrollTop"),
+                baselineScroll,
+                accuracy: 2.0,
+                "Scroll jumped at \(tag): \(sample) vs before \(baseline)"
+            )
+        }
     }
 
     func testDarkFirstPaintUsesLiteralThemeBackgroundBeforeSharedCss() async throws {

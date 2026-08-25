@@ -31,6 +31,16 @@ function initializePage() {
                 performSwitch(switchIndex, button);
             }
         });
+        document.body.addEventListener('change', (event) => {
+            const select = event.target.closest('select');
+            if (!select) return;
+            if (!select.closest('.infobox-buttons, .switch-infobox-triggers, .infobox-switch, .switch-infobox')) {
+                return;
+            }
+            const option = select.options[select.selectedIndex];
+            const switchIndex = (option && option.getAttribute('data-switch-index')) || select.value;
+            performSwitch(switchIndex, select);
+        });
 
         configureLegacySwitchers(mainButtons);
 
@@ -166,8 +176,11 @@ function restoreSwitcherScrollPin(pin) {
     if (scroller && typeof scroller.scrollTop === 'number') {
         scroller.scrollTop += delta;
     }
-    if (typeof window.scrollBy === 'function') {
-        window.scrollBy(0, pin.node.getBoundingClientRect().top - pin.top);
+    const remaining = pin.node.getBoundingClientRect().top - pin.top;
+    if (Math.abs(remaining) >= 0.5 && typeof window.scrollTo === 'function') {
+        const x = (typeof window.scrollX === 'number') ? window.scrollX : 0;
+        const y = (typeof window.scrollY === 'number') ? window.scrollY : (scroller ? scroller.scrollTop : 0);
+        window.scrollTo(x, y + remaining);
     }
 }
 
@@ -176,13 +189,13 @@ function stabilizeSwitcherScrollPin(pin) {
         return;
     }
     pendingSwitcherScrollPin = pin;
+    // Mutate-then-pin must land in this turn so the first paint is already
+    // anchored. Post-paint rAF correction is the flash of another layout.
     restoreSwitcherScrollPin(pendingSwitcherScrollPin);
-    requestAnimationFrame(function() {
-        restoreSwitcherScrollPin(pendingSwitcherScrollPin);
-        requestAnimationFrame(function() {
-            restoreSwitcherScrollPin(pendingSwitcherScrollPin);
-        });
-    });
+    if (pin.node && typeof pin.node.offsetHeight === 'number') {
+        void pin.node.offsetHeight;
+    }
+    restoreSwitcherScrollPin(pendingSwitcherScrollPin);
 }
 
 function performSwitch(switchIndex, anchorNode) {
@@ -205,6 +218,7 @@ function performSwitch(switchIndex, anchorNode) {
     // Update infobox content
     const infoboxesToUpdate = document.querySelectorAll('.infobox-switch[data-resource-class]');
     infoboxesToUpdate.forEach(infobox => {
+        applySwitcherLayoutLock(infobox);
         const resourceClass = infobox.getAttribute('data-resource-class');
         const resources = resourceClass ? document.querySelector(resourceClass) : null;
         if (resources) {
@@ -352,6 +366,10 @@ function applySwitcherLayoutLock(infobox) {
         th.style.setProperty('max-width', lock.labelPx + 'px', 'important');
         th.style.setProperty('white-space', 'nowrap', 'important');
     });
+
+    if (lock.heightPx > 0) {
+        infobox.style.setProperty('min-height', lock.heightPx + 'px', 'important');
+    }
 }
 
 function watchSwitcherHostSize(infobox) {
@@ -361,6 +379,8 @@ function watchSwitcherHostSize(infobox) {
     const observer = new ResizeObserver(() => {
         const lock = switcherLayoutLocks.get(infobox);
         const width = infobox.getBoundingClientRect().width;
+        const cap = switcherViewportWidth(infobox);
+        if (width > cap + 8) return;
         if (lock && lock.widthPx > 48 && width <= lock.widthPx + 8) return;
         if (width > 48) {
             lockSwitcherMinBlockSize();
@@ -378,32 +398,70 @@ function clearSwitcherLockStyles(root) {
     });
 }
 
+function switcherViewportWidth(infobox) {
+    const inner = window.innerWidth || document.documentElement.clientWidth || 375;
+    const parent = infobox && infobox.parentElement;
+    const parentWidth = parent && typeof parent.getBoundingClientRect === 'function'
+        ? parent.getBoundingClientRect().width
+        : 0;
+    const cap = (parentWidth > 48 && parentWidth <= inner + 8) ? parentWidth : inner;
+    return Math.max(48, cap);
+}
+
+function osrsSwitcherMeasureHost() {
+    let host = document.getElementById('osrs-switcher-measure-host');
+    if (host) {
+        return host;
+    }
+    host = document.createElement('div');
+    host.id = 'osrs-switcher-measure-host';
+    host.setAttribute('aria-hidden', 'true');
+    host.style.cssText = [
+        'position:fixed',
+        'left:-9999px',
+        'top:0',
+        'z-index:-1',
+        'overflow:hidden',
+        'visibility:hidden',
+        'pointer-events:none',
+        'box-sizing:border-box'
+    ].join(';');
+    document.documentElement.appendChild(host);
+    return host;
+}
+
 function lockSwitcherMinBlockSize() {
     document.querySelectorAll('.infobox-switch[data-resource-class]').forEach((infobox) => {
         const resourceClass = infobox.getAttribute('data-resource-class');
         const resources = resourceClass ? document.querySelector(resourceClass) : null;
-        if (!resources || !infobox.parentNode) return;
+        if (!resources) return;
 
         const indices = Array.from(
-            infobox.querySelectorAll('.infobox-buttons .button[data-switch-index]')
+            infobox.querySelectorAll(
+                '.infobox-buttons .button[data-switch-index], .infobox-buttons option[data-switch-index]'
+            )
         ).map((button) => button.getAttribute('data-switch-index')).filter(Boolean);
         if (indices.length === 0) return;
 
         watchSwitcherHostSize(infobox);
+        const cap = switcherViewportWidth(infobox);
         const measuredWidth = infobox.getBoundingClientRect().width;
         const existing = switcherLayoutLocks.get(infobox);
         if (!(measuredWidth > 48) && !(existing && existing.widthPx > 48)) return;
-        const liveWidth = (existing && existing.widthPx > 48 && measuredWidth <= existing.widthPx + 8)
+        let liveWidth = (existing && existing.widthPx > 48 && measuredWidth <= existing.widthPx + 8)
             ? existing.widthPx
             : measuredWidth;
+        if (!(liveWidth > 48) || liveWidth > cap + 8) {
+            liveWidth = Math.min(measuredWidth > 48 ? measuredWidth : cap, cap);
+        }
+        liveWidth = Math.min(liveWidth, cap);
 
         const probe = infobox.cloneNode(true);
+        probe.removeAttribute('id');
         probe.setAttribute('aria-hidden', 'true');
         clearSwitcherLockStyles(probe);
         probe.style.cssText = [
-            'position:absolute',
-            'left:-10000px',
-            'top:0',
+            'position:static',
             'visibility:hidden',
             'pointer-events:none',
             'box-sizing:border-box'
@@ -413,11 +471,18 @@ function lockSwitcherMinBlockSize() {
         probe.style.setProperty('min-width', '0', 'important');
         probe.style.setProperty('min-height', '0', 'important');
         probe.style.setProperty('table-layout', 'auto', 'important');
-        infobox.parentNode.appendChild(probe);
+        const host = osrsSwitcherMeasureHost();
+        host.style.width = liveWidth + 'px';
+        host.appendChild(probe);
 
         let maxLabelWidth = 0;
+        let maxHeight = infobox.getBoundingClientRect().height;
         indices.forEach((index) => {
             populatePlaceholders(probe, resources, index);
+            const probeHeight = probe.getBoundingClientRect().height;
+            if (probeHeight > 0) {
+                maxHeight = Math.max(maxHeight, probeHeight);
+            }
             probe.querySelectorAll('th:not(.infobox-header):not([colspan])').forEach((th) => {
                 th.style.setProperty('white-space', 'nowrap', 'important');
                 th.style.setProperty('width', 'auto', 'important');
@@ -435,7 +500,8 @@ function lockSwitcherMinBlockSize() {
         const labelCap = Math.max(1, Math.floor(liveWidth * 0.62));
         switcherLayoutLocks.set(infobox, {
             widthPx: Math.ceil(liveWidth),
-            labelPx: Math.max(1, Math.min(labelCap, Math.ceil(maxLabelWidth)))
+            labelPx: Math.max(1, Math.min(labelCap, Math.ceil(maxLabelWidth))),
+            heightPx: Math.ceil(maxHeight)
         });
         applySwitcherLayoutLock(infobox);
     });
