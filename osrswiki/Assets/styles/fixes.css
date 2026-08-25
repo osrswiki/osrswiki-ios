@@ -2426,13 +2426,17 @@ table.notebox th,
 }
 
 /* Wiki quote boxes (Cquote2 tables with td.quotation-mark, HTML blockquote)
-   wrap inside the article column. They are prose, not data tables. */
+   wrap inside the article column. They are prose, not data tables.
+   Cquote2's attribution row starts with a non-mark spacer in column 1.
+   width:100% / min-width:0 / overflow-wrap:anywhere on every non-mark cell
+   dumps leftover table width into that spacer and collapses the quote body
+   to a 1-2 letter rail on the right. */
 blockquote {
     margin-inline: 0 !important;
     max-width: 100% !important;
     box-sizing: border-box;
     white-space: normal !important;
-    overflow-wrap: anywhere;
+    overflow-wrap: break-word;
     overflow-x: visible !important;
 }
 
@@ -2445,21 +2449,30 @@ table:has(td.quotation-mark) {
     overflow-x: visible !important;
 }
 
-table:has(td.quotation-mark) td:not(.quotation-mark),
-table:has(td.quotation-mark) th:not(.quotation-mark) {
-    overflow-wrap: anywhere;
-    white-space: normal !important;
-    word-break: break-word;
-    min-width: 0 !important;
-    width: 100% !important;
-    max-width: 100%;
-}
-
+/* 1% + nowrap is the Cquote leftover-width trick: glyphs stay intrinsic
+   and extra space goes to the body column. Do not use width:auto here;
+   that overrides the template's 20px and lets marks grow. */
 td.quotation-mark,
 th.quotation-mark {
-    width: auto !important;
+    width: 1% !important;
     white-space: nowrap !important;
     box-sizing: border-box;
+}
+
+/* Body is the cell immediately after the opening mark, not every
+   td:not(.quotation-mark) — attribution spacers must not get 100%. */
+table:has(td.quotation-mark) td.quotation-mark + td,
+table:has(td.quotation-mark) th.quotation-mark + td {
+    white-space: normal !important;
+    overflow-wrap: break-word;
+    word-break: normal;
+    width: auto !important;
+}
+
+table:has(td.quotation-mark) td:not(.quotation-mark),
+table:has(td.quotation-mark) th:not(.quotation-mark) {
+    white-space: normal !important;
+    overflow-wrap: break-word;
 }
 
 /* osrs-bonuses-overlap-guard: keep section labels and slot text from

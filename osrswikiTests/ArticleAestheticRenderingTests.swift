@@ -1322,15 +1322,31 @@ final class ArticleAestheticRenderingTests: XCTestCase {
         </head>
         <body class="theme-osrs-light">
           <div class="mw-parser-output">
-            <p>Ian Taylor later commented on its fame:</p>
+            <p id="lead-para">Ian Taylor later commented on its fame:</p>
             <table id="sea-shanty-quote" align="center" style="border-collapse:collapse; border-style:none; background-color:transparent;">
               <tbody><tr>
                 <td class="quotation-mark" style="width:20px; vertical-align:top; font-size:40px; font-family:serif; font-weight:bold; text-align:left; padding:10px 10px;">“</td>
                 <td id="quote-text" style="vertical-align:center; padding:4px 10px;">\(quoteText)</td>
-                <td class="quotation-mark" style="width:20px; vertical-align:top; font-size:40px; font-family:serif; font-weight:bold; text-align:right; padding:10px 10px;">”</td>
+                <td class="quotation-mark" style="width:20px; vertical-align:bottom; font-size:40px; font-family:serif; font-weight:bold; text-align:right; padding:10px 10px;">”</td>
+              </tr>
+              <tr>
+                <td id="quote-spacer">&nbsp;</td>
+                <td id="quote-cite" style="vertical-align:top"><div style="line-height:1em;text-align: right"><cite style="font-style:normal;">— Ian Taylor</cite></div></td>
               </tr></tbody>
             </table>
             <div id="toc" class="toc"><div class="toctitle"><h2>Contents</h2></div><ul><li>Versions</li></ul></div>
+            <p id="jagex-lead">Mark Gerhard later commented:</p>
+            <table id="jagex-quote" align="center" style="border-collapse:collapse; border-style:none; background-color:transparent;">
+              <tbody><tr>
+                <td class="quotation-mark" style="width:20px; vertical-align:top; font-size:40px; font-family:serif; font-weight:bold; text-align:left; padding:10px 10px;">“</td>
+                <td id="jagex-quote-text" style="vertical-align:center; padding:4px 10px;">Sadly the game was not as complete as we wanted and we spent the first few months trying to "fix" the game where we could. About a month or so ago we took the decision to stop trying to "fix it" as we still wouldn't have the game we wanted and the game certainly did not meet all the objectives and specifications established in the original game design document and therefore it would be better to go back to the founding principles and build the game we always wanted.</td>
+                <td class="quotation-mark" style="width:20px; vertical-align:bottom; font-size:40px; font-family:serif; font-weight:bold; text-align:right; padding:10px 10px;">”</td>
+              </tr>
+              <tr>
+                <td>&nbsp;</td>
+                <td style="vertical-align:top"><div style="line-height:1em;text-align: right"><cite style="font-style:normal;">— Mark Gerhard, 25 October 2009</cite></div></td>
+              </tr></tbody>
+            </table>
             <blockquote id="quote-block">\(quoteText)</blockquote>
             <pre id="code-sample"><code>UNBROKEN_TOKEN_THAT_SHOULD_STILL_BE_ALLOWED_TO_OVERFLOW_HORIZONTALLY_WHEN_IT_CANNOT_WRAP_BECAUSE_IT_HAS_NO_SPACES_OR_BREAKS_0123456789_ABCDEFGHIJKLMNOPQRSTUVWXYZ</code></pre>
           </div>
@@ -1349,28 +1365,69 @@ final class ArticleAestheticRenderingTests: XCTestCase {
                 if (cs.lineHeight !== 'normal' && Number.isFinite(parsed)) return parsed;
                 return parseFloat(cs.fontSize) * 1.2;
             }
+            function lineBoxes(el) {
+                const range = document.createRange();
+                range.selectNodeContents(el);
+                const unique = [];
+                for (const r of range.getClientRects()) {
+                    const prev = unique.find((item) => Math.abs(item.top - r.top) < 0.5);
+                    if (prev) {
+                        prev.width = Math.max(prev.width, r.width);
+                        continue;
+                    }
+                    unique.push({ top: r.top, width: r.width, height: r.height });
+                }
+                return unique;
+            }
+            function measureQuote(tableId, textId) {
+                const table = document.getElementById(tableId);
+                const cell = document.getElementById(textId);
+                const marks = [...table.querySelectorAll('td.quotation-mark')];
+                const lines = lineBoxes(cell);
+                return {
+                    tableWidth: table.getBoundingClientRect().width,
+                    tableDelta: table.scrollWidth - table.clientWidth,
+                    tableSurface: !!(table.closest('.osrs-local-scroll-surface') ||
+                        (table.parentElement && /osrs-local-scroll-surface|osrs-article-scroll-region/.test(table.parentElement.className || ''))),
+                    cellWidth: cell.getBoundingClientRect().width,
+                    cellHeight: cell.getBoundingClientRect().height,
+                    cellLine: lineBoxHeight(cell),
+                    cellWhiteSpace: getComputedStyle(cell).whiteSpace,
+                    cellMaxLineWidth: lines.reduce((m, l) => Math.max(m, l.width), 0),
+                    maxMarkWidth: marks.reduce((m, el) => Math.max(m, el.getBoundingClientRect().width), 0)
+                };
+            }
             function measure(theme) {
                 document.documentElement.className = theme;
                 document.body.className = theme;
                 if (typeof window.OSRSApplyArticlePolish === 'function') {
                     window.OSRSApplyArticlePolish();
                 }
-                const table = document.getElementById('sea-shanty-quote');
-                const cell = document.getElementById('quote-text');
                 const block = document.getElementById('quote-block');
                 const pre = document.getElementById('code-sample');
+                const para = document.getElementById('lead-para');
+                const sea = measureQuote('sea-shanty-quote', 'quote-text');
+                const jagex = measureQuote('jagex-quote', 'jagex-quote-text');
                 const viewport = document.documentElement.clientWidth;
                 return {
                     viewportWidth: viewport,
-                    tableWidth: table.getBoundingClientRect().width,
-                    tableScrollWidth: table.scrollWidth,
-                    tableClientWidth: table.clientWidth,
-                    tableSurface: !!(table.closest('.osrs-local-scroll-surface') ||
-                        (table.parentElement && /osrs-local-scroll-surface|osrs-article-scroll-region/.test(table.parentElement.className || ''))),
-                    cellWhiteSpace: getComputedStyle(cell).whiteSpace,
-                    cellOverflowX: getComputedStyle(cell).overflowX,
-                    cellHeight: cell.getBoundingClientRect().height,
-                    cellLine: lineBoxHeight(cell),
+                    paraWidth: para.getBoundingClientRect().width,
+                    tableWidth: sea.tableWidth,
+                    tableDelta: sea.tableDelta,
+                    tableSurface: sea.tableSurface,
+                    cellWidth: sea.cellWidth,
+                    cellWhiteSpace: sea.cellWhiteSpace,
+                    cellHeight: sea.cellHeight,
+                    cellLine: sea.cellLine,
+                    cellMaxLineWidth: sea.cellMaxLineWidth,
+                    maxMarkWidth: sea.maxMarkWidth,
+                    jagexCellWidth: jagex.cellWidth,
+                    jagexCellHeight: jagex.cellHeight,
+                    jagexCellLine: jagex.cellLine,
+                    jagexCellWhiteSpace: jagex.cellWhiteSpace,
+                    jagexMaxLineWidth: jagex.cellMaxLineWidth,
+                    jagexMaxMarkWidth: jagex.maxMarkWidth,
+                    jagexTableDelta: jagex.tableDelta,
                     blockWidth: block.getBoundingClientRect().width,
                     blockScrollWidth: block.scrollWidth,
                     blockClientWidth: block.clientWidth,
@@ -1387,12 +1444,23 @@ final class ArticleAestheticRenderingTests: XCTestCase {
             const dark = measure('theme-osrs-dark');
             return {
                 lightViewport: light.viewportWidth,
+                lightParaWidth: light.paraWidth,
                 lightTableWidth: light.tableWidth,
-                lightTableDelta: light.tableScrollWidth - light.tableClientWidth,
+                lightTableDelta: light.tableDelta,
                 lightTableSurface: light.tableSurface,
+                lightCellWidth: light.cellWidth,
                 lightCellWhiteSpace: light.cellWhiteSpace,
                 lightCellHeight: light.cellHeight,
                 lightCellLine: light.cellLine,
+                lightCellMaxLineWidth: light.cellMaxLineWidth,
+                lightMaxMarkWidth: light.maxMarkWidth,
+                lightJagexCellWidth: light.jagexCellWidth,
+                lightJagexCellHeight: light.jagexCellHeight,
+                lightJagexCellLine: light.jagexCellLine,
+                lightJagexCellWhiteSpace: light.jagexCellWhiteSpace,
+                lightJagexMaxLineWidth: light.jagexMaxLineWidth,
+                lightJagexMaxMarkWidth: light.jagexMaxMarkWidth,
+                lightJagexTableDelta: light.jagexTableDelta,
                 lightBlockWidth: light.blockWidth,
                 lightBlockDelta: light.blockScrollWidth - light.blockClientWidth,
                 lightBlockWhiteSpace: light.blockWhiteSpace,
@@ -1402,12 +1470,23 @@ final class ArticleAestheticRenderingTests: XCTestCase {
                 lightPreOverflowX: light.preOverflowX,
                 lightRootScrollWidth: light.rootScrollWidth,
                 darkViewport: dark.viewportWidth,
+                darkParaWidth: dark.paraWidth,
                 darkTableWidth: dark.tableWidth,
-                darkTableDelta: dark.tableScrollWidth - dark.tableClientWidth,
+                darkTableDelta: dark.tableDelta,
                 darkTableSurface: dark.tableSurface,
+                darkCellWidth: dark.cellWidth,
                 darkCellWhiteSpace: dark.cellWhiteSpace,
                 darkCellHeight: dark.cellHeight,
                 darkCellLine: dark.cellLine,
+                darkCellMaxLineWidth: dark.cellMaxLineWidth,
+                darkMaxMarkWidth: dark.maxMarkWidth,
+                darkJagexCellWidth: dark.jagexCellWidth,
+                darkJagexCellHeight: dark.jagexCellHeight,
+                darkJagexCellLine: dark.jagexCellLine,
+                darkJagexCellWhiteSpace: dark.jagexCellWhiteSpace,
+                darkJagexMaxLineWidth: dark.jagexMaxLineWidth,
+                darkJagexMaxMarkWidth: dark.jagexMaxMarkWidth,
+                darkJagexTableDelta: dark.jagexTableDelta,
                 darkBlockWidth: dark.blockWidth,
                 darkBlockDelta: dark.blockScrollWidth - dark.blockClientWidth,
                 darkBlockWhiteSpace: dark.blockWhiteSpace,
@@ -1422,7 +1501,9 @@ final class ArticleAestheticRenderingTests: XCTestCase {
 
         for prefix in ["light", "dark"] {
             let viewport = number(state, "\(prefix)Viewport")
+            let paraWidth = number(state, "\(prefix)ParaWidth")
             XCTAssertGreaterThan(viewport, 0, "\(prefix) viewport")
+            XCTAssertGreaterThan(paraWidth, 0, "\(prefix) sibling paragraph")
             XCTAssertLessThanOrEqual(
                 number(state, "\(prefix)TableWidth"),
                 viewport + 8,
@@ -1436,14 +1517,50 @@ final class ArticleAestheticRenderingTests: XCTestCase {
             XCTAssertEqual(state["\(prefix)TableSurface"] as? Bool, false, "\(prefix) Cquote2 must not become a local scroll surface")
             XCTAssertNotEqual(state["\(prefix)CellWhiteSpace"] as? String, "nowrap", "\(prefix) quote text cell must wrap")
             XCTAssertGreaterThan(
+                number(state, "\(prefix)CellWidth"),
+                paraWidth * 0.65,
+                "\(prefix) Sea shanty 2 quote body must use paragraph-width, not a 1-2 letter rail"
+            )
+            XCTAssertGreaterThan(
+                number(state, "\(prefix)CellMaxLineWidth"),
+                paraWidth * 0.5,
+                "\(prefix) Sea shanty 2 quote lines must be paragraph-width"
+            )
+            XCTAssertLessThan(
+                number(state, "\(prefix)MaxMarkWidth"),
+                viewport * 0.28,
+                "\(prefix) quotation-mark columns must stay glyph-sized"
+            )
+            XCTAssertGreaterThan(
                 number(state, "\(prefix)CellHeight"),
                 number(state, "\(prefix)CellLine") * 1.5,
                 "\(prefix) Cquote2 text must wrap onto more than one line at 375px"
             )
+            XCTAssertGreaterThan(
+                number(state, "\(prefix)JagexCellWidth"),
+                paraWidth * 0.65,
+                "\(prefix) Jagex quote body must use paragraph-width, not a 1-2 letter rail"
+            )
+            XCTAssertGreaterThan(
+                number(state, "\(prefix)JagexMaxLineWidth"),
+                paraWidth * 0.5,
+                "\(prefix) Jagex quote lines must be paragraph-width"
+            )
+            XCTAssertNotEqual(state["\(prefix)JagexCellWhiteSpace"] as? String, "nowrap")
+            XCTAssertGreaterThan(
+                number(state, "\(prefix)JagexCellHeight"),
+                number(state, "\(prefix)JagexCellLine") * 1.5
+            )
+            XCTAssertLessThanOrEqual(number(state, "\(prefix)JagexTableDelta"), 2)
             XCTAssertLessThanOrEqual(
                 number(state, "\(prefix)BlockWidth"),
                 viewport + 8,
                 "\(prefix) blockquote must stay inside the phone content width"
+            )
+            XCTAssertGreaterThan(
+                number(state, "\(prefix)BlockWidth"),
+                paraWidth * 0.85,
+                "\(prefix) blockquote must stay near paragraph width"
             )
             XCTAssertLessThanOrEqual(
                 number(state, "\(prefix)BlockDelta"),
