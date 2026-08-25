@@ -23,4 +23,10 @@ enum osrsNativeCalcSlotGeometry {
     ) -> Bool {
         formTopY + formHeight <= 0 || formTopY >= viewportHeight
     }
+
+    /// The overlay starts at y=0 of the article shell. Painting before the
+    /// slot probe returns a real top covers search chrome with the form tail.
+    static func overlayMayShow(slotResolved: Bool) -> Bool {
+        slotResolved
+    }
 }

@@ -89,14 +89,15 @@
         var formId = opts.formId || '';
         var resultId = opts.resultId || '';
         var height = Math.max(1, parseInt(opts.height, 10) || 420);
-        if (!document.getElementById('osrs-native-calc-slot') &&
-            document.querySelectorAll('select').length === 0) {
-            return JSON.stringify({ missing: true, waiting: true, selectCount: 0 });
-        }
         var form = (formId && document.getElementById(formId)) ||
             document.querySelector('.jcTable, [id$="Calc"], [id$="Form"]');
         var config = document.querySelector('pre.jcConfig');
         var layout = document.querySelector('.osrs-calculator-layout');
+        if (!document.getElementById('osrs-native-calc-slot') &&
+            document.querySelectorAll('select').length === 0 &&
+            !form && !config && !layout) {
+            return JSON.stringify({ missing: true, waiting: true, selectCount: 0 });
+        }
         var result = (resultId && document.getElementById(resultId)) ||
             document.querySelector('.osrs-calculator-result, [id$="Results"]');
         var panel = (layout && layout.querySelector('.osrs-calculator-panel, .oo-ui-panelLayout-framed')) ||
@@ -122,8 +123,10 @@
             'html.osrs-native-calc-slot-active .osrs-calculator-layout .oo-ui-widget,',
             'html.osrs-native-calc-slot-active .osrs-calculator-layout input,',
             'html.osrs-native-calc-slot-active .osrs-calculator-layout select,',
-            'html.osrs-native-calc-slot-active .osrs-calculator-layout button {',
-            'display:none!important;visibility:hidden!important;height:0!important;min-height:0!important;padding:0!important;margin:0!important;border:0!important;overflow:hidden!important;',
+            'html.osrs-native-calc-slot-active .osrs-calculator-layout button,',
+            'html.osrs-native-calc-slot-active select,',
+            'html.osrs-native-calc-slot-active noscript {',
+            'display:none!important;visibility:hidden!important;height:0!important;min-height:0!important;padding:0!important;margin:0!important;border:0!important;overflow:hidden!important;pointer-events:none!important;',
             '}',
             'html.osrs-native-calc-slot-active .osrs-calculator-panel {',
             'display:none!important;visibility:hidden!important;height:0!important;min-height:0!important;padding:0!important;margin:0!important;border:0!important;background:transparent!important;box-shadow:none!important;',

@@ -6,6 +6,7 @@ struct osrsNativeCalcSlotOverlay: View {
     @ObservedObject var session: osrsNativeCalcSession
     var webView: WKWebView?
     @State private var slotY: CGFloat = 0
+    @State private var slotResolved = false
     @State private var formHeight: CGFloat = 420
     @State private var collapsed = false
 
@@ -15,14 +16,16 @@ struct osrsNativeCalcSlotOverlay: View {
                 slotDocumentY: slotY,
                 contentOffsetY: 0
             )
-            osrsNativeCalcChrome(
-                session: session,
-                collapsed: $collapsed,
-                onHeightChange: { formHeight = $0 }
-            )
-            .offset(y: top)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-            .allowsHitTesting(top + formHeight > 0 && top < page.size.height)
+            if osrsNativeCalcSlotGeometry.overlayMayShow(slotResolved: slotResolved) {
+                osrsNativeCalcChrome(
+                    session: session,
+                    collapsed: $collapsed,
+                    onHeightChange: { formHeight = $0 }
+                )
+                .frame(maxWidth: .infinity, maxHeight: formHeight, alignment: .top)
+                .offset(y: top)
+                .allowsHitTesting(top + formHeight > 0 && top < page.size.height)
+            }
         }
         .clipped()
         .background(
@@ -30,6 +33,7 @@ struct osrsNativeCalcSlotOverlay: View {
                 session: session,
                 webView: webView,
                 slotY: $slotY,
+                slotResolved: $slotResolved,
                 formHeight: formHeight,
                 collapsed: collapsed
             )
@@ -43,11 +47,12 @@ private struct osrsNativeCalcSlotProbe: UIViewRepresentable {
     @ObservedObject var session: osrsNativeCalcSession
     var webView: WKWebView?
     @Binding var slotY: CGFloat
+    @Binding var slotResolved: Bool
     var formHeight: CGFloat
     var collapsed: Bool
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(slotY: $slotY)
+        Coordinator(slotY: $slotY, slotResolved: $slotResolved)
     }
 
     func makeUIView(context: Context) -> UIView {
@@ -61,6 +66,7 @@ private struct osrsNativeCalcSlotProbe: UIViewRepresentable {
         context.coordinator.session = session
         context.coordinator.webView = webView
         context.coordinator.slotY = $slotY
+        context.coordinator.slotResolved = $slotResolved
         context.coordinator.collapsed = collapsed
         context.coordinator.sync(formHeight: formHeight)
     }
@@ -70,6 +76,7 @@ private struct osrsNativeCalcSlotProbe: UIViewRepresentable {
         var session: osrsNativeCalcSession?
         weak var webView: WKWebView?
         var slotY: Binding<CGFloat>
+        var slotResolved: Binding<Bool>
         var collapsed = false
         private var offsetObservation: NSKeyValueObservation?
         private var observedScrollView: UIScrollView?
@@ -79,8 +86,9 @@ private struct osrsNativeCalcSlotProbe: UIViewRepresentable {
         private var installWorkItem: DispatchWorkItem?
         private var retries = 0
 
-        init(slotY: Binding<CGFloat>) {
+        init(slotY: Binding<CGFloat>, slotResolved: Binding<Bool>) {
             self.slotY = slotY
+            self.slotResolved = slotResolved
         }
 
         func sync(formHeight: CGFloat) {
@@ -160,6 +168,7 @@ private struct osrsNativeCalcSlotProbe: UIViewRepresentable {
         private func applySlotResult(_ result: Any?) {
             if let number = result as? NSNumber {
                 slotDocumentY = CGFloat(truncating: number)
+                slotResolved.wrappedValue = slotDocumentY > 0
                 return
             }
             guard let raw = result as? String,
@@ -167,10 +176,16 @@ private struct osrsNativeCalcSlotProbe: UIViewRepresentable {
                   let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
                 return
             }
+            if json["waiting"] as? Bool == true || json["missing"] as? Bool == true {
+                slotResolved.wrappedValue = false
+                return
+            }
             if let top = json["top"] as? Double {
                 slotDocumentY = CGFloat(top)
+                slotResolved.wrappedValue = true
             } else if let top = json["top"] as? NSNumber {
                 slotDocumentY = CGFloat(truncating: top)
+                slotResolved.wrappedValue = true
             }
         }
 

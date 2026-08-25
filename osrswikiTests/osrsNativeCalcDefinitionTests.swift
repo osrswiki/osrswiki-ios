@@ -540,7 +540,7 @@ final class osrsNativeCalcDefinitionTests: XCTestCase {
     }
 
     @MainActor
-    func testSlotGeometryScrollsOffInsteadOfPinningToTop() {
+    func testSlotGeometryScrollsOffInsteadOfPinningToTop() throws {
         XCTAssertEqual(osrsNativeCalcSlotGeometry.formTopY(slotDocumentY: 420, contentOffsetY: 0), 420)
         XCTAssertEqual(osrsNativeCalcSlotGeometry.formTopY(slotDocumentY: 420, contentOffsetY: 600), -180)
         XCTAssertFalse(
@@ -564,6 +564,25 @@ final class osrsNativeCalcDefinitionTests: XCTestCase {
                 viewportHeight: 800
             )
         )
+        XCTAssertFalse(
+            osrsNativeCalcSlotGeometry.overlayMayShow(slotResolved: false),
+            "unresolved slotY=0 must not paint the form over search chrome"
+        )
+        XCTAssertTrue(osrsNativeCalcSlotGeometry.overlayMayShow(slotResolved: true))
+        let overlay = try String(
+            contentsOf: URL(fileURLWithPath: #filePath)
+                .deletingLastPathComponent()
+                .deletingLastPathComponent()
+                .appendingPathComponent("osrswiki/Views/osrsNativeCalcSlotOverlay.swift"),
+            encoding: .utf8
+        )
+        XCTAssertTrue(overlay.contains("overlayMayShow"))
+        XCTAssertTrue(overlay.contains("slotResolved"))
+        XCTAssertFalse(
+            overlay.contains("maxHeight: .infinity"),
+            "full-height overlay frame swallows article pans so the calc cannot scroll away"
+        )
+        XCTAssertTrue(overlay.contains("maxHeight: formHeight"))
     }
 
     @MainActor
