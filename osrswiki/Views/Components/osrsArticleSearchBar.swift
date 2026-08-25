@@ -78,6 +78,7 @@ struct osrsArticleSearchBar: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Search OSRS Wiki")
+                .accessibilityIdentifier("article_search_launcher")
 
                 osrsVoiceSearchButton(
                     action: {

@@ -213,6 +213,7 @@ extension AppState {
         // Remove any article destination before exposing the Search tab's root. Do this before
         // publishing the intent so an already-mounted SearchView never handles it underneath an
         // article that is still on screen.
+        osrsResumeFrameOverlay.discard()
         searchNavigationStack.removeAll(keepingCapacity: true)
         if selectedTab != .search {
             setSelectedTab(.search)

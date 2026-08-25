@@ -21,6 +21,31 @@ final class osrsArticleLoadRegressionContractTests: XCTestCase {
         XCTAssertTrue(articleView.contains("shouldSkipDocumentWakeDuringFindOrKeyboard"))
         XCTAssertTrue(articleView.contains(".ignoresSafeArea(.keyboard)"))
         XCTAssertTrue(articleWebView.contains("shouldSkipDocumentWakeDuringFindOrKeyboard"))
+        XCTAssertTrue(compositor.contains("shouldPreserveLiveHierarchy"))
+        XCTAssertTrue(compositor.contains("preserveLiveWebViewWithoutReparent"))
+        let wakeBody = compositor
+            .components(separatedBy: "static func wakeLiveArticleWebView")
+            .dropFirst()
+            .first?
+            .components(separatedBy: "static func preserveLiveWebViewWithoutReparent")
+            .first ?? ""
+        XCTAssertTrue(
+            wakeBody.contains("shouldPreserveLiveHierarchy()"),
+            "Compositor wake must skip reparent while Find/Name/search first responder is active"
+        )
+        XCTAssertTrue(wakeBody.contains("preserveLiveWebViewWithoutReparent"))
+        let searchView = try source(root, "platforms/ios/osrswiki/Views/SearchView.swift")
+        XCTAssertTrue(
+            searchView.contains(".ignoresSafeArea(.keyboard)"),
+            "Search canvas must not keyboard-avoid down to the theme fill"
+        )
+        XCTAssertFalse(
+            searchView.contains("dismissKeyboardOnDisappear()"),
+            "Article→search must not force-dismiss keyboard from a Search-tab disappear"
+        )
+        XCTAssertTrue(searchView.contains("osrsResumeFrameOverlay.discard()"))
+        let navigation = try source(root, "platforms/ios/osrswiki/Models/AppState+Navigation.swift")
+        XCTAssertTrue(navigation.contains("osrsResumeFrameOverlay.discard()"))
         let recommitBody = viewModel
             .components(separatedBy: "func recommitCachedArticleAfterBackground")
             .dropFirst()

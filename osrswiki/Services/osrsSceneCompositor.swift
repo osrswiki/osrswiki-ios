@@ -73,8 +73,15 @@ enum osrsSceneCompositor {
 
     /// After `loadHTMLString` replaces WK compositing views, force the new
     /// layer tree through `didMoveToWindow` so GPU tiles can attach.
+    /// Find, calc Name, and article→search all put overlay first-responder
+    /// chrome on the live tree. `removeFromSuperview` during that overlay
+    /// parks WK GPU tiles and the window collapses to the theme fill.
     static func wakeLiveArticleWebView(_ webView: WKWebView) {
         if isPreparedWarmer(webView) {
+            return
+        }
+        if shouldPreserveLiveHierarchy() {
+            preserveLiveWebViewWithoutReparent(webView)
             return
         }
         reparentWebViews(in: webView)
@@ -85,6 +92,79 @@ enum osrsSceneCompositor {
         if let window = webView.window {
             stripSwitcherSnapshot(from: window)
         }
+    }
+
+    static func preserveLiveWebViewWithoutReparent(_ webView: WKWebView) {
+        webView.isHidden = false
+        webView.alpha = 1
+        webView.scrollView.isHidden = false
+        webView.scrollView.alpha = 1
+        clearFrozenWebKitScrollSnapshot(webView)
+        webView.layer.setNeedsDisplay()
+        webView.setNeedsLayout()
+        webView.layoutIfNeeded()
+    }
+
+    /// Find, calc Name, and article→search all put a text field or Find
+    /// navigator first-responder over the live article/search tree.
+    /// Keyboard / TextEffects windows are part of that overlay, so this
+    /// walks every scene window, not only the app content window.
+    static func shouldPreserveLiveHierarchy() -> Bool {
+        for window in allSceneWindows() {
+            if let responder = window.value(forKey: "firstResponder") as? UIResponder,
+               isOverlayFirstResponder(responder) {
+                return true
+            }
+            if overlayFirstResponder(in: window) != nil {
+                return true
+            }
+            if findNavigatorView(in: window) != nil {
+                return true
+            }
+        }
+        return false
+    }
+
+    private static func allSceneWindows() -> [UIWindow] {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap(\.windows)
+    }
+
+    private static func overlayFirstResponder(in view: UIView) -> UIResponder? {
+        if view.isFirstResponder, isOverlayFirstResponder(view) {
+            return view
+        }
+        for child in view.subviews {
+            if let found = overlayFirstResponder(in: child) {
+                return found
+            }
+        }
+        return nil
+    }
+
+    private static func isOverlayFirstResponder(_ responder: UIResponder) -> Bool {
+        if responder is UITextField || responder is UITextView {
+            return true
+        }
+        let name = NSStringFromClass(type(of: responder))
+        return name.contains("FindNavigator")
+            || name.contains("UIFindBar")
+            || name.contains("SearchBar")
+            || name.contains("SearchTextField")
+    }
+
+    private static func findNavigatorView(in root: UIView) -> UIView? {
+        let name = NSStringFromClass(type(of: root))
+        if name.contains("FindNavigator") || name.contains("UIFindBar") {
+            return root
+        }
+        for child in root.subviews {
+            if let found = findNavigatorView(in: child) {
+                return found
+            }
+        }
+        return nil
     }
 
     /// Drop remaining host snapshots after the article document is healthy

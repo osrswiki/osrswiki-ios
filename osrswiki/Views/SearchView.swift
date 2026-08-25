@@ -7,6 +7,7 @@
 
 import SwiftUI
 import UIKit
+import QuartzCore
 
 struct SearchView: View {
     @EnvironmentObject var appState: AppState
@@ -58,6 +59,7 @@ struct SearchView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
 
             }
+            .ignoresSafeArea(.keyboard)
             .navigationTitle("")
             .navigationBarHidden(true)
             .osrsInteractiveBackSwipe(
@@ -116,22 +118,18 @@ struct SearchView: View {
             .onDisappear {
                 searchViewAppeared = false
                 // A Search-tab layout pass can disappear while an article→search
-                // handoff is still pending. Only cancel when leaving Search.
+                // handoff is still pending. Only cancel / resign first responder
+                // when leaving Search. Forcing endEditing+layout here is the
+                // same keyboard-dismiss blank as d8b5809a.
                 if appState.selectedTab != .search {
                     appState.cancelSearchActivationIntent()
                     appState.invalidateActiveSearchReturnContext()
+                    isSearchFocused = false
+                    dismissKeyboardWithLayoutUpdate()
+                    appState.speechManager.cleanup()
                 }
-                // Dismiss keyboard to prevent blank area when navigating back
-                isSearchFocused = false
-                dismissKeyboardWithLayoutUpdate()
-                
-                // Clean up speech recognition when leaving the view
-                appState.speechManager.cleanup()
-                
-                // Clear navigation callback to prevent retain cycles
                 viewModel.navigateToArticle = nil
             }
-            .dismissKeyboardOnDisappear()
             .navigationDestination(for: SearchNavigationDestination.self) { destination in
                 switch destination {
                 case .article(let articleDestination):
@@ -516,6 +514,7 @@ struct SearchView: View {
         }
 
         isSearchMode = true
+        osrsResumeFrameOverlay.discard()
         if let query = appState.pendingSearchQuery {
             searchText = query
             viewModel.currentQuery = query
@@ -527,6 +526,7 @@ struct SearchView: View {
         // never lands on a keyboard-only empty canvas.
         Task { @MainActor in
             await Task.yield()
+            CATransaction.flush()
             guard searchViewAppeared,
                   appState.selectedTab == .search,
                   appState.searchNavigationStack.isEmpty,

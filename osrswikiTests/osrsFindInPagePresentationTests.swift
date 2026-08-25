@@ -3,6 +3,17 @@ import UIKit
 import WebKit
 @testable import osrswiki
 
+private final class ReparentProbeView: UIView {
+    var removedWebViewCount = 0
+
+    override func willRemoveSubview(_ subview: UIView) {
+        if subview is WKWebView {
+            removedWebViewCount += 1
+        }
+        super.willRemoveSubview(subview)
+    }
+}
+
 private final class FindInPageNavigationDelegate: NSObject, WKNavigationDelegate {
     let didFinish: XCTestExpectation
 
@@ -80,6 +91,10 @@ final class osrsFindInPagePresentationTests: XCTestCase {
         )
         let wakeText = try await documentContains(webView, "Varrock")
         XCTAssertTrue(wakeText, "after compositor-blank wake: article document lost Varrock")
+        XCTAssertTrue(
+            osrsSceneCompositor.shouldPreserveLiveHierarchy(),
+            "Find first responder must be visible to the shared compositor preserve gate"
+        )
 
         viewModel.hideFindInPageAction()
         try await waitUntil(timeout: 6) {
@@ -93,6 +108,97 @@ final class osrsFindInPagePresentationTests: XCTestCase {
         )
         let dismissText = try await documentContains(webView, "Varrock")
         XCTAssertTrue(dismissText, "after dismiss: article document lost Varrock")
+    }
+
+    func testCompositorWakeDuringTextFieldFirstResponderDoesNotReparentArticleWebView() async throws {
+        let harness = try await makeHarness()
+        let webView = harness.webView
+        let probe = try XCTUnwrap(webView.superview as? ReparentProbeView)
+        let field = UITextField(frame: CGRect(x: 0, y: 700, width: 300, height: 44))
+        field.accessibilityIdentifier = "native-calc-field-name"
+        field.placeholder = "Name"
+        probe.addSubview(field)
+        XCTAssertTrue(field.becomeFirstResponder(), "Name-style field must take first responder")
+        XCTAssertTrue(
+            osrsSceneCompositor.shouldPreserveLiveHierarchy(),
+            "A UITextField first responder (Name / search / Find) must trip the shared preserve gate"
+        )
+
+        let before = probe.removedWebViewCount
+        osrsSceneCompositor.wakeLiveArticleWebView(webView)
+        viewModelWake(harness.viewModel)
+        try await Task.sleep(nanoseconds: 80_000_000)
+
+        XCTAssertEqual(
+            probe.removedWebViewCount,
+            before,
+            "wakeLiveArticleWebView must not removeFromSuperview while overlay first responder is active"
+        )
+        assertArticleWebViewUsable(webView, moment: "after wake during Name-style first responder")
+        try await waitUntil(timeout: 2) {
+            !osrsWebViewThemePaint.isUniformFill(visibleSnapshot(webView))
+        }
+        XCTAssertFalse(
+            osrsWebViewThemePaint.isUniformFill(visibleSnapshot(webView)),
+            "Name/search first responder + compositor wake must not blank the article"
+        )
+        XCTAssertTrue(field.isFirstResponder)
+        field.resignFirstResponder()
+    }
+
+    func testArticleToSearchActivationKeepsPaintedCanvasAndSurvivesCompositorWake() async throws {
+        let article = try ArticleDestination(
+            title: "Varrock",
+            url: XCTUnwrap(URL(string: "https://oldschool.runescape.wiki/w/Varrock"))
+        )
+        let appState = AppState()
+        appState.selectedTab = .news
+        appState.newsNavigationStack = [.article(article)]
+
+        appState.navigateToActiveSearch()
+        XCTAssertEqual(appState.selectedTab, .search)
+        XCTAssertTrue(appState.searchNavigationStack.isEmpty)
+        XCTAssertNotNil(appState.pendingSearchActivationIntent)
+        XCTAssertEqual(appState.newsNavigationStack, [.article(article)])
+
+        let harness = try await makeHarness()
+        let webView = harness.webView
+        let probe = try XCTUnwrap(webView.superview as? ReparentProbeView)
+        let field = UITextField(frame: CGRect(x: 8, y: 12, width: 300, height: 44))
+        field.accessibilityIdentifier = "search_input"
+        field.placeholder = "Search OSRS Wiki"
+        field.backgroundColor = .systemBackground
+        probe.addSubview(field)
+        XCTAssertTrue(field.becomeFirstResponder(), "search_input must take first responder")
+        XCTAssertTrue(
+            osrsSceneCompositor.shouldPreserveLiveHierarchy(),
+            "Search keyboard first responder must trip the shared compositor preserve gate"
+        )
+
+        let canvasSnapshot = visibleSnapshot(probe)
+        XCTAssertFalse(
+            osrsWebViewThemePaint.isUniformFill(canvasSnapshot),
+            "article→search + keyboard must not be a uniform fill range=\(osrsWebViewThemePaint.luminanceRange(canvasSnapshot))"
+        )
+
+        let before = probe.removedWebViewCount
+        harness.viewModel.wakeRenderedDocumentAfterBackground()
+        osrsSceneCompositor.wakeLiveArticleWebView(webView)
+        try await Task.sleep(nanoseconds: 80_000_000)
+        XCTAssertEqual(
+            probe.removedWebViewCount,
+            before,
+            "Search keyboard must share the compositor no-reparent gate with Find/Name"
+        )
+        assertArticleWebViewUsable(webView, moment: "after compositor-blank wake during search keyboard")
+        XCTAssertEqual(field.accessibilityIdentifier, "search_input")
+        XCTAssertTrue(field.isFirstResponder)
+        XCTAssertNotNil(descendant(in: probe, identifier: "search_input"))
+        field.resignFirstResponder()
+    }
+
+    private func viewModelWake(_ viewModel: ArticleViewModel) {
+        viewModel.wakeRenderedDocumentAfterBackground()
     }
 
     private struct Harness {
@@ -135,10 +241,26 @@ final class osrsFindInPagePresentationTests: XCTestCase {
     private func attach(_ webView: WKWebView) {
         let host = UIViewController()
         host.view.frame = CGRect(x: 0, y: 0, width: 390, height: 844)
-        webView.frame = host.view.bounds
+        let probe = ReparentProbeView(frame: host.view.bounds)
+        probe.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        webView.frame = probe.bounds
         webView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        host.view.addSubview(webView)
+        probe.addSubview(webView)
+        host.view.addSubview(probe)
+        attach(host)
+        host.view.layoutIfNeeded()
+        webView.layoutIfNeeded()
+    }
+
+    private func attach(_ host: UIViewController, insteadOf webView: WKWebView? = nil) {
+        _ = webView
         let window: UIWindow
+        if let existing = hostWindow {
+            existing.rootViewController = host
+            existing.makeKeyAndVisible()
+            host.view.layoutIfNeeded()
+            return
+        }
         if let scene = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first {
             window = UIWindow(windowScene: scene)
             window.frame = host.view.frame
@@ -148,8 +270,31 @@ final class osrsFindInPagePresentationTests: XCTestCase {
         window.rootViewController = host
         window.makeKeyAndVisible()
         host.view.layoutIfNeeded()
-        webView.layoutIfNeeded()
         hostWindow = window
+    }
+
+    private func descendant(in root: UIView, identifier: String) -> UIView? {
+        if root.accessibilityIdentifier == identifier {
+            return root
+        }
+        for child in root.subviews {
+            if let found = descendant(in: child, identifier: identifier) {
+                return found
+            }
+        }
+        return nil
+    }
+
+    private func firstTextField(in root: UIView) -> UITextField? {
+        if let field = root as? UITextField {
+            return field
+        }
+        for child in root.subviews {
+            if let found = firstTextField(in: child) {
+                return found
+            }
+        }
+        return nil
     }
 
     private func load(_ html: String, in webView: WKWebView) async throws {
