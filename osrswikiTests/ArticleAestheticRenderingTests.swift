@@ -109,6 +109,39 @@ final class ArticleAestheticRenderingTests: XCTestCase {
         XCTAssertTrue(tableNormalize.contains("lockInfoboxValueCellFloors"))
         XCTAssertTrue(tableNormalize.contains("probeInfoboxValueIntrinsicWidth"))
         XCTAssertTrue(tableNormalize.contains("osrsValueFloor"))
+        try assertDateCellsAndImageRowsStayContained(fixes: fixes)
+    }
+
+    func testSharedArticleCssContainsDateCellsAndKeepsImageRowsInViewport() throws {
+        let fixes = try readAsset("Assets/styles/fixes.css")
+        let polish = try readAsset("Assets/web/mobile_article_polish.js")
+        let imageCap = try readAsset("Assets/web/image_area_cap.js")
+        let aesthetics = try readAsset("Assets/styles/ios-article-aesthetics.css")
+        try assertDateCellsAndImageRowsStayContained(fixes: fixes)
+        XCTAssertTrue(polish.contains("markImageRowTables"))
+        XCTAssertTrue(polish.contains("osrs-image-row-table"))
+        XCTAssertTrue(imageCap.contains("if (targetWidth > viewportWidth && dims.width > 0)"))
+        XCTAssertTrue(aesthetics.contains("table.osrs-map-table:not(.osrs-image-row-table)"))
+        XCTAssertTrue(fixes.contains("table.infobox-bonuses"))
+        XCTAssertTrue(fixes.contains(".wikitable img"))
+        XCTAssertTrue(fixes.contains("width: 22px"))
+        XCTAssertFalse(
+            fixes.contains("table.infobox-bonuses :is(th, td) {\n    min-width: max-content"),
+            "Generic wikitable nowrap/max-content must not dump leftover width onto bonuses."
+        )
+    }
+
+    private func assertDateCellsAndImageRowsStayContained(fixes: String) throws {
+        XCTAssertTrue(fixes.contains("OSRS_DATE_CELL_CONTAINMENT"))
+        XCTAssertTrue(fixes.contains("OSRS_IMAGE_ROW_IN_VIEWPORT"))
+        XCTAssertTrue(fixes.contains("osrs-image-row-table"))
+        XCTAssertTrue(fixes.contains("min-width: max-content"))
+        XCTAssertTrue(
+            fixes.contains(
+                "table.wikitable:not(.infobox):not(.infobox-bonuses):not(.navbox):not(.osrs-map-table) :is(th, td)[style*=\"max-width\"]"
+            )
+        )
+        XCTAssertTrue(fixes.contains("table.osrs-map-table:not(.osrs-image-row-table)"))
     }
 
     func testJcConfigCombatCalculatorLeavesWikiFormForCalcCore() async throws {

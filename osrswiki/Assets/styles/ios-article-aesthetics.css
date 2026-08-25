@@ -497,12 +497,31 @@ body.osrs-accessibility-reflow .osrs-disclosure-body :is(th, td) {
     overflow-x: hidden !important;
 }
 
-.collapsible-map-table table.osrs-map-table > :is(thead, tbody, tfoot) > tr > :is(th, td):has(.mw-kartographer-map),
-.osrs-disclosure-body > table.osrs-map-table > :is(thead, tbody, tfoot) > tr > :is(th, td):has(.mw-kartographer-map),
-table.osrs-map-table > :is(thead, tbody, tfoot) > tr > :is(th, td):has(.mw-kartographer-map) {
+.collapsible-map-table table.osrs-map-table:not(.osrs-image-row-table) > :is(thead, tbody, tfoot) > tr > :is(th, td):has(.mw-kartographer-map),
+.osrs-disclosure-body > table.osrs-map-table:not(.osrs-image-row-table) > :is(thead, tbody, tfoot) > tr > :is(th, td):has(.mw-kartographer-map),
+table.osrs-map-table:not(.osrs-image-row-table) > :is(thead, tbody, tfoot) > tr > :is(th, td):has(.mw-kartographer-map) {
     width: 99% !important;
     min-width: 0 !important;
     white-space: normal !important;
+}
+
+table.osrs-image-row-table,
+table.osrs-map-table.osrs-image-row-table {
+    box-sizing: border-box !important;
+    clear: both !important;
+    float: none !important;
+    margin-inline: 0 !important;
+    max-width: 100% !important;
+    table-layout: fixed !important;
+    width: 100% !important;
+}
+
+table.osrs-image-row-table > tr > :is(th, td),
+table.osrs-image-row-table > :is(thead, tbody, tfoot) > tr > :is(th, td) {
+    box-sizing: border-box !important;
+    max-width: none !important;
+    min-width: 0 !important;
+    width: auto !important;
 }
 
 /* WebKit line boxes add a font-metric descender strut under replaced images

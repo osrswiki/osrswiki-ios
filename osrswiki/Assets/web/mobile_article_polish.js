@@ -312,11 +312,39 @@
         diagnostics.mapTables += 1;
       }
     });
+    markImageRowTables(root);
+  }
+
+  function cellHasRowImage(cell) {
+    if (!(cell instanceof HTMLElement)) return false;
+    if (!cell.matches('td, th')) return false;
+    return !!cell.querySelector('.mw-kartographer-map, img, figure, .thumbinner, .thumb');
+  }
+
+  function markImageRowTables(root) {
+    const scope = root && root.querySelectorAll ? root : document;
+    scope.querySelectorAll('table').forEach((table) => {
+      if (table.matches('.wikitable, .infobox, .infobox-bonuses, .navbox, .messagebox')) return;
+      let marked = false;
+      table.querySelectorAll(':scope > tbody > tr, :scope > tr').forEach((row) => {
+        const cells = Array.from(row.children).filter((child) => child.matches('td, th'));
+        if (cells.length < 2) return;
+        const imageCells = cells.filter(cellHasRowImage);
+        if (imageCells.length >= 2) {
+          marked = true;
+        }
+      });
+      if (marked) {
+        table.classList.add('osrs-image-row-table');
+      } else {
+        table.classList.remove('osrs-image-row-table');
+      }
+    });
   }
 
   function isProtectedTableRole(table) {
     return !!(table && (
-      table.matches('.main-infobox, .osrs-map-table') ||
+      table.matches('.main-infobox, .osrs-map-table, .osrs-image-row-table') ||
       table.closest('.collapsible-primary-infobox, .collapsible-map-table, .osrs-recipe-unit')
     ));
   }

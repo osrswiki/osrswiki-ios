@@ -113,10 +113,14 @@ figcaption:empty {
  * container, while leaving inventory/item images at their natural size.
  * This rule targets a container with .infobox-full-width-content but
  * explicitly ignores it if it also has the .inventory-image class.
+ * 
+ * Mobile viewport area cap: Content images are capped at 50% viewport area via JS
+ * (image_area_cap.js). CSS fallback uses max-height as approximation.
  */
 .infobox-full-width-content:not(.inventory-image) img {
     width: 100%;
     height: auto; /* Maintain aspect ratio */
+    max-height: 70vh; /* CSS fallback: prevent single image from dominating screen */
 }
 
 /* --- Responsive Video Embeds (Enhanced) --- */
@@ -1331,10 +1335,10 @@ table.osrs-intrinsic-recipe-table {
     width: auto;
 }
 
-.collapsible-map-table table.osrs-map-table > tr > :is(th, td):has(.mw-kartographer-map),
-.collapsible-map-table table.osrs-map-table > :is(thead, tbody, tfoot) > tr > :is(th, td):has(.mw-kartographer-map),
-table.osrs-map-table > tr > :is(th, td):has(.mw-kartographer-map),
-table.osrs-map-table > :is(thead, tbody, tfoot) > tr > :is(th, td):has(.mw-kartographer-map) {
+.collapsible-map-table table.osrs-map-table:not(.osrs-image-row-table) > tr > :is(th, td):has(.mw-kartographer-map),
+.collapsible-map-table table.osrs-map-table:not(.osrs-image-row-table) > :is(thead, tbody, tfoot) > tr > :is(th, td):has(.mw-kartographer-map),
+table.osrs-map-table:not(.osrs-image-row-table) > tr > :is(th, td):has(.mw-kartographer-map),
+table.osrs-map-table:not(.osrs-image-row-table) > :is(thead, tbody, tfoot) > tr > :is(th, td):has(.mw-kartographer-map) {
     width: 99% !important;
     min-width: 0 !important;
     white-space: normal !important;
@@ -1935,9 +1939,9 @@ table.wikitable :is(th, td) > :is(
     overflow-x: hidden !important;
 }
 
-.collapsible-map-table table.osrs-map-table > :is(thead, tbody, tfoot) > tr > :is(th, td):has(.mw-kartographer-map),
-.osrs-disclosure-body > table.osrs-map-table > :is(thead, tbody, tfoot) > tr > :is(th, td):has(.mw-kartographer-map),
-table.osrs-map-table > :is(thead, tbody, tfoot) > tr > :is(th, td):has(.mw-kartographer-map) {
+.collapsible-map-table table.osrs-map-table:not(.osrs-image-row-table) > :is(thead, tbody, tfoot) > tr > :is(th, td):has(.mw-kartographer-map),
+.osrs-disclosure-body > table.osrs-map-table:not(.osrs-image-row-table) > :is(thead, tbody, tfoot) > tr > :is(th, td):has(.mw-kartographer-map),
+table.osrs-map-table:not(.osrs-image-row-table) > :is(thead, tbody, tfoot) > tr > :is(th, td):has(.mw-kartographer-map) {
     width: 99% !important;
     min-width: 0 !important;
     white-space: normal !important;
@@ -1979,6 +1983,16 @@ ol:not(:has(> li:not(.mw-empty-elt))) {
     display: none !important;
 }
 
+/* Date-like / nowrap cells outside a scroll surface still keep glyphs inside
+   the padding box. Wiki Date columns use inline max-width; .nowrap is the
+   MediaWiki unbreakable-date class. Do not apply this to bonuses/infobox. */
+.mw-parser-output table.wikitable:not(.infobox):not(.infobox-bonuses):not(.navbox):not(.osrs-map-table) :is(th, td).nowrap,
+.mw-parser-output table.wikitable:not(.infobox):not(.infobox-bonuses):not(.navbox):not(.osrs-map-table) :is(th, td)[style*="max-width"] {
+    overflow-wrap: anywhere;
+    min-width: max-content;
+    max-width: none !important;
+}
+
 /* Wide data tables keep one row height and scroll horizontally. Infoboxes,
    recipe cards, and map tables stay viewport-fit. Map placeholders are
    width:100% of their cell, so max-content + nowrap collapses that column
@@ -1995,6 +2009,11 @@ ol:not(:has(> li:not(.mw-empty-elt))) {
 .osrs-local-scroll-surface > table.wikitable:not(.osrs-map-table) :is(th, td),
 .osrs-local-scroll-surface > .osrs-disclosure-body > table.wikitable:not(.osrs-map-table) :is(th, td) {
     white-space: nowrap;
+    /* OSRS_DATE_CELL_CONTAINMENT: wiki Date columns often pin max-width inline.
+       nowrap plus that cap bleeds glyphs into the next cell. Grow to content. */
+    overflow-wrap: anywhere;
+    min-width: max-content;
+    max-width: none !important;
 }
 
 /* Appearance: wrap table cells instead of forcing one line plus horizontal scroll.
@@ -2017,6 +2036,7 @@ html.osrs-table-cells-wrap .osrs-local-scroll-surface > .osrs-disclosure-body > 
 body.osrs-table-cells-wrap .osrs-local-scroll-surface > .osrs-disclosure-body > table.wikitable:not(.osrs-map-table) :is(th, td) {
     white-space: normal !important;
     overflow-wrap: anywhere;
+    min-width: 0;
 }
 
 html.osrs-table-cells-wrap .collapsible-header .collapsible-label,
@@ -2032,7 +2052,7 @@ body.osrs-table-cells-wrap .collapsible-state {
 }
 
 .collapsible-map-table table.osrs-map-table,
-table.osrs-map-table {
+table.osrs-map-table:not(.osrs-image-row-table) {
     width: 100% !important;
     max-width: 100% !important;
     table-layout: auto !important;
@@ -2213,11 +2233,87 @@ ul.tabbernav > li {
     display: inline !important;
 }
 
+.collapsible-container.collapsible-calculator:not(.collapsed) > .collapsible-content,
+.collapsible-container.collapsible-calculator:not(.collapsed) > .collapsible-content > .osrs-disclosure-body {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+}
+
 ul.gallery,
 ul.gallery > li,
 li.gallerybox {
     list-style: none !important;
     list-style-image: none !important;
+}
+
+/* OSRS_IMAGE_ROW_IN_VIEWPORT: a horizontal image/map pair that cannot fit the
+   article column shrinks or wraps so every image stays on-screen. Keep aspect
+   ratio; large content images still honor the ~50% viewport-area cap. Isolate
+   from .wikitable img 22px icons and infobox-bonuses. Polish marks these
+   tables; do not use nested :has() sibling selectors (invalid in WebKit). */
+table.osrs-image-row-table,
+table.osrs-map-table.osrs-image-row-table {
+    box-sizing: border-box !important;
+    clear: both !important;
+    float: none !important;
+    margin-inline: 0 !important;
+    max-width: 100% !important;
+    table-layout: fixed !important;
+    width: 100% !important;
+}
+
+table.osrs-image-row-table > tr > :is(th, td),
+table.osrs-image-row-table > :is(thead, tbody, tfoot) > tr > :is(th, td) {
+    box-sizing: border-box !important;
+    max-width: none !important;
+    min-width: 0 !important;
+    width: auto !important;
+}
+
+table.osrs-image-row-table .thumbinner,
+table.osrs-image-row-table .mw-kartographer-container {
+    box-sizing: border-box !important;
+    max-width: 100% !important;
+    width: 100% !important;
+}
+
+table.osrs-image-row-table .mw-kartographer-map {
+    height: auto !important;
+}
+
+ul.gallery {
+    box-sizing: border-box !important;
+    display: flex !important;
+    flex-wrap: wrap !important;
+    margin-inline: 0 !important;
+    max-width: 100% !important;
+    padding-inline: 0 !important;
+    width: 100% !important;
+}
+
+li.gallerybox {
+    box-sizing: border-box !important;
+    flex: 1 1 12rem;
+    max-width: 100% !important;
+    width: auto !important;
+}
+
+li.gallerybox .thumb,
+li.gallerybox img {
+    height: auto !important;
+    max-width: 100% !important;
+}
+
+.mw-parser-output > figure[typeof^="mw:File"],
+.mw-parser-output figure[typeof^="mw:File"]:not(.mw-default-size) {
+    box-sizing: border-box;
+    max-width: 100%;
+}
+
+.mw-parser-output > figure[typeof^="mw:File"] img,
+.mw-parser-output figure[typeof^="mw:File"]:not(.mw-default-size) img {
+    height: auto !important;
+    max-width: 100% !important;
 }
 
 /* wiki-integration.css reserves 15px for an external-link icon that this app

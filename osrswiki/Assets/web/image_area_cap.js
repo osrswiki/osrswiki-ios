@@ -108,10 +108,16 @@
         }
         
         // Image exceeds 50% viewport area - scale it down uniformly
-        // Calculate scale factor to bring area down to exactly 50%
+        // Calculate scale factor to bring area down to exactly 50%, then also
+        // keep the result inside the viewport width so a square cap cannot
+        // overflow a portrait phone column.
         const scaleFactor = Math.sqrt(maxArea / imageArea);
-        const targetWidth = Math.round(dims.width * scaleFactor);
-        const targetHeight = Math.round(dims.height * scaleFactor);
+        let targetWidth = Math.round(dims.width * scaleFactor);
+        let targetHeight = Math.round(dims.height * scaleFactor);
+        if (targetWidth > viewportWidth && dims.width > 0) {
+            targetWidth = viewportWidth;
+            targetHeight = Math.round(targetWidth * (dims.height / dims.width));
+        }
         
         // Apply as max-width/max-height to preserve aspect ratio and allow smaller sizes
         img.style.maxWidth = targetWidth + 'px';
