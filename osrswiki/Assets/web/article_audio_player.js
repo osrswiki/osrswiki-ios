@@ -87,8 +87,8 @@
     var ns = 'http://www.w3.org/2000/svg';
     var svg = document.createElementNS(ns, 'svg');
     svg.setAttribute('viewBox', '0 0 24 24');
-    svg.setAttribute('width', '22');
-    svg.setAttribute('height', '22');
+    svg.setAttribute('width', '16');
+    svg.setAttribute('height', '16');
     svg.setAttribute('aria-hidden', 'true');
     svg.style.display = 'block';
     var path = document.createElementNS(ns, 'path');
@@ -144,12 +144,15 @@
       'width:100%',
       'max-width:100%',
       'min-width:0',
-      'min-height:44px',
-      'padding:2px 8px 2px 2px',
-      'border:1px solid var(--body-border, #94866d)',
-      'border-radius:10px',
-      'background:var(--body-main, #e2dbc8)',
-      'color:var(--text-color, #000)'
+      'height:var(--osrs-article-audio-height, 32px)',
+      'min-height:var(--osrs-article-audio-height, 32px)',
+      'padding:0 10px 0 0',
+      'border:0',
+      'border-color:var(--osrs-article-audio-fill, var(--body-main, #e2dbc8))',
+      'border-radius:var(--osrs-article-audio-radius, 16px)',
+      'background:var(--osrs-article-audio-fill, var(--body-main, #e2dbc8))',
+      'color:var(--text-color, #000)',
+      'overflow:hidden'
     ].join(';');
 
     var playBtn = document.createElement('button');
@@ -164,12 +167,12 @@
       'justify-content:center',
       'margin:0',
       'padding:0',
-      'width:44px',
-      'height:44px',
-      'min-height:44px',
-      'min-width:44px',
+      'width:var(--osrs-article-audio-control-size, 32px)',
+      'height:var(--osrs-article-audio-control-size, 32px)',
+      'min-height:var(--osrs-article-audio-control-size, 32px)',
+      'min-width:var(--osrs-article-audio-control-size, 32px)',
       'border:0',
-      'border-radius:22px',
+      'border-radius:var(--osrs-article-audio-radius, 16px)',
       'background:transparent',
       'color:inherit',
       'cursor:pointer'
@@ -200,7 +203,7 @@
       'flex:1 1 auto',
       'min-width:72px',
       'width:100%',
-      'height:24px',
+      'height:16px',
       'margin:0'
     ].join(';');
 

@@ -127,12 +127,101 @@ h1.firstHeading {
 table.infobox-bonuses .button,
 table :is(th, td) a,
 .infobox a,
-.scp a {
+.scp a,
+.osrs-article-audio-play {
     -webkit-appearance: none !important;
     appearance: none !important;
     min-height: 0 !important;
     min-width: 0 !important;
     line-height: 1.2 !important;
+}
+
+/* Same short pill as Android: radius = half height; outline matches fill. */
+td.infobox-media-player,
+.infobox-media-player {
+    display: table-cell !important;
+    height: auto !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    width: 100% !important;
+}
+
+.infobox-media-player .osrs-article-audio,
+.osrs-article-audio {
+    display: block !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    width: 100% !important;
+}
+
+.infobox-media-player .osrs-article-audio-chrome,
+.osrs-article-audio-chrome {
+    display: flex !important;
+    align-items: center;
+    background: var(--osrs-article-audio-fill, var(--body-main, #e2dbc8));
+    border: 0;
+    border-color: var(--osrs-article-audio-fill, var(--body-main, #e2dbc8));
+    border-radius: var(--osrs-article-audio-radius, 16px);
+    box-sizing: border-box;
+    gap: 6px;
+    height: var(--osrs-article-audio-height, 32px) !important;
+    max-width: 100% !important;
+    min-height: var(--osrs-article-audio-height, 32px) !important;
+    min-width: 0 !important;
+    overflow: hidden;
+    padding: 0 10px 0 0;
+    width: 100% !important;
+}
+
+.osrs-article-audio-play {
+    align-items: center;
+    background: transparent !important;
+    border: 0 !important;
+    border-radius: var(--osrs-article-audio-radius, 16px) !important;
+    display: flex !important;
+    height: var(--osrs-article-audio-control-size, 32px) !important;
+    justify-content: center;
+    min-height: var(--osrs-article-audio-control-size, 32px) !important;
+    min-width: var(--osrs-article-audio-control-size, 32px) !important;
+    padding: 0 !important;
+    width: var(--osrs-article-audio-control-size, 32px) !important;
+}
+
+.osrs-article-audio-time,
+.osrs-article-audio-duration {
+    flex: 0 0 auto;
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    min-width: 2.6em;
+    opacity: 0.85;
+    white-space: nowrap;
+}
+
+.osrs-article-audio-seek {
+    flex: 1 1 auto;
+    min-width: 72px;
+    width: 100%;
+}
+
+.osrs-article-audio:has(.osrs-article-audio-chrome) > .osrs-article-audio-play {
+    display: none !important;
+}
+
+.osrs-article-audio:has(.osrs-article-audio-chrome) audio {
+    border: 0 !important;
+    clip: rect(0 0 0 0) !important;
+    clip-path: inset(50%) !important;
+    height: 1px !important;
+    margin: 0 !important;
+    max-width: 1px !important;
+    min-height: 0 !important;
+    min-width: 0 !important;
+    opacity: 0 !important;
+    overflow: hidden !important;
+    padding: 0 !important;
+    pointer-events: none !important;
+    position: absolute !important;
+    width: 1px !important;
 }
 
 /* Beat `.infobox > tbody > tr > th { vertical-align: top }` (0,1,4). */

@@ -10,6 +10,11 @@
     --body-mid: #d0bd97;
     --body-dark-shade: #b8a282;
     --body-border: #94866d;
+    /* In-article audio chrome: short pill; radius is half the box height. */
+    --osrs-article-audio-height: 32px;
+    --osrs-article-audio-radius: calc(var(--osrs-article-audio-height) / 2);
+    --osrs-article-audio-control-size: var(--osrs-article-audio-height);
+    --osrs-article-audio-fill: var(--body-main);
     --text-color: #000000;
     --link-color: #744e2f;
     --link-visited-color: var(--link-color);
@@ -235,6 +240,7 @@ body.theme-osrs-dark {
     --body-mid: #312a25;
     --body-dark-shade: #312a25;
     --body-border: #736559;
+    --osrs-article-audio-fill: var(--body-main);
     --text-color: #f4eaea;
     --link-color: #b79d7e;
     --link-visited-color: var(--link-color);
