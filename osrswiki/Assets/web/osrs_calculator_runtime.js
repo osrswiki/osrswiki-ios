@@ -89,6 +89,10 @@
         var formId = opts.formId || '';
         var resultId = opts.resultId || '';
         var height = Math.max(1, parseInt(opts.height, 10) || 420);
+        if (!document.getElementById('osrs-native-calc-slot') &&
+            document.querySelectorAll('select').length === 0) {
+            return JSON.stringify({ missing: true, waiting: true, selectCount: 0 });
+        }
         var form = (formId && document.getElementById(formId)) ||
             document.querySelector('.jcTable, [id$="Calc"], [id$="Form"]');
         var config = document.querySelector('pre.jcConfig');
@@ -158,6 +162,47 @@
         hideRoot.querySelectorAll(
             '.jcTable, .jcSubmit, .oo-ui-fieldsetLayout, pre.jcConfig, .jsCalc-field, .oo-ui-textInputWidget, .osrs-calculator-panel, .oo-ui-panelLayout-framed'
         ).forEach(hideUnlessResult);
+        function neutralizeGadgetSelect(node) {
+            if (!node || (result && result.contains && result.contains(node))) return;
+            try {
+                node.disabled = true;
+                node.setAttribute('disabled', 'disabled');
+                node.setAttribute('aria-hidden', 'true');
+                node.style.setProperty('pointer-events', 'none', 'important');
+                node.style.setProperty('display', 'none', 'important');
+                if (node.parentNode) node.parentNode.removeChild(node);
+            } catch (err) {}
+        }
+        hideRoot.querySelectorAll('select').forEach(neutralizeGadgetSelect);
+        hideRoot.querySelectorAll(
+            'select, .oo-ui-dropdownWidget, .oo-ui-selectWidget, .oo-ui-comboBoxInputWidget'
+        ).forEach(neutralizeGadgetSelect);
+        if (!window.__osrsNativeCalcSelectGuard) {
+            window.__osrsNativeCalcSelectGuard = new MutationObserver(function () {
+                if (!document.documentElement ||
+                    !document.documentElement.classList.contains('osrs-native-calc-slot-active')) {
+                    return;
+                }
+                document.querySelectorAll(
+                    'select, .oo-ui-dropdownWidget, .oo-ui-selectWidget, .oo-ui-comboBoxInputWidget'
+                ).forEach(neutralizeGadgetSelect);
+            });
+            window.__osrsNativeCalcSelectGuard.observe(document.documentElement, {
+                childList: true,
+                subtree: true
+            });
+            document.addEventListener('click', function (event) {
+                if (!document.documentElement ||
+                    !document.documentElement.classList.contains('osrs-native-calc-slot-active')) {
+                    return;
+                }
+                var target = event.target;
+                if (target && target.tagName === 'SELECT') {
+                    event.preventDefault();
+                    event.stopPropagation();
+                }
+            }, true);
+        }
 
         var slot = document.getElementById('osrs-native-calc-slot');
         if (!slot) {
