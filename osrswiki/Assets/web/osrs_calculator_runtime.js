@@ -132,7 +132,7 @@
             'display:block!important;background:transparent!important;border:0!important;box-shadow:none!important;outline:none!important;padding:0!important;margin:0!important;',
             '}',
             'html.osrs-native-calc-slot-active .collapsible-calculator {',
-            'display:block!important;max-width:100%!important;box-sizing:border-box!important;',
+            'display:block!important;max-width:100%!important;box-sizing:border-box!important;background:transparent!important;background-color:transparent!important;box-shadow:none!important;border:0!important;',
             '}',
             'html.osrs-native-calc-slot-active .collapsible-calculator:not(.collapsed) > .collapsible-content,',
             'html.osrs-native-calc-slot-active .collapsible-calculator:not(.collapsed) > .collapsible-content > .osrs-disclosure-body {',
@@ -224,6 +224,7 @@
         }
         slot.style.display = 'block';
         slot.style.width = '100%';
+        slot.style.minWidth = (document.documentElement.clientWidth || window.innerWidth || 360) + 'px';
         slot.style.boxSizing = 'border-box';
         slot.style.minHeight = height + 'px';
         slot.style.background = 'transparent';
