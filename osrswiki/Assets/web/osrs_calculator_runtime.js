@@ -299,6 +299,22 @@
         return osrsNativeCalcDocumentTop(nativeSlot);
     }
 
+    function osrsNotifyNativeCalcCollapsed(box) {
+        var collapsed = !!(box && box.classList.contains('collapsed'));
+        try {
+            var handlers = window.webkit && window.webkit.messageHandlers;
+            if (handlers && handlers.osrsNativeCalcCollapsed) {
+                handlers.osrsNativeCalcCollapsed.postMessage({ collapsed: collapsed });
+            }
+        } catch (e) {}
+        try {
+            var bridge = window.OsrsWikiBridge;
+            if (bridge && typeof bridge.nativeCalcCollapsed === 'function') {
+                bridge.nativeCalcCollapsed(collapsed);
+            }
+        } catch (e) {}
+    }
+
     function osrsWrapNativeCalcCalculatorBox(slot, height) {
         if (!slot || !slot.parentNode) return null;
         var container = osrsNativeCalcCalculatorBox(slot);
@@ -319,9 +335,17 @@
         if (!container.dataset.osrsNativeCalcToggleBound) {
             container.dataset.osrsNativeCalcToggleBound = 'true';
             var header = container.querySelector(':scope > .collapsible-header');
+            function onCalcDisclosureToggle() {
+                osrsSyncNativeCalcSlotHeight(container, height);
+                osrsNotifyNativeCalcCollapsed(container);
+            }
             if (header) {
-                header.addEventListener('click', function () {
-                    osrsSyncNativeCalcSlotHeight(container, height);
+                header.addEventListener('click', onCalcDisclosureToggle);
+            }
+            if (window.MutationObserver) {
+                new MutationObserver(onCalcDisclosureToggle).observe(container, {
+                    attributes: true,
+                    attributeFilter: ['class']
                 });
             }
         }

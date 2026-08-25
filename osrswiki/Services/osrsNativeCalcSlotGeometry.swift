@@ -1,6 +1,11 @@
 import CoreGraphics
+import Foundation
 
 enum osrsNativeCalcSlotGeometry {
+    /// How often the overlay re-reads the article disclosure `collapsed`
+    /// class. A WebView header tap never drives SwiftUI `updateUIView`.
+    static let disclosurePollInterval: TimeInterval = 0.2
+
     /// Form Y in the article WebView. Negative means the slot has scrolled
     /// above the visible article. Never clamp to 0 — that pins the overlay.
     static func formTopY(slotDocumentY: CGFloat, contentOffsetY: CGFloat) -> CGFloat {

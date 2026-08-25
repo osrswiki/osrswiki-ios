@@ -74,6 +74,12 @@ final class osrsCalculatorThemeContrastUITests: XCTestCase {
             expandHint.waitForExistence(timeout: 6),
             "collapse did not show Tap to expand. \(app.debugDescription)"
         )
+        let collapsedForm = app.descendants(matching: .any)["native-calc-form"].firstMatch
+        _ = collapsedForm.waitForNonExistence(timeout: 4)
+        XCTAssertFalse(
+            collapsedForm.exists && collapsedForm.isHittable,
+            "native-calc-form leaked after collapse. \(app.debugDescription)"
+        )
         writeScratchScreenshot(from: app, name: "ios-agility-collapsed.png")
         attachScreenshot(from: app, name: "ios-agility-collapsed")
 

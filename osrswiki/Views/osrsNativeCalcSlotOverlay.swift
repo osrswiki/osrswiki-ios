@@ -95,7 +95,12 @@ private struct osrsNativeCalcSlotProbe: UIViewRepresentable {
         private var lastInjectedHTML: String?
         private var lastSlotKey: String = ""
         private var installWorkItem: DispatchWorkItem?
+        private var pollWorkItem: DispatchWorkItem?
+        private var collapsedObserver: NSObjectProtocol?
         private var retries = 0
+        /// Matches Android `installNativeCalcSlot` postDelayed loop: a WebView
+        /// article-header click never calls SwiftUI `updateUIView`, so collapsed
+        /// must be probed on a timer or the overlay stays painted.
 
         init(
             slotY: Binding<CGFloat>,
@@ -117,14 +122,70 @@ private struct osrsNativeCalcSlotProbe: UIViewRepresentable {
             guard let webView, let session else { return }
             switch session.phase {
             case .native, .submitting:
+                observeCollapsedNotifications()
                 installSlot(webView: webView, session: session, formHeight: formHeight)
                 injectResultIfNeeded(webView: webView, session: session)
                 probeDisclosure(webView: webView)
+                startDisclosurePollIfNeeded()
             default:
+                stopDisclosurePoll()
                 lastSlotKey = ""
                 lastInjectedHTML = nil
                 retries = 0
                 webView.evaluateJavaScript(osrsNativeCalcDefinition.uninstallSlotJavaScript(), completionHandler: nil)
+            }
+        }
+
+        private func observeCollapsedNotifications() {
+            guard collapsedObserver == nil else { return }
+            collapsedObserver = NotificationCenter.default.addObserver(
+                forName: .osrsNativeCalcCollapsed,
+                object: nil,
+                queue: .main
+            ) { [weak self] note in
+                let collapsed = (note.userInfo?["collapsed"] as? Bool) ?? false
+                Task { @MainActor in
+                    self?.collapsed.wrappedValue = collapsed
+                }
+            }
+        }
+
+        private func startDisclosurePollIfNeeded() {
+            guard pollWorkItem == nil else { return }
+            scheduleDisclosurePoll()
+        }
+
+        private func stopDisclosurePoll() {
+            pollWorkItem?.cancel()
+            pollWorkItem = nil
+        }
+
+        private func scheduleDisclosurePoll() {
+            pollWorkItem?.cancel()
+            let work = DispatchWorkItem { [weak self] in
+                Task { @MainActor in
+                    guard let self else { return }
+                    self.pollDisclosureIfNeeded()
+                }
+            }
+            pollWorkItem = work
+            DispatchQueue.main.asyncAfter(
+                deadline: .now() + osrsNativeCalcSlotGeometry.disclosurePollInterval,
+                execute: work
+            )
+        }
+
+        private func pollDisclosureIfNeeded() {
+            guard let webView else {
+                stopDisclosurePoll()
+                return
+            }
+            switch session?.phase {
+            case .native, .submitting:
+                probeDisclosure(webView: webView)
+                scheduleDisclosurePoll()
+            default:
+                stopDisclosurePoll()
             }
         }
 

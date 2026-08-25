@@ -400,6 +400,7 @@ final class osrsNativeCalcDefinitionTests: XCTestCase {
         XCTAssertTrue(runtime.contains("collapsible-calculator"))
         XCTAssertTrue(runtime.contains("osrsWrapNativeCalcCalculatorBox"))
         XCTAssertTrue(runtime.contains("osrsNativeCalcSetCollapsed"))
+        XCTAssertTrue(runtime.contains("osrsNotifyNativeCalcCollapsed"))
         XCTAssertTrue(runtime.contains("osrsWrapCollapsible"))
 
         let collapsible = try String(
@@ -605,6 +606,12 @@ final class osrsNativeCalcDefinitionTests: XCTestCase {
         )
         XCTAssertTrue(overlay.contains("overlayMayShow"))
         XCTAssertTrue(overlay.contains("slotResolved"))
+        XCTAssertTrue(
+            overlay.contains("startDisclosurePollIfNeeded"),
+            "WebView header tap never calls updateUIView; overlay must poll collapsed like Android"
+        )
+        XCTAssertTrue(overlay.contains("osrsNativeCalcCollapsed"))
+        XCTAssertEqual(osrsNativeCalcSlotGeometry.disclosurePollInterval, 0.2)
         XCTAssertFalse(
             overlay.contains("maxHeight: .infinity"),
             "full-height overlay frame swallows article pans so the calc cannot scroll away"

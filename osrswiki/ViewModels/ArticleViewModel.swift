@@ -26,6 +26,7 @@ extension Notification.Name {
     static let showAppearanceSettings = Notification.Name("showAppearanceSettings")
     static let osrsInternalArticleLinkRequested = Notification.Name("osrsInternalArticleLinkRequested")
     static let osrsPlayYouTubeRequested = Notification.Name("osrsPlayYouTubeRequested")
+    static let osrsNativeCalcCollapsed = Notification.Name("osrsNativeCalcCollapsed")
     static let osrsSceneCompositorLooksBlank = Notification.Name("osrs.sceneCompositorLooksBlank")
 }
 
