@@ -110,6 +110,63 @@ final class osrsFindInPagePresentationTests: XCTestCase {
         XCTAssertTrue(dismissText, "after dismiss: article document lost Varrock")
     }
 
+    func testFindRequestPreservesHierarchyBeforeNavigatorChromeExists() async throws {
+        let harness = try await makeHarness()
+        let webView = harness.webView
+        let viewModel = harness.viewModel
+        let probe = try XCTUnwrap(webView.superview as? ReparentProbeView)
+        XCTAssertFalse(viewModel.isNativeFindNavigatorVisible())
+        XCTAssertNil(findNavigatorHostAnywhere())
+
+        // Bottom-bar Find sets this and hides overlay chrome *before*
+        // presentFindNavigator. Compositor wake in that window must not
+        // removeFromSuperview (iOS 26 parks GPU tiles → theme fill).
+        viewModel.isFindInPageActive = true
+        XCTAssertTrue(
+            osrsSceneCompositor.shouldPreserveLiveHierarchy(),
+            "Find request must trip the shared overlay-session preserve gate before navigator chrome exists"
+        )
+
+        let before = probe.removedWebViewCount
+        osrsSceneCompositor.wakeLiveArticleWebView(webView)
+        XCTAssertEqual(
+            probe.removedWebViewCount,
+            before,
+            "wakeLiveArticleWebView must not reparent after Find is requested and before the navigator is in the tree"
+        )
+        assertArticleWebViewUsable(webView, moment: "after wake during Find request, navigator not yet shown")
+        XCTAssertFalse(
+            osrsWebViewThemePaint.isUniformFill(visibleSnapshot(webView)),
+            "Find-request wake must not blank the article"
+        )
+        viewModel.isFindInPageActive = false
+    }
+
+    func testPreservePathDoesNotNilWebKitScrollLayerContents() async throws {
+        let harness = try await makeHarness()
+        let webView = harness.webView
+        let probe = try XCTUnwrap(webView.superview as? ReparentProbeView)
+        let field = UITextField(frame: CGRect(x: 0, y: 700, width: 300, height: 44))
+        field.accessibilityIdentifier = "overlay-session-field"
+        probe.addSubview(field)
+        XCTAssertTrue(field.becomeFirstResponder(), "overlay field must take first responder")
+        XCTAssertTrue(osrsSceneCompositor.shouldPreserveLiveHierarchy())
+
+        let marker = UIGraphicsImageRenderer(size: CGSize(width: 8, height: 8)).image { ctx in
+            UIColor.red.setFill()
+            ctx.fill(CGRect(x: 0, y: 0, width: 8, height: 8))
+        }
+        webView.scrollView.layer.contents = marker.cgImage
+        XCTAssertNotNil(webView.scrollView.layer.contents)
+
+        osrsSceneCompositor.wakeLiveArticleWebView(webView)
+        XCTAssertNotNil(
+            webView.scrollView.layer.contents,
+            "preserve path must not nil WKScrollView.layer.contents; that drops live iOS 26 GPU tiles"
+        )
+        field.resignFirstResponder()
+    }
+
     func testCompositorWakeDuringTextFieldFirstResponderDoesNotReparentArticleWebView() async throws {
         let harness = try await makeHarness()
         let webView = harness.webView

@@ -2118,13 +2118,21 @@ struct ArticleWebView: UIViewRepresentable {
             }
             keyboardObservers.append(center.addObserver(forName: UIResponder.keyboardWillShowNotification, object: nil, queue: .main) { [weak self] _ in
                 Task { @MainActor in
-                    self?.parent.viewModel.isArticleSoftwareKeyboardVisible = true
+                    guard let viewModel = self?.parent.viewModel else { return }
+                    if !viewModel.isArticleSoftwareKeyboardVisible {
+                        viewModel.isArticleSoftwareKeyboardVisible = true
+                        osrsSceneCompositor.beginLiveOverlaySession()
+                    }
                 }
             })
             keyboardObservers.append(center.addObserver(forName: UIResponder.keyboardWillHideNotification, object: nil, queue: .main, using: restore))
             keyboardObservers.append(center.addObserver(forName: UIResponder.keyboardDidHideNotification, object: nil, queue: .main) { [weak self] _ in
                 Task { @MainActor in
-                    self?.parent.viewModel.isArticleSoftwareKeyboardVisible = false
+                    guard let viewModel = self?.parent.viewModel else { return }
+                    if viewModel.isArticleSoftwareKeyboardVisible {
+                        viewModel.isArticleSoftwareKeyboardVisible = false
+                        osrsSceneCompositor.endLiveOverlaySession()
+                    }
                     self?.restoreWebViewAfterCalculatorKeyboard()
                 }
             })

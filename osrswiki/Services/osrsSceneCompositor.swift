@@ -99,10 +99,24 @@ enum osrsSceneCompositor {
         webView.alpha = 1
         webView.scrollView.isHidden = false
         webView.scrollView.alpha = 1
-        clearFrozenWebKitScrollSnapshot(webView)
+        // Do not nil WKScrollView.layer.contents here. Resume already
+        // recorded that as dropping live iOS 26 GPU tiles to the theme fill.
         webView.layer.setNeedsDisplay()
         webView.setNeedsLayout()
         webView.layoutIfNeeded()
+    }
+
+    /// Bottom-bar Find hides overlay chrome and expands collapsibles *before*
+    /// UIFindInteraction is in the tree. Keyboard willShow has the same race.
+    /// Depth is the overlay session itself (Find, Name, search), not a Find skip.
+    private static var liveOverlaySessionDepth = 0
+
+    static func beginLiveOverlaySession() {
+        liveOverlaySessionDepth += 1
+    }
+
+    static func endLiveOverlaySession() {
+        liveOverlaySessionDepth = max(0, liveOverlaySessionDepth - 1)
     }
 
     /// Find, calc Name, and article→search all put a text field or Find
@@ -110,6 +124,9 @@ enum osrsSceneCompositor {
     /// Keyboard / TextEffects windows are part of that overlay, so this
     /// walks every scene window, not only the app content window.
     static func shouldPreserveLiveHierarchy() -> Bool {
+        if liveOverlaySessionDepth > 0 {
+            return true
+        }
         for window in allSceneWindows() {
             if let responder = window.value(forKey: "firstResponder") as? UIResponder,
                isOverlayFirstResponder(responder) {
@@ -255,6 +272,9 @@ enum osrsSceneCompositor {
     /// theme fill — even though the article document is healthy.
     static func clearFrozenWebKitScrollSnapshot(_ webView: WKWebView) {
         if isPreparedWarmer(webView) {
+            return
+        }
+        if shouldPreserveLiveHierarchy() {
             return
         }
         let scroll = webView.scrollView

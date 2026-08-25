@@ -750,7 +750,16 @@ class ArticleViewModel: NSObject, ObservableObject {
     @Published var isLoading: Bool = false
     var isArticleSoftwareKeyboardVisible = false
     /// Find session owns keyboard/focus. Compositor-blank wake must not reparent WK while this is true.
-    var isFindInPageActive = false
+    var isFindInPageActive = false {
+        didSet {
+            guard isFindInPageActive != oldValue else { return }
+            if isFindInPageActive {
+                osrsSceneCompositor.beginLiveOverlaySession()
+            } else {
+                osrsSceneCompositor.endLiveOverlaySession()
+            }
+        }
+    }
 
     var shouldSkipDocumentWakeDuringFindOrKeyboard: Bool {
         isFindInPageActive || isArticleSoftwareKeyboardVisible || isNativeFindNavigatorVisible()

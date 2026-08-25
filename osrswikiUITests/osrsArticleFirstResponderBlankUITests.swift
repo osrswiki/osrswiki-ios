@@ -32,7 +32,7 @@ final class osrsArticleFirstResponderBlankUITests: XCTestCase {
         if !input.isHittable {
             input.tap()
         }
-        try requireSoftwareKeyboard("article→search")
+        requireSoftwareKeyboardOrFail("article→search")
         XCTAssertTrue(app.textFields["search_input"].isHittable, "search_input must stay hittable with keyboard up")
         XCTAssertTrue(app.buttons["search_back_button"].isHittable, "search_back_button must stay hittable with keyboard up")
         waitUntilSurfacePainted("article→search keyboard")
@@ -47,14 +47,26 @@ final class osrsArticleFirstResponderBlankUITests: XCTestCase {
         waitUntilSurfacePainted("loaded before Find")
 
         let findButton = waitForArticleFindButton()
+        XCTAssertTrue(findButton.isHittable, "Bottom-bar Find must be hittable before tap")
         findButton.tap()
+
+        dismissKeyboardOnboardingIfPresent()
+
         let field = app.searchFields["find.searchField"]
-        XCTAssertTrue(field.waitForExistence(timeout: 8), "Find search field missing")
-        try requireSoftwareKeyboard("Find")
+        XCTAssertTrue(
+            field.waitForExistence(timeout: 8),
+            "Find search field missing after bottom-bar Find\n\(app.debugDescription)"
+        )
+        requireSoftwareKeyboardOrFail("TF40 bottom-bar Find")
+        XCTAssertTrue(
+            field.isHittable || app.buttons["find.doneButton"].exists || app.buttons["Done"].exists,
+            "Find chrome must stay hittable with keyboard up. \(app.debugDescription)"
+        )
         assertIdentifiedArticleWebViewUsable("after Find tap")
-        waitUntilSurfacePainted("Find present")
-        saveScratchScreenshot("find.png")
-        attachScreenshot("find")
+        waitUntilSurfacePainted("TF40 Find present + keyboard")
+        saveScratchScreenshot("find-tf40.png")
+        attachScreenshot("find-tf40")
+        saveDebugDescription("find-tf40-ax.txt")
     }
 
     func testAgilityNameKeyboardKeepsPaintedArticle() throws {
@@ -92,7 +104,7 @@ final class osrsArticleFirstResponderBlankUITests: XCTestCase {
             }
             tapNameFieldWithoutOpeningSearch(nameField)
         }
-        try requireSoftwareKeyboard("Agility Name")
+        requireSoftwareKeyboardOrFail("Agility Name")
         XCTAssertFalse(
             app.textFields["search_input"].exists && app.buttons["search_back_button"].exists,
             "Tapping Name must stay on Calculator:Agility, not article→search"
@@ -137,12 +149,33 @@ final class osrsArticleFirstResponderBlankUITests: XCTestCase {
         }
     }
 
-    private func requireSoftwareKeyboard(_ moment: String) throws {
+    private func dismissKeyboardOnboardingIfPresent() {
+        let continueButton = app.buttons["Continue"]
+        if continueButton.waitForExistence(timeout: 2),
+           app.staticTexts.containing(NSPredicate(format: "label CONTAINS[c] %@", "sliding your finger")).firstMatch.exists {
+            continueButton.tap()
+        }
+    }
+
+    private func requireSoftwareKeyboardOrFail(_ moment: String) {
+        dismissKeyboardOnboardingIfPresent()
         let keyboard = app.keyboards.firstMatch
-        if keyboard.waitForExistence(timeout: 8) {
+        XCTAssertTrue(
+            keyboard.waitForExistence(timeout: 8),
+            "\(moment): software keyboard did not appear. Connect Hardware Keyboard must be off. Do not skip. \(app.debugDescription)"
+        )
+    }
+
+    private func saveDebugDescription(_ name: String) {
+        guard let dir = ProcessInfo.processInfo.environment["OSRS_BLANK_EVIDENCE_DIR"], !dir.isEmpty else {
+            let attachment = XCTAttachment(string: app.debugDescription)
+            attachment.name = name
+            attachment.lifetime = .keepAlways
+            add(attachment)
             return
         }
-        throw XCTSkip("\(moment): software keyboard did not appear. Connect Hardware Keyboard must be off.")
+        let url = URL(fileURLWithPath: dir).appendingPathComponent(name)
+        try? app.debugDescription.write(to: url, atomically: true, encoding: .utf8)
     }
 
     private func identifiedArticleWebView() -> XCUIElement {

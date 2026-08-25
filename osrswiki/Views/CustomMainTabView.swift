@@ -21,6 +21,7 @@ struct CustomMainTabView: View {
         ZStack {
             Color(themeManager.currentTheme.background)
                 .ignoresSafeArea()
+                .ignoresSafeArea(.keyboard)
 
             osrsAccessibilityMarker(
                 identifier: "osrs_app_root_tab_host",
@@ -28,6 +29,7 @@ struct CustomMainTabView: View {
             )
 
             rootTabContent
+                .ignoresSafeArea(.keyboard)
 
 #if DEBUG
             VStack {

@@ -123,6 +123,10 @@ final class osrsArticleLoadRegressionContractTests: XCTestCase {
         XCTAssertTrue(articleView.contains("osrsResumeFrameOverlay.discard()"))
         let tabView = try source(root, "platforms/ios/osrswiki/Views/CustomMainTabView.swift")
         XCTAssertTrue(tabView.contains("osrsResumeFrameOverlay.discard()"))
+        XCTAssertTrue(
+            tabView.contains(".ignoresSafeArea(.keyboard)"),
+            "Tab host must ignore keyboard safe area; otherwise Find/Name/search shrink onto the theme fill"
+        )
         XCTAssertTrue(articleView.contains("needsContentProcessRecovery = false"))
         XCTAssertTrue(articleView.contains("loadArticle(theme: osrsTheme, isReload: true)"))
         let newsView = try source(root, "platforms/ios/osrswiki/Views/NewsView.swift")
