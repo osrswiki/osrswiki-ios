@@ -118,10 +118,22 @@ final class osrsFindInPagePresentationTests: XCTestCase {
         XCTAssertFalse(viewModel.isNativeFindNavigatorVisible())
         XCTAssertNil(findNavigatorHostAnywhere())
 
-        // Bottom-bar Find sets this and hides overlay chrome *before*
-        // presentFindNavigator. Compositor wake in that window must not
+        // ArticleView.startFindInPage hides the bottom bar then calls this.
+        // Collapsible expand is async; compositor wake in that window must not
         // removeFromSuperview (iOS 26 parks GPU tiles → theme fill).
-        viewModel.isFindInPageActive = true
+        let presented = expectation(description: "find presented")
+        viewModel.performFindInPageAction {
+            presented.fulfill()
+        }
+        XCTAssertTrue(
+            viewModel.isFindInPageActive,
+            "performFindInPageAction must mark Find requested before navigator chrome exists"
+        )
+        XCTAssertFalse(viewModel.isNativeFindNavigatorVisible())
+        XCTAssertNil(
+            findNavigatorHostAnywhere(),
+            "wake must run before UIFindInteraction chrome is in the tree"
+        )
         XCTAssertTrue(
             osrsSceneCompositor.shouldPreserveLiveHierarchy(),
             "Find request must trip the shared overlay-session preserve gate before navigator chrome exists"
@@ -139,7 +151,12 @@ final class osrsFindInPagePresentationTests: XCTestCase {
             osrsWebViewThemePaint.isUniformFill(visibleSnapshot(webView)),
             "Find-request wake must not blank the article"
         )
-        viewModel.isFindInPageActive = false
+
+        await fulfillment(of: [presented], timeout: 5)
+        viewModel.hideFindInPageAction()
+        try await waitUntil(timeout: 6) {
+            !viewModel.isFindInPageActive && findNavigatorHostAnywhere() == nil
+        }
     }
 
     func testPreservePathDoesNotNilWebKitScrollLayerContents() async throws {
