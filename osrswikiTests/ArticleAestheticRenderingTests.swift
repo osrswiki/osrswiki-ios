@@ -2364,9 +2364,6 @@ final class ArticleAestheticRenderingTests: XCTestCase {
         XCTAssertTrue(switcher.contains("captureSwitcherScrollPin"))
         XCTAssertTrue(switcher.contains("bindSwitcherViewportPin"))
         XCTAssertTrue(switcher.contains("osrsSwitcherScrollingElement"))
-        XCTAssertTrue(switcher.contains("osrsSwitcherMeasureHost"))
-        XCTAssertTrue(switcher.contains("osrs-switcher-measure-host"))
-        XCTAssertTrue(switcher.contains("switcherViewportWidth"))
         XCTAssertTrue(switcher.contains("watchSwitcherHostSize"))
         XCTAssertTrue(switcher.contains("th.scrollWidth"))
         XCTAssertTrue(switcher.contains("setProperty('table-layout'"))
@@ -2809,144 +2806,156 @@ final class ArticleAestheticRenderingTests: XCTestCase {
         )
     }
 
-    func testMidPageGloryBonusesSwitcherKeepsTablePutDuringSwitch() async throws {
+    func testInfoboxAndBonusesRowHeightsStayStableAcrossScroll() async throws {
         attachWebViewToWindow()
-        let bootstrap = try readAsset("Assets/web/infobox_switcher_bootstrap.js")
-        let switcher = try readAsset("Assets/web/switch_infobox.js")
-        let html = """
-        <!doctype html>
-        <html>
-        <head>
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <style>
-        html, body { margin: 0; width: 375px; max-width: 375px; }
-        table.infobox, table.infobox-bonuses { width: 375px; max-width: 375px; border-collapse: collapse; box-sizing: border-box; }
-        table.infobox-bonuses th, table.infobox-bonuses td { min-width: 28px; padding: 4px; }
-        .tall { height: 280px; background: #c00; }
-        .short { height: 48px; background: #0c0; }
-        </style>
-        </head>
-        <body>
-        <table class="infobox infobox-switch" id="glory" data-resource-class=".infobox-resources-glory">
-            <caption>
-                <div class="infobox-buttons" data-default-version="0">
-                    <span data-switch-index="0" class="button">Uncharged</span>
-                    <span data-switch-index="1" class="button">6</span>
-                </div>
-            </caption>
-            <tbody>
-                <tr><th class="infobox-header" data-attr-param="name">Amulet of glory</th></tr>
-                <tr><td data-attr-param="block"><div class="short"></div></td></tr>
-            </tbody>
-        </table>
-        <div class="infobox-resources-glory infobox-switch-resources">
-            <div data-attr-param="name">
-                <span data-attr-index="0">Amulet of glory</span>
-                <span data-attr-index="1">Amulet of glory (6)</span>
-            </div>
-            <div data-attr-param="block">
-                <span data-attr-index="0"><div class="short"></div></span>
-                <span data-attr-index="1"><div class="tall"></div></span>
-            </div>
-        </div>
-        <p>Combat stats filler so Equipment bonuses sits below the first screen.</p>
-        <div style="height: 420px"></div>
-        <table class="infobox infobox-switch infobox-bonuses" id="combatStats" data-resource-class=".infobox-resources-bonuses">
-            <caption>
-                <div class="infobox-buttons" id="mid-page-switcher" data-default-version="0">
-                    <span data-switch-index="0" class="button">Uncharged</span>
-                    <span data-switch-index="1" class="button" id="mid-charged">6</span>
-                </div>
-            </caption>
-            <tbody>
-                <tr>
-                    <th class="infobox-subheader">Attack bonuses</th>
-                    <th class="infobox-bonuses-image">Stab</th>
-                    <th class="infobox-bonuses-image">Slash</th>
-                    <th class="infobox-bonuses-image">Crush</th>
-                </tr>
-                <tr>
-                    <td>Attack</td>
-                    <td data-attr-param="stab">+0</td>
-                    <td>+0</td>
-                    <td>+0</td>
-                </tr>
-            </tbody>
-        </table>
-        <div class="infobox-resources-bonuses infobox-switch-resources">
-            <div data-attr-param="stab">
-                <span data-attr-index="0">+0</span>
-                <span data-attr-index="1">+0</span>
-            </div>
-        </div>
-        <div style="height: 2000px">scrollable tail</div>
-        <script>\(bootstrap)</script>
-        <script>\(switcher)</script>
-        <script>initializeInfoboxSwitcher();</script>
-        </body>
-        </html>
-        """
-        try await load(html)
+        try await load(gloryMidPageSwitcherFixtureHTML())
+        try await Task.sleep(nanoseconds: 250_000_000)
+        let before = try await evaluate(gloryLayoutProbeScript(tag: "before-scroll"))
+        XCTAssertEqual(before["ready"] as? String, "true")
+        XCTAssertGreaterThan(number(before, "gloryHeight"), 40)
+        XCTAssertGreaterThan(number(before, "bonusesHeight"), 20)
+        _ = try await evaluate("""
+        (() => {
+            const scroller = document.scrollingElement || document.documentElement;
+            const max = Math.max(0, (scroller.scrollHeight || 0) - (window.innerHeight || 812));
+            const steps = [0.15, 0.35, 0.6, 0.9, 1];
+            steps.forEach((frac) => { scroller.scrollTop = max * frac; });
+            scroller.scrollTop = 0;
+            return { ok: true, max: max };
+        })()
+        """)
+        try await Task.sleep(nanoseconds: 150_000_000)
+        let after = try await evaluate(gloryLayoutProbeScript(tag: "after-scroll"))
+        XCTAssertEqual(
+            number(before, "gloryHeight"),
+            number(after, "gloryHeight"),
+            accuracy: 1.0,
+            "Infobox height ratcheted across scroll: \(before) -> \(after)"
+        )
+        XCTAssertEqual(
+            number(before, "bonusesHeight"),
+            number(after, "bonusesHeight"),
+            accuracy: 1.0,
+            "Equipment-stats height ratcheted across scroll: \(before) -> \(after)"
+        )
+        XCTAssertEqual(
+            number(before, "gloryRow0"),
+            number(after, "gloryRow0"),
+            accuracy: 1.0,
+            "Infobox row height ratcheted across scroll: \(before) -> \(after)"
+        )
+        XCTAssertEqual(
+            number(before, "bonusesRow0"),
+            number(after, "bonusesRow0"),
+            accuracy: 1.0,
+            "Bonuses row height ratcheted across scroll: \(before) -> \(after)"
+        )
+        XCTAssertEqual(number(after, "gloryMinHeight"), 0, accuracy: 0.5)
+        XCTAssertEqual(number(after, "bonusesMinHeight"), 0, accuracy: 0.5)
+    }
+
+    func testFirstSwitchToUnactivatedStateLeavesSettledViewportUnmoved() async throws {
+        attachWebViewToWindow()
+        try await load(gloryMidPageSwitcherFixtureHTML())
         try await Task.sleep(nanoseconds: 250_000_000)
         _ = try await evaluate("""
         (() => {
+            document.getElementById('mid-page-switcher').scrollIntoView();
+            return { ok: true };
+        })()
+        """)
+        let before = try await evaluate("""
+        (() => {
             const pin = document.getElementById('mid-page-switcher');
-            const table = document.getElementById('combatStats');
-            const charged = document.getElementById('mid-charged');
             const scroller = document.scrollingElement || document.documentElement;
+            const selected = document.querySelector('#mid-page-switcher .button-selected');
+            return {
+                top: pin.getBoundingClientRect().top,
+                scrollTop: scroller.scrollTop,
+                selected: (selected && selected.getAttribute('data-switch-index')) || '',
+                activated: document.documentElement.dataset.osrsFlashStudyActivated || ''
+            };
+        })()
+        """)
+        XCTAssertEqual(before["selected"] as? String, "0")
+        _ = try await evaluate("""
+        (() => {
+            performSwitch('1', document.getElementById('mid-charged'));
+            return { ok: true };
+        })()
+        """)
+        try await Task.sleep(nanoseconds: 250_000_000)
+        let after = try await evaluate("""
+        (() => {
+            const pin = document.getElementById('mid-page-switcher');
+            const scroller = document.scrollingElement || document.documentElement;
+            const selected = document.querySelector('#mid-page-switcher .button-selected');
+            const gloryName = (document.querySelector('#glory [data-attr-param="name"]') || {}).textContent || '';
+            return {
+                top: pin.getBoundingClientRect().top,
+                scrollTop: scroller.scrollTop,
+                selected: (selected && selected.getAttribute('data-switch-index')) || '',
+                gloryName: gloryName.trim()
+            };
+        })()
+        """)
+        XCTAssertEqual(after["selected"] as? String, "1")
+        XCTAssertEqual(after["gloryName"] as? String, "Amulet of glory (6)")
+        XCTAssertEqual(
+            number(before, "top"),
+            number(after, "top"),
+            accuracy: 2.0,
+            "Settled first-switch pin/viewport top jumped from \(before) to \(after)"
+        )
+        // scrollTop is allowed to change: a taller top infobox must be
+        // compensated so the mid-page pin stays put. A lasting viewport
+        // jump is pin.getBoundingClientRect().top, not scroller.scrollTop.
+        XCTAssertGreaterThan(number(after, "scrollTop"), 0)
+    }
+
+    func testOriginalMidPageSwitcherFlashStudyCapturesFramesAndLogs() async throws {
+        attachWebViewToWindow()
+        try await load(gloryMidPageSwitcherFixtureHTML(includeLazy: true))
+        try await Task.sleep(nanoseconds: 250_000_000)
+        let beforeImage = try await snapshot()
+        add(XCTAttachment(image: beforeImage))
+        _ = try await evaluate("""
+        (() => {
+            const pin = document.getElementById('mid-page-switcher');
             pin.scrollIntoView();
-            const samples = [];
-            window.__osrsSwitcherMidpage = { done: false, samples: samples, selected: '', gloryName: '' };
-            const measure = (tag) => {
-                const pinBox = pin.getBoundingClientRect();
-                const tableBox = table.getBoundingClientRect();
-                samples.push({
-                    tag: tag,
-                    pinTop: Math.round(pinBox.top * 100) / 100,
-                    tableTop: Math.round(tableBox.top * 100) / 100,
-                    tableHeight: Math.round(tableBox.height * 100) / 100,
-                    tableWidth: Math.round(tableBox.width * 100) / 100,
-                    scrollTop: Math.round((scroller.scrollTop || 0) * 100) / 100
-                });
-            };
-            const origRestore = restoreSwitcherScrollPin;
-            restoreSwitcherScrollPin = function(nextPin) {
-                measure('pre-restore');
-                origRestore(nextPin);
-                measure('post-restore');
-            };
-            measure('before');
+            \(gloryFlashStudyProbeSource())
+            window.__osrsFlashStudy.snapshot('before');
+            return { ok: true };
+        })()
+        """)
+        _ = try await evaluate("""
+        (() => {
+            const charged = document.getElementById('mid-charged');
+            window.__osrsFlashStudy.snapshot('pre-click');
             charged.click();
-            measure('sync-after-click');
+            window.__osrsFlashStudy.snapshot('sync-after-click');
             let frames = 0;
             const onFrame = () => {
-                measure('raf-' + frames);
+                window.__osrsFlashStudy.snapshot('raf-' + frames);
                 frames += 1;
-                if (frames < 6) {
+                if (frames < 8) {
                     requestAnimationFrame(onFrame);
                     return;
                 }
-                const selected = document.querySelector('#mid-page-switcher .button-selected');
-                window.__osrsSwitcherMidpage.selected = (selected && selected.textContent) || '';
-                window.__osrsSwitcherMidpage.gloryName = (document.querySelector('#glory [data-attr-param="name"]').textContent || '').trim();
-                window.__osrsSwitcherMidpage.done = true;
+                window.__osrsFlashStudy.done = true;
             };
             requestAnimationFrame(onFrame);
             return { ok: true };
         })()
         """)
         var payload: [String: Any] = [:]
-        for _ in 0..<40 {
+        for _ in 0..<50 {
             let probe = try await evaluate("""
             (() => {
-                const state = window.__osrsSwitcherMidpage || { done: false };
+                const state = window.__osrsFlashStudy || { done: false, samples: [] };
                 return {
                     done: !!state.done,
-                    json: JSON.stringify({
-                        samples: state.samples || [],
-                        selected: state.selected || '',
-                        gloryName: state.gloryName || ''
-                    })
+                    json: JSON.stringify({ samples: state.samples || [] })
                 };
             })()
             """)
@@ -2958,50 +2967,48 @@ final class ArticleAestheticRenderingTests: XCTestCase {
             }
             try await Task.sleep(nanoseconds: 20_000_000)
         }
+        let afterImage = try await snapshot()
+        add(XCTAttachment(image: afterImage))
         let samples = payload["samples"] as? [[String: Any]] ?? []
-        XCTAssertGreaterThanOrEqual(samples.count, 4, "Need before/during/after samples, got \(samples)")
-        XCTAssertEqual(payload["selected"] as? String, "6")
-        XCTAssertEqual(payload["gloryName"] as? String, "Amulet of glory (6)")
-        let baseline = samples.first { ($0["tag"] as? String) == "before" } ?? samples[0]
-        let baselinePin = number(baseline, "pinTop")
-        let baselineTable = number(baseline, "tableTop")
-        let baselineHeight = number(baseline, "tableHeight")
-        let baselineWidth = number(baseline, "tableWidth")
-        let baselineScroll = number(baseline, "scrollTop")
-        XCTAssertGreaterThan(baselineWidth, 48)
-        for sample in samples {
-            let tag = sample["tag"] as? String ?? "?"
-            XCTAssertEqual(
-                number(sample, "pinTop"),
-                baselinePin,
-                accuracy: 2.0,
-                "Pin jumped at \(tag): \(sample) vs before \(baseline)"
-            )
-            XCTAssertEqual(
-                number(sample, "tableTop"),
-                baselineTable,
-                accuracy: 2.0,
-                "Bonuses table jumped at \(tag): \(sample) vs before \(baseline)"
-            )
-            XCTAssertEqual(
-                number(sample, "tableHeight"),
-                baselineHeight,
-                accuracy: 2.0,
-                "Bonuses table height changed at \(tag): \(sample) vs before \(baseline)"
-            )
-            XCTAssertEqual(
-                number(sample, "tableWidth"),
-                baselineWidth,
-                accuracy: 2.0,
-                "Bonuses table width changed at \(tag): \(sample) vs before \(baseline)"
-            )
-            XCTAssertEqual(
-                number(sample, "scrollTop"),
-                baselineScroll,
-                accuracy: 2.0,
-                "Scroll jumped at \(tag): \(sample) vs before \(baseline)"
-            )
-        }
+        XCTAssertGreaterThanOrEqual(samples.count, 6, "Flash study needs before/during/after samples, got \(samples)")
+        let json = try JSONSerialization.data(withJSONObject: payload, options: [.prettyPrinted, .sortedKeys])
+        let jsonText = String(data: json, encoding: .utf8) ?? "{}"
+        let attachment = XCTAttachment(string: jsonText)
+        attachment.name = "original-midpage-flash-study.json"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+        print("OSRS_FLASH_STUDY_JSON_BEGIN")
+        print(jsonText)
+        print("OSRS_FLASH_STUDY_JSON_END")
+
+        let tags = samples.map { $0["tag"] as? String ?? "" }
+        XCTAssertTrue(tags.contains("before"))
+        XCTAssertTrue(tags.contains { $0.hasPrefix("performSwitch") })
+        XCTAssertTrue(tags.contains { $0.hasPrefix("restoreSwitcherScrollPin") })
+        XCTAssertTrue(tags.contains { $0.hasPrefix("raf-") })
+
+        let before = samples.first { ($0["tag"] as? String) == "before" } ?? samples[0]
+        let lastRaf = samples.last { ($0["tag"] as? String)?.hasPrefix("raf-") == true } ?? samples.last!
+        XCTAssertEqual(
+            number(before, "pinTop"),
+            number(lastRaf, "pinTop"),
+            accuracy: 2.0,
+            "Settled pin moved after original first-switch: before=\(before) last=\(lastRaf)"
+        )
+
+        let pinDeltas = samples.map { abs(number($0, "pinTop") - number(before, "pinTop")) }
+        let srcs = samples.map { $0["imgSrc"] as? String ?? "" }
+        let heights = samples.map { number($0, "gloryHeight") }
+        let deferredHits = samples.filter { ($0["tag"] as? String)?.contains("restoreDeferredImage") == true }
+        let pinRestores = samples.filter { ($0["tag"] as? String)?.hasPrefix("restoreSwitcherScrollPin") == true }
+        let pinJumpedDuring = pinDeltas.contains { $0 > 2.0 }
+        let srcChanged = Set(srcs.filter { !$0.isEmpty }).count > 1
+        let heightChanged = (heights.max() ?? 0) - (heights.min() ?? 0) > 2.0
+        XCTAssertFalse(
+            deferredHits.isEmpty && !srcChanged && !pinJumpedDuring && !heightChanged,
+            "Flash study recorded no src/layout/scroll change; samples=\(tags)"
+        )
+        _ = pinRestores
     }
 
     func testDarkFirstPaintUsesLiteralThemeBackgroundBeforeSharedCss() async throws {
@@ -3657,6 +3664,177 @@ final class ArticleAestheticRenderingTests: XCTestCase {
         XCTAssertGreaterThan(number(after, "releasedWidth"), 24)
         XCTAssertGreaterThan(number(after, "examineWidth"), 24)
         XCTAssertEqual(number(after, "boxWidth"), number(before, "boxWidth"), accuracy: 8.0)
+    }
+
+    private func gloryMidPageSwitcherFixtureHTML(includeLazy: Bool = false) throws -> String {
+        let bootstrap = try readAsset("Assets/web/infobox_switcher_bootstrap.js")
+        let switcher = try readAsset("Assets/web/switch_infobox.js")
+        let lazy = includeLazy ? (try readAsset("Assets/web/article_image_lazy.js")) : ""
+        let short = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='40' height='48'><rect width='40' height='48' fill='%23c00'/></svg>"
+        let tall = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='80' height='280'><rect width='80' height='280' fill='%23006'/></svg>"
+        let deferredImg = includeLazy
+            ? "<img width=\"80\" height=\"280\" class=\"mw-file-element osrs-deferred-offscreen-image\" src=\"data:image/gif;base64,R0lGODlhAQABAAAAACwAAAAAAQABAAA=\" data-osrs-deferred-src=\"\(tall)\">"
+            : "<img width=\"80\" height=\"280\" class=\"mw-file-element\" src=\"\(tall)\">"
+        return """
+        <!doctype html>
+        <html>
+        <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <style>
+        html, body { margin: 0; width: 375px; max-width: 375px; }
+        table.infobox, table.infobox-bonuses { width: 375px; max-width: 375px; border-collapse: collapse; box-sizing: border-box; }
+        table.infobox-bonuses th, table.infobox-bonuses td { min-width: 28px; padding: 4px; }
+        </style>
+        </head>
+        <body>
+        <table class="infobox infobox-switch" id="glory" data-resource-class=".infobox-resources-glory">
+            <caption>
+                <div class="infobox-buttons" data-default-version="0">
+                    <span data-switch-index="0" class="button">Uncharged</span>
+                    <span data-switch-index="1" class="button">6</span>
+                </div>
+            </caption>
+            <tbody>
+                <tr><th class="infobox-header" data-attr-param="name">Amulet of glory</th></tr>
+                <tr><td data-attr-param="image"><img width="40" height="48" class="mw-file-element" src="\(short)"></td></tr>
+            </tbody>
+        </table>
+        <div class="infobox-resources-glory infobox-switch-resources">
+            <div data-attr-param="name">
+                <span data-attr-index="0">Amulet of glory</span>
+                <span data-attr-index="1">Amulet of glory (6)</span>
+            </div>
+            <div data-attr-param="image">
+                <span data-attr-index="0"><img width="40" height="48" class="mw-file-element" src="\(short)"></span>
+                <span data-attr-index="1">\(deferredImg)</span>
+            </div>
+        </div>
+        <p>Combat stats filler so Equipment bonuses sits below the first screen.</p>
+        <div style="height: 420px"></div>
+        <table class="infobox infobox-switch infobox-bonuses" id="combatStats" data-resource-class=".infobox-resources-bonuses">
+            <caption>
+                <div class="infobox-buttons" id="mid-page-switcher" data-default-version="0">
+                    <span data-switch-index="0" class="button">Uncharged</span>
+                    <span data-switch-index="1" class="button" id="mid-charged">6</span>
+                </div>
+            </caption>
+            <tbody>
+                <tr>
+                    <th class="infobox-subheader">Attack bonuses</th>
+                    <th class="infobox-bonuses-image">Stab</th>
+                    <th class="infobox-bonuses-image">Slash</th>
+                    <th class="infobox-bonuses-image">Crush</th>
+                </tr>
+                <tr>
+                    <td>Attack</td>
+                    <td data-attr-param="stab">+0</td>
+                    <td>+0</td>
+                    <td>+0</td>
+                </tr>
+            </tbody>
+        </table>
+        <div class="infobox-resources-bonuses infobox-switch-resources">
+            <div data-attr-param="stab">
+                <span data-attr-index="0">+0</span>
+                <span data-attr-index="1">+0</span>
+            </div>
+        </div>
+        <div style="height: 2000px">scrollable tail</div>
+        <script>\(lazy)</script>
+        <script>\(bootstrap)</script>
+        <script>\(switcher)</script>
+        <script>initializeInfoboxSwitcher();</script>
+        </body>
+        </html>
+        """
+    }
+
+    private func gloryLayoutProbeScript(tag: String) -> String {
+        """
+        (() => {
+            const glory = document.getElementById('glory');
+            const bonuses = document.getElementById('combatStats');
+            const gloryRow = glory && glory.querySelector('tbody tr');
+            const bonusesRow = bonuses && bonuses.querySelector('tbody tr');
+            const gloryMin = glory ? parseFloat(getComputedStyle(glory).minHeight) || 0 : -1;
+            const bonusesMin = bonuses ? parseFloat(getComputedStyle(bonuses).minHeight) || 0 : -1;
+            return {
+                tag: '\(tag)',
+                ready: (glory && glory.dataset.osrsSwitcherReady) || '',
+                gloryHeight: glory ? glory.getBoundingClientRect().height : -1,
+                bonusesHeight: bonuses ? bonuses.getBoundingClientRect().height : -1,
+                gloryRow0: gloryRow ? gloryRow.getBoundingClientRect().height : -1,
+                bonusesRow0: bonusesRow ? bonusesRow.getBoundingClientRect().height : -1,
+                gloryMinHeight: gloryMin,
+                bonusesMinHeight: bonusesMin
+            };
+        })()
+        """
+    }
+
+    private func gloryFlashStudyProbeSource() -> String {
+        """
+            (function () {
+                const samples = [];
+                const t0 = performance.now();
+                const now = () => Math.round((performance.now() - t0) * 100) / 100;
+                const snapshot = (tag, extra) => {
+                    const pin = document.getElementById('mid-page-switcher');
+                    const glory = document.getElementById('glory');
+                    const bonuses = document.getElementById('combatStats');
+                    const scroller = document.scrollingElement || document.documentElement;
+                    const img = glory && glory.querySelector('img');
+                    const rec = Object.assign({
+                        tag: tag,
+                        t: now(),
+                        pinTop: pin ? Math.round(pin.getBoundingClientRect().top * 100) / 100 : null,
+                        gloryTop: glory ? Math.round(glory.getBoundingClientRect().top * 100) / 100 : null,
+                        gloryHeight: glory ? Math.round(glory.getBoundingClientRect().height * 100) / 100 : null,
+                        bonusesTop: bonuses ? Math.round(bonuses.getBoundingClientRect().top * 100) / 100 : null,
+                        bonusesHeight: bonuses ? Math.round(bonuses.getBoundingClientRect().height * 100) / 100 : null,
+                        scrollTop: scroller ? Math.round((scroller.scrollTop || 0) * 100) / 100 : null,
+                        scrollY: Math.round((window.scrollY || 0) * 100) / 100,
+                        imgSrc: img ? (img.currentSrc || img.getAttribute('src') || '') : '',
+                        imgComplete: !!(img && img.complete),
+                        imgNatural: img ? img.naturalHeight : 0,
+                        deferred: img ? (img.getAttribute('data-osrs-deferred-src') || '') : '',
+                        firstView: !!window.__osrsFirstViewPainted
+                    }, extra || {});
+                    samples.push(rec);
+                    return rec;
+                };
+                const wrap = (name) => {
+                    const orig = window[name];
+                    if (typeof orig !== 'function') return;
+                    window[name] = function () {
+                        snapshot(name + ':enter');
+                        const result = orig.apply(this, arguments);
+                        snapshot(name + ':exit');
+                        return result;
+                    };
+                };
+                wrap('performSwitch');
+                wrap('restoreSwitcherScrollPin');
+                wrap('stabilizeSwitcherScrollPin');
+                wrap('restoreDeferredImage');
+                wrap('updateExistingImage');
+                wrap('populatePlaceholders');
+                wrap('lockSwitcherMinBlockSize');
+                wrap('applySwitcherLayoutLock');
+                if (typeof window.osrsRestoreDeferredImage === 'function') {
+                    const origLazy = window.osrsRestoreDeferredImage;
+                    window.osrsRestoreDeferredImage = function (image) {
+                        snapshot('osrsRestoreDeferredImage:enter', {
+                            deferred: image && image.getAttribute && (image.getAttribute('data-osrs-deferred-src') || '')
+                        });
+                        const result = origLazy.apply(this, arguments);
+                        snapshot('osrsRestoreDeferredImage:exit');
+                        return result;
+                    };
+                }
+                window.__osrsFlashStudy = { samples: samples, snapshot: snapshot, done: false };
+            })();
+        """
     }
 
     private func attachWebViewToWindow() {

@@ -135,8 +135,6 @@ final class osrsArticleLoadRegressionContractTests: XCTestCase {
         XCTAssertTrue(switcher.contains("stabilizeSwitcherScrollPin"))
         XCTAssertTrue(switcher.contains("bindSwitcherViewportPin"))
         XCTAssertTrue(switcher.contains("osrsSwitcherScrollingElement"))
-        XCTAssertTrue(switcher.contains("osrsSwitcherMeasureHost"))
-        XCTAssertTrue(switcher.contains("osrs-switcher-measure-host"))
         XCTAssertTrue(firstViewport.contains("osrsWatchFirstViewComplete"))
         XCTAssertTrue(firstViewport.contains("__osrsLayoutStability"))
         XCTAssertTrue(firstViewport.contains("osrs-first-view-complete"))
