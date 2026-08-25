@@ -299,9 +299,21 @@ final class osrsNativeCalcDefinitionTests: XCTestCase {
             encoding: .utf8
         )
         XCTAssertTrue(view.contains("Picker(input.label"))
+        XCTAssertTrue(view.contains("native-calc-label-\\(input.name)"))
+        XCTAssertTrue(view.contains("osrsNativeCalcChrome"))
+        XCTAssertTrue(view.contains("native-calc-collapsible"))
+        XCTAssertTrue(view.contains("native-calc-overflow"))
         XCTAssertFalse(view.contains("Menu {"))
         XCTAssertTrue(view.contains("osrsNativeCalcDraftField"))
         XCTAssertTrue(view.contains("native-calc-error"))
+        let overlay = try String(
+            contentsOf: root.appendingPathComponent("osrswiki/Views/osrsNativeCalcSlotOverlay.swift"),
+            encoding: .utf8
+        )
+        XCTAssertTrue(overlay.contains("osrsNativeCalcSlotGeometry.formTopY"))
+        XCTAssertTrue(overlay.contains(".clipped()"))
+        XCTAssertFalse(overlay.contains("max(0, slotY)"))
+        XCTAssertFalse(overlay.contains("max(0, slotDocumentY"))
         XCTAssertFalse(view.contains("listStyle(.insetGrouped)"))
         XCTAssertFalse(view.contains("osrsNativeCalcResultWebView"))
         let runtime = try String(
@@ -376,6 +388,9 @@ final class osrsNativeCalcDefinitionTests: XCTestCase {
         XCTAssertTrue(runtime.contains("osrs-native-calc-slot-style"))
         XCTAssertTrue(runtime.contains(".osrs-calculator-panel"))
         XCTAssertTrue(runtime.contains(".oo-ui-textInputWidget"))
+        XCTAssertTrue(runtime.contains("collapsible-calculator"))
+        XCTAssertTrue(runtime.contains("osrsWrapNativeCalcCalculatorBox"))
+        XCTAssertTrue(runtime.contains("osrsNativeCalcSetCollapsed"))
 
         let html = """
         <!DOCTYPE html>
@@ -474,6 +489,12 @@ final class osrsNativeCalcDefinitionTests: XCTestCase {
           layout.insertBefore(late, layout.firstChild);
           var slot = document.getElementById('osrs-native-calc-slot');
           var slotCs = slot ? window.getComputedStyle(slot) : null;
+          var box = slot && slot.closest && slot.closest('.collapsible-calculator');
+          var body = box && box.querySelector('.osrs-disclosure-body');
+          var bodyCs = body ? window.getComputedStyle(body) : null;
+          window.osrsNativeCalcSetCollapsed && window.osrsNativeCalcSetCollapsed(true);
+          var collapsedHeight = slot ? slot.getBoundingClientRect().height : -1;
+          window.osrsNativeCalcSetCollapsed && window.osrsNativeCalcSetCollapsed(false);
           return {
             heading: (document.querySelector('h2') || {}).textContent || '',
             leftover: vis('.leftover-gadget-name'),
@@ -483,7 +504,12 @@ final class osrsNativeCalcDefinitionTests: XCTestCase {
             gadget: visibleGadgetChrome(),
             slotExists: !!slot,
             slotBorder: slotCs ? slotCs.borderTopWidth : '',
-            result: vis('#AgilityResults')
+            result: vis('#AgilityResults'),
+            category: box ? (box.getAttribute('data-osrs-disclosure-kind') || '') : '',
+            boxClass: box ? String(box.className || '') : '',
+            overflowX: bodyCs ? bodyCs.overflowX : '',
+            collapsedHidesSlot: collapsedHeight <= 1,
+            isCollapsedFn: window.osrsNativeCalcIsCollapsed ? window.osrsNativeCalcIsCollapsed() : null
           };
         })()
         """
@@ -505,7 +531,79 @@ final class osrsNativeCalcDefinitionTests: XCTestCase {
         XCTAssertEqual(payload["slotBorder"] as? String, "0px")
         let result = try XCTUnwrap(payload["result"] as? [String: Any])
         XCTAssertEqual(result["exists"] as? Bool, true)
+        XCTAssertEqual(payload["category"] as? String, "calculator")
+        XCTAssertTrue(((payload["boxClass"] as? String) ?? "").contains("collapsible-calculator"))
+        XCTAssertEqual(payload["overflowX"] as? String, "auto")
+        XCTAssertEqual(payload["collapsedHidesSlot"] as? Bool, true)
+        XCTAssertEqual(payload["isCollapsedFn"] as? Bool, false)
         window.isHidden = true
+    }
+
+    @MainActor
+    func testSlotGeometryScrollsOffInsteadOfPinningToTop() {
+        XCTAssertEqual(osrsNativeCalcSlotGeometry.formTopY(slotDocumentY: 420, contentOffsetY: 0), 420)
+        XCTAssertEqual(osrsNativeCalcSlotGeometry.formTopY(slotDocumentY: 420, contentOffsetY: 600), -180)
+        XCTAssertFalse(
+            osrsNativeCalcSlotGeometry.isPinnedToWebViewTop(
+                formTopY: -180,
+                slotDocumentY: 420,
+                contentOffsetY: 600
+            )
+        )
+        XCTAssertTrue(
+            osrsNativeCalcSlotGeometry.isPinnedToWebViewTop(
+                formTopY: 0,
+                slotDocumentY: 420,
+                contentOffsetY: 600
+            )
+        )
+        XCTAssertTrue(
+            osrsNativeCalcSlotGeometry.formHasLeftViewport(
+                formTopY: -180,
+                formHeight: 160,
+                viewportHeight: 800
+            )
+        )
+    }
+
+    @MainActor
+    func testAgilitySelectLabelsRenderFromJcConfig() throws {
+        let session = osrsNativeCalcSession()
+        let definition = try XCTUnwrap(osrsNativeCalcDefinition.parse(agilityConfig, title: "Calculator:Agility"))
+        session.seedNativeStateForTesting(
+            definition: definition,
+            values: Dictionary(uniqueKeysWithValues: definition.inputs.map { ($0.name, $0.defaultValue) }),
+            resultDocument: "<html>Plank</html>",
+            resultHTML: "<td>Plank</td>"
+        )
+        let labels = session.visibleInputs().filter { $0.type == .select }.map(\.label)
+        XCTAssertEqual(
+            labels,
+            [
+                "Current: Level or Experience",
+                "Goal: Level or Experience?",
+                "Method"
+            ]
+        )
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let view = try String(
+            contentsOf: root.appendingPathComponent("osrswiki/Views/osrsNativeCalcView.swift"),
+            encoding: .utf8
+        )
+        let selectStart = try XCTUnwrap(view.range(of: "case .select:"))
+        let selectEnd = try XCTUnwrap(view.range(of: "case .buttonSelect:"))
+        let selectBranch = String(view[selectStart.lowerBound..<selectEnd.lowerBound])
+        XCTAssertTrue(selectBranch.contains("Text(input.label)"))
+        XCTAssertTrue(selectBranch.contains("native-calc-label-\\(input.name)"))
+        XCTAssertTrue(view.contains(".accessibilityLabel(input.label)"))
+        let chromeStart = try XCTUnwrap(view.range(of: "struct osrsNativeCalcChrome"))
+        let chromeEnd = try XCTUnwrap(view.range(of: "struct osrsNativeCalcView"))
+        let chrome = String(view[chromeStart.lowerBound..<chromeEnd.lowerBound])
+        XCTAssertTrue(chrome.contains("native-calc-collapsible"))
+        XCTAssertTrue(chrome.contains("native-calc-overflow"))
+        XCTAssertTrue(chrome.contains("ScrollView(.horizontal"))
     }
 
     @MainActor

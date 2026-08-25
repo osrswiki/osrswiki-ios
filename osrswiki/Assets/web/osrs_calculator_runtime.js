@@ -127,6 +127,16 @@
             'html.osrs-native-calc-slot-active #osrs-native-calc-slot {',
             'display:block!important;background:transparent!important;border:0!important;box-shadow:none!important;outline:none!important;padding:0!important;margin:0!important;',
             '}',
+            'html.osrs-native-calc-slot-active .collapsible-calculator {',
+            'display:block!important;max-width:100%!important;box-sizing:border-box!important;',
+            '}',
+            'html.osrs-native-calc-slot-active .collapsible-calculator:not(.collapsed) > .collapsible-content,',
+            'html.osrs-native-calc-slot-active .collapsible-calculator:not(.collapsed) > .collapsible-content > .osrs-disclosure-body {',
+            'overflow-x:auto!important;-webkit-overflow-scrolling:touch!important;',
+            '}',
+            'html.osrs-native-calc-slot-active .collapsible-calculator.collapsed > .collapsible-content {',
+            'display:block!important;height:0!important;max-height:0!important;min-height:0!important;overflow:hidden!important;padding:0!important;margin:0!important;border:0!important;',
+            '}',
             'html.osrs-native-calc-slot-active .osrs-calculator-result,',
             'html.osrs-native-calc-slot-active [id$="Results"] {',
             'display:block!important;visibility:visible!important;height:auto!important;min-height:0!important;overflow:visible!important;',
@@ -178,15 +188,58 @@
         slot.style.boxShadow = 'none';
         slot.style.padding = '0';
         slot.style.margin = '0';
+        var box = osrsWrapNativeCalcCalculatorBox(slot, height);
         if (window.osrsEnsureCalculatorPageVisible) {
             window.osrsEnsureCalculatorPageVisible();
         }
         return JSON.stringify({
             top: osrsNativeCalcDocumentTop(slot),
             width: slot.offsetWidth || 0,
-            height: slot.offsetHeight || height
+            height: slot.offsetHeight || height,
+            collapsed: !!(box && box.classList.contains('collapsed')),
+            category: 'calculator'
         });
     };
+
+    function osrsWrapNativeCalcCalculatorBox(slot, height) {
+        if (!slot || !slot.parentNode) return null;
+        var container = slot.closest('.collapsible-calculator');
+        if (!container) {
+            container = document.createElement('div');
+            container.className = 'collapsible-container collapsible-calculator primary-collapsible';
+            container.setAttribute('data-osrs-disclosure-kind', 'calculator');
+            container.dataset.osrsDisclosureKind = 'calculator';
+            container.dataset.collapseLabelKind = 'semantic';
+            var content = document.createElement('div');
+            content.className = 'collapsible-content';
+            var body = document.createElement('div');
+            body.className = 'osrs-disclosure-body';
+            slot.parentNode.insertBefore(container, slot);
+            container.appendChild(content);
+            content.appendChild(body);
+            body.appendChild(slot);
+        }
+        window.osrsNativeCalcSetCollapsed = function (collapsed) {
+            var box = document.querySelector('.collapsible-calculator');
+            var nativeSlot = document.getElementById('osrs-native-calc-slot');
+            if (!box) return 0;
+            if (collapsed) {
+                box.classList.add('collapsed');
+                box.setAttribute('aria-expanded', 'false');
+                if (nativeSlot) nativeSlot.style.minHeight = '0px';
+            } else {
+                box.classList.remove('collapsed');
+                box.setAttribute('aria-expanded', 'true');
+                if (nativeSlot) nativeSlot.style.minHeight = Math.max(1, parseInt(height, 10) || 1) + 'px';
+            }
+            return osrsNativeCalcDocumentTop(nativeSlot);
+        };
+        window.osrsNativeCalcIsCollapsed = function () {
+            var box = document.querySelector('.collapsible-calculator');
+            return !!(box && box.classList.contains('collapsed'));
+        };
+        return container;
+    }
 
     window.osrsNativeCalcSetSlotHeight = function (height) {
         var slot = document.getElementById('osrs-native-calc-slot');
@@ -237,9 +290,14 @@
             node.removeAttribute('aria-hidden');
         });
         var slot = document.getElementById('osrs-native-calc-slot');
-        if (slot && slot.parentNode) {
+        var wrap = slot && slot.closest && slot.closest('.collapsible-calculator');
+        if (wrap && wrap.parentNode) {
+            wrap.parentNode.removeChild(wrap);
+        } else if (slot && slot.parentNode) {
             slot.parentNode.removeChild(slot);
         }
+        delete window.osrsNativeCalcSetCollapsed;
+        delete window.osrsNativeCalcIsCollapsed;
     };
 
     function osrsInstallCalculatorKeyboardGuards() {

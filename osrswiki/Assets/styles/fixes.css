@@ -2507,3 +2507,9 @@ table.infobox-bonuses [data-attr-param="slot"] a {
     width: auto !important;
 }
 
+.collapsible-container.collapsible-calculator:not(.collapsed) > .collapsible-content,
+.collapsible-container.collapsible-calculator:not(.collapsed) > .collapsible-content > .osrs-disclosure-body {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+}
+

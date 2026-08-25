@@ -7,48 +7,35 @@ struct osrsNativeCalcSlotOverlay: View {
     var webView: WKWebView?
     @State private var slotY: CGFloat = 0
     @State private var formHeight: CGFloat = 420
+    @State private var collapsed = false
 
     var body: some View {
         GeometryReader { page in
-            let top = max(0, slotY)
-            let visible = max(160, page.size.height - top)
-            VStack(spacing: 0) {
-                Color.clear
-                    .frame(height: top)
-                    .allowsHitTesting(false)
-                ScrollView {
-                    osrsNativeCalcView(session: session)
-                        .background(
-                            GeometryReader { geo in
-                                Color.clear.preference(
-                                    key: osrsNativeCalcFormHeightKey.self,
-                                    value: min(max(geo.size.height, 160), visible)
-                                )
-                            }
-                        )
-                }
-                .frame(height: min(max(formHeight, 160), visible))
-            }
+            let top = osrsNativeCalcSlotGeometry.formTopY(
+                slotDocumentY: slotY,
+                contentOffsetY: 0
+            )
+            osrsNativeCalcChrome(
+                session: session,
+                collapsed: $collapsed,
+                onHeightChange: { formHeight = $0 }
+            )
+            .offset(y: top)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .allowsHitTesting(top + formHeight > 0 && top < page.size.height)
         }
-        .onPreferenceChange(osrsNativeCalcFormHeightKey.self) { formHeight = $0 }
+        .clipped()
         .background(
             osrsNativeCalcSlotProbe(
                 session: session,
                 webView: webView,
                 slotY: $slotY,
-                formHeight: formHeight
+                formHeight: formHeight,
+                collapsed: collapsed
             )
             .frame(width: 0, height: 0)
             .allowsHitTesting(false)
         )
-    }
-}
-
-private struct osrsNativeCalcFormHeightKey: PreferenceKey {
-    static var defaultValue: CGFloat = 420
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = max(value, nextValue())
     }
 }
 
@@ -57,6 +44,7 @@ private struct osrsNativeCalcSlotProbe: UIViewRepresentable {
     var webView: WKWebView?
     @Binding var slotY: CGFloat
     var formHeight: CGFloat
+    var collapsed: Bool
 
     func makeCoordinator() -> Coordinator {
         Coordinator(slotY: $slotY)
@@ -73,6 +61,7 @@ private struct osrsNativeCalcSlotProbe: UIViewRepresentable {
         context.coordinator.session = session
         context.coordinator.webView = webView
         context.coordinator.slotY = $slotY
+        context.coordinator.collapsed = collapsed
         context.coordinator.sync(formHeight: formHeight)
     }
 
@@ -81,6 +70,7 @@ private struct osrsNativeCalcSlotProbe: UIViewRepresentable {
         var session: osrsNativeCalcSession?
         weak var webView: WKWebView?
         var slotY: Binding<CGFloat>
+        var collapsed = false
         private var offsetObservation: NSKeyValueObservation?
         private var observedScrollView: UIScrollView?
         private var slotDocumentY: CGFloat = 0
@@ -101,6 +91,10 @@ private struct osrsNativeCalcSlotProbe: UIViewRepresentable {
             case .native, .submitting:
                 installSlot(webView: webView, session: session, formHeight: formHeight)
                 injectResultIfNeeded(webView: webView, session: session)
+                webView.evaluateJavaScript(
+                    "window.osrsNativeCalcSetCollapsed && window.osrsNativeCalcSetCollapsed(\(collapsed ? "true" : "false"))",
+                    completionHandler: nil
+                )
             default:
                 lastSlotKey = ""
                 lastInjectedHTML = nil
@@ -121,7 +115,10 @@ private struct osrsNativeCalcSlotProbe: UIViewRepresentable {
 
         private func publishViewportY() {
             let offsetY = webView?.scrollView.contentOffset.y ?? 0
-            let next = max(0, slotDocumentY - offsetY)
+            let next = osrsNativeCalcSlotGeometry.formTopY(
+                slotDocumentY: slotDocumentY,
+                contentOffsetY: offsetY
+            )
             if abs(slotY.wrappedValue - next) > 0.5 {
                 slotY.wrappedValue = next
             }
@@ -131,7 +128,7 @@ private struct osrsNativeCalcSlotProbe: UIViewRepresentable {
             let formId = session.definition?.ui.formId ?? ""
             let resultId = session.definition?.ui.resultId ?? ""
             let height = max(Int(ceil(formHeight > 1 ? formHeight : 420)), 1)
-            let key = "\(formId)|\(resultId)|\(height)"
+            let key = "\(formId)|\(resultId)|\(height)|\(collapsed)"
             if lastSlotKey == key { return }
             lastSlotKey = key
             let script = osrsNativeCalcDefinition.installSlotJavaScript(
