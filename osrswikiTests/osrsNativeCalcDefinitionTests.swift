@@ -301,7 +301,7 @@ final class osrsNativeCalcDefinitionTests: XCTestCase {
         XCTAssertTrue(view.contains("Picker(input.label"))
         XCTAssertTrue(view.contains("native-calc-label-\\(input.name)"))
         XCTAssertTrue(view.contains("osrsNativeCalcChrome"))
-        XCTAssertTrue(view.contains("native-calc-collapsible"))
+        XCTAssertFalse(view.contains("native-calc-collapsible-header"))
         XCTAssertTrue(view.contains("native-calc-overflow"))
         XCTAssertFalse(view.contains("Menu {"))
         XCTAssertTrue(view.contains("osrsNativeCalcDraftField"))
@@ -323,6 +323,15 @@ final class osrsNativeCalcDefinitionTests: XCTestCase {
         XCTAssertTrue(runtime.contains("osrsInstallNativeCalcSlot"))
         XCTAssertTrue(runtime.contains("osrs-native-calc-slot"))
         XCTAssertTrue(runtime.contains("osrsNativeCalcSetResult"))
+        XCTAssertTrue(runtime.contains("osrsWrapCollapsible"))
+        XCTAssertTrue(runtime.contains("osrsWrapWikitablesInRoot"))
+        let collapsible = try String(
+            contentsOf: root.appendingPathComponent("osrswiki/Assets/web/collapsible_content.js"),
+            encoding: .utf8
+        )
+        XCTAssertTrue(collapsible.contains("window.osrsWrapCollapsible"))
+        XCTAssertTrue(collapsible.contains("kind === 'calculator'"))
+        XCTAssertTrue(collapsible.contains("allowInsideCalculator"))
         let script = osrsNativeCalcDefinition.installSlotJavaScript(
             formId: "AgilityCalc",
             resultId: "AgilityResults",
@@ -391,7 +400,12 @@ final class osrsNativeCalcDefinitionTests: XCTestCase {
         XCTAssertTrue(runtime.contains("collapsible-calculator"))
         XCTAssertTrue(runtime.contains("osrsWrapNativeCalcCalculatorBox"))
         XCTAssertTrue(runtime.contains("osrsNativeCalcSetCollapsed"))
+        XCTAssertTrue(runtime.contains("osrsWrapCollapsible"))
 
+        let collapsible = try String(
+            contentsOf: root.appendingPathComponent("osrswiki/Assets/web/collapsible_content.js"),
+            encoding: .utf8
+        )
         let html = """
         <!DOCTYPE html>
         <html>
@@ -443,7 +457,10 @@ final class osrsNativeCalcDefinitionTests: XCTestCase {
         window.addSubview(webView)
         window.makeKeyAndVisible()
         try await loadHTML(html, in: webView)
+        _ = try await webView.evaluateJavaScript("window.OSRS_TABLE_COLLAPSED = false;")
+        _ = try await webView.evaluateJavaScript(collapsible)
         _ = try await webView.evaluateJavaScript(runtime)
+        _ = try await webView.evaluateJavaScript("window.OSRSInitializeCollapsibleContent && window.OSRSInitializeCollapsibleContent();")
 
         let probe = """
         (function () {
@@ -569,6 +586,16 @@ final class osrsNativeCalcDefinitionTests: XCTestCase {
             "unresolved slotY=0 must not paint the form over search chrome"
         )
         XCTAssertTrue(osrsNativeCalcSlotGeometry.overlayMayShow(slotResolved: true))
+        XCTAssertFalse(
+            osrsNativeCalcSlotGeometry.overlayMayShow(slotResolved: true, collapsed: true),
+            "collapsed article header must stay tappable; overlay hides"
+        )
+        XCTAssertFalse(
+            osrsNativeCalcSlotGeometry.overlayCoversArticleHeader(
+                overlayIncludesHeader: false,
+                collapsed: true
+            )
+        )
         let overlay = try String(
             contentsOf: URL(fileURLWithPath: #filePath)
                 .deletingLastPathComponent()
@@ -620,9 +647,212 @@ final class osrsNativeCalcDefinitionTests: XCTestCase {
         let chromeStart = try XCTUnwrap(view.range(of: "struct osrsNativeCalcChrome"))
         let chromeEnd = try XCTUnwrap(view.range(of: "struct osrsNativeCalcView"))
         let chrome = String(view[chromeStart.lowerBound..<chromeEnd.lowerBound])
-        XCTAssertTrue(chrome.contains("native-calc-collapsible"))
+        XCTAssertFalse(chrome.contains("native-calc-collapsible-header"))
         XCTAssertTrue(chrome.contains("native-calc-overflow"))
         XCTAssertTrue(chrome.contains("ScrollView(.horizontal"))
+    }
+
+    @MainActor
+    func testCalculatorCollapsibleMatchesArticleDisclosureChromeAndToggle() async throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let collapsible = try String(
+            contentsOf: root.appendingPathComponent("osrswiki/Assets/web/collapsible_content.js"),
+            encoding: .utf8
+        )
+        let runtime = try String(
+            contentsOf: root.appendingPathComponent("osrswiki/Assets/web/osrs_calculator_runtime.js"),
+            encoding: .utf8
+        )
+        XCTAssertTrue(collapsible.contains("window.osrsWrapCollapsible"))
+        XCTAssertTrue(runtime.contains("osrsWrapCollapsible"))
+
+        let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        let window = UIWindow(frame: webView.bounds)
+        window.addSubview(webView)
+        window.makeKeyAndVisible()
+        try await loadHTML(disclosureFixtureHTML(), in: webView)
+        _ = try await webView.evaluateJavaScript("window.OSRS_TABLE_COLLAPSED = false;")
+        _ = try await webView.evaluateJavaScript(collapsible)
+        _ = try await webView.evaluateJavaScript(runtime)
+        _ = try await webView.evaluateJavaScript("window.OSRSInitializeCollapsibleContent && window.OSRSInitializeCollapsibleContent();")
+
+        let probe = """
+        (function () {
+          function boxInfo(sel) {
+            var box = document.querySelector(sel);
+            if (!box) return null;
+            var header = box.querySelector(':scope > .collapsible-header');
+            var label = header && header.querySelector('.collapsible-label');
+            var state = header && header.querySelector('.collapsible-state');
+            var body = box.querySelector(':scope > .collapsible-content > .osrs-disclosure-body');
+            var content = box.querySelector(':scope > .collapsible-content');
+            var br = box.getBoundingClientRect();
+            var bodyCs = body ? window.getComputedStyle(body) : null;
+            return {
+              classes: String(box.className || ''),
+              kind: box.getAttribute('data-osrs-disclosure-kind') || '',
+              hasHeader: !!(header && header.classList.contains('collapsible-header')),
+              hasLabel: !!(label && label.classList.contains('collapsible-label')),
+              hasState: !!(state && state.classList.contains('collapsible-state')),
+              hasBody: !!(body && body.classList.contains('osrs-disclosure-body')),
+              label: label ? String(label.textContent || '') : '',
+              state: state ? String(state.textContent || '') : '',
+              left: br.left,
+              width: br.width,
+              inset: bodyCs ? bodyCs.marginLeft : '',
+              contentHeight: content ? content.getBoundingClientRect().height : -1,
+              collapsed: box.classList.contains('collapsed'),
+              viewport: document.documentElement.clientWidth || window.innerWidth || 0
+            };
+          }
+          window.osrsInstallNativeCalcSlot({
+            formId: 'AgilityCalc',
+            resultId: 'AgilityResults',
+            height: 220
+          });
+          var article = boxInfo('.collapsible-wikitable');
+          var calc = boxInfo('.collapsible-calculator');
+          var header = document.querySelector('.collapsible-calculator > .collapsible-header');
+          if (header) header.click();
+          var afterCollapse = boxInfo('.collapsible-calculator');
+          if (header) header.click();
+          var afterExpand = boxInfo('.collapsible-calculator');
+          var slot = document.getElementById('osrs-native-calc-slot');
+          return {
+            article: article,
+            calc: calc,
+            afterCollapse: afterCollapse,
+            afterExpand: afterExpand,
+            slotVisibleAfterExpand: !!(slot && slot.getBoundingClientRect().height > 0),
+            wrapFn: typeof window.osrsWrapCollapsible,
+            toggleFn: typeof window.osrsToggleCollapsible
+          };
+        })()
+        """
+        let raw = try await webView.evaluateJavaScript(probe)
+        let payload = try XCTUnwrap(raw as? [String: Any])
+        writeScratchJSON(payload, name: "calc-collapsible-probe.json")
+        XCTAssertEqual(payload["wrapFn"] as? String, "function")
+        let article = try XCTUnwrap(payload["article"] as? [String: Any])
+        let calc = try XCTUnwrap(payload["calc"] as? [String: Any])
+        XCTAssertEqual(article["hasHeader"] as? Bool, true)
+        XCTAssertEqual(article["hasLabel"] as? Bool, true)
+        XCTAssertEqual(article["hasState"] as? Bool, true)
+        XCTAssertEqual(article["hasBody"] as? Bool, true)
+        XCTAssertEqual(calc["hasHeader"] as? Bool, true)
+        XCTAssertEqual(calc["hasLabel"] as? Bool, true)
+        XCTAssertEqual(calc["hasState"] as? Bool, true)
+        XCTAssertEqual(calc["hasBody"] as? Bool, true)
+        XCTAssertEqual(calc["kind"] as? String, "calculator")
+        XCTAssertEqual(calc["label"] as? String, "Calculator")
+        XCTAssertTrue(((calc["classes"] as? String) ?? "").contains("collapsible-container"))
+        XCTAssertTrue(((calc["classes"] as? String) ?? "").contains("collapsible-calculator"))
+        let articleWidth = (article["width"] as? NSNumber)?.doubleValue ?? -1
+        let calcWidth = (calc["width"] as? NSNumber)?.doubleValue ?? -1
+        let articleLeft = (article["left"] as? NSNumber)?.doubleValue ?? -1
+        let calcLeft = (calc["left"] as? NSNumber)?.doubleValue ?? -1
+        let viewport = (calc["viewport"] as? NSNumber)?.doubleValue ?? 390
+        XCTAssertGreaterThan(articleWidth, 0)
+        XCTAssertEqual(articleWidth, calcWidth, accuracy: 2)
+        XCTAssertEqual(articleLeft, calcLeft, accuracy: 2)
+        XCTAssertLessThan(calcWidth, viewport - 8, "calc box must use article inset, not full-bleed")
+        XCTAssertEqual(article["inset"] as? String, calc["inset"] as? String)
+        let afterCollapse = try XCTUnwrap(payload["afterCollapse"] as? [String: Any])
+        XCTAssertEqual(afterCollapse["collapsed"] as? Bool, true)
+        let collapsedHeight = (afterCollapse["contentHeight"] as? NSNumber)?.doubleValue ?? 99
+        XCTAssertLessThanOrEqual(collapsedHeight, 1)
+        XCTAssertEqual(afterCollapse["state"] as? String, "Tap to expand")
+        let afterExpand = try XCTUnwrap(payload["afterExpand"] as? [String: Any])
+        XCTAssertEqual(afterExpand["collapsed"] as? Bool, false)
+        let expandedHeight = (afterExpand["contentHeight"] as? NSNumber)?.doubleValue ?? 0
+        XCTAssertGreaterThan(expandedHeight, 0)
+        XCTAssertEqual(payload["slotVisibleAfterExpand"] as? Bool, true)
+        window.isHidden = true
+    }
+
+    @MainActor
+    func testSetResultWrapsTablesAsArticleCollapsiblesInsideCalcBox() async throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let collapsible = try String(
+            contentsOf: root.appendingPathComponent("osrswiki/Assets/web/collapsible_content.js"),
+            encoding: .utf8
+        )
+        let runtime = try String(
+            contentsOf: root.appendingPathComponent("osrswiki/Assets/web/osrs_calculator_runtime.js"),
+            encoding: .utf8
+        )
+        let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        let window = UIWindow(frame: webView.bounds)
+        window.addSubview(webView)
+        window.makeKeyAndVisible()
+        try await loadHTML(disclosureFixtureHTML(), in: webView)
+        _ = try await webView.evaluateJavaScript("window.OSRS_TABLE_COLLAPSED = false;")
+        _ = try await webView.evaluateJavaScript(collapsible)
+        _ = try await webView.evaluateJavaScript(runtime)
+        _ = try await webView.evaluateJavaScript("window.OSRSInitializeCollapsibleContent && window.OSRSInitializeCollapsibleContent();")
+
+        let probe = """
+        (function () {
+          window.osrsInstallNativeCalcSlot({
+            formId: 'AgilityCalc',
+            resultId: 'AgilityResults',
+            height: 180
+          });
+          window.osrsNativeCalcSetResult('AgilityResults',
+            '<table class="wikitable"><caption>Methods</caption><tr><td>Plank</td></tr></table>' +
+            '<table class="wikitable"><caption>Rates</caption><tr><td>Low wall</td></tr></table>'
+          );
+          var calc = document.querySelector('.collapsible-calculator');
+          var body = calc && calc.querySelector(':scope > .collapsible-content > .osrs-disclosure-body');
+          var result = document.getElementById('AgilityResults');
+          var nested = result ? Array.prototype.map.call(
+            result.querySelectorAll(':scope > .collapsible-container'),
+            function (box) {
+              return {
+                kind: box.getAttribute('data-osrs-disclosure-kind') || '',
+                classes: String(box.className || ''),
+                hasHeader: !!box.querySelector(':scope > .collapsible-header'),
+                hasBody: !!box.querySelector('.osrs-disclosure-body'),
+                tableKind: box.classList.contains('collapsible-wikitable')
+              };
+            }
+          ) : [];
+          var nestedHeader = result && result.querySelector('.collapsible-container > .collapsible-header');
+          var parentBefore = calc && calc.classList.contains('collapsed');
+          if (nestedHeader) nestedHeader.click();
+          var parentAfterNested = calc && calc.classList.contains('collapsed');
+          if (nestedHeader) nestedHeader.click();
+          return {
+            resultInBody: !!(body && result && body.contains(result)),
+            nestedCount: nested.length,
+            nested: nested,
+            parentCollapsedBefore: parentBefore,
+            parentCollapsedAfterNestedToggle: parentAfterNested,
+            parentStillPresent: !!document.querySelector('.collapsible-calculator')
+          };
+        })()
+        """
+        let raw = try await webView.evaluateJavaScript(probe)
+        let payload = try XCTUnwrap(raw as? [String: Any])
+        writeScratchJSON(payload, name: "calc-result-tables.json")
+        XCTAssertEqual(payload["resultInBody"] as? Bool, true)
+        XCTAssertEqual((payload["nestedCount"] as? NSNumber)?.intValue, 2)
+        let nested = try XCTUnwrap(payload["nested"] as? [[String: Any]])
+        XCTAssertEqual(nested.count, 2)
+        for box in nested {
+            XCTAssertEqual(box["hasHeader"] as? Bool, true)
+            XCTAssertEqual(box["hasBody"] as? Bool, true)
+            XCTAssertEqual(box["tableKind"] as? Bool, true)
+            XCTAssertTrue(((box["classes"] as? String) ?? "").contains("collapsible-container"))
+        }
+        XCTAssertEqual(payload["parentCollapsedBefore"] as? Bool, false)
+        XCTAssertEqual(payload["parentCollapsedAfterNestedToggle"] as? Bool, false)
+        XCTAssertEqual(payload["parentStillPresent"] as? Bool, true)
+        window.isHidden = true
     }
 
     @MainActor
@@ -632,6 +862,61 @@ final class osrsNativeCalcDefinitionTests: XCTestCase {
         webView.navigationDelegate = delegate
         webView.loadHTMLString(html, baseURL: nil)
         await fulfillment(of: [ready], timeout: 5)
+    }
+
+    private func writeScratchJSON(_ payload: Any, name: String) {
+        let scratch = ProcessInfo.processInfo.environment["OSRS_SCRATCH"]
+            ?? "/var/folders/vt/gqrlflhj10b1g04_6pcq_q3r0000gn/T/grok-goal-7ce604d6481b/implementer"
+        guard JSONSerialization.isValidJSONObject(payload),
+              let data = try? JSONSerialization.data(
+                withJSONObject: payload,
+                options: [.prettyPrinted, .sortedKeys]
+              ) else { return }
+        try? data.write(to: URL(fileURLWithPath: scratch).appendingPathComponent(name))
+    }
+
+    private func disclosureFixtureHTML() -> String {
+        """
+        <!DOCTYPE html>
+        <html>
+        <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <style>
+          :root { --osrs-disclosure-content-inline-inset: 12px; --osrs-disclosure-chrome-bg: #d8ccb4; }
+          body { margin: 0; background: #e2dbc8; }
+          .mw-parser-output { padding: 12px; }
+          .collapsible-container { background-color: var(--osrs-disclosure-chrome-bg); box-sizing: border-box; }
+          .collapsible-header { display: flex; padding: 12px; }
+          .collapsible-label { font-weight: 600; }
+          .collapsible-state { margin-left: 8px; }
+          .collapsible-container.collapsed > .collapsible-content {
+            height: 0; max-height: 0; min-height: 0; overflow: hidden; padding: 0; margin: 0;
+          }
+          .collapsible-container:not(.collapsed) > .collapsible-content > .osrs-disclosure-body {
+            margin-inline: var(--osrs-disclosure-content-inline-inset);
+            overflow-x: auto;
+          }
+          table.wikitable { width: 100%; border: 1px solid #94866d; }
+        </style>
+        </head>
+        <body>
+          <div class="mw-parser-output">
+            <table class="wikitable">
+              <caption>Drops</caption>
+              <tr><th>Item</th><td>Coins</td></tr>
+            </table>
+            <h2>Calculator</h2>
+            <pre class="jcConfig">form=AgilityCalc result=AgilityResults</pre>
+            <div class="osrs-calculator-layout">
+              <div class="osrs-calculator-panel">
+                <fieldset class="jcTable oo-ui-fieldsetLayout" id="jsForm-AgilityCalc"></fieldset>
+              </div>
+              <div id="AgilityResults" class="osrs-calculator-result"></div>
+            </div>
+          </div>
+        </body>
+        </html>
+        """
     }
 }
 

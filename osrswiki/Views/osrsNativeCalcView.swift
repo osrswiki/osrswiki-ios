@@ -3,51 +3,23 @@ import UIKit
 
 struct osrsNativeCalcChrome: View {
     @ObservedObject var session: osrsNativeCalcSession
-    @Binding var collapsed: Bool
     var onHeightChange: (CGFloat) -> Void
     @Environment(\.osrsTheme) private var osrsTheme
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Button {
-                collapsed.toggle()
-            } label: {
-                HStack(alignment: .center, spacing: 8) {
-                    Text("Calculator")
-                        .font(.headline)
-                        .foregroundStyle(osrsTheme.primaryTextColor)
-                    Spacer(minLength: 8)
-                    Text(collapsed ? "Tap to expand" : "Tap to collapse")
-                        .font(.footnote)
-                        .foregroundStyle(osrsTheme.secondaryTextColor)
-                    Image(systemName: collapsed ? "chevron.down" : "chevron.up")
-                        .foregroundStyle(osrsTheme.secondaryTextColor)
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 10)
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("native-calc-collapsible-header")
-
-            if !collapsed {
-                ScrollView(.horizontal, showsIndicators: true) {
-                    osrsNativeCalcView(session: session)
-                        .fixedSize(horizontal: true, vertical: false)
-                }
-                .accessibilityIdentifier("native-calc-overflow")
-            }
+        ScrollView(.horizontal, showsIndicators: true) {
+            osrsNativeCalcView(session: session)
+                .fixedSize(horizontal: true, vertical: false)
         }
+        .accessibilityIdentifier("native-calc-overflow")
         .frame(maxWidth: .infinity, alignment: .topLeading)
-        .background(osrsTheme.surfaceVariant.opacity(0.92))
-        .clipShape(RoundedRectangle(cornerRadius: 6))
         .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("native-calc-collapsible")
         .accessibilityValue("calculator")
         .background(
             GeometryReader { geo in
                 Color.clear.preference(
                     key: osrsNativeCalcFormHeightKey.self,
-                    value: max(geo.size.height, collapsed ? 44 : 160)
+                    value: max(geo.size.height, 160)
                 )
             }
         )

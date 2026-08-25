@@ -26,7 +26,16 @@ enum osrsNativeCalcSlotGeometry {
 
     /// The overlay starts at y=0 of the article shell. Painting before the
     /// slot probe returns a real top covers search chrome with the form tail.
-    static func overlayMayShow(slotResolved: Bool) -> Bool {
-        slotResolved
+    /// Collapsed article disclosures own the header; hiding the overlay then
+    /// is what lets Android/iOS expand after collapse.
+    static func overlayMayShow(slotResolved: Bool, collapsed: Bool = false) -> Bool {
+        slotResolved && !collapsed
+    }
+
+    static func overlayCoversArticleHeader(
+        overlayIncludesHeader: Bool,
+        collapsed: Bool
+    ) -> Bool {
+        overlayIncludesHeader && collapsed
     }
 }

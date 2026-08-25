@@ -38,6 +38,56 @@ final class osrsCalculatorThemeContrastUITests: XCTestCase {
         attachScreenshot(from: app, name: "calculator-theme-contrast-barrows-scrolled")
     }
 
+    func testAgilityNativeCalcCollapsibleMatchesArticleChrome() throws {
+        let app = launchArticle(title: "Calculator:Agility", path: "Calculator:Agility")
+        let webView = articleWebView(in: app)
+        XCTAssertTrue(webView.waitForExistence(timeout: articleLoadTimeout), app.debugDescription)
+
+        let form = app.descendants(matching: .any)["native-calc-form"].firstMatch
+        var header = labeledControl("Calculator Tap to collapse", in: app)
+        for _ in 0..<16 {
+            if header.exists, header.frame.height > 4, header.frame.minY > 80 {
+                break
+            }
+            if form.exists, form.frame.minY > 80 {
+                break
+            }
+            webView.swipeUp()
+            header = labeledControl("Calculator Tap to collapse", in: app)
+        }
+        XCTAssertTrue(
+            header.waitForExistence(timeout: 8) || form.waitForExistence(timeout: 2),
+            "Agility calc header never appeared. \(app.debugDescription)"
+        )
+        writeScratchScreenshot(from: app, name: "ios-agility-open.png")
+        attachScreenshot(from: app, name: "ios-agility-open")
+
+        let articleHeader = labeledControl("Navigation Tap to collapse", in: app)
+        if articleHeader.exists {
+            writeScratchScreenshot(from: app, name: "ios-article-collapsible-ref.png")
+            attachScreenshot(from: app, name: "ios-article-collapsible-ref")
+        }
+
+        header.tap()
+        let expandHint = labeledControl("Calculator Tap to expand", in: app)
+        XCTAssertTrue(
+            expandHint.waitForExistence(timeout: 6),
+            "collapse did not show Tap to expand. \(app.debugDescription)"
+        )
+        writeScratchScreenshot(from: app, name: "ios-agility-collapsed.png")
+        attachScreenshot(from: app, name: "ios-agility-collapsed")
+
+        expandHint.tap()
+        let collapseHint = labeledControl("Calculator Tap to collapse", in: app)
+        XCTAssertTrue(
+            collapseHint.waitForExistence(timeout: 6),
+            "expand after collapse failed. \(app.debugDescription)"
+        )
+        XCTAssertTrue(form.waitForExistence(timeout: 4), "native form missing after expand")
+        writeScratchScreenshot(from: app, name: "ios-agility-reexpanded.png")
+        attachScreenshot(from: app, name: "ios-agility-reexpanded")
+    }
+
     func testCombatLevelFieldLabelsStayOnscreenAndThemed() throws {
         let app = launchArticle(title: "Calculator:Combat level", path: "Calculator:Combat_level")
         let webView = articleWebView(in: app)
@@ -77,6 +127,12 @@ final class osrsCalculatorThemeContrastUITests: XCTestCase {
 
     private func articleWebView(in app: XCUIApplication) -> XCUIElement {
         app.webViews["article_web_view"].exists ? app.webViews["article_web_view"] : app.webViews.firstMatch
+    }
+
+    private func labeledControl(_ label: String, in app: XCUIApplication) -> XCUIElement {
+        app.descendants(matching: .any).matching(
+            NSPredicate(format: "label == %@", label)
+        ).firstMatch
     }
 
     private func firstMatchingControl(_ name: String, in app: XCUIApplication, webView: XCUIElement) -> XCUIElement {
@@ -121,5 +177,12 @@ final class osrsCalculatorThemeContrastUITests: XCTestCase {
         attachment.name = name
         attachment.lifetime = .keepAlways
         add(attachment)
+    }
+
+    private func writeScratchScreenshot(from app: XCUIApplication, name: String) {
+        let scratch = ProcessInfo.processInfo.environment["OSRS_SCRATCH"]
+            ?? "/var/folders/vt/gqrlflhj10b1g04_6pcq_q3r0000gn/T/grok-goal-7ce604d6481b/implementer"
+        let url = URL(fileURLWithPath: scratch).appendingPathComponent(name)
+        try? app.screenshot().pngRepresentation.write(to: url)
     }
 }

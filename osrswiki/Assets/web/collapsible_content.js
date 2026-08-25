@@ -561,16 +561,35 @@
         });
     }
 
+    function shouldSkipWrap(elementToWrap, options) {
+        if (!elementToWrap || !elementToWrap.parentNode) return true;
+        const existing = elementToWrap.closest('.collapsible-container');
+        if (!existing) return false;
+        if (options && options.allowInsideCalculator &&
+            existing.dataset.osrsDisclosureKind === 'calculator') {
+            let node = elementToWrap.parentElement;
+            while (node && node !== existing) {
+                if (node.classList && node.classList.contains('collapsible-container')) return true;
+                node = node.parentElement;
+            }
+            return false;
+        }
+        return true;
+    }
+
     function transformElement(options) {
         const kind = options.kind;
-        const table = options.table;
+        const table = options.table || null;
         const elementToWrap = options.elementToWrap || table;
-        if (!table || !elementToWrap || !elementToWrap.parentNode || elementToWrap.closest('.collapsible-container')) {
+        if (!elementToWrap || !elementToWrap.parentNode || shouldSkipWrap(elementToWrap, options)) {
+            return null;
+        }
+        if (!table && kind !== 'calculator') {
             return null;
         }
 
         const isPrimary = !!options.isPrimary;
-        if (isPrimary) {
+        if (isPrimary && table) {
             table.classList.add('main-infobox');
             table.style.marginTop = '0px';
         }
@@ -587,10 +606,10 @@
             table.classList.add('osrs-intrinsic-recipe-table');
         } else if (kind === 'wikitable') {
             classes.push('collapsible-wikitable');
-            if (table.querySelector('.mw-kartographer-map')) {
+            if (table && table.querySelector('.mw-kartographer-map')) {
                 classes.push('collapsible-map-table');
                 table.classList.add('osrs-map-table');
-            } else if (isIntrinsicWidthTable(table)) {
+            } else if (table && isIntrinsicWidthTable(table)) {
                 classes.push('collapsible-intrinsic-table');
             }
         } else if (kind === 'questdetails') {
@@ -599,10 +618,12 @@
             classes.push('collapsible-explicit-mw-collapsible');
         } else if (kind === 'navbox') {
             classes.push('collapsible-navbox');
+        } else if (kind === 'calculator') {
+            classes.push('collapsible-calculator');
         } else if (kind === 'infobox') {
             classes.push('collapsible-infobox');
             if (isPrimary) classes.push('collapsible-primary-infobox');
-            if (table.classList.contains('infobox-bonuses')) classes.push('collapsible-bonuses-infobox');
+            if (table && table.classList.contains('infobox-bonuses')) classes.push('collapsible-bonuses-infobox');
         }
 
         // Recipe units are stacked full-width cards. Wiki float classes must not shrink
@@ -644,7 +665,9 @@
         header.appendChild(titleWrapper);
         header.appendChild(icon);
 
-        hideRepresentedCaption(table, options.representedCaption || visibleCaptionText(directCaption(table)));
+        if (table) {
+            hideRepresentedCaption(table, options.representedCaption || visibleCaptionText(directCaption(table)));
+        }
         elementToWrap.parentNode.insertBefore(container, elementToWrap);
         container.appendChild(header);
         const content = document.createElement('div');
@@ -654,6 +677,38 @@
         updateHeaderText(container, titleWrapper, captionText);
         setupCollapsible(header, container, titleWrapper, captionText);
         return container;
+    }
+
+    function wrapWikitablesInRoot(root) {
+        if (!root || !root.querySelectorAll) return [];
+        const wrapped = [];
+        Array.from(root.querySelectorAll('table')).forEach(function(table) {
+            if (table.matches(
+                'table[role="presentation"], table.navbox, table.infobox, table.archivelist, ' +
+                'table.gallery, table.messagebox, table.ambox, table.mbox, table.notebox, ' +
+                '.osrs-toc-layout-table, .osrs-toc-layout-host'
+            )) return;
+            const kind = table.classList.contains('mw-collapsible') && !table.classList.contains('wikitable')
+                ? 'explicit'
+                : 'wikitable';
+            const container = transformElement({
+                kind: kind,
+                defaultTitle: 'Table',
+                table: table,
+                allowInsideCalculator: true
+            });
+            if (container) wrapped.push(container);
+        });
+        return wrapped;
+    }
+
+    function toggleCollapsibleElement(container, collapsed) {
+        if (!container) return false;
+        const isCollapsed = container.classList.contains('collapsed');
+        if (typeof collapsed === 'boolean' && collapsed === isCollapsed) return isCollapsed;
+        const header = container.querySelector(':scope > .collapsible-header');
+        if (header) header.click();
+        return container.classList.contains('collapsed');
     }
 
     function directRecipeTables(wrapper) {
@@ -867,6 +922,7 @@
 
     function initialize() {
         if (!document.body) return;
+        if (document.body.classList.contains('js-transforms-complete')) return;
         const startedAt = window.performance && performance.now ? performance.now() : Date.now();
 
         transformRecipeTables();
@@ -933,6 +989,9 @@
     }
 
     window.OSRSInitializeCollapsibleContent = initialize;
+    window.osrsWrapCollapsible = transformElement;
+    window.osrsWrapWikitablesInRoot = wrapWikitablesInRoot;
+    window.osrsToggleCollapsible = toggleCollapsibleElement;
 
     var COLLAPSE_AFTER_FIRST_VIEW_FALLBACK_MS = 2500;
     var collapseInitScheduled = false;

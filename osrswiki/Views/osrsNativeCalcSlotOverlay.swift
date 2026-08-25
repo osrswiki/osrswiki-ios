@@ -6,6 +6,8 @@ struct osrsNativeCalcSlotOverlay: View {
     @ObservedObject var session: osrsNativeCalcSession
     var webView: WKWebView?
     @State private var slotY: CGFloat = 0
+    @State private var slotX: CGFloat = 0
+    @State private var slotWidth: CGFloat = 0
     @State private var slotResolved = false
     @State private var formHeight: CGFloat = 420
     @State private var collapsed = false
@@ -16,14 +18,15 @@ struct osrsNativeCalcSlotOverlay: View {
                 slotDocumentY: slotY,
                 contentOffsetY: 0
             )
-            if osrsNativeCalcSlotGeometry.overlayMayShow(slotResolved: slotResolved) {
+            let width = slotWidth > 1 ? slotWidth : page.size.width
+            if osrsNativeCalcSlotGeometry.overlayMayShow(slotResolved: slotResolved, collapsed: collapsed) {
                 osrsNativeCalcChrome(
                     session: session,
-                    collapsed: $collapsed,
                     onHeightChange: { formHeight = $0 }
                 )
-                .frame(maxWidth: .infinity, maxHeight: formHeight, alignment: .top)
-                .offset(y: top)
+                .frame(width: width, alignment: .top)
+                .frame(maxHeight: formHeight, alignment: .top)
+                .offset(x: slotX, y: top)
                 .allowsHitTesting(top + formHeight > 0 && top < page.size.height)
             }
         }
@@ -33,9 +36,11 @@ struct osrsNativeCalcSlotOverlay: View {
                 session: session,
                 webView: webView,
                 slotY: $slotY,
+                slotX: $slotX,
+                slotWidth: $slotWidth,
                 slotResolved: $slotResolved,
                 formHeight: formHeight,
-                collapsed: collapsed
+                collapsed: $collapsed
             )
             .frame(width: 0, height: 0)
             .allowsHitTesting(false)
@@ -47,12 +52,14 @@ private struct osrsNativeCalcSlotProbe: UIViewRepresentable {
     @ObservedObject var session: osrsNativeCalcSession
     var webView: WKWebView?
     @Binding var slotY: CGFloat
+    @Binding var slotX: CGFloat
+    @Binding var slotWidth: CGFloat
     @Binding var slotResolved: Bool
     var formHeight: CGFloat
-    var collapsed: Bool
+    @Binding var collapsed: Bool
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(slotY: $slotY, slotResolved: $slotResolved)
+        Coordinator(slotY: $slotY, slotX: $slotX, slotWidth: $slotWidth, slotResolved: $slotResolved, collapsed: $collapsed)
     }
 
     func makeUIView(context: Context) -> UIView {
@@ -66,8 +73,10 @@ private struct osrsNativeCalcSlotProbe: UIViewRepresentable {
         context.coordinator.session = session
         context.coordinator.webView = webView
         context.coordinator.slotY = $slotY
+        context.coordinator.slotX = $slotX
+        context.coordinator.slotWidth = $slotWidth
         context.coordinator.slotResolved = $slotResolved
-        context.coordinator.collapsed = collapsed
+        context.coordinator.collapsed = $collapsed
         context.coordinator.sync(formHeight: formHeight)
     }
 
@@ -76,8 +85,10 @@ private struct osrsNativeCalcSlotProbe: UIViewRepresentable {
         var session: osrsNativeCalcSession?
         weak var webView: WKWebView?
         var slotY: Binding<CGFloat>
+        var slotX: Binding<CGFloat>
+        var slotWidth: Binding<CGFloat>
         var slotResolved: Binding<Bool>
-        var collapsed = false
+        var collapsed: Binding<Bool>
         private var offsetObservation: NSKeyValueObservation?
         private var observedScrollView: UIScrollView?
         private var slotDocumentY: CGFloat = 0
@@ -86,9 +97,18 @@ private struct osrsNativeCalcSlotProbe: UIViewRepresentable {
         private var installWorkItem: DispatchWorkItem?
         private var retries = 0
 
-        init(slotY: Binding<CGFloat>, slotResolved: Binding<Bool>) {
+        init(
+            slotY: Binding<CGFloat>,
+            slotX: Binding<CGFloat>,
+            slotWidth: Binding<CGFloat>,
+            slotResolved: Binding<Bool>,
+            collapsed: Binding<Bool>
+        ) {
             self.slotY = slotY
+            self.slotX = slotX
+            self.slotWidth = slotWidth
             self.slotResolved = slotResolved
+            self.collapsed = collapsed
         }
 
         func sync(formHeight: CGFloat) {
@@ -99,10 +119,7 @@ private struct osrsNativeCalcSlotProbe: UIViewRepresentable {
             case .native, .submitting:
                 installSlot(webView: webView, session: session, formHeight: formHeight)
                 injectResultIfNeeded(webView: webView, session: session)
-                webView.evaluateJavaScript(
-                    "window.osrsNativeCalcSetCollapsed && window.osrsNativeCalcSetCollapsed(\(collapsed ? "true" : "false"))",
-                    completionHandler: nil
-                )
+                probeDisclosure(webView: webView)
             default:
                 lastSlotKey = ""
                 lastInjectedHTML = nil
@@ -136,8 +153,11 @@ private struct osrsNativeCalcSlotProbe: UIViewRepresentable {
             let formId = session.definition?.ui.formId ?? ""
             let resultId = session.definition?.ui.resultId ?? ""
             let height = max(Int(ceil(formHeight > 1 ? formHeight : 420)), 1)
-            let key = "\(formId)|\(resultId)|\(height)|\(collapsed)"
-            if lastSlotKey == key { return }
+            let key = "\(formId)|\(resultId)|\(height)"
+            if lastSlotKey == key {
+                probeDisclosure(webView: webView)
+                return
+            }
             lastSlotKey = key
             let script = osrsNativeCalcDefinition.installSlotJavaScript(
                 formId: formId,
@@ -186,6 +206,47 @@ private struct osrsNativeCalcSlotProbe: UIViewRepresentable {
             } else if let top = json["top"] as? NSNumber {
                 slotDocumentY = CGFloat(truncating: top)
                 slotResolved.wrappedValue = true
+            }
+            applyGeometry(json)
+        }
+
+        private func probeDisclosure(webView: WKWebView) {
+            webView.evaluateJavaScript(
+                """
+                (function(){
+                  var s=document.getElementById('osrs-native-calc-slot');
+                  if(!s)return null;
+                  var box=s.closest('.collapsible-calculator');
+                  var r=s.getBoundingClientRect();
+                  return JSON.stringify({
+                    top:r.top+(window.scrollY||document.documentElement.scrollTop||0),
+                    left:r.left+(window.scrollX||document.documentElement.scrollLeft||0),
+                    width:r.width,
+                    collapsed:!!(box&&box.classList.contains('collapsed'))
+                  });
+                })()
+                """
+            ) { [weak self] result, _ in
+                Task { @MainActor in
+                    self?.applySlotResult(result)
+                    self?.publishViewportY()
+                }
+            }
+        }
+
+        private func applyGeometry(_ json: [String: Any]) {
+            if let collapsed = json["collapsed"] as? Bool {
+                self.collapsed.wrappedValue = collapsed
+            }
+            if let left = json["left"] as? Double {
+                slotX.wrappedValue = CGFloat(left)
+            } else if let left = json["left"] as? NSNumber {
+                slotX.wrappedValue = CGFloat(truncating: left)
+            }
+            if let width = json["width"] as? Double, width > 1 {
+                slotWidth.wrappedValue = CGFloat(width)
+            } else if let width = json["width"] as? NSNumber, CGFloat(truncating: width) > 1 {
+                slotWidth.wrappedValue = CGFloat(truncating: width)
             }
         }
 

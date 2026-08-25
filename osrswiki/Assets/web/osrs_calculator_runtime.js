@@ -66,15 +66,53 @@
     }
     window.osrsEnsureCalculatorPageVisible = osrsEnsureCalculatorPageVisible;
 
-    function osrsNativeCalcDocumentTop(el) {
+    function osrsNativeCalcDocumentOffset(el, prop) {
         if (!el) return 0;
-        var top = 0;
+        var value = 0;
         var node = el;
         while (node) {
-            top += node.offsetTop || 0;
+            value += node[prop] || 0;
             node = node.offsetParent;
         }
-        return top;
+        return value;
+    }
+
+    function osrsNativeCalcDocumentTop(el) {
+        return osrsNativeCalcDocumentOffset(el, 'offsetTop');
+    }
+
+    function osrsNativeCalcDocumentLeft(el) {
+        return osrsNativeCalcDocumentOffset(el, 'offsetLeft');
+    }
+
+    function osrsNativeCalcCalculatorBox(slot) {
+        return slot && slot.closest ? slot.closest('.collapsible-calculator') : null;
+    }
+
+    function osrsNativeCalcDisclosureBody(box) {
+        return box && box.querySelector
+            ? box.querySelector(':scope > .collapsible-content > .osrs-disclosure-body')
+            : null;
+    }
+
+    function osrsPlaceNativeCalcResultInBox(result) {
+        var slot = document.getElementById('osrs-native-calc-slot');
+        var body = osrsNativeCalcDisclosureBody(osrsNativeCalcCalculatorBox(slot));
+        if (!body || !result || body.contains(result)) return;
+        if (slot && slot.parentNode === body) {
+            if (slot.nextSibling) body.insertBefore(result, slot.nextSibling);
+            else body.appendChild(result);
+            return;
+        }
+        body.appendChild(result);
+    }
+
+    function osrsWrapNativeCalcResultTables(result) {
+        if (!result) return;
+        osrsPlaceNativeCalcResultInBox(result);
+        if (typeof window.osrsWrapWikitablesInRoot === 'function') {
+            window.osrsWrapWikitablesInRoot(result);
+        }
     }
 
     function osrsNativeCalcHideGadget(node) {
@@ -132,12 +170,8 @@
             'display:none!important;visibility:hidden!important;height:0!important;min-height:0!important;padding:0!important;margin:0!important;border:0!important;background:transparent!important;box-shadow:none!important;',
             '}',
             'html.osrs-native-calc-slot-active #osrs-native-calc-slot {',
-            'display:block!important;background:transparent!important;border:0!important;box-shadow:none!important;outline:none!important;padding:0!important;margin:0!important;',
+            'display:block!important;background:transparent!important;border:0!important;box-shadow:none!important;outline:none!important;padding:0!important;margin:0!important;width:100%!important;max-width:100%!important;min-width:0!important;box-sizing:border-box!important;',
             '}',
-            'html.osrs-native-calc-slot-active .collapsible-calculator {',
-            'display:block!important;max-width:100%!important;box-sizing:border-box!important;background:transparent!important;background-color:transparent!important;box-shadow:none!important;border:0!important;',
-            '}',
-            'html.osrs-native-calc-slot-active .collapsible-calculator:not(.collapsed) > .collapsible-content,',
             'html.osrs-native-calc-slot-active .collapsible-calculator:not(.collapsed) > .collapsible-content > .osrs-disclosure-body {',
             'overflow-x:auto!important;-webkit-overflow-scrolling:touch!important;',
             '}',
@@ -227,7 +261,8 @@
         }
         slot.style.display = 'block';
         slot.style.width = '100%';
-        slot.style.minWidth = (document.documentElement.clientWidth || window.innerWidth || 360) + 'px';
+        slot.style.minWidth = '0';
+        slot.style.maxWidth = '100%';
         slot.style.boxSizing = 'border-box';
         slot.style.minHeight = height + 'px';
         slot.style.background = 'transparent';
@@ -238,50 +273,69 @@
         slot.style.padding = '0';
         slot.style.margin = '0';
         var box = osrsWrapNativeCalcCalculatorBox(slot, height);
+        var resultNode = (resultId && document.getElementById(resultId)) || result;
+        osrsPlaceNativeCalcResultInBox(resultNode);
+        osrsWrapNativeCalcResultTables(resultNode);
         if (window.osrsEnsureCalculatorPageVisible) {
             window.osrsEnsureCalculatorPageVisible();
         }
+        var header = box && box.querySelector(':scope > .collapsible-header');
         return JSON.stringify({
             top: osrsNativeCalcDocumentTop(slot),
+            left: osrsNativeCalcDocumentLeft(slot),
             width: slot.offsetWidth || 0,
             height: slot.offsetHeight || height,
+            headerHeight: header ? (header.offsetHeight || 0) : 0,
             collapsed: !!(box && box.classList.contains('collapsed')),
             category: 'calculator'
         });
     };
 
+    function osrsSyncNativeCalcSlotHeight(box, height) {
+        var nativeSlot = document.getElementById('osrs-native-calc-slot');
+        if (!nativeSlot) return 0;
+        var collapsed = !!(box && box.classList.contains('collapsed'));
+        nativeSlot.style.minHeight = collapsed ? '0px' : (Math.max(1, parseInt(height, 10) || 1) + 'px');
+        return osrsNativeCalcDocumentTop(nativeSlot);
+    }
+
     function osrsWrapNativeCalcCalculatorBox(slot, height) {
         if (!slot || !slot.parentNode) return null;
-        var container = slot.closest('.collapsible-calculator');
+        var container = osrsNativeCalcCalculatorBox(slot);
+        if (!container && typeof window.osrsWrapCollapsible === 'function') {
+            container = window.osrsWrapCollapsible({
+                kind: 'calculator',
+                elementToWrap: slot,
+                captionText: 'Calculator',
+                defaultTitle: 'Calculator',
+                isPrimary: true
+            });
+        }
         if (!container) {
-            container = document.createElement('div');
-            container.className = 'collapsible-container collapsible-calculator primary-collapsible';
-            container.setAttribute('data-osrs-disclosure-kind', 'calculator');
-            container.dataset.osrsDisclosureKind = 'calculator';
-            container.dataset.collapseLabelKind = 'semantic';
-            var content = document.createElement('div');
-            content.className = 'collapsible-content';
-            var body = document.createElement('div');
-            body.className = 'osrs-disclosure-body';
-            slot.parentNode.insertBefore(container, slot);
-            container.appendChild(content);
-            content.appendChild(body);
-            body.appendChild(slot);
+            container = osrsNativeCalcCalculatorBox(slot);
+        }
+        if (!container) return null;
+        osrsSyncNativeCalcSlotHeight(container, height);
+        if (!container.dataset.osrsNativeCalcToggleBound) {
+            container.dataset.osrsNativeCalcToggleBound = 'true';
+            var header = container.querySelector(':scope > .collapsible-header');
+            if (header) {
+                header.addEventListener('click', function () {
+                    osrsSyncNativeCalcSlotHeight(container, height);
+                });
+            }
         }
         window.osrsNativeCalcSetCollapsed = function (collapsed) {
             var box = document.querySelector('.collapsible-calculator');
-            var nativeSlot = document.getElementById('osrs-native-calc-slot');
             if (!box) return 0;
-            if (collapsed) {
-                box.classList.add('collapsed');
-                box.setAttribute('aria-expanded', 'false');
-                if (nativeSlot) nativeSlot.style.minHeight = '0px';
+            if (typeof window.osrsToggleCollapsible === 'function') {
+                window.osrsToggleCollapsible(box, !!collapsed);
             } else {
-                box.classList.remove('collapsed');
-                box.setAttribute('aria-expanded', 'true');
-                if (nativeSlot) nativeSlot.style.minHeight = Math.max(1, parseInt(height, 10) || 1) + 'px';
+                var nativeHeader = box.querySelector(':scope > .collapsible-header');
+                var isCollapsed = box.classList.contains('collapsed');
+                if (!!collapsed !== isCollapsed && nativeHeader) nativeHeader.click();
             }
-            return osrsNativeCalcDocumentTop(nativeSlot);
+            return osrsSyncNativeCalcSlotHeight(box, height);
         };
         window.osrsNativeCalcIsCollapsed = function () {
             var box = document.querySelector('.collapsible-calculator');
@@ -320,6 +374,7 @@
         result.removeAttribute('aria-hidden');
         result.style.removeProperty('display');
         result.innerHTML = html || '';
+        osrsWrapNativeCalcResultTables(result);
         if (window.osrsEnsureCalculatorPageVisible) {
             window.osrsEnsureCalculatorPageVisible();
         }
