@@ -1,0 +1,88 @@
+{
+  "fill-specializations": [
+    {
+      "value": {
+        "solid": "srgb:0.10588,0.08627,0.07059,1.00000"
+      }
+    },
+    {
+      "appearance": "dark",
+      "value": {
+        "solid": "srgb:0.10588,0.08627,0.07059,1.00000"
+      }
+    }
+  ],
+  "groups": [
+    {
+      "blur-material": null,
+      "layers": [
+        {
+          "glass": true,
+          "hidden": false,
+          "image-name-specializations": [
+            {
+              "value": "02-question-mark.svg"
+            },
+            {
+              "appearance": "dark",
+              "value": "02-question-mark-dark.svg"
+            },
+            {
+              "appearance": "tinted",
+              "value": "02-question-mark-tinted.svg"
+            }
+          ],
+          "name": "Question Mark",
+          "position": {
+            "scale": 0.9,
+            "translation-in-points": [
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "glass": true,
+          "hidden": false,
+          "image-name-specializations": [
+            {
+              "value": "01-essence.svg"
+            },
+            {
+              "appearance": "dark",
+              "value": "01-essence-dark.svg"
+            },
+            {
+              "appearance": "tinted",
+              "value": "01-essence-tinted.svg"
+            }
+          ],
+          "name": "Essence",
+          "position": {
+            "scale": 0.9,
+            "translation-in-points": [
+              0,
+              0
+            ]
+          }
+        }
+      ],
+      "name": "Wiki Rune",
+      "shadow": {
+        "kind": "layer-color",
+        "opacity": 0.36
+      },
+      "specular": true,
+      "translucency": {
+        "enabled": true,
+        "value": 0.12
+      }
+    }
+  ],
+  "supported-platforms": {
+    "circles": [
+      "watchOS"
+    ],
+    "squares": "shared"
+  }
+}
