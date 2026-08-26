@@ -75,14 +75,18 @@ enum osrsWebViewThemePaint {
     @MainActor
     static func apply(to webView: WKWebView, theme: any osrsThemeProtocol) {
         let pageColor = UIColor(theme.background)
-        webView.underPageBackgroundColor = pageColor
-        webView.backgroundColor = pageColor
-        webView.scrollView.backgroundColor = pageColor
-        // Opaque white WKCompositingView is the light flash in dark theme.
-        // Keep the UIKit chrome color visible until HTML first-paint commits.
+        let url = webView.url?.absoluteString ?? ""
+        let emptyDocument = url.isEmpty || url == "about:blank"
+        // A loaded article that parks GPU tiles would otherwise fill the LCD
+        // with this page color (#28221d). Placeholder/about:blank still uses
+        // parchment so first paint is not system white.
+        let compositorFill = emptyDocument ? pageColor : UIColor.clear
+        webView.underPageBackgroundColor = compositorFill
+        webView.backgroundColor = compositorFill
+        webView.scrollView.backgroundColor = compositorFill
         webView.isOpaque = false
         webView.scrollView.isOpaque = false
-        paintViewTree(webView, color: pageColor)
+        paintViewTree(webView, color: compositorFill)
     }
 
     /// Tiny themed document so WKWebView's compositor is not the system-white
@@ -136,7 +140,8 @@ enum osrsWebViewThemePaint {
             view.backgroundColor = .clear
         } else {
             view.backgroundColor = color
-            view.isOpaque = !(view is WKWebView || view is UIScrollView)
+            let transparent = color.cgColor.alpha < 0.05
+            view.isOpaque = !transparent && !(view is WKWebView || view is UIScrollView)
         }
         view.subviews.forEach { paintViewTree($0, color: color) }
     }

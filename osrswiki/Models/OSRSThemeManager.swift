@@ -380,7 +380,7 @@ class osrsThemeManager: ObservableObject {
             .flatMap(\.windows)
             .forEach { window in
                 window.overrideUserInterfaceStyle = style
-                window.backgroundColor = background
+                osrsHostThemeFill.apply(to: window, themeBackground: background)
                 if restoreSceneCompositor, osrsSceneCompositor.isAppContentWindow(window) {
                     osrsSceneCompositor.restore(window)
                 }

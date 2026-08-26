@@ -5551,33 +5551,15 @@ extension ArticleViewModel: WKNavigationDelegate {
     /// Do not reparent WK: `removeFromSuperview` during UIFindInteraction blanks
     /// the compositor and can stick the navigator.
     func preserveRenderedArticleDuringFind(_ webView: WKWebView) {
+        webView.isOpaque = false
+        webView.backgroundColor = UIColor.clear
+        webView.underPageBackgroundColor = UIColor.clear
+        webView.scrollView.isOpaque = false
+        webView.scrollView.backgroundColor = UIColor.clear
         webView.isHidden = false
         webView.alpha = 1
-        webView.isOpaque = true
         webView.scrollView.isHidden = false
         webView.scrollView.alpha = 1
-        unhideWebKitLayers(webView)
-        webView.layer.setNeedsDisplay()
-        webView.setNeedsLayout()
-        webView.layoutIfNeeded()
-        let offset = webView.scrollView.contentOffset
-        webView.scrollView.setContentOffset(
-            CGPoint(x: offset.x, y: offset.y + 1),
-            animated: false
-        )
-        webView.scrollView.setContentOffset(offset, animated: false)
-        webView.evaluateJavaScript(
-            """
-            (function() {
-              if (!document.body) return;
-              document.body.style.visibility = 'visible';
-              document.body.style.opacity = '1';
-              document.documentElement.style.visibility = 'visible';
-              void document.body.offsetHeight;
-            })();
-            """
-        )
-        CATransaction.flush()
     }
 
     private func unhideWebKitLayers(_ view: UIView) {

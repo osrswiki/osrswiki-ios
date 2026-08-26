@@ -41,6 +41,7 @@ final class osrsSceneDelegate: UIResponder, UIWindowSceneDelegate {
 
     func sceneDidEnterBackground(_ scene: UIScene) {
         didLeaveToBackground = true
+        osrsSceneCompositor.noteDidEnterBackground()
         markNeedsResumeRestore(reason: "sceneDidEnterBackground")
     }
 
@@ -73,6 +74,7 @@ final class osrsSceneDelegate: UIResponder, UIWindowSceneDelegate {
             queue: .main
         ) { [weak self] _ in
             self?.didLeaveToBackground = true
+            osrsSceneCompositor.noteDidEnterBackground()
             self?.markNeedsResumeRestore(reason: "applicationDidEnterBackground")
         })
         appObservers.append(center.addObserver(
@@ -111,6 +113,8 @@ final class osrsSceneDelegate: UIResponder, UIWindowSceneDelegate {
         }
         guard needsResumeRestore else { return }
         needsResumeRestore = false
+        guard didLeaveToBackground else { return }
+        didLeaveToBackground = false
         print("🪟 osrsSceneDelegate resume compositor trigger=\(reason)")
         NSLog("osrsSceneDelegate resume compositor trigger=%@", reason)
         restoreResumedScene(on: windowScene, reason: reason)
@@ -150,22 +154,20 @@ final class osrsSceneDelegate: UIResponder, UIWindowSceneDelegate {
         sceneWindow.frame = bounds
         sceneWindow.bounds = bounds
         sceneWindow.windowLevel = .normal
-        sceneWindow.backgroundColor = UIColor(theme.background)
         sceneWindow.overrideUserInterfaceStyle = osrsAppRoot.themeManager.currentColorScheme == .dark ? .dark : .light
         sceneWindow.layer.contents = nil
         sceneWindow.layer.shouldRasterize = false
 
         let container = sceneContainer ?? osrsAppSceneViewController()
-        container.view.backgroundColor = UIColor(theme.background)
         if sceneWindow.rootViewController !== container {
             replaceRootViewController(on: sceneWindow, with: container)
         }
         if container.osrsContent == nil {
             let host = appHost ?? UIHostingController(rootView: osrsAppRoot.rootView)
-            host.view.backgroundColor = UIColor(theme.background)
             appHost = host
             container.osrsInstall(host)
         }
+        osrsHostThemeFill.apply(to: sceneWindow, themeBackground: UIColor(theme.background))
         sceneWindow.makeKeyAndVisible()
         window = sceneWindow
 
@@ -195,7 +197,10 @@ final class osrsSceneDelegate: UIResponder, UIWindowSceneDelegate {
         // Minting a second window (or nilling windowScene) left iOS 26
         // compositing only backgroundColor. Rebinding UIHostingController
         // dropped WKContentView to 0x0.
-        window.backgroundColor = UIColor(osrsAppRoot.themeManager.currentTheme.background)
+        osrsHostThemeFill.apply(
+            to: window,
+            themeBackground: UIColor(osrsAppRoot.themeManager.currentTheme.background)
+        )
         window.overrideUserInterfaceStyle = osrsAppRoot.themeManager.currentColorScheme == .dark ? .dark : .light
         reconnectSwiftUIHostToWindow()
         osrsPreparedArticleWebViewStore.shared.detachFromKeyWindowForResume()
@@ -346,7 +351,14 @@ final class osrsAppSceneViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = UIColor(osrsAppRoot.themeManager.currentTheme.background)
+        if let window = view.window {
+            osrsHostThemeFill.apply(
+                to: window,
+                themeBackground: UIColor(osrsAppRoot.themeManager.currentTheme.background)
+            )
+        } else {
+            view.backgroundColor = UIColor(osrsAppRoot.themeManager.currentTheme.background)
+        }
     }
 
     func osrsInstall(_ child: UIViewController) {

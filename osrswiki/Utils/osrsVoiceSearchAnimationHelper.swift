@@ -733,6 +733,9 @@ struct osrsUIKitSearchTextField: UIViewRepresentable {
 
         func textFieldDidBeginEditing(_ textField: UITextField) {
             parent.onFocusChange(true)
+            #if DEBUG
+            osrsBlankViewFirstResponderDump.capture(reason: "search-field")
+            #endif
         }
 
         func textFieldDidEndEditing(_ textField: UITextField) {

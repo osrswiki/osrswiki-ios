@@ -14,7 +14,21 @@ import WebKit
 
 @MainActor
 enum osrsSceneCompositor {
+    private static var pendingBackgroundRestore = false
+
+    static func shouldRestoreResumeCover(didLeaveToBackground: Bool) -> Bool {
+        didLeaveToBackground
+    }
+
+    static func noteDidEnterBackground() {
+        pendingBackgroundRestore = true
+    }
+
     static func restoreResumedScenes() {
+        guard shouldRestoreResumeCover(didLeaveToBackground: pendingBackgroundRestore) else {
+            return
+        }
+        pendingBackgroundRestore = false
         let windows = appContentWindows()
         print(
             "🪟 osrsSceneCompositor restore scenes=\(UIApplication.shared.connectedScenes.count) appWindows=\(windows.count) openSessions=\(UIApplication.shared.openSessions.count)"
@@ -113,6 +127,14 @@ enum osrsSceneCompositor {
 
     static func beginLiveOverlaySession() {
         liveOverlaySessionDepth += 1
+        osrsHostThemeFill.applyToAppWindows(
+            themeBackground: UIColor(osrsAppRoot.themeManager.currentTheme.background)
+        )
+        if liveOverlaySessionDepth == 1 {
+            for window in allSceneWindows() where isAppContentWindow(window) {
+                dumpWindow(window)
+            }
+        }
     }
 
     static func endLiveOverlaySession() {
@@ -412,14 +434,23 @@ enum osrsSceneCompositor {
         return false
     }
 
-    private static func containsLiveArticleWebView(_ view: UIView) -> Bool {
+    static func containsLiveArticleWebView(_ view: UIView) -> Bool {
+        firstLiveArticleWebView(in: view) != nil
+    }
+
+    static func firstLiveArticleWebView(in view: UIView) -> WKWebView? {
         if isPreparedWarmer(view) {
-            return false
+            return nil
         }
-        if view is WKWebView {
-            return true
+        if let webView = view as? WKWebView {
+            return webView
         }
-        return view.subviews.contains { containsLiveArticleWebView($0) }
+        for child in view.subviews {
+            if let found = firstLiveArticleWebView(in: child) {
+                return found
+            }
+        }
+        return nil
     }
 
     private static func removeStaleSnapshotOverlays(from root: UIView) {
@@ -593,7 +624,7 @@ enum osrsSceneCompositor {
         )
     }
 
-    fileprivate static func dumpWindow(_ window: UIWindow) {
+    static func dumpWindow(_ window: UIWindow) {
         var lines: [String] = []
         func walk(_ view: UIView, depth: Int) {
             let name = NSStringFromClass(type(of: view))
@@ -662,17 +693,39 @@ enum osrsResumeFrameOverlay {
     }
 
     private static func consider(_ image: UIImage) {
-        if osrsWebViewThemePaint.isUniformFill(image)
-            || osrsWebViewThemePaint.isUnpaintedSystemFill(image) {
+        #if DEBUG
+        let cfg = "Debug"
+        #else
+        let cfg = "Release"
+        #endif
+        let uniform = osrsWebViewThemePaint.isUniformFill(image)
+            || osrsWebViewThemePaint.isUnpaintedSystemFill(image)
+        let range = osrsWebViewThemePaint.luminanceRange(image)
+        if uniform {
+            NSLog(
+                "osrsResumeFrameOverlay capture skip cfg=%@ uniform=1 range=%d %dx%d",
+                cfg,
+                range,
+                Int(image.size.width),
+                Int(image.size.height)
+            )
             return
         }
-        let range = osrsWebViewThemePaint.luminanceRange(image)
-        guard range > lastGoodRange else { return }
+        guard range > lastGoodRange else {
+            NSLog(
+                "osrsResumeFrameOverlay capture skip cfg=%@ range=%d last=%d",
+                cfg,
+                range,
+                lastGoodRange
+            )
+            return
+        }
         lastGoodFrame = image
         lastGoodRange = range
         persistCapturedFrame(image)
         NSLog(
-            "osrsResumeFrameOverlay captured %dx%d range=%d",
+            "osrsResumeFrameOverlay captured cfg=%@ %dx%d range=%d",
+            cfg,
             Int(image.size.width),
             Int(image.size.height),
             range
@@ -715,12 +768,33 @@ enum osrsResumeFrameOverlay {
         }
         overlay.osrsHitTarget = nil
         overlay.isUserInteractionEnabled = true
+        let lastGoodImage = overlay.rootViewController?.view.subviews
+            .compactMap { $0 as? UIImageView }
+            .first { $0.accessibilityIdentifier == "osrs_resume_passthrough_frame" }?
+            .image ?? lastGoodFrame
         live.rootViewController = nil
         overlay.rootViewController = root
         if let bounds = overlay.windowScene?.coordinateSpace.bounds {
             overlay.frame = bounds
         }
         root.view.frame = overlay.bounds
+        if let image = lastGoodImage {
+            let imageView = root.view.subviews
+                .compactMap { $0 as? UIImageView }
+                .first { $0.accessibilityIdentifier == "osrs_resume_passthrough_frame" }
+                ?? UIImageView()
+            imageView.image = image
+            imageView.frame = overlay.bounds
+            imageView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+            imageView.contentMode = .scaleToFill
+            imageView.isUserInteractionEnabled = false
+            imageView.accessibilityIdentifier = "osrs_resume_passthrough_frame"
+            if imageView.superview !== root.view {
+                root.view.insertSubview(imageView, at: 0)
+            } else {
+                root.view.sendSubviewToBack(imageView)
+            }
+        }
         root.view.setNeedsLayout()
         root.view.layoutIfNeeded()
         overlay.makeKeyAndVisible()
@@ -729,6 +803,10 @@ enum osrsResumeFrameOverlay {
         live.isUserInteractionEnabled = false
         live.isHidden = true
         onAdoptedPrimary?(overlay)
+        osrsHostThemeFill.apply(
+            to: overlay,
+            themeBackground: UIColor(osrsAppRoot.themeManager.currentTheme.background)
+        )
         osrsSceneCompositor.dumpWindow(overlay)
         NSLog("osrsResumeFrameOverlay adopted live root")
     }
@@ -748,7 +826,7 @@ enum osrsResumeFrameOverlay {
             installPassthroughResumePixels(on: scene)
         }
         NSLog(
-            "osrsResumeFrameOverlay installed %dx%d on window layer",
+            "osrsResumeFrameOverlay installed %dx%d on window layer passthrough will follow",
             Int(image.size.width * image.scale),
             Int(image.size.height * image.scale)
         )

@@ -91,7 +91,7 @@ enum osrsAppRoot {
             .osrsUserTextScaled()
             .environmentObject(themeManager)
             .environmentObject(appState)
-            .background(Color(themeManager.currentTheme.background))
+            .background { osrsRootHostFill() }
             .tint(Color(themeManager.currentTheme.primary))
             .accentColor(Color(themeManager.currentTheme.primary))
             .onChange(of: themeManager.currentTheme.primary) { _, _ in
@@ -117,5 +117,18 @@ enum osrsAppRoot {
             colorScheme: themeManager.currentColorScheme
         )
         print("🎨 [GLOBAL THEMING] Live theming applied to connected windows")
+    }
+}
+
+private struct osrsRootHostFill: View {
+    @ObservedObject private var appState = osrsAppRoot.appState
+    @ObservedObject private var themeManager = osrsAppRoot.themeManager
+
+    var body: some View {
+        if osrsHostThemeFill.shouldPaintOpaqueFill(
+            liveArticleWebViewPresent: appState.activeArticleDestination != nil
+        ) {
+            Color(themeManager.currentTheme.background)
+        }
     }
 }

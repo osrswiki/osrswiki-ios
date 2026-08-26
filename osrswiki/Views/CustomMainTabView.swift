@@ -19,9 +19,7 @@ struct CustomMainTabView: View {
 
     var body: some View {
         ZStack {
-            Color(themeManager.currentTheme.background)
-                .ignoresSafeArea()
-                .ignoresSafeArea(.keyboard)
+            tabHostFill
 
             osrsAccessibilityMarker(
                 identifier: "osrs_app_root_tab_host",
@@ -69,6 +67,7 @@ struct CustomMainTabView: View {
             AppLaunchCoordinator.shared.markThemeApplied()
             osrsWebViewProcessWarmer.warmIfNeeded()
             osrsResumedSceneWindow.bindRuntime(appState: appState, themeManager: themeManager)
+            applyHostFillToWindows()
 
             // DEBUG: Log theme information
             print("🎨 [MAIN TAB] onAppear - Selected theme: \(themeManager.selectedTheme)")
@@ -142,6 +141,9 @@ struct CustomMainTabView: View {
                 themeManager.updateSystemColorScheme(currentSystemScheme)
             }
         }
+        .onChange(of: appState.activeArticleDestination?.navigationIdentity) { _, _ in
+            applyHostFillToWindows()
+        }
         .onChange(of: environmentColorScheme) { _, newColorScheme in
             // Update theme manager when system color scheme changes
             print("🎨 [MAIN TAB] Environment color scheme changed to: \(newColorScheme)")
@@ -159,6 +161,23 @@ struct CustomMainTabView: View {
             if let errorMessage = appState.errorMessage {
                 Text(errorMessage)
             }
+        }
+    }
+
+    private func applyHostFillToWindows() {
+        osrsHostThemeFill.applyToAppWindows(
+            themeBackground: UIColor(themeManager.currentTheme.background)
+        )
+    }
+
+    @ViewBuilder
+    private var tabHostFill: some View {
+        if osrsHostThemeFill.shouldPaintOpaqueFill(
+            liveArticleWebViewPresent: appState.activeArticleDestination != nil
+        ) {
+            Color(themeManager.currentTheme.background)
+                .ignoresSafeArea()
+                .ignoresSafeArea(.keyboard)
         }
     }
 

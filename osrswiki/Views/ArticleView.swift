@@ -143,7 +143,11 @@ private struct ArticleViewContent: View {
     private var articleNavigationChrome: some View {
         articleLayout
             .background {
-                osrsTheme.background.ignoresSafeArea()
+                if osrsHostThemeFill.shouldPaintOpaqueFill(
+                    liveArticleWebViewPresent: true
+                ) {
+                    osrsTheme.background.ignoresSafeArea()
+                }
             }
             .navigationBarHidden(true)
             .onAppear {
@@ -1122,7 +1126,7 @@ private struct ArticleViewContent: View {
             }
         )
             .id(viewModel.webViewRenderGeneration)
-            .background(Color.osrsBackground)
+            .background(Color.clear)
             .opacity(hideArticleShell ? 0 : 1)
             .allowsHitTesting(!hideArticleShell)
             .accessibilityHidden(hideArticleShell)

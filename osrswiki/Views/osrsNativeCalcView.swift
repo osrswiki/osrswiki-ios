@@ -266,7 +266,11 @@ private struct osrsNativeCalcDraftField: View {
                 onChange(value)
             }
             .onChange(of: focused) { _, isFocused in
-                if !isFocused {
+                if isFocused {
+                    #if DEBUG
+                    osrsBlankViewFirstResponderDump.capture(reason: "native-calc-\(name)")
+                    #endif
+                } else {
                     onCommit?(draft)
                 }
             }
