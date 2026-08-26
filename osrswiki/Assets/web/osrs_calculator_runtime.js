@@ -85,6 +85,69 @@
         return osrsNativeCalcDocumentOffset(el, 'offsetLeft');
     }
 
+    function osrsNativeCalcContentColumnWidth() {
+        var sibling = document.querySelector(
+            '.mw-parser-output > .collapsible-container:not(.collapsible-calculator)'
+        ) || document.querySelector('.collapsible-container:not(.collapsible-calculator)');
+        if (sibling && sibling.offsetWidth > 1) {
+            return Math.round(sibling.offsetWidth);
+        }
+        var output = document.querySelector('.mw-parser-output') || document.body;
+        if (output) {
+            var cs = window.getComputedStyle(output);
+            var pad = (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0);
+            var inner = (output.clientWidth || output.offsetWidth || 0) - pad;
+            if (inner > 1) return Math.round(inner);
+        }
+        return Math.round(document.documentElement.clientWidth || window.innerWidth || 0);
+    }
+    window.osrsNativeCalcContentColumnWidth = osrsNativeCalcContentColumnWidth;
+
+    function osrsNativeCalcApplyContentColumnWidth(box) {
+        var width = osrsNativeCalcContentColumnWidth();
+        if (!(width > 1)) return width;
+        var stop = document.querySelector('.mw-parser-output') || document.body;
+        var node = box;
+        while (node && node !== stop && node !== document.body && node !== document.documentElement) {
+            if (node.nodeType === 1 && node.style) {
+                if (node.classList && node.classList.contains('osrs-calculator-layout')) {
+                    node.style.setProperty('width', '100%', 'important');
+                    node.style.setProperty('max-width', '100%', 'important');
+                    node.style.setProperty('min-width', '0', 'important');
+                    node.style.setProperty('box-sizing', 'border-box', 'important');
+                } else {
+                    node.style.setProperty('width', width + 'px', 'important');
+                    node.style.setProperty('max-width', '100%', 'important');
+                    node.style.setProperty('min-width', '0', 'important');
+                    node.style.setProperty('box-sizing', 'border-box', 'important');
+                    if (node.classList && node.classList.contains('collapsible-calculator')) {
+                        node.style.setProperty('display', 'block', 'important');
+                        node.style.setProperty('float', 'none', 'important');
+                        node.style.setProperty('clear', 'both', 'important');
+                    }
+                }
+            }
+            node = node.parentElement;
+        }
+        if (box && box.querySelectorAll) {
+            box.querySelectorAll('.osrs-calculator-layout').forEach(function (layout) {
+                layout.style.setProperty('width', '100%', 'important');
+                layout.style.setProperty('max-width', '100%', 'important');
+                layout.style.setProperty('min-width', '0', 'important');
+                layout.style.setProperty('box-sizing', 'border-box', 'important');
+            });
+        }
+        var slot = document.getElementById('osrs-native-calc-slot');
+        if (slot && slot.style) {
+            slot.style.setProperty('width', '100%', 'important');
+            slot.style.setProperty('max-width', '100%', 'important');
+            slot.style.setProperty('min-width', '0', 'important');
+            slot.style.setProperty('box-sizing', 'border-box', 'important');
+        }
+        return width;
+    }
+    window.osrsNativeCalcApplyContentColumnWidth = osrsNativeCalcApplyContentColumnWidth;
+
     function osrsNativeCalcCalculatorBox(slot) {
         return slot && slot.closest ? slot.closest('.collapsible-calculator') : null;
     }
@@ -171,6 +234,9 @@
             '}',
             'html.osrs-native-calc-slot-active #osrs-native-calc-slot {',
             'display:block!important;background:transparent!important;border:0!important;box-shadow:none!important;outline:none!important;padding:0!important;margin:0!important;width:100%!important;max-width:100%!important;min-width:0!important;box-sizing:border-box!important;',
+            '}',
+            'html.osrs-native-calc-slot-active .collapsible-calculator .osrs-calculator-layout {',
+            'width:100%!important;max-width:100%!important;min-width:0!important;box-sizing:border-box!important;',
             '}',
             'html.osrs-native-calc-slot-active .collapsible-calculator:not(.collapsed) > .collapsible-content > .osrs-disclosure-body {',
             'overflow-x:auto!important;-webkit-overflow-scrolling:touch!important;',
@@ -276,14 +342,19 @@
         var resultNode = (resultId && document.getElementById(resultId)) || result;
         osrsPlaceNativeCalcResultInBox(resultNode);
         osrsWrapNativeCalcResultTables(resultNode);
+        var contentColumn = osrsNativeCalcApplyContentColumnWidth(box);
         if (window.osrsEnsureCalculatorPageVisible) {
             window.osrsEnsureCalculatorPageVisible();
         }
         var header = box && box.querySelector(':scope > .collapsible-header');
+        var boxWidth = box ? (box.offsetWidth || 0) : 0;
+        var slotWidth = slot.offsetWidth || 0;
         return JSON.stringify({
             top: osrsNativeCalcDocumentTop(slot),
             left: osrsNativeCalcDocumentLeft(slot),
-            width: slot.offsetWidth || 0,
+            width: Math.max(boxWidth, slotWidth, contentColumn),
+            contentColumn: contentColumn,
+            clientWidth: document.documentElement.clientWidth || window.innerWidth || 0,
             height: slot.offsetHeight || height,
             headerHeight: header ? (header.offsetHeight || 0) : 0,
             collapsed: !!(box && box.classList.contains('collapsed')),
@@ -319,9 +390,14 @@
         if (!slot || !slot.parentNode) return null;
         var container = osrsNativeCalcCalculatorBox(slot);
         if (!container && typeof window.osrsWrapCollapsible === 'function') {
+            var layout = document.querySelector('.osrs-calculator-layout');
+            var wrapTarget = slot;
+            if (layout && layout.contains(slot) && !osrsNativeCalcCalculatorBox(layout)) {
+                wrapTarget = layout;
+            }
             container = window.osrsWrapCollapsible({
                 kind: 'calculator',
-                elementToWrap: slot,
+                elementToWrap: wrapTarget,
                 captionText: 'Calculator',
                 defaultTitle: 'Calculator',
                 isPrimary: true
@@ -332,6 +408,7 @@
         }
         if (!container) return null;
         osrsSyncNativeCalcSlotHeight(container, height);
+        osrsNativeCalcApplyContentColumnWidth(container);
         if (!container.dataset.osrsNativeCalcToggleBound) {
             container.dataset.osrsNativeCalcToggleBound = 'true';
             var header = container.querySelector(':scope > .collapsible-header');

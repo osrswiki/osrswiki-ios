@@ -38,6 +38,34 @@ final class osrsCalculatorThemeContrastUITests: XCTestCase {
         attachScreenshot(from: app, name: "calculator-theme-contrast-barrows-scrolled")
     }
 
+    func testAgilityNativeCalcFirstOpenUsesContentColumnWidthWithoutSwipe() throws {
+        func openAndMeasure(shot: String) throws -> (boxWidth: CGFloat, viewport: CGFloat, inset: Bool) {
+            let app = launchArticle(title: "Calculator:Agility", path: "Calculator:Agility")
+            let webView = articleWebView(in: app)
+            XCTAssertTrue(webView.waitForExistence(timeout: articleLoadTimeout), app.debugDescription)
+            let form = app.descendants(matching: .any)["native-calc-form"].firstMatch
+            let header = labeledControl("Calculator Tap to collapse", in: app)
+            _ = form.waitForExistence(timeout: 12)
+            _ = header.waitForExistence(timeout: 2)
+            writeScratchScreenshot(from: app, name: shot)
+            attachScreenshot(from: app, name: shot)
+            let box = header.exists && header.frame.width > 1 ? header : form
+            XCTAssertTrue(
+                box.exists && box.frame.width > 1,
+                "calc box missing on first open without swipe. \(app.debugDescription)"
+            )
+            let viewport = app.frame.width > 1 ? app.frame.width : webView.frame.width
+            return (box.frame.width, viewport, box.frame.width < viewport - 8)
+        }
+        let first = try openAndMeasure(shot: "ios-agility-first-open.png")
+        XCTAssertGreaterThan(first.boxWidth, first.viewport * 0.7, "first open leftover skinny. \(first)")
+        XCTAssertTrue(first.inset, "first open must stay inset, not full-bleed. \(first)")
+        let second = try openAndMeasure(shot: "ios-agility-first-open.png")
+        XCTAssertGreaterThan(second.boxWidth, second.viewport * 0.7, "second open leftover skinny. \(second)")
+        XCTAssertTrue(second.inset, "second open must stay inset, not full-bleed. \(second)")
+        XCTAssertEqual(first.boxWidth, second.boxWidth, accuracy: 12)
+    }
+
     func testAgilityNativeCalcCollapsibleMatchesArticleChrome() throws {
         let app = launchArticle(title: "Calculator:Agility", path: "Calculator:Agility")
         let webView = articleWebView(in: app)
@@ -187,7 +215,7 @@ final class osrsCalculatorThemeContrastUITests: XCTestCase {
 
     private func writeScratchScreenshot(from app: XCUIApplication, name: String) {
         let scratch = ProcessInfo.processInfo.environment["OSRS_SCRATCH"]
-            ?? "/var/folders/vt/gqrlflhj10b1g04_6pcq_q3r0000gn/T/grok-goal-7ce604d6481b/implementer"
+            ?? "/var/folders/vt/gqrlflhj10b1g04_6pcq_q3r0000gn/T/grok-goal-b3bd04458c83/implementer"
         let url = URL(fileURLWithPath: scratch).appendingPathComponent(name)
         try? app.screenshot().pngRepresentation.write(to: url)
     }

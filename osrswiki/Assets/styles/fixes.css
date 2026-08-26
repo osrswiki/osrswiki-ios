@@ -1054,8 +1054,9 @@ html body .osrs-calculator-panel .oo-ui-horizontalLayout.jsCalc-group {
     display: block !important;
     height: auto !important;
     margin: 0.4em auto !important;
-    max-height: min(34vh, 280px) !important;
-    max-width: min(68vw, 220px) !important;
+    /* CSS fallback caps - JS image_area_cap.js provides exact 50% area limit */
+    max-height: min(50vh, 280px) !important;
+    max-width: min(70vw, 220px) !important;
     object-fit: contain !important;
     width: auto !important;
 }
@@ -2231,6 +2232,23 @@ ul.tabbernav > li {
 .floornumber-setting-us .floornumber-us,
 .floornumber-setting-us .floornumber .floornumber-us {
     display: inline !important;
+}
+
+.collapsible-container.collapsible-calculator {
+    box-sizing: border-box !important;
+    clear: both !important;
+    float: none !important;
+    margin-inline: 0 !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    width: 100% !important;
+}
+
+.collapsible-container.collapsible-calculator .osrs-calculator-layout {
+    box-sizing: border-box !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    width: 100% !important;
 }
 
 .collapsible-container.collapsible-calculator:not(.collapsed) > .collapsible-content,

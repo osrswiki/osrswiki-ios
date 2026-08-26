@@ -8,6 +8,7 @@ struct osrsNativeCalcSlotOverlay: View {
     @State private var slotY: CGFloat = 0
     @State private var slotX: CGFloat = 0
     @State private var slotWidth: CGFloat = 0
+    @State private var contentColumnWidth: CGFloat = 0
     @State private var slotResolved = false
     @State private var formHeight: CGFloat = 420
     @State private var collapsed = false
@@ -18,7 +19,11 @@ struct osrsNativeCalcSlotOverlay: View {
                 slotDocumentY: slotY,
                 contentOffsetY: 0
             )
-            let width = slotWidth > 1 ? slotWidth : page.size.width
+            let width = osrsNativeCalcSlotGeometry.firstLayoutWidth(
+                slotWidth: slotWidth,
+                contentColumnWidth: contentColumnWidth,
+                viewportWidth: page.size.width
+            )
             if osrsNativeCalcSlotGeometry.overlayMayShow(slotResolved: slotResolved, collapsed: collapsed) {
                 osrsNativeCalcChrome(
                     session: session,
@@ -38,6 +43,7 @@ struct osrsNativeCalcSlotOverlay: View {
                 slotY: $slotY,
                 slotX: $slotX,
                 slotWidth: $slotWidth,
+                contentColumnWidth: $contentColumnWidth,
                 slotResolved: $slotResolved,
                 formHeight: formHeight,
                 collapsed: $collapsed
@@ -54,12 +60,13 @@ private struct osrsNativeCalcSlotProbe: UIViewRepresentable {
     @Binding var slotY: CGFloat
     @Binding var slotX: CGFloat
     @Binding var slotWidth: CGFloat
+    @Binding var contentColumnWidth: CGFloat
     @Binding var slotResolved: Bool
     var formHeight: CGFloat
     @Binding var collapsed: Bool
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(slotY: $slotY, slotX: $slotX, slotWidth: $slotWidth, slotResolved: $slotResolved, collapsed: $collapsed)
+        Coordinator(slotY: $slotY, slotX: $slotX, slotWidth: $slotWidth, contentColumnWidth: $contentColumnWidth, slotResolved: $slotResolved, collapsed: $collapsed)
     }
 
     func makeUIView(context: Context) -> UIView {
@@ -75,6 +82,7 @@ private struct osrsNativeCalcSlotProbe: UIViewRepresentable {
         context.coordinator.slotY = $slotY
         context.coordinator.slotX = $slotX
         context.coordinator.slotWidth = $slotWidth
+        context.coordinator.contentColumnWidth = $contentColumnWidth
         context.coordinator.slotResolved = $slotResolved
         context.coordinator.collapsed = $collapsed
         context.coordinator.sync(formHeight: formHeight)
@@ -87,6 +95,7 @@ private struct osrsNativeCalcSlotProbe: UIViewRepresentable {
         var slotY: Binding<CGFloat>
         var slotX: Binding<CGFloat>
         var slotWidth: Binding<CGFloat>
+        var contentColumnWidth: Binding<CGFloat>
         var slotResolved: Binding<Bool>
         var collapsed: Binding<Bool>
         private var offsetObservation: NSKeyValueObservation?
@@ -106,12 +115,14 @@ private struct osrsNativeCalcSlotProbe: UIViewRepresentable {
             slotY: Binding<CGFloat>,
             slotX: Binding<CGFloat>,
             slotWidth: Binding<CGFloat>,
+            contentColumnWidth: Binding<CGFloat>,
             slotResolved: Binding<Bool>,
             collapsed: Binding<Bool>
         ) {
             self.slotY = slotY
             self.slotX = slotX
             self.slotWidth = slotWidth
+            self.contentColumnWidth = contentColumnWidth
             self.slotResolved = slotResolved
             self.collapsed = collapsed
         }
@@ -279,10 +290,15 @@ private struct osrsNativeCalcSlotProbe: UIViewRepresentable {
                   if(!s)return null;
                   var box=s.closest('.collapsible-calculator');
                   var r=s.getBoundingClientRect();
+                  var boxR=box?box.getBoundingClientRect():null;
+                  var column=window.osrsNativeCalcContentColumnWidth?window.osrsNativeCalcContentColumnWidth():0;
+                  if(window.osrsNativeCalcApplyContentColumnWidth&&box)window.osrsNativeCalcApplyContentColumnWidth(box);
                   return JSON.stringify({
                     top:r.top+(window.scrollY||document.documentElement.scrollTop||0),
                     left:r.left+(window.scrollX||document.documentElement.scrollLeft||0),
-                    width:r.width,
+                    width:Math.max(r.width,boxR?boxR.width:0,column),
+                    contentColumn:column,
+                    clientWidth:document.documentElement.clientWidth||window.innerWidth||0,
                     collapsed:!!(box&&box.classList.contains('collapsed'))
                   });
                 })()
@@ -304,11 +320,24 @@ private struct osrsNativeCalcSlotProbe: UIViewRepresentable {
             } else if let left = json["left"] as? NSNumber {
                 slotX.wrappedValue = CGFloat(truncating: left)
             }
-            if let width = json["width"] as? Double, width > 1 {
-                slotWidth.wrappedValue = CGFloat(width)
-            } else if let width = json["width"] as? NSNumber, CGFloat(truncating: width) > 1 {
-                slotWidth.wrappedValue = CGFloat(truncating: width)
+            if let column = json["contentColumn"] as? Double, column > 1 {
+                contentColumnWidth.wrappedValue = CGFloat(column)
+            } else if let column = json["contentColumn"] as? NSNumber, CGFloat(truncating: column) > 1 {
+                contentColumnWidth.wrappedValue = CGFloat(truncating: column)
             }
+            let probedWidth: CGFloat
+            if let width = json["width"] as? Double, width > 1 {
+                probedWidth = CGFloat(width)
+            } else if let width = json["width"] as? NSNumber, CGFloat(truncating: width) > 1 {
+                probedWidth = CGFloat(truncating: width)
+            } else {
+                probedWidth = slotWidth.wrappedValue
+            }
+            slotWidth.wrappedValue = osrsNativeCalcSlotGeometry.firstLayoutWidth(
+                slotWidth: probedWidth,
+                contentColumnWidth: contentColumnWidth.wrappedValue,
+                viewportWidth: webView?.bounds.width ?? probedWidth
+            )
         }
 
         private func injectResultIfNeeded(webView: WKWebView, session: osrsNativeCalcSession) {

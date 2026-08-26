@@ -617,6 +617,37 @@ final class osrsNativeCalcDefinitionTests: XCTestCase {
             "full-height overlay frame swallows article pans so the calc cannot scroll away"
         )
         XCTAssertTrue(overlay.contains("maxHeight: formHeight"))
+        XCTAssertEqual(
+            osrsNativeCalcSlotGeometry.firstLayoutWidth(
+                slotWidth: 96,
+                contentColumnWidth: 366,
+                viewportWidth: 390
+            ),
+            366,
+            accuracy: 0.5,
+            "overlay must use the content column on first paint, not a leftover slot rect"
+        )
+        XCTAssertEqual(
+            osrsNativeCalcSlotGeometry.firstLayoutWidth(
+                slotWidth: 96,
+                contentColumnWidth: 366,
+                viewportWidth: 390,
+                intersected: true
+            ),
+            366,
+            accuracy: 0.5
+        )
+        XCTAssertEqual(
+            osrsNativeCalcSlotGeometry.firstLayoutWidth(
+                slotWidth: 366,
+                contentColumnWidth: 366,
+                viewportWidth: 390
+            ),
+            366,
+            accuracy: 0.5
+        )
+        XCTAssertTrue(overlay.contains("firstLayoutWidth"))
+        XCTAssertTrue(overlay.contains("contentColumn"))
     }
 
     @MainActor
@@ -780,6 +811,105 @@ final class osrsNativeCalcDefinitionTests: XCTestCase {
     }
 
     @MainActor
+    func testCalculatorCollapsibleUsesContentColumnWidthOnFirstPaintBelowFold() async throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let collapsible = try String(
+            contentsOf: root.appendingPathComponent("osrswiki/Assets/web/collapsible_content.js"),
+            encoding: .utf8
+        )
+        let runtime = try String(
+            contentsOf: root.appendingPathComponent("osrswiki/Assets/web/osrs_calculator_runtime.js"),
+            encoding: .utf8
+        )
+        let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        let window = UIWindow(frame: webView.bounds)
+        window.addSubview(webView)
+        window.makeKeyAndVisible()
+        try await loadHTML(belowFoldDisclosureFixtureHTML(), in: webView)
+        _ = try await webView.evaluateJavaScript("window.OSRS_TABLE_COLLAPSED = false;")
+        _ = try await webView.evaluateJavaScript(collapsible)
+        _ = try await webView.evaluateJavaScript(runtime)
+        _ = try await webView.evaluateJavaScript("window.OSRSInitializeCollapsibleContent && window.OSRSInitializeCollapsibleContent();")
+
+        let probe = """
+        (function () {
+          function boxInfo(sel) {
+            var box = document.querySelector(sel);
+            if (!box) return null;
+            var br = box.getBoundingClientRect();
+            var slot = document.getElementById('osrs-native-calc-slot');
+            var slotBr = slot ? slot.getBoundingClientRect() : null;
+            return {
+              left: br.left,
+              width: br.width,
+              top: br.top,
+              documentTop: br.top + (window.scrollY || document.documentElement.scrollTop || 0),
+              collapsed: box.classList.contains('collapsed'),
+              slotWidth: slotBr ? slotBr.width : 0,
+              slotLeft: slotBr ? slotBr.left : 0
+            };
+          }
+          window.scrollTo(0, 0);
+          window.osrsInstallNativeCalcSlot({
+            formId: 'AgilityCalc',
+            resultId: 'AgilityResults',
+            height: 220
+          });
+          var viewport = document.documentElement.clientWidth || window.innerWidth || 0;
+          var viewportHeight = window.innerHeight || 844;
+          var atRest = {
+            scrollY: window.scrollY || document.documentElement.scrollTop || 0,
+            article: boxInfo('.collapsible-wikitable'),
+            calc: boxInfo('.collapsible-calculator'),
+            viewport: viewport,
+            viewportHeight: viewportHeight
+          };
+          var calcEl = document.querySelector('.collapsible-calculator');
+          if (calcEl && calcEl.scrollIntoView) {
+            calcEl.scrollIntoView({ block: 'start', inline: 'nearest' });
+          }
+          var afterScroll = {
+            scrollY: window.scrollY || document.documentElement.scrollTop || 0,
+            article: boxInfo('.collapsible-wikitable'),
+            calc: boxInfo('.collapsible-calculator'),
+            viewport: viewport
+          };
+          return { atRest: atRest, afterScroll: afterScroll };
+        })()
+        """
+        let raw = try await webView.evaluateJavaScript(probe)
+        let payload = try XCTUnwrap(raw as? [String: Any])
+        writeScratchJSON(payload, name: "calc-first-paint-width.json")
+        let atRest = try XCTUnwrap(payload["atRest"] as? [String: Any])
+        let afterScroll = try XCTUnwrap(payload["afterScroll"] as? [String: Any])
+        let restScroll = (atRest["scrollY"] as? NSNumber)?.doubleValue ?? -1
+        XCTAssertEqual(restScroll, 0, accuracy: 1, "first paint must be measured at scrollY=0")
+        let article = try XCTUnwrap(atRest["article"] as? [String: Any])
+        let calc = try XCTUnwrap(atRest["calc"] as? [String: Any])
+        let articleWidth = (article["width"] as? NSNumber)?.doubleValue ?? -1
+        let calcWidth = (calc["width"] as? NSNumber)?.doubleValue ?? -1
+        let articleLeft = (article["left"] as? NSNumber)?.doubleValue ?? -1
+        let calcLeft = (calc["left"] as? NSNumber)?.doubleValue ?? -1
+        let viewport = (atRest["viewport"] as? NSNumber)?.doubleValue ?? 390
+        let viewportHeight = (atRest["viewportHeight"] as? NSNumber)?.doubleValue ?? 844
+        let calcDocumentTop = (calc["documentTop"] as? NSNumber)?.doubleValue ?? 0
+        XCTAssertGreaterThan(articleWidth, 200, "article collapsible must occupy the content column")
+        XCTAssertGreaterThan(calcDocumentTop, viewportHeight, "calc must start below the first viewport")
+        XCTAssertEqual(articleWidth, calcWidth, accuracy: 4)
+        XCTAssertEqual(articleLeft, calcLeft, accuracy: 4)
+        XCTAssertLessThan(calcWidth, viewport - 8, "calc box must use article inset, not full-bleed")
+        XCTAssertGreaterThan(calcWidth, viewport * 0.7, "calc box must not be a leftover much smaller than the column")
+        let afterCalc = try XCTUnwrap(afterScroll["calc"] as? [String: Any])
+        let afterWidth = (afterCalc["width"] as? NSNumber)?.doubleValue ?? -1
+        XCTAssertEqual(calcWidth, afterWidth, accuracy: 4, "width must not jump after intersection/scroll")
+        XCTAssertTrue(runtime.contains("osrsNativeCalcContentColumnWidth"))
+        XCTAssertTrue(runtime.contains("osrsNativeCalcApplyContentColumnWidth"))
+        window.isHidden = true
+    }
+
+    @MainActor
     func testSetResultWrapsTablesAsArticleCollapsiblesInsideCalcBox() async throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
@@ -873,7 +1003,7 @@ final class osrsNativeCalcDefinitionTests: XCTestCase {
 
     private func writeScratchJSON(_ payload: Any, name: String) {
         let scratch = ProcessInfo.processInfo.environment["OSRS_SCRATCH"]
-            ?? "/var/folders/vt/gqrlflhj10b1g04_6pcq_q3r0000gn/T/grok-goal-7ce604d6481b/implementer"
+            ?? "/var/folders/vt/gqrlflhj10b1g04_6pcq_q3r0000gn/T/grok-goal-b3bd04458c83/implementer"
         guard JSONSerialization.isValidJSONObject(payload),
               let data = try? JSONSerialization.data(
                 withJSONObject: payload,
@@ -915,6 +1045,63 @@ final class osrsNativeCalcDefinitionTests: XCTestCase {
             <h2>Calculator</h2>
             <pre class="jcConfig">form=AgilityCalc result=AgilityResults</pre>
             <div class="osrs-calculator-layout">
+              <div class="osrs-calculator-panel">
+                <fieldset class="jcTable oo-ui-fieldsetLayout" id="jsForm-AgilityCalc"></fieldset>
+              </div>
+              <div id="AgilityResults" class="osrs-calculator-result"></div>
+            </div>
+          </div>
+        </body>
+        </html>
+        """
+    }
+
+    private func belowFoldDisclosureFixtureHTML() -> String {
+        """
+        <!DOCTYPE html>
+        <html>
+        <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <style>
+          :root { --osrs-disclosure-content-inline-inset: 12px; --osrs-disclosure-chrome-bg: #d8ccb4; }
+          body { margin: 0; background: #e2dbc8; }
+          .mw-parser-output { padding: 12px; box-sizing: border-box; }
+          .collapsible-container { background-color: var(--osrs-disclosure-chrome-bg); box-sizing: border-box; }
+          .collapsible-header { display: flex; padding: 12px; }
+          .collapsible-label { font-weight: 600; }
+          .collapsible-state { margin-left: 8px; }
+          .collapsible-container.collapsed > .collapsible-content {
+            height: 0; max-height: 0; min-height: 0; overflow: hidden; padding: 0; margin: 0;
+          }
+          .collapsible-container:not(.collapsed) > .collapsible-content > .osrs-disclosure-body {
+            margin-inline: var(--osrs-disclosure-content-inline-inset);
+            overflow-x: auto;
+          }
+          table.wikitable { width: 100%; border: 1px solid #94866d; }
+          .below-fold-spacer { height: 1400px; }
+          .osrs-calculator-layout {
+            display: block;
+            width: 96px;
+            max-width: 96px;
+          }
+          .leftover-gadget {
+            width: 96px;
+            height: 32px;
+            background: #d8ccb4;
+          }
+        </style>
+        </head>
+        <body>
+          <div class="mw-parser-output">
+            <table class="wikitable">
+              <caption>Drops</caption>
+              <tr><th>Item</th><td>Coins</td></tr>
+            </table>
+            <div class="below-fold-spacer"></div>
+            <h2>Calculator</h2>
+            <pre class="jcConfig">form=AgilityCalc result=AgilityResults</pre>
+            <div class="osrs-calculator-layout">
+              <div class="leftover-gadget osrs-calculator-panel">gadget leftover</div>
               <div class="osrs-calculator-panel">
                 <fieldset class="jcTable oo-ui-fieldsetLayout" id="jsForm-AgilityCalc"></fieldset>
               </div>

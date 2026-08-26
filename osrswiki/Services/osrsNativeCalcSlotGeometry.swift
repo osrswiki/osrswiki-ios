@@ -43,4 +43,31 @@ enum osrsNativeCalcSlotGeometry {
     ) -> Bool {
         overlayIncludesHeader && collapsed
     }
+
+    /// Host/overlay width on first layout. Leftover gadget/slot shrink-wrap
+    /// (much smaller than the article column) is ignored. Intersection must
+    /// not change the chosen width.
+    static func firstLayoutWidth(
+        slotWidth: CGFloat,
+        contentColumnWidth: CGFloat,
+        viewportWidth: CGFloat,
+        intersected: Bool = false
+    ) -> CGFloat {
+        _ = intersected
+        let column: CGFloat
+        if contentColumnWidth > 1 {
+            column = contentColumnWidth
+        } else if viewportWidth > 1 {
+            column = viewportWidth
+        } else {
+            column = slotWidth
+        }
+        if contentColumnWidth > 1 && slotWidth > 1 && slotWidth < contentColumnWidth * 0.7 {
+            return contentColumnWidth
+        }
+        if slotWidth > 1 {
+            return slotWidth
+        }
+        return column
+    }
 }
