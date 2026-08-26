@@ -352,6 +352,39 @@ final class osrsHostThemeFillTests: XCTestCase {
         XCTAssertEqual(live.backgroundColor, UIColor.clear)
     }
 
+    func testLiveOverlaySessionMintsParkedMetalFillWindowNotResumeCover() async throws {
+        let themeColor = UIColor(red: 40 / 255, green: 34 / 255, blue: 29 / 255, alpha: 1)
+        let live = makeWindow(theme: themeColor, includeArticleWebView: true)
+        let webView = try XCTUnwrap(firstWebView(in: live))
+        try await loadArticleHTML(in: webView)
+        live.makeKeyAndVisible()
+        osrsSceneCompositor.rememberPaintedArticle(from: live)
+
+        osrsSceneCompositor.beginLiveOverlaySession()
+        defer { osrsSceneCompositor.endLiveOverlaySession() }
+
+        XCTAssertTrue(
+            osrsSceneCompositor.parkedMetalFillInstalled,
+            "Find/search/Name overlay must place last-good above WindowServer Metal in a second window"
+        )
+        XCTAssertFalse(live is osrsResumeCoverWindow)
+        XCTAssertNil(
+            firstOverlayFrame(in: live) ?? firstOverlayFrameAcrossScenes(),
+            "Parked-metal fill must not mint osrs_live_overlay_frame"
+        )
+        XCTAssertTrue(osrsSceneCompositor.containsLiveArticleWebView(live))
+        XCTAssertFalse(
+            osrsSceneCompositor.shouldRestoreResumeCover(didLeaveToBackground: false)
+        )
+        let fillWindows = live.windowScene?.windows.compactMap { $0 as? osrsParkedMetalFillWindow } ?? []
+        XCTAssertFalse(fillWindows.isEmpty, "osrsParkedMetalFillWindow must be in the scene")
+        XCTAssertTrue(fillWindows.allSatisfy { $0.isUserInteractionEnabled == false })
+        XCTAssertTrue(fillWindows.allSatisfy { !($0 is osrsResumeCoverWindow) })
+        let hit = live.hitTest(CGPoint(x: live.bounds.midX, y: live.bounds.midY), with: nil)
+        XCTAssertFalse(hit is osrsResumeCoverWindow)
+        XCTAssertFalse(hit is osrsParkedMetalFillWindow)
+    }
+
     func testResumeCoverInstallsOnlyAfterTrueBackground() {
         XCTAssertFalse(
             osrsSceneCompositor.shouldRestoreResumeCover(didLeaveToBackground: false),
@@ -398,7 +431,70 @@ final class osrsHostThemeFillTests: XCTestCase {
         }
         XCTAssertFalse(webView.isHidden)
         XCTAssertEqual(webView.alpha, 1, accuracy: 0.01)
+        XCTAssertTrue(dump.contains("passthrough="), "Same-second dump must log cover passthrough")
+        XCTAssertTrue(dump.contains("adopted="), "Same-second dump must log cover adopt")
+        XCTAssertTrue(dump.contains("firstResponder="), "Same-second dump must log first responder")
+        XCTAssertTrue(dump.contains("tabBar"), "Same-second dump must log tab-bar alpha")
+        XCTAssertTrue(dump.contains("hit y=80"), "Same-second dump must log hit-test at y≈80")
+        XCTAssertTrue(dump.contains("hit y=mid"), "Same-second dump must log mid-article hit-test")
+        XCTAssertTrue(dump.contains("hit y=aboveKb"), "Same-second dump must log above-keyboard hit-test")
+        XCTAssertTrue(dump.contains("kind="), "Same-second dump must log contents kind")
+        XCTAssertTrue(dump.contains("keyClass="), "Same-second dump must log key window class")
+        XCTAssertTrue(dump.contains("opaque="), "Same-second dump must log isOpaque")
+        XCTAssertTrue(dump.contains("wkBackground="), "Same-second dump must log WK _isBackground")
+        XCTAssertEqual(osrsSceneCompositor.layerContentsKind(nil), "nil")
+        let sample = UIGraphicsImageRenderer(size: CGSize(width: 2, height: 2)).image { ctx in
+            UIColor.red.setFill()
+            ctx.fill(CGRect(x: 0, y: 0, width: 2, height: 2))
+        }
+        XCTAssertEqual(
+            osrsSceneCompositor.layerContentsKind(sample.cgImage),
+            "CGImage",
+            "Shipped contents-kind probe must name a CGImage stamp"
+        )
     }
+
+    func testBeginLiveOverlaySessionDumpsOnNestedSearchDepth() async throws {
+        let themeColor = UIColor(red: 40 / 255, green: 34 / 255, blue: 29 / 255, alpha: 1)
+        let live = makeWindow(theme: themeColor, includeArticleWebView: true)
+        let webView = try XCTUnwrap(firstWebView(in: live))
+        try await loadArticleHTML(in: webView)
+        live.makeKeyAndVisible()
+
+        osrsSceneCompositor.beginLiveOverlaySession()
+        defer {
+            osrsSceneCompositor.endLiveOverlaySession()
+            osrsSceneCompositor.endLiveOverlaySession()
+        }
+
+        let dumpURL = try XCTUnwrap(
+            FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
+        ).appendingPathComponent("osrs-scene-dump.txt")
+        let first = try String(contentsOf: dumpURL, encoding: .utf8)
+        XCTAssertTrue(
+            first.contains("overlayDepth=1"),
+            "Find present must dump at overlay depth 1"
+        )
+
+        try "stale-find-dump".write(to: dumpURL, atomically: true, encoding: .utf8)
+        osrsSceneCompositor.beginLiveOverlaySession()
+        let second = try String(contentsOf: dumpURL, encoding: .utf8)
+        XCTAssertFalse(
+            second.contains("stale-find-dump"),
+            "Article-search after Find must rewrite dumpWindow, not reuse the depth 0→1 file"
+        )
+        XCTAssertTrue(
+            second.contains("overlayDepth=2"),
+            "Search/Name nested overlay must dump at depth ≥1, not only 0→1"
+        )
+        XCTAssertTrue(second.contains("kind="))
+        XCTAssertTrue(second.contains("passthrough="))
+        XCTAssertTrue(second.contains("firstResponder="))
+    }
+
+
+
+
 
     func testCoverMintingAndHostFillDecisionStayOnTheShippedPath() throws {
         let root = try repositoryRoot()

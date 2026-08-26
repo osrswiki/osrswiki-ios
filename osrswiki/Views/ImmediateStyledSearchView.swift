@@ -27,9 +27,7 @@ struct ImmediateStyledTextField: UIViewRepresentable {
         }
         
         func textFieldDidBeginEditing(_ textField: UITextField) {
-            #if DEBUG
             osrsBlankViewFirstResponderDump.capture(reason: "immediate-search")
-            #endif
         }
 
         func textFieldShouldReturn(_ textField: UITextField) -> Bool {

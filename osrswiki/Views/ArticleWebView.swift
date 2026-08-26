@@ -2123,9 +2123,12 @@ struct ArticleWebView: UIViewRepresentable {
                         viewModel.isArticleSoftwareKeyboardVisible = true
                         osrsSceneCompositor.beginLiveOverlaySession()
                     }
-                    #if DEBUG
                     osrsBlankViewFirstResponderDump.capture(reason: "keyboardWillShow")
-                    #endif
+                }
+            })
+            keyboardObservers.append(center.addObserver(forName: UIResponder.keyboardDidShowNotification, object: nil, queue: .main) { _ in
+                Task { @MainActor in
+                    osrsBlankViewFirstResponderDump.capture(reason: "keyboardDidShow")
                 }
             })
             keyboardObservers.append(center.addObserver(forName: UIResponder.keyboardWillHideNotification, object: nil, queue: .main, using: restore))

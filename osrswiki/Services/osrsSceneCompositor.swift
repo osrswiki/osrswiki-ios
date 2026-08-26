@@ -9,6 +9,7 @@
 //  that worse.
 //
 
+import IOSurface
 import UIKit
 import WebKit
 
@@ -146,28 +147,95 @@ enum osrsSceneCompositor {
                 pinParkedArticlePaint(from: webView)
             }
         }
-        if liveOverlaySessionDepth == 1 {
-            for window in allSceneWindows() where isAppContentWindow(window) {
-                dumpWindow(window)
-            }
+        installParkedMetalFill()
+        for window in allSceneWindows() where isAppContentWindow(window) {
+            dumpWindow(window, reason: "overlay-depth-\(liveOverlaySessionDepth)")
+        }
+        if let fill = parkedMetalFillWindow, fill.isHidden == false {
+            dumpWindow(fill, reason: "parked-metal-fill")
         }
     }
 
     static func endLiveOverlaySession() {
         liveOverlaySessionDepth = max(0, liveOverlaySessionDepth - 1)
         if liveOverlaySessionDepth == 0 {
+            removeParkedMetalFill()
             for window in allSceneWindows() {
                 removeParkedArticlePaint(from: window)
                 if let webView = firstLiveArticleWebView(in: window) {
                     webView.scrollView.isHidden = false
                     webView.isHidden = false
+                    webView.alpha = 1
+                    webView.scrollView.alpha = 1
                 }
             }
         }
     }
 
     static let parkedArticlePaintIdentifier = "osrs_parked_article_paint"
+    static let parkedMetalFillIdentifier = "osrs_parked_metal_fill"
     private static var parkedArticleLastGood: UIImage?
+    private static var parkedMetalFillWindow: osrsParkedMetalFillWindow?
+
+    /// WindowServer Metal sits above the scene `UIWindow` CALayer tree (Cycles
+    /// 1–12). A last-good bitmap in a second window at `.statusBar` is above
+    /// that surface. This is not the background resume cover and not the
+    /// live-article overlay frame pin. Hits pass through to the live scene.
+    static func installParkedMetalFill() {
+        let image = parkedArticleLastGood ?? osrsResumeFrameOverlay.paintedArticleImage
+        guard let image, !osrsWebViewThemePaint.isUniformFill(image) else { return }
+        guard let sceneWindow = allSceneWindows().first(where: {
+            isAppContentWindow($0)
+                && !($0 is osrsParkedMetalFillWindow)
+                && !($0 is osrsResumeCoverWindow)
+        }), let scene = sceneWindow.windowScene else {
+            return
+        }
+        let overlay = parkedMetalFillWindow ?? osrsParkedMetalFillWindow(windowScene: scene)
+        overlay.windowScene = scene
+        overlay.frame = scene.coordinateSpace.bounds
+        overlay.windowLevel = .statusBar
+        // Hits must reach the live scene (Find/search/Name). A passthrough
+        // hitTest on an interaction-enabled window still occludes XCTest.
+        overlay.isUserInteractionEnabled = false
+        overlay.isOpaque = true
+        overlay.backgroundColor = .clear
+        overlay.osrsHitTarget = sceneWindow
+        overlay.accessibilityElementsHidden = true
+        let host = overlay.rootViewController ?? UIViewController()
+        host.view.frame = overlay.bounds
+        host.view.backgroundColor = .clear
+        let paint = host.view.subviews
+            .compactMap { $0 as? UIImageView }
+            .first { $0.accessibilityIdentifier == parkedMetalFillIdentifier }
+            ?? UIImageView()
+        paint.image = image
+        paint.contentMode = .scaleToFill
+        paint.frame = host.view.bounds
+        paint.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        paint.isUserInteractionEnabled = false
+        paint.accessibilityIdentifier = parkedMetalFillIdentifier
+        paint.accessibilityElementsHidden = true
+        if paint.superview !== host.view {
+            host.view.addSubview(paint)
+        }
+        overlay.rootViewController = host
+        overlay.isHidden = false
+        parkedMetalFillWindow = overlay
+        NSLog("osrsSceneCompositor parkedMetalFill installed")
+    }
+
+    static func removeParkedMetalFill() {
+        parkedMetalFillWindow?.isHidden = true
+        parkedMetalFillWindow?.osrsHitTarget = nil
+        parkedMetalFillWindow?.rootViewController = nil
+        parkedMetalFillWindow = nil
+        NSLog("osrsSceneCompositor parkedMetalFill removed")
+    }
+
+    static var parkedMetalFillInstalled: Bool {
+        parkedMetalFillWindow != nil && parkedMetalFillWindow?.isHidden == false
+    }
 
     /// Keep a painted article bitmap while GPU tiles are still live. Find then
     /// parks Metal and `drawHierarchy` is a uniform page color; pin that last-good
@@ -506,6 +574,9 @@ enum osrsSceneCompositor {
     }
 
     static func isAppContentWindow(_ window: UIWindow) -> Bool {
+        if window is osrsParkedMetalFillWindow {
+            return false
+        }
         if let overlay = window as? osrsResumeCoverWindow {
             return overlay.rootViewController is osrsAppSceneViewController
         }
@@ -801,19 +872,59 @@ enum osrsSceneCompositor {
         )
     }
 
-    static func dumpWindow(_ window: UIWindow) {
+    static func dumpWindow(_ window: UIWindow, reason: String = "dump") {
         var lines: [String] = []
+        let keyWindow = allSceneWindows().first(where: \.isKeyWindow)
+        let keyClass = keyWindow.map { NSStringFromClass(type(of: $0)) } ?? "nil"
+        lines.append(
+            "reason=\(reason) t=\(Date().timeIntervalSince1970) overlayDepth=\(liveOverlaySessionDepth)"
+        )
+        lines.append(
+            "passthrough=\(osrsResumeFrameOverlay.isPassthroughInstalled) adopted=\(osrsResumeFrameOverlay.hasAdoptedLiveRoot) hasFrame=\(osrsResumeFrameOverlay.hasCapturedFrame)"
+        )
+        lines.append(
+            "keyClass=\(keyClass) windowClass=\(NSStringFromClass(type(of: window))) key=\(window.isKeyWindow)"
+        )
+        if let responder = firstResponder(in: window) ?? findFirstResponder() {
+            lines.append("firstResponder=\(NSStringFromClass(type(of: responder)))")
+        } else {
+            lines.append("firstResponder=nil")
+        }
+        lines.append("wkBackground=\(webViewIsBackground(in: window))")
+        var tabBars: [String] = []
+        collectTabBars(in: window, into: &tabBars)
+        lines.append("tabBar \(tabBars.isEmpty ? "none" : tabBars.joined(separator: " | "))")
+        let hits = [
+            ("y=80", CGPoint(x: window.bounds.midX, y: 80)),
+            ("y=mid", CGPoint(x: window.bounds.midX, y: window.bounds.midY)),
+            ("y=aboveKb", CGPoint(x: window.bounds.midX, y: max(window.bounds.maxY - 120, 80))),
+        ]
+        for (label, point) in hits {
+            let hit = window.hitTest(point, with: nil)
+            let hitName = hit.map { NSStringFromClass(type(of: $0)) } ?? "nil"
+            lines.append(
+                "hit \(label) (\(Int(point.x)),\(Int(point.y))) -> \(hitName) hidden=\(hit?.isHidden ?? true) alpha=\(String(format: "%.2f", hit?.alpha ?? -1))"
+            )
+        }
         func walk(_ view: UIView, depth: Int) {
             let name = NSStringFromClass(type(of: view))
             let isWeb = view is WKWebView
-            guard (depth < 22 || isWeb), lines.count < 240 else { return }
+                || name.contains("WK")
+                || name.contains("Compositing")
+            guard (depth < 22 || isWeb), lines.count < 360 else { return }
             let contents = view.layer.contents == nil ? "nil" : "set"
+            let kind = layerContentsKind(view.layer.contents)
+            var extra = ""
+            if let scroll = view as? UIScrollView {
+                extra = " insetAdj=\(scroll.contentInsetAdjustmentBehavior.rawValue)"
+            }
             let attached = view.window != nil
+            let aid = view.accessibilityIdentifier ?? ""
+            let bg = describeDumpColor(view.backgroundColor)
+            let layerClass = NSStringFromClass(type(of: view.layer))
             lines.append(
-                String(
-                    repeating: "  ",
-                    count: depth
-                ) + "\(name) alpha=\(String(format: "%.2f", view.alpha)) hidden=\(view.isHidden) z=\(Int(view.layer.zPosition)) contents=\(contents) raster=\(view.layer.shouldRasterize) win=\(attached) frame=\(Int(view.frame.minX)),\(Int(view.frame.minY)) \(Int(view.frame.width))x\(Int(view.frame.height)) desc=\(descendantCount(view))"
+                String(repeating: "  ", count: depth)
+                    + "\(name) alpha=\(String(format: "%.2f", view.alpha)) hidden=\(view.isHidden) z=\(Int(view.layer.zPosition)) contents=\(contents) kind=\(kind) opaque=\(view.isOpaque) bg=\(bg) layer=\(layerClass) aid=\(aid) raster=\(view.layer.shouldRasterize) win=\(attached) frame=\(Int(view.frame.minX)),\(Int(view.frame.minY)) \(Int(view.frame.width))x\(Int(view.frame.height)) desc=\(descendantCount(view))\(extra)"
             )
             for child in view.subviews {
                 walk(child, depth: depth + 1)
@@ -823,10 +934,90 @@ enum osrsSceneCompositor {
         let header = "appState=\(UIApplication.shared.applicationState.rawValue) scene=\(window.windowScene?.activationState.rawValue ?? -1) key=\(window.isKeyWindow) sceneWindows=\(window.windowScene?.windows.count ?? -1) overlay=\(osrsResumeFrameOverlay.hasCapturedFrame)\n"
         let text = header + lines.joined(separator: "\n")
         print("🪟 osrsSceneCompositor dump\n\(text)")
-        if let url = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first?
-            .appendingPathComponent("osrs-scene-dump.txt") {
-            try? text.write(to: url, atomically: true, encoding: .utf8)
+        NSLog("osrsSceneCompositor dump\n%@", text)
+        if let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
+            try? text.write(
+                to: dir.appendingPathComponent("osrs-scene-dump.txt"),
+                atomically: true,
+                encoding: .utf8
+            )
+            try? text.write(
+                to: dir.appendingPathComponent("osrs-blank-fr-dump.txt"),
+                atomically: true,
+                encoding: .utf8
+            )
         }
+    }
+
+    static func layerContentsKind(_ contents: Any?) -> String {
+        guard let contents else { return "nil" }
+        let cf = contents as CFTypeRef
+        let typeID = CFGetTypeID(cf)
+        if typeID == CGImage.typeID {
+            return "CGImage"
+        }
+        if typeID == IOSurfaceGetTypeID() {
+            return "IOSurface"
+        }
+        return NSStringFromClass(type(of: contents as AnyObject))
+    }
+
+    private static func describeDumpColor(_ color: UIColor?) -> String {
+        guard let color else { return "nil" }
+        var red: CGFloat = 0, green: CGFloat = 0, blue: CGFloat = 0, alpha: CGFloat = 0
+        guard color.getRed(&red, green: &green, blue: &blue, alpha: &alpha) else {
+            return String(describing: color)
+        }
+        return String(
+            format: "rgba(%.0f,%.0f,%.0f,%.2f)",
+            red * 255,
+            green * 255,
+            blue * 255,
+            alpha
+        )
+    }
+
+    private static func collectTabBars(in view: UIView, into tabBars: inout [String]) {
+        if let tab = view as? UITabBar {
+            tabBars.append(
+                "alpha=\(String(format: "%.2f", tab.alpha)) hidden=\(tab.isHidden) z=\(Int(tab.layer.zPosition)) frame=\(Int(tab.frame.minX)),\(Int(tab.frame.minY)) \(Int(tab.frame.width))x\(Int(tab.frame.height))"
+            )
+        }
+        for child in view.subviews {
+            collectTabBars(in: child, into: &tabBars)
+        }
+    }
+
+    private static func findFirstResponder() -> UIResponder? {
+        for window in allSceneWindows() {
+            if let found = firstResponder(in: window) {
+                return found
+            }
+        }
+        return nil
+    }
+
+    private static func firstResponder(in view: UIView) -> UIResponder? {
+        if view.isFirstResponder {
+            return view
+        }
+        for child in view.subviews {
+            if let found = firstResponder(in: child) {
+                return found
+            }
+        }
+        return nil
+    }
+
+    private static func webViewIsBackground(in window: UIWindow) -> String {
+        guard let webView = firstLiveArticleWebView(in: window) else { return "no-wk" }
+        let selector = NSSelectorFromString("_isBackground")
+        guard webView.responds(to: selector), let method = webView.method(for: selector) else {
+            return "n/a"
+        }
+        typealias BackgroundIMP = @convention(c) (AnyObject, Selector) -> Bool
+        let imp = unsafeBitCast(method, to: BackgroundIMP.self)
+        return imp(webView, selector) ? "true" : "false"
     }
 }
 
@@ -836,6 +1027,18 @@ enum osrsSceneCompositor {
 /// frontmost window; returning nil from hitTest does not fall through.
 /// This window stays key and returns the live tree's hit view so SwiftUI
 /// and WK gesture recognizers still fire.
+/// Last-good article bitmap above iOS 26 WK Metal. Hits go to the live scene.
+final class osrsParkedMetalFillWindow: UIWindow {
+    weak var osrsHitTarget: UIWindow?
+
+    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        guard let target = osrsHitTarget else {
+            return super.hitTest(point, with: event)
+        }
+        return target.hitTest(convert(point, to: target), with: event)
+    }
+}
+
 final class osrsResumeCoverWindow: UIWindow {
     weak var osrsHitTarget: UIWindow?
 
