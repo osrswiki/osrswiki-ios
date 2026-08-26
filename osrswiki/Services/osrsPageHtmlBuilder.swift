@@ -297,92 +297,85 @@ class osrsPageHtmlBuilder {
                 };
             }
 
-            if (window.OsrsWikiBridge) {
-                osrsInstallFetchText(window.OsrsWikiBridge);
-                console.log('🚨 [INLINE-BRIDGE] Bridge already exists; ensured fetchText');
-                return;
+            function osrsPostMapBridge(payload) {
+                if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.mapBridge) {
+                    window.webkit.messageHandlers.mapBridge.postMessage(payload);
+                    return true;
+                }
+                console.error('🚨 [INLINE-BRIDGE] webkit.messageHandlers.mapBridge not available');
+                return false;
             }
 
-            // Create OsrsWikiBridge equivalent for iOS MapLibre integration
-            window.OsrsWikiBridge = {
-                onMapPlaceholderMeasured: function(id, rectJson, mapDataJson) {
+            function osrsInstallMapBridgeMethods(bridge) {
+                bridge.onMapPlaceholderMeasured = function(id, rectJson, mapDataJson) {
                     console.log('🚨 [INLINE-BRIDGE] onMapPlaceholderMeasured called:', id);
-                    if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.mapBridge) {
-                        window.webkit.messageHandlers.mapBridge.postMessage({
-                            action: 'onMapPlaceholderMeasured',
-                            id: id,
-                            rectJson: rectJson,
-                            mapDataJson: mapDataJson
-                        });
-                        console.log('🚨 [INLINE-BRIDGE] Message sent to native layer');
-                    } else {
-                        console.error('🚨 [INLINE-BRIDGE] webkit.messageHandlers.mapBridge not available');
-                    }
-                },
+                    osrsPostMapBridge({
+                        action: 'onMapPlaceholderMeasured',
+                        id: id,
+                        rectJson: rectJson,
+                        mapDataJson: mapDataJson
+                    });
+                };
 
-                onCollapsibleToggled: function(mapId, isOpening) {
+                bridge.onCollapsibleToggled = function(mapId, isOpening) {
                     console.log('🚨 [INLINE-BRIDGE] onCollapsibleToggled called:', mapId, isOpening);
-                    if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.mapBridge) {
-                        window.webkit.messageHandlers.mapBridge.postMessage({
-                            action: 'onCollapsibleToggled',
-                            mapId: mapId,
-                            isOpening: isOpening
-                        });
-                    } else {
-                        console.error('🚨 [INLINE-BRIDGE] webkit.messageHandlers.mapBridge not available');
-                    }
-                },
+                    osrsPostMapBridge({
+                        action: 'onCollapsibleToggled',
+                        mapId: mapId,
+                        isOpening: !!isOpening
+                    });
+                };
 
-                setHorizontalScroll: function(inProgress) {
+                bridge.onMapViewportVisibilityChanged = function(mapId, isVisible) {
+                    osrsPostMapBridge({
+                        action: 'onMapViewportVisibilityChanged',
+                        mapId: mapId,
+                        isVisible: !!isVisible
+                    });
+                };
+
+                bridge.setHorizontalScroll = function(inProgress) {
                     console.log('🚨 [INLINE-BRIDGE] setHorizontalScroll called:', inProgress);
-                    if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.mapBridge) {
-                        window.webkit.messageHandlers.mapBridge.postMessage({
-                            action: 'setHorizontalScroll',
-                            inProgress: inProgress
-                        });
-                    } else {
-                        console.error('🚨 [INLINE-BRIDGE] webkit.messageHandlers.mapBridge not available');
-                    }
-                },
+                    osrsPostMapBridge({
+                        action: 'setHorizontalScroll',
+                        inProgress: inProgress
+                    });
+                };
 
-                setHorizontalScrollGesture: function(phase, gestureId, ownerId) {
+                bridge.setHorizontalScrollGesture = function(phase, gestureId, ownerId) {
                     var local = (phase === 'begin' || phase === 'change') && ownerId !== 'article-navigation';
-                    if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.mapBridge) {
-                        window.webkit.messageHandlers.mapBridge.postMessage({
-                            action: 'setHorizontalScrollGesture',
-                            phase: String(phase || ''),
-                            gestureId: String(gestureId || ''),
-                            ownerId: String(ownerId || 'article-navigation'),
-                            isLocalOwner: !!local
-                        });
-                    }
-                },
+                    osrsPostMapBridge({
+                        action: 'setHorizontalScrollGesture',
+                        phase: String(phase || ''),
+                        gestureId: String(gestureId || ''),
+                        ownerId: String(ownerId || 'article-navigation'),
+                        isLocalOwner: !!local
+                    });
+                };
 
-                setArticleTouchSequence: function(sequence) {
+                bridge.setArticleTouchSequence = function(sequence) {
                     // Handled natively via gesture-id binding on iOS.
-                },
+                };
 
-                log: function(message) {
+                bridge.log = function(message) {
                     console.log('🚨 [INLINE-BRIDGE] log called:', message);
-                    if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.mapBridge) {
-                        window.webkit.messageHandlers.mapBridge.postMessage({
-                            action: 'log',
-                            message: message
-                        });
-                    } else {
-                        console.error('🚨 [INLINE-BRIDGE] webkit.messageHandlers.mapBridge not available');
-                    }
-                },
+                    osrsPostMapBridge({
+                        action: 'log',
+                        message: message
+                    });
+                };
 
-                openFloorNumberingSettings: function() {
-                    if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.mapBridge) {
-                        window.webkit.messageHandlers.mapBridge.postMessage({
-                            action: 'openFloorNumberingSettings'
-                        });
-                    }
-                }
-            };
+                bridge.openFloorNumberingSettings = function() {
+                    osrsPostMapBridge({
+                        action: 'openFloorNumberingSettings'
+                    });
+                };
+            }
 
+            if (!window.OsrsWikiBridge) {
+                window.OsrsWikiBridge = {};
+            }
+            osrsInstallMapBridgeMethods(window.OsrsWikiBridge);
             osrsInstallFetchText(window.OsrsWikiBridge);
             console.log('🗺️ iOS OsrsWikiBridge initialized and ready');
             console.log('🚨 [INLINE-BRIDGE] Bridge object created:', typeof window.OsrsWikiBridge);

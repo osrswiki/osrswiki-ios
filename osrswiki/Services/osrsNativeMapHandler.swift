@@ -192,6 +192,13 @@ class osrsNativeMapHandler: NSObject {
         }
     }
     
+    func onMapViewportVisibilityChanged(mapId: String, isVisible: Bool) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.applyDesiredVisibility(mapId: mapId, isVisible: isVisible)
+        }
+    }
+
     func onCollapsibleToggled(mapId: String, isOpening: Bool) {
         print("🔥 TOGGLE: onCollapsibleToggled - \(mapId), opening: \(isOpening)")
 
@@ -356,6 +363,22 @@ class osrsNativeMapHandler: NSObject {
     
     // MARK: - Private Implementation
     
+    private func applyDesiredVisibility(mapId: String, isVisible: Bool) {
+        desiredMapVisibility[mapId] = isVisible
+        if isVisible {
+            requestedVisibleMapIds.insert(mapId)
+        } else {
+            requestedVisibleMapIds.remove(mapId)
+        }
+        guard let webView = articleWebView, mapContainers[mapId] != nil else { return }
+        applyMapLayout(id: mapId, webView: webView)
+        let showNative = isVisible && renderedMapIds.contains(mapId)
+        let opacity = showNative ? 0 : 1
+        webView.evaluateJavaScript(
+            "var el = document.getElementById('\(mapId)'); if (el) { el.style.opacity = \(opacity); }"
+        )
+    }
+
     private func preloadMap(id: String, rect: osrsMapRect, mapData: osrsMapData, webView: WKWebView) {
         print("🔥 CRITICAL: preloadMap started for \(id)")
         

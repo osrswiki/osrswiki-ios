@@ -319,6 +319,88 @@ final class IOS07MapStabilityTests: XCTestCase {
         handler.cleanup()
     }
 
+    @MainActor
+    func testNativeMapHandlerCreatesOverlaysForGloryTeleportationTablePlaceholders() async throws {
+        let parentView = UIView(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        let webView = WKWebView(frame: parentView.bounds)
+        parentView.addSubview(webView)
+
+        let handler = osrsNativeMapHandler(webView: webView)
+        let mapIds = [
+            "map-placeholder-glory-0",
+            "map-placeholder-glory-1",
+            "map-placeholder-glory-2",
+            "map-placeholder-glory-3"
+        ]
+        for mapId in mapIds {
+            handler.onCollapsibleToggled(mapId: mapId, isOpening: true)
+        }
+        for (index, mapId) in mapIds.enumerated() {
+            let top = 120 + (index * 200)
+            handler.onMapPlaceholderMeasured(
+                id: mapId,
+                rectJson: "{\"x\":20,\"y\":\(top),\"width\":300,\"height\":180}",
+                mapDataJson: #"{"lat":"3094","lon":"3240","zoom":"7","plane":"0","initiallyVisible":false}"#
+            )
+        }
+        try await Task.sleep(nanoseconds: 500_000_000)
+
+        XCTAssertEqual(handler.activeMapContainerIdentifiersForTesting, mapIds)
+        for (index, mapId) in mapIds.enumerated() {
+            let awaitingFirstFrame = try XCTUnwrap(handler.mapContainerFrameForTesting(id: mapId))
+            XCTAssertEqual(
+                awaitingFirstFrame.origin.x,
+                20 + osrsEmbeddedMapLayoutState.offscreenTranslationX,
+                "Glory table maps must keep the static image until the first canonical frame"
+            )
+            XCTAssertEqual(awaitingFirstFrame.origin.y, CGFloat(120 + (index * 200)))
+            handler.markMapRenderedForTesting(id: mapId)
+        }
+        try await Task.sleep(nanoseconds: 100_000_000)
+        for (index, mapId) in mapIds.enumerated() {
+            let openFrame = try XCTUnwrap(handler.mapContainerFrameForTesting(id: mapId))
+            XCTAssertEqual(openFrame.origin.x, 20)
+            XCTAssertEqual(openFrame.origin.y, CGFloat(120 + (index * 200)))
+            XCTAssertEqual(handler.mapContainerIsHiddenForTesting(id: mapId), false)
+        }
+
+        handler.onMapViewportVisibilityChanged(mapId: mapIds[3], isVisible: false)
+        try await Task.sleep(nanoseconds: 100_000_000)
+        XCTAssertEqual(
+            try XCTUnwrap(handler.mapContainerFrameForTesting(id: mapIds[3])).origin.x,
+            20 + osrsEmbeddedMapLayoutState.offscreenTranslationX
+        )
+        handler.onMapViewportVisibilityChanged(mapId: mapIds[3], isVisible: true)
+        try await Task.sleep(nanoseconds: 100_000_000)
+        XCTAssertEqual(try XCTUnwrap(handler.mapContainerFrameForTesting(id: mapIds[3])).origin.x, 20)
+
+        handler.cleanup()
+    }
+
+    func testInlineMapBridgeForwardsViewportVisibilityAndDoesNotSkipExistingBridge() throws {
+        let builderURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("osrswiki/Services/osrsPageHtmlBuilder.swift")
+        let articleURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("osrswiki/Views/ArticleWebView.swift")
+        let handlerURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("osrswiki/Services/osrsNativeMapHandler.swift")
+        let builder = try String(contentsOf: builderURL, encoding: .utf8)
+        let article = try String(contentsOf: articleURL, encoding: .utf8)
+        let handler = try String(contentsOf: handlerURL, encoding: .utf8)
+
+        XCTAssertTrue(builder.contains("onMapViewportVisibilityChanged"))
+        XCTAssertTrue(builder.contains("osrsInstallMapBridgeMethods"))
+        XCTAssertFalse(builder.contains("Bridge already exists; ensured fetchText"))
+        XCTAssertTrue(article.contains("case \"onMapViewportVisibilityChanged\""))
+        XCTAssertTrue(handler.contains("func onMapViewportVisibilityChanged(mapId: String, isVisible: Bool)"))
+    }
+
     func testMainTabDoesNotStartUnusedBackgroundMapPreloader() throws {
         let viewsURL = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()

@@ -3093,6 +3093,26 @@ struct ArticleWebView: UIViewRepresentable {
             }
         }
         
+        private func jsFlag(_ value: Any?) -> Bool? {
+            if let flag = value as? Bool {
+                return flag
+            }
+            if let number = value as? NSNumber {
+                return number.boolValue
+            }
+            if let string = value as? String {
+                switch string.lowercased() {
+                case "true", "1", "yes":
+                    return true
+                case "false", "0", "no":
+                    return false
+                default:
+                    return nil
+                }
+            }
+            return nil
+        }
+
         private func handleMapBridgeMessage(_ body: [String: Any]) {
             guard let action = body["action"] as? String else { 
                 print("🔴 MapBridge: Received message with no action: \(body)")
@@ -3111,8 +3131,14 @@ struct ArticleWebView: UIViewRepresentable {
                 
             case "onCollapsibleToggled":
                 if let mapId = body["mapId"] as? String,
-                   let isOpening = body["isOpening"] as? Bool {
+                   let isOpening = jsFlag(body["isOpening"]) {
                     mapHandler?.onCollapsibleToggled(mapId: mapId, isOpening: isOpening)
+                }
+
+            case "onMapViewportVisibilityChanged":
+                if let mapId = body["mapId"] as? String,
+                   let isVisible = jsFlag(body["isVisible"]) {
+                    mapHandler?.onMapViewportVisibilityChanged(mapId: mapId, isVisible: isVisible)
                 }
                 
             case "setHorizontalScroll":
