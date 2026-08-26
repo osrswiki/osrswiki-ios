@@ -127,9 +127,25 @@ enum osrsSceneCompositor {
 
     static func beginLiveOverlaySession() {
         liveOverlaySessionDepth += 1
+        for window in allSceneWindows() where isAppContentWindow(window) {
+            rememberPaintedArticle(from: window)
+        }
         osrsHostThemeFill.applyToAppWindows(
             themeBackground: UIColor(osrsAppRoot.themeManager.currentTheme.background)
         )
+        for window in allSceneWindows() {
+            if let webView = firstLiveArticleWebView(in: window) {
+                osrsWebViewThemePaint.apply(
+                    to: webView,
+                    theme: osrsAppRoot.themeManager.currentTheme
+                )
+            }
+        }
+        for window in allSceneWindows() {
+            if let webView = firstLiveArticleWebView(in: window) {
+                pinParkedArticlePaint(from: webView)
+            }
+        }
         if liveOverlaySessionDepth == 1 {
             for window in allSceneWindows() where isAppContentWindow(window) {
                 dumpWindow(window)
@@ -139,6 +155,167 @@ enum osrsSceneCompositor {
 
     static func endLiveOverlaySession() {
         liveOverlaySessionDepth = max(0, liveOverlaySessionDepth - 1)
+        if liveOverlaySessionDepth == 0 {
+            for window in allSceneWindows() {
+                removeParkedArticlePaint(from: window)
+                if let webView = firstLiveArticleWebView(in: window) {
+                    webView.scrollView.isHidden = false
+                    webView.isHidden = false
+                }
+            }
+        }
+    }
+
+    static let parkedArticlePaintIdentifier = "osrs_parked_article_paint"
+    private static var parkedArticleLastGood: UIImage?
+
+    /// Keep a painted article bitmap while GPU tiles are still live. Find then
+    /// parks Metal and `drawHierarchy` is a uniform page color; pin that last-good
+    /// as a sibling, not a cover `UIWindow`.
+    static func rememberPaintedArticle(_ image: UIImage) {
+        guard !osrsWebViewThemePaint.isUniformFill(image),
+              !osrsWebViewThemePaint.isUnpaintedSystemFill(image) else {
+            return
+        }
+        parkedArticleLastGood = image
+        osrsResumeFrameOverlay.rememberPaintedArticle(image)
+    }
+
+    static func rememberPaintedArticle(from view: UIView) {
+        let bounds = view.bounds
+        guard bounds.width > 8, bounds.height > 8 else { return }
+        let image = UIGraphicsImageRenderer(bounds: bounds).image { _ in
+            view.drawHierarchy(in: bounds, afterScreenUpdates: false)
+        }
+        rememberPaintedArticle(image)
+    }
+
+    /// Last painted article as a sibling of WK in the live tree. iOS 26 parks
+    /// Metal tiles independently of `CALayer.contents`; this is not a cover
+    /// `UIWindow` and does not nil WK layer contents.
+    static func pinParkedArticlePaint(from webView: WKWebView, completion: (() -> Void)? = nil) {
+        if isPreparedWarmer(webView) {
+            completion?()
+            return
+        }
+        guard webView.superview != nil else {
+            completion?()
+            return
+        }
+        webView.evaluateJavaScript(osrsWebViewThemePaint.keepCompositorAliveScript)
+        let snapshotView: UIView = webView.window ?? webView
+        let bounds = snapshotView.bounds
+        var liveImage: UIImage?
+        if bounds.width > 8, bounds.height > 8 {
+            liveImage = UIGraphicsImageRenderer(bounds: bounds).image { _ in
+                snapshotView.drawHierarchy(in: bounds, afterScreenUpdates: false)
+            }
+        }
+        if let liveImage {
+            rememberPaintedArticle(liveImage)
+        }
+        let image = lastPaintedArticleImage(preferring: liveImage)
+        if let existing = parkedArticlePaintView(
+            in: webView.window?.rootViewController?.view ?? webView.superview ?? webView
+        ), existing.image != nil {
+            if let image, !osrsWebViewThemePaint.isUniformFill(image) {
+                existing.image = image
+            }
+            existing.frame = existing.superview?.bounds ?? webView.frame
+            if let parent = existing.superview {
+                parent.bringSubviewToFront(existing)
+                raiseFindNavigatorAboveParkedPaint(in: parent, paint: existing)
+            }
+            if let image, !osrsWebViewThemePaint.isUniformFill(image) {
+                pinLastGoodOnWebViewLayer(webView, image: image)
+            }
+            completion?()
+            return
+        }
+        guard let image, !osrsWebViewThemePaint.isUniformFill(image) else {
+            completion?()
+            return
+        }
+        let parent = webView.window?.rootViewController?.view ?? webView.superview
+        guard let parent else {
+            completion?()
+            return
+        }
+        let paint = parkedArticlePaintView(in: parent) ?? UIImageView()
+        paint.image = image
+        paint.contentMode = .scaleToFill
+        paint.frame = parent.bounds
+        paint.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        paint.isUserInteractionEnabled = false
+        paint.accessibilityIdentifier = parkedArticlePaintIdentifier
+        paint.accessibilityElementsHidden = true
+        paint.isHidden = false
+        paint.alpha = 1
+        if paint.superview != parent {
+            parent.addSubview(paint)
+        }
+        parent.bringSubviewToFront(paint)
+        raiseFindNavigatorAboveParkedPaint(in: parent, paint: paint)
+        pinLastGoodOnWebViewLayer(webView, image: image)
+        completion?()
+    }
+
+    /// Parked Metal IOSurface sits on WK's own layer, above UIKit siblings.
+    /// Stamp last-good there. Never `contents = nil`.
+    private static func pinLastGoodOnWebViewLayer(_ webView: WKWebView, image: UIImage) {
+        guard let cgImage = image.cgImage else { return }
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        webView.layer.contents = cgImage
+        webView.layer.contentsScale = image.scale
+        webView.layer.contentsGravity = .resize
+        webView.scrollView.layer.contents = cgImage
+        webView.scrollView.layer.contentsScale = image.scale
+        webView.scrollView.layer.contentsGravity = .resize
+        CATransaction.commit()
+    }
+
+    private static func lastPaintedArticleImage(preferring liveImage: UIImage?) -> UIImage? {
+        if let liveImage,
+           !osrsWebViewThemePaint.isUniformFill(liveImage),
+           !osrsWebViewThemePaint.isUnpaintedSystemFill(liveImage) {
+            return liveImage
+        }
+        if let parkedArticleLastGood,
+           !osrsWebViewThemePaint.isUniformFill(parkedArticleLastGood) {
+            return parkedArticleLastGood
+        }
+        return osrsResumeFrameOverlay.paintedArticleImage
+    }
+
+    static func removeParkedArticlePaint(from view: UIView) {
+        if let imageView = view as? UIImageView,
+           imageView.accessibilityIdentifier == parkedArticlePaintIdentifier {
+            imageView.removeFromSuperview()
+            return
+        }
+        view.subviews.forEach { removeParkedArticlePaint(from: $0) }
+    }
+
+    private static func parkedArticlePaintView(in view: UIView) -> UIImageView? {
+        if let imageView = view as? UIImageView,
+           imageView.accessibilityIdentifier == parkedArticlePaintIdentifier {
+            return imageView
+        }
+        for child in view.subviews {
+            if let found = parkedArticlePaintView(in: child) {
+                return found
+            }
+        }
+        return nil
+    }
+
+    private static func raiseFindNavigatorAboveParkedPaint(in parent: UIView, paint: UIView) {
+        if let find = findNavigatorView(in: parent),
+           find !== paint,
+           find.superview == parent {
+            parent.insertSubview(find, aboveSubview: paint)
+        }
     }
 
     /// Find, calc Name, and article→search all put a text field or Find
@@ -679,6 +856,11 @@ enum osrsResumeFrameOverlay {
     private static var previousBackgroundColor: UIColor?
 
     static var hasCapturedFrame: Bool { lastGoodFrame != nil }
+    static var paintedArticleImage: UIImage? { lastGoodFrame }
+
+    static func rememberPaintedArticle(_ image: UIImage) {
+        consider(image)
+    }
 
     static func capture(from window: UIWindow) {
         let bounds = window.bounds

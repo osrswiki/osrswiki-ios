@@ -67,6 +67,27 @@ final class osrsHostThemeFillTests: XCTestCase {
         XCTAssertLessThan(webView.underPageBackgroundColor.cgColor.alpha, 0.05)
     }
 
+    func testApplyClearsThemeColoredHostViewsOverLiveArticleWebView() async throws {
+        let theme = UIColor(red: 226 / 255, green: 219 / 255, blue: 200 / 255, alpha: 1)
+        let live = makeWindow(theme: theme, includeArticleWebView: true)
+        let webView = try XCTUnwrap(firstWebView(in: live))
+        try await loadArticleHTML(in: webView)
+        let filler = UIView(frame: live.bounds)
+        filler.backgroundColor = theme
+        filler.isOpaque = true
+        live.rootViewController?.view.insertSubview(filler, at: 0)
+
+        osrsHostThemeFill.apply(to: live, themeBackground: theme)
+
+        XCTAssertLessThan(
+            filler.backgroundColor?.cgColor.alpha ?? 1,
+            0.05,
+            "Theme parchment UIView behind a live WK must not keep compositing on Find/keyboard"
+        )
+        XCTAssertFalse(filler.isOpaque)
+        XCTAssertTrue(osrsSceneCompositor.containsLiveArticleWebView(live))
+    }
+
     func testLoadedArticleThemePaintDoesNotFillParkedCompositorWithPageColor() async throws {
         let themeColor = UIColor(red: 40 / 255, green: 34 / 255, blue: 29 / 255, alpha: 1)
         let live = makeWindow(theme: themeColor, includeArticleWebView: true)
@@ -85,6 +106,230 @@ final class osrsHostThemeFillTests: XCTestCase {
         XCTAssertFalse(webView.scrollView.isOpaque)
         XCTAssertLessThan(webView.backgroundColor?.cgColor.alpha ?? 1, 0.05)
         XCTAssertFalse(live.rootViewController?.view.isOpaque ?? true)
+    }
+
+    func testApplyLiveThemeOnLoadedArticleDoesNotRestoreOpaqueUnderPageFill() async throws {
+        let live = makeWindow(
+            theme: UIColor(red: 226 / 255, green: 219 / 255, blue: 200 / 255, alpha: 1),
+            includeArticleWebView: true
+        )
+        let webView = try XCTUnwrap(firstWebView(in: live))
+        try await loadArticleHTML(in: webView)
+        let viewModel = ArticleViewModel(
+            pageUrl: URL(string: "https://oldschool.runescape.wiki/w/Varrock")!,
+            pageTitle: "Varrock"
+        )
+        viewModel.setWebView(webView)
+        osrsWebViewThemePaint.apply(to: webView, theme: osrsLightTheme())
+        XCTAssertLessThan(webView.underPageBackgroundColor.cgColor.alpha, 0.05)
+
+        viewModel.applyLiveTheme(osrsLightTheme(), themeManager: osrsThemeManager())
+
+        XCTAssertLessThan(
+            webView.underPageBackgroundColor.cgColor.alpha,
+            0.05,
+            "applyLiveTheme must not put #E2DBC8 under a loaded article; Find then fills the LCD"
+        )
+        XCTAssertLessThan(webView.backgroundColor?.cgColor.alpha ?? 1, 0.05)
+        XCTAssertLessThan(webView.scrollView.backgroundColor?.cgColor.alpha ?? 1, 0.05)
+        XCTAssertFalse(webView.isOpaque)
+    }
+
+    func testLoadedArticleThemePaintClearsImportantHtmlBodyPageFill() async throws {
+        let live = makeWindow(
+            theme: UIColor(red: 226 / 255, green: 219 / 255, blue: 200 / 255, alpha: 1),
+            includeArticleWebView: true
+        )
+        let webView = try XCTUnwrap(firstWebView(in: live))
+        let html = """
+        <!doctype html>
+        <html>
+        <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <style id="osrs-article-first-paint">
+        html, body { background-color: #e2dbc8 !important; color: #000000 !important; }
+        </style>
+        </head>
+        <body>
+        <h1>Varrock</h1>
+        <p>The capital of Misthalin is a busy trade city with a palace.</p>
+        </body>
+        </html>
+        """
+        try await loadHTML(html, in: webView)
+        osrsWebViewThemePaint.apply(to: webView, theme: osrsLightTheme())
+        let computed = try await computedBodyBackground(webView)
+        XCTAssertTrue(
+            computed.contains("0, 0, 0, 0") || computed.contains("transparent"),
+            "Find parks GPU on html/body #E2DBC8; theme paint must clear it computed=\(computed)"
+        )
+        XCTAssertLessThan(webView.underPageBackgroundColor.cgColor.alpha, 0.05)
+    }
+
+    func testFindExpandClearsImportantHtmlBodyFillBeforePresentingNavigator() async throws {
+        let live = makeWindow(
+            theme: UIColor(red: 226 / 255, green: 219 / 255, blue: 200 / 255, alpha: 1),
+            includeArticleWebView: true
+        )
+        let webView = try XCTUnwrap(firstWebView(in: live))
+        let html = """
+        <!doctype html>
+        <html>
+        <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <style id="osrs-article-first-paint">
+        html, body { background-color: #e2dbc8 !important; color: #000000 !important; }
+        </style>
+        </head>
+        <body>
+        <h1>Varrock</h1>
+        <p>The capital of Misthalin is a busy trade city with a palace.</p>
+        </body>
+        </html>
+        """
+        try await loadHTML(html, in: webView)
+        let viewModel = ArticleViewModel(
+            pageUrl: URL(string: "https://oldschool.runescape.wiki/w/Varrock")!,
+            pageTitle: "Varrock"
+        )
+        viewModel.setWebView(webView)
+
+        let presented = expectation(description: "find expand completed")
+        viewModel.performFindInPageAction {
+            presented.fulfill()
+        }
+        await fulfillment(of: [presented], timeout: 5)
+        defer { viewModel.hideFindInPageAction() }
+
+        let overlayId = try await evaluateString(
+            "document.getElementById('osrs-overlay-page-fill') ? 'present' : 'missing'",
+            in: webView
+        )
+        XCTAssertEqual(
+            overlayId,
+            "present",
+            "Find expand must inject overlay page-fill CSS before UIFindInteraction parks GPU"
+        )
+        let computed = try await evaluateString(
+            "getComputedStyle(document.body).backgroundColor",
+            in: webView
+        )
+        XCTAssertTrue(
+            computed.contains("0, 0, 0, 0") || computed.contains("transparent"),
+            "Find present must not still see html/body #E2DBC8 computed=\(computed)"
+        )
+    }
+
+    func testFindKeepsInTreeArticlePaintWhenWebKitCompositorParksWithoutACoverWindow() async throws {
+        let theme = UIColor(red: 226 / 255, green: 219 / 255, blue: 200 / 255, alpha: 1)
+        let live = makeWindow(theme: theme, includeArticleWebView: true)
+        let webView = try XCTUnwrap(firstWebView(in: live))
+        try await loadArticleHTML(in: webView)
+        let viewModel = ArticleViewModel(
+            pageUrl: URL(string: "https://oldschool.runescape.wiki/w/Varrock")!,
+            pageTitle: "Varrock"
+        )
+        viewModel.setWebView(webView)
+
+        let presented = expectation(description: "find presented for parked paint")
+        viewModel.performFindInPageAction {
+            presented.fulfill()
+        }
+        await fulfillment(of: [presented], timeout: 5)
+        defer { viewModel.hideFindInPageAction() }
+
+        let paint = try await waitForParkedArticlePaint(in: live)
+        XCTAssertTrue(
+            paint.superview === webView.superview
+                || paint.superview === live.rootViewController?.view,
+            "Parked article paint must live in the same window as the article WK"
+        )
+        XCTAssertFalse(paint is UIWindow)
+        XCTAssertFalse(paint.isUserInteractionEnabled)
+        XCTAssertNil(
+            firstOverlayFrame(in: live) ?? firstOverlayFrameAcrossScenes(),
+            "Find must not mint osrs_live_overlay_frame"
+        )
+        XCTAssertFalse(live is osrsResumeCoverWindow)
+        XCTAssertTrue(osrsSceneCompositor.containsLiveArticleWebView(live))
+        XCTAssertFalse(
+            webView.scrollView.isHidden,
+            "Hiding WKScrollView blanks the live tree for Name/search; last-good is a sibling, not a hide"
+        )
+
+        webView.isHidden = true
+        let parked = snapshot(live)
+        XCTAssertFalse(
+            osrsWebViewThemePaint.isUniformFill(parked),
+            "In-tree article paint must stay on the LCD after WK Metal parks range=\(osrsWebViewThemePaint.luminanceRange(parked))"
+        )
+        webView.isHidden = false
+    }
+
+    func testPinReinstallsLastGoodWhenLiveSnapshotIsUniformThemeFillWithoutACoverWindow() async throws {
+        let theme = UIColor(red: 40 / 255, green: 34 / 255, blue: 29 / 255, alpha: 1)
+        let live = makeWindow(theme: theme, includeArticleWebView: true)
+        let webView = try XCTUnwrap(firstWebView(in: live))
+        try await loadArticleHTML(in: webView)
+        let windowsBefore = live.windowScene?.windows.count ?? 1
+        let painted = UIGraphicsImageRenderer(bounds: live.bounds).image { ctx in
+            UIColor.white.setFill()
+            ctx.fill(live.bounds)
+            UIColor.black.setFill()
+            ctx.fill(CGRect(x: 16, y: 48, width: 120, height: 180))
+            UIColor.systemOrange.setFill()
+            ctx.fill(CGRect(x: 180, y: 240, width: 90, height: 140))
+        }
+        XCTAssertFalse(osrsWebViewThemePaint.isUniformFill(painted))
+        osrsSceneCompositor.rememberPaintedArticle(painted)
+
+        let parkedGPU = UIView(frame: live.bounds)
+        parkedGPU.backgroundColor = theme
+        parkedGPU.isOpaque = true
+        parkedGPU.accessibilityIdentifier = "parked-gpu-sim"
+        live.rootViewController?.view.addSubview(parkedGPU)
+        XCTAssertTrue(
+            osrsWebViewThemePaint.isUniformFill(snapshot(live)),
+            "Sanity: simulated parked compositor is a uniform #28221d fill"
+        )
+
+        let name = UITextField(frame: CGRect(x: 24, y: 96, width: 200, height: 36))
+        name.accessibilityIdentifier = "native-calc-field-name"
+        live.rootViewController?.view.addSubview(name)
+
+        osrsSceneCompositor.pinParkedArticlePaint(from: webView)
+        let paint = try await waitForParkedArticlePaint(in: live)
+        XCTAssertFalse(paint is UIWindow)
+        XCTAssertFalse(paint.isUserInteractionEnabled)
+        XCTAssertNil(
+            firstOverlayFrame(in: live) ?? firstOverlayFrameAcrossScenes(),
+            "Find/search/Name must not mint osrs_live_overlay_frame"
+        )
+        XCTAssertFalse(live is osrsResumeCoverWindow)
+        XCTAssertTrue(osrsSceneCompositor.containsLiveArticleWebView(live))
+        XCTAssertEqual(
+            live.windowScene?.windows.count ?? windowsBefore,
+            windowsBefore,
+            "In-tree pin must not mint a second UIWindow"
+        )
+        parkedGPU.isHidden = true
+        let parked = snapshot(live)
+        parkedGPU.isHidden = false
+        XCTAssertFalse(
+            osrsWebViewThemePaint.isUniformFill(parked),
+            "Parked compositor must keep last-good in-tree, not #28221d fill range=\(osrsWebViewThemePaint.luminanceRange(parked))"
+        )
+        XCTAssertNotNil(
+            webView.layer.contents,
+            "Last-good must stamp WK layer.contents (not nil) so parked Metal tiles are not the LCD"
+        )
+        let hitPoint = name.convert(CGPoint(x: 8, y: 8), to: live)
+        let hit = live.hitTest(hitPoint, with: nil)
+        XCTAssertFalse(hit is osrsResumeCoverWindow)
+        XCTAssertTrue(
+            hit === name || (hit?.isDescendant(of: name) ?? false) || paint.isUserInteractionEnabled == false,
+            "Hits must still reach the live tree, not a cover window hit=\(String(describing: hit))"
+        )
     }
 
     func testFindKeyboardOverlayDoesNotMintALastGoodCoverWindow() async throws {
@@ -130,6 +375,8 @@ final class osrsHostThemeFillTests: XCTestCase {
         XCTAssertTrue(fill.contains("shouldPaintOpaqueFill(liveArticleWebViewPresent:"))
         XCTAssertTrue(fill.contains("osrsResumeCoverWindow"))
         XCTAssertTrue(fill.contains("underPageBackgroundColor = UIColor.clear"))
+        XCTAssertTrue(fill.contains("clearThemeColoredHostViews"))
+        XCTAssertFalse(fill.contains("layer.contents = nil"))
         let viewModel = try source(root, "platforms/ios/osrswiki/ViewModels/ArticleViewModel.swift")
         let preserve = viewModel
             .components(separatedBy: "func preserveRenderedArticleDuringFind")
@@ -158,6 +405,35 @@ final class osrsHostThemeFillTests: XCTestCase {
         XCTAssertTrue(sceneDelegate.contains("osrsHostThemeFill.apply(to:"))
         let themePaint = try source(root, "platforms/ios/osrswiki/Utils/osrsWebViewThemePaint.swift")
         XCTAssertTrue(themePaint.contains("emptyDocument ? pageColor : UIColor.clear"))
+        XCTAssertTrue(themePaint.contains("osrs-overlay-page-fill"))
+        XCTAssertTrue(themePaint.contains("background-color: transparent !important"))
+        XCTAssertTrue(viewModel.contains("osrs-overlay-page-fill") || viewModel.contains("clearLoadedDocumentPageFillScript"))
+        let begin = compositor
+            .components(separatedBy: "static func beginLiveOverlaySession")
+            .dropFirst()
+            .first?
+            .components(separatedBy: "static func endLiveOverlaySession")
+            .first ?? ""
+        XCTAssertTrue(begin.contains("osrsWebViewThemePaint.apply"))
+        XCTAssertFalse(begin.contains("layer.contents = nil"))
+        XCTAssertFalse(begin.contains("pinLiveArticleFrame"))
+        XCTAssertTrue(begin.contains("pinParkedArticlePaint"))
+        XCTAssertTrue(begin.contains("rememberPaintedArticle"))
+        XCTAssertTrue(compositor.contains("osrs_parked_article_paint"))
+        XCTAssertTrue(compositor.contains("parkedArticleLastGood"))
+        XCTAssertTrue(viewModel.contains("pinParkedArticlePaint"))
+        XCTAssertTrue(viewModel.contains("rememberPaintedArticle(from:"))
+        XCTAssertFalse(begin.contains("#if DEBUG"))
+        let liveTheme = viewModel
+            .components(separatedBy: "func applyLiveTheme")
+            .dropFirst()
+            .first?
+            .components(separatedBy: "func applyThemeColors")
+            .first ?? ""
+        XCTAssertTrue(liveTheme.contains("osrsWebViewThemePaint.apply"))
+        XCTAssertFalse(liveTheme.contains("underPageBackgroundColor = pageColor"))
+        XCTAssertTrue(compositor.contains("pinLastGoodOnWebViewLayer"))
+        XCTAssertFalse(compositor.contains("webView.layer.contents = nil"))
         XCTAssertFalse(compositor.contains("pinLiveArticleFrame"))
         XCTAssertFalse(compositor.contains("osrs_live_overlay_frame"))
         XCTAssertFalse(compositor.contains("removePinnedArticleOverlay"))
@@ -225,6 +501,33 @@ final class osrsHostThemeFillTests: XCTestCase {
         return nil
     }
 
+    private func firstParkedArticlePaint(in view: UIView) -> UIImageView? {
+        if let imageView = view as? UIImageView,
+           imageView.accessibilityIdentifier == "osrs_parked_article_paint" {
+            return imageView
+        }
+        for child in view.subviews {
+            if let found = firstParkedArticlePaint(in: child) {
+                return found
+            }
+        }
+        return nil
+    }
+
+    private func waitForParkedArticlePaint(in window: UIWindow) async throws -> UIImageView {
+        let deadline = Date().addingTimeInterval(4)
+        while Date() < deadline {
+            if let paint = firstParkedArticlePaint(in: window) {
+                return paint
+            }
+            try await Task.sleep(nanoseconds: 50_000_000)
+        }
+        return try XCTUnwrap(
+            firstParkedArticlePaint(in: window),
+            "Find must pin in-tree article paint before WK Metal parks"
+        )
+    }
+
     private func firstWebView(in window: UIWindow) -> WKWebView? {
         func walk(_ view: UIView) -> WKWebView? {
             if let web = view as? WKWebView {
@@ -258,6 +561,36 @@ final class osrsHostThemeFillTests: XCTestCase {
         webView.loadHTMLString(html, baseURL: URL(string: "https://oldschool.runescape.wiki/"))
         await fulfillment(of: [didFinish], timeout: 10)
         try await Task.sleep(nanoseconds: 80_000_000)
+    }
+
+    private func loadHTML(_ html: String, in webView: WKWebView) async throws {
+        let didFinish = expectation(description: "host-fill custom HTML loaded")
+        let delegate = HostFillNavigationDelegate(didFinish: didFinish)
+        webView.navigationDelegate = delegate
+        objc_setAssociatedObject(webView, &HostFillNavigationDelegate.handle, delegate, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
+        webView.loadHTMLString(html, baseURL: URL(string: "https://oldschool.runescape.wiki/"))
+        await fulfillment(of: [didFinish], timeout: 10)
+        try await Task.sleep(nanoseconds: 80_000_000)
+    }
+
+    private func computedBodyBackground(_ webView: WKWebView) async throws -> String {
+        try await Task.sleep(nanoseconds: 150_000_000)
+        return try await evaluateString(
+            "getComputedStyle(document.body).backgroundColor",
+            in: webView
+        )
+    }
+
+    private func evaluateString(_ script: String, in webView: WKWebView) async throws -> String {
+        try await withCheckedThrowingContinuation { continuation in
+            webView.evaluateJavaScript(script) { result, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                    return
+                }
+                continuation.resume(returning: result as? String ?? "")
+            }
+        }
     }
 
     private func snapshot(_ window: UIWindow) -> UIImage {

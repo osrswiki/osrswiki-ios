@@ -3319,10 +3319,9 @@ class ArticleViewModel: NSObject, ObservableObject {
     func applyLiveTheme(_ theme: any osrsThemeProtocol, themeManager: osrsThemeManager) {
         injectThemeColors(themeManager)
         let isDark = theme is osrsDarkTheme
-        let pageColor = UIColor(theme.background)
-        webView?.underPageBackgroundColor = pageColor
-        webView?.backgroundColor = pageColor
-        webView?.scrollView.backgroundColor = pageColor
+        if let webView {
+            osrsWebViewThemePaint.apply(to: webView, theme: theme)
+        }
         webView?.evaluateJavaScript(
             "if (window.OSRSWikiTheme) { window.OSRSWikiTheme.switchTheme(\(isDark)); }"
         )
@@ -5502,23 +5501,31 @@ extension ArticleViewModel: WKNavigationDelegate {
     /// Find in page action - matches Android FindInPageManager functionality
     func performFindInPageAction(onPresented: (() -> Void)? = nil) {
         guard let webView = webView else { return }
+        if let window = webView.window {
+            osrsSceneCompositor.rememberPaintedArticle(from: window)
+        }
         isFindInPageActive = true
 
-        // Expand collapsible sections like Android does
+        // Expand collapsibles and clear html/body parchment before Find parks GPU.
         let expandScript = """
             document.querySelectorAll('.collapsible-closed').forEach(function(e) {
                 e.classList.remove('collapsible-closed');
             });
+            \(osrsWebViewThemePaint.clearLoadedDocumentPageFillScript)
+            \(osrsWebViewThemePaint.keepCompositorAliveScript)
         """
-        webView.evaluateJavaScript(expandScript) { [weak self] (_, error) in
+        webView.evaluateJavaScript(expandScript) { [weak self] (result, error) in
             if let error = error {
                 print("🚨 ArticleViewModel: Error expanding collapsible content: \(error)")
             }
 
-            // After expanding content, present the native find interface
+            // After expanding content, pin in-tree paint then present Find.
             DispatchQueue.main.async {
-                self?.presentNativeFindInterface()
-                onPresented?()
+                self?.logFillIsolate(webView: webView, js: result as? String, reason: "find-expand")
+                osrsSceneCompositor.pinParkedArticlePaint(from: webView) {
+                    self?.presentNativeFindInterface()
+                    onPresented?()
+                }
             }
         }
 
@@ -5558,8 +5565,33 @@ extension ArticleViewModel: WKNavigationDelegate {
         webView.scrollView.backgroundColor = UIColor.clear
         webView.isHidden = false
         webView.alpha = 1
-        webView.scrollView.isHidden = false
         webView.scrollView.alpha = 1
+        osrsSceneCompositor.pinParkedArticlePaint(from: webView)
+        logFillIsolate(webView: webView, js: nil, reason: "find-preserve")
+    }
+
+    private func logFillIsolate(webView: WKWebView, js: String?, reason: String) {
+        let window = webView.window
+        NSLog(
+            "osrsFillIsolate reason=%@ js=%@ windowBg=%@ windowOpaque=%@ underPage=%@ wkBg=%@ scrollBg=%@ cover=%@",
+            reason,
+            js ?? "nil",
+            describeFillColor(window?.backgroundColor),
+            String(describing: window?.isOpaque),
+            describeFillColor(webView.underPageBackgroundColor),
+            describeFillColor(webView.backgroundColor),
+            describeFillColor(webView.scrollView.backgroundColor),
+            String(window is osrsResumeCoverWindow)
+        )
+    }
+
+    private func describeFillColor(_ color: UIColor?) -> String {
+        guard let color else { return "nil" }
+        var red: CGFloat = 0, green: CGFloat = 0, blue: CGFloat = 0, alpha: CGFloat = 0
+        guard color.getRed(&red, green: &green, blue: &blue, alpha: &alpha) else {
+            return String(describing: color)
+        }
+        return String(format: "rgba(%.0f,%.0f,%.0f,%.2f)", red * 255, green * 255, blue * 255, alpha)
     }
 
     private func unhideWebKitLayers(_ view: UIView) {

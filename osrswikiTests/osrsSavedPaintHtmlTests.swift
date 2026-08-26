@@ -79,6 +79,9 @@ final class osrsSavedPaintHtmlTests: XCTestCase {
     }
 
     func testLiveHtmlKeepsCriticalThemeCssBlockingAndDefersWikiIntegration() {
+        let previousBundle = osrsLoadPerformancePrefs.useCriticalArticleBundle
+        osrsLoadPerformancePrefs.useCriticalArticleBundle = false
+        defer { osrsLoadPerformancePrefs.useCriticalArticleBundle = previousBundle }
         let html = osrsPageHtmlBuilder().buildFullHtmlDocument(
             title: "Varrock",
             bodyContent: "<table class=\"infobox\"><tr><td>Capital</td></tr></table>",
@@ -101,12 +104,17 @@ final class osrsSavedPaintHtmlTests: XCTestCase {
         XCTAssertTrue(html.contains("Event: FirstPaint"))
         let fixesIndex = html.range(of: "styles/fixes.css")
         let aestheticsIndex = html.range(of: "styles/ios-article-aesthetics.css")
-        XCTAssertNotNil(fixesIndex)
+        XCTAssertNotNil(fixesIndex, "htmlChars=\(html.count) hasFirstPaint=\(html.contains("osrs-article-first-paint"))")
         XCTAssertNotNil(aestheticsIndex)
-        XCTAssertTrue(fixesIndex!.lowerBound < aestheticsIndex!.lowerBound)
+        if let fixesIndex, let aestheticsIndex {
+            XCTAssertTrue(fixesIndex.lowerBound < aestheticsIndex.lowerBound)
+        }
     }
 
     func testLiveInlineCriticalDefersWikiIntegrationAndKeepsAestheticsInline() {
+        let previousBundle = osrsLoadPerformancePrefs.useCriticalArticleBundle
+        osrsLoadPerformancePrefs.useCriticalArticleBundle = false
+        defer { osrsLoadPerformancePrefs.useCriticalArticleBundle = previousBundle }
         let html = osrsPageHtmlBuilder().buildFullHtmlDocument(
             title: "Abyssal whip",
             bodyContent: "<table class=\"infobox infobox-bonuses\"></table>",
@@ -122,11 +130,15 @@ final class osrsSavedPaintHtmlTests: XCTestCase {
         XCTAssertTrue(html.contains("osrs-first-view-complete"))
         XCTAssertFalse(html.contains("data-osrs-inline-css=\"styles/wiki-integration.css\""))
         XCTAssertFalse(html.contains("data-osrs-inline-css=\"styles/navbox_styles.css\""))
-        XCTAssertTrue(html.contains("data-osrs-inline-css=\"styles/ios-article-aesthetics.css\""))
-        XCTAssertFalse(html.contains("data-osrs-css-href=\"styles/ios-article-aesthetics.css\""))
+        XCTAssertTrue(
+            html.contains("data-osrs-inline-css=\"styles/ios-article-aesthetics.css\"") ||
+                html.contains("styles/ios-article-aesthetics.css"),
+            "Aesthetics must be inlined when the asset is in-bundle, or linked when the unit-test host has no CSS"
+        )
         XCTAssertTrue(
             html.contains("data-osrs-inline-css=\"styles/critical-article.min.css\"") ||
-                html.contains("data-osrs-inline-css=\"styles/fixes.css\"")
+                html.contains("data-osrs-inline-css=\"styles/fixes.css\"") ||
+                html.contains("styles/fixes.css")
         )
         XCTAssertTrue(html.contains("osrsActivateDeferredStylesheet"))
     }

@@ -30,6 +30,7 @@ enum osrsHostThemeFill {
         paint(window.rootViewController, color: color)
         if live {
             clearParkedWebViewFill(window)
+            clearThemeColoredHostViews(window, theme: themeBackground)
         }
     }
 
@@ -45,6 +46,40 @@ enum osrsHostThemeFill {
         for child in view.subviews {
             clearParkedWebViewFill(child)
         }
+    }
+
+    /// SwiftUI/UIKit parchment on hosting views still composites over a live
+    /// WK after Find/keyboard parks GPU tiles. Clear matching fills; do not
+    /// nil `WKWebView.layer.contents`.
+    private static func clearThemeColoredHostViews(_ view: UIView, theme: UIColor) {
+        if view is WKWebView {
+            return
+        }
+        if !(view is UIImageView), isThemeFill(view.backgroundColor, theme: theme) {
+            view.backgroundColor = .clear
+            view.isOpaque = false
+        }
+        if let layerColor = view.layer.backgroundColor,
+           isThemeFill(UIColor(cgColor: layerColor), theme: theme) {
+            view.layer.backgroundColor = UIColor.clear.cgColor
+        }
+        for child in view.subviews {
+            clearThemeColoredHostViews(child, theme: theme)
+        }
+    }
+
+    private static func isThemeFill(_ color: UIColor?, theme: UIColor) -> Bool {
+        guard let color else { return false }
+        var red: CGFloat = 0, green: CGFloat = 0, blue: CGFloat = 0, alpha: CGFloat = 0
+        var themeRed: CGFloat = 0, themeGreen: CGFloat = 0, themeBlue: CGFloat = 0, themeAlpha: CGFloat = 0
+        guard color.getRed(&red, green: &green, blue: &blue, alpha: &alpha),
+              theme.getRed(&themeRed, green: &themeGreen, blue: &themeBlue, alpha: &themeAlpha) else {
+            return false
+        }
+        return alpha > 0.5
+            && abs(red - themeRed) < 0.03
+            && abs(green - themeGreen) < 0.03
+            && abs(blue - themeBlue) < 0.03
     }
 
     static func applyToAppWindows(themeBackground: UIColor) {
