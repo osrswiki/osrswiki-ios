@@ -363,6 +363,43 @@ final class osrsHostThemeFillTests: XCTestCase {
         )
     }
 
+    func testDumpWindowOnLiveArticleReportsWKAndHitsStayOffCover() async throws {
+        let themeColor = UIColor(red: 40 / 255, green: 34 / 255, blue: 29 / 255, alpha: 1)
+        let live = makeWindow(theme: themeColor, includeArticleWebView: true)
+        let webView = try XCTUnwrap(firstWebView(in: live))
+        try await loadArticleHTML(in: webView)
+        live.makeKeyAndVisible()
+
+        osrsSceneCompositor.dumpWindow(live)
+
+        let dumpURL = try XCTUnwrap(
+            FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
+        ).appendingPathComponent("osrs-scene-dump.txt")
+        let dump = try String(contentsOf: dumpURL, encoding: .utf8)
+        XCTAssertTrue(dump.contains("WKWebView"), "TF 42 Find/search/Name dumps must still list WK")
+        XCTAssertTrue(dump.contains("contents=set") || dump.contains("contents=nil"))
+        XCTAssertTrue(dump.contains("overlay="))
+        XCTAssertFalse(
+            dump.contains("osrsResumeCoverWindow"),
+            "Overlay-session dump of the live window must not be a cover window"
+        )
+
+        let points = [
+            CGPoint(x: live.bounds.midX, y: 80),
+            CGPoint(x: live.bounds.midX, y: live.bounds.midY),
+            CGPoint(x: live.bounds.midX, y: max(live.bounds.maxY - 120, 80)),
+        ]
+        for point in points {
+            let hit = live.hitTest(point, with: nil)
+            XCTAssertFalse(
+                hit is osrsResumeCoverWindow,
+                "Hit at \(point) must stay on the live tree, not a cover"
+            )
+        }
+        XCTAssertFalse(webView.isHidden)
+        XCTAssertEqual(webView.alpha, 1, accuracy: 0.01)
+    }
+
     func testCoverMintingAndHostFillDecisionStayOnTheShippedPath() throws {
         let root = try repositoryRoot()
         let fill = try source(root, "platforms/ios/osrswiki/Services/osrsHostThemeFill.swift")
