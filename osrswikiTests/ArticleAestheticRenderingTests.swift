@@ -3910,8 +3910,13 @@ final class ArticleAestheticRenderingTests: XCTestCase {
             const infobox = [55, 46, 39];
             const buttonsBg = bg(buttons);
             const captionBg = bg(caption);
-            const gutterEl = (captionBox.width - buttonsBox.width) > 8 ? caption : buttons;
-            const gutterBg = bg(gutterEl);
+            const uncharged = Array.from(buttons.querySelectorAll('.button')).find(
+                (el) => (el.textContent || '').trim() === 'Uncharged'
+            );
+            const unchargedBox = uncharged ? uncharged.getBoundingClientRect() : { left: 0 };
+            const gutterX = uncharged ? unchargedBox.left - 12 : buttonsBox.left;
+            const gutterInsideButtons = gutterX >= buttonsBox.left - 1;
+            const gutterBg = bg(buttons);
             return {
                 buttonsBg: buttonsBg,
                 captionBg: captionBg,
@@ -3919,9 +3924,13 @@ final class ArticleAestheticRenderingTests: XCTestCase {
                 disclosureBg: bg(body),
                 pageBg: bg(page),
                 gutterBg: gutterBg,
-                gutterIsCaption: gutterEl === caption,
+                gutterInsideButtons: gutterInsideButtons,
+                gutterX: gutterX,
+                buttonsLeft: buttonsBox.left,
+                unchargedLeft: unchargedBox.left,
                 buttonsWidth: buttonsBox.width,
                 captionWidth: captionBox.width,
+                widthGap: captionBox.width - buttonsBox.width,
                 buttonsOverflowX: getComputedStyle(buttons).overflowX,
                 disclosureOverflowX: getComputedStyle(body).overflowX,
                 tableOverflowX: getComputedStyle(table).overflowX,
@@ -3935,6 +3944,17 @@ final class ArticleAestheticRenderingTests: XCTestCase {
         let gutterAlpha = state["gutterAlpha"] as? Double ?? -1
         let distParchment = state["distParchment"] as? Double ?? 999
         let distInfobox = state["distInfobox"] as? Double ?? 999
+        let widthGap = state["widthGap"] as? Double ?? 999
+        let gutterInsideButtons = state["gutterInsideButtons"] as? Bool ?? false
+        XCTAssertLessThanOrEqual(
+            widthGap,
+            8,
+            "Switcher buttons row must fill the caption so Uncharged-left is not empty padding: \(state)"
+        )
+        XCTAssertTrue(
+            gutterInsideButtons,
+            "A point 12px left of Uncharged must lie inside .infobox-buttons: \(state)"
+        )
         XCTAssertGreaterThan(gutterAlpha, 0.99, "Uncharged-left spacer must not be transparent: \(state)")
         XCTAssertLessThan(
             distInfobox,
