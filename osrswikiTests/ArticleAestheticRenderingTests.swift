@@ -3837,6 +3837,113 @@ final class ArticleAestheticRenderingTests: XCTestCase {
         """
     }
 
+    func testBonusesUnchargedSwitcherRowPaintsInfoboxNotParchment() async throws {
+        let themesCss = try readAsset("Assets/styles/themes.css")
+        let fixesCss = try readAsset("Assets/styles/fixes.css")
+        let componentsCss = try readAsset("Assets/styles/components.css")
+        let switcherCss = try readAsset("Assets/web/switch_infobox_styles.css")
+        let html = """
+        <!doctype html>
+        <html class="theme-osrs-dark">
+        <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <style>
+        \(themesCss)
+        \(componentsCss)
+        \(switcherCss)
+        \(fixesCss)
+        /* iOS ArticleViewModel.applyThemeColors injects this on the live article. */
+        html.theme-osrs-dark, body.theme-osrs-dark {
+            --colorsurfacevariant: #3e3529;
+        }
+        </style>
+        </head>
+        <body class="theme-osrs-dark">
+        <div class="collapsible-container collapsible-infobox collapsible-bonuses-infobox">
+          <div class="collapsible-header">Equipment bonuses Tap to collapse</div>
+          <div class="collapsible-content">
+            <div class="osrs-disclosure-body">
+              <table class="infobox infobox-switch infobox-bonuses" id="bonuses">
+                <caption class="infobox-switch-buttons-caption">
+                  <div class="infobox-buttons" id="chargeRow">
+                    <span class="button">Uncharged</span>
+                    <span class="button">1</span>
+                    <span class="button">2</span>
+                    <span class="button">3</span>
+                    <span class="button button-selected">4</span>
+                    <span class="button">5</span>
+                    <span class="button">6</span>
+                  </div>
+                </caption>
+                <tbody>
+                  <tr><th>Attack bonuses</th><td>+10</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        </body>
+        </html>
+        """
+        attachWebViewToWindow()
+        try await load(html)
+        let state = try await evaluate("""
+        (() => {
+            const buttons = document.getElementById('chargeRow');
+            const caption = document.querySelector('#bonuses caption');
+            const table = document.getElementById('bonuses');
+            const body = document.querySelector('.osrs-disclosure-body');
+            const page = document.body;
+            const bg = (el) => el ? getComputedStyle(el).backgroundColor : 'missing';
+            const channels = (value) => {
+                const m = String(value).match(/rgba?\\((\\d+),\\s*(\\d+),\\s*(\\d+)(?:,\\s*([0-9.]+))?/);
+                return m ? [Number(m[1]), Number(m[2]), Number(m[3]), m[4] === undefined ? 1 : Number(m[4])] : [0, 0, 0, 0];
+            };
+            const dist = (value, rgb) => {
+                const c = channels(value);
+                const dr = c[0] - rgb[0], dg = c[1] - rgb[1], db = c[2] - rgb[2];
+                return Math.sqrt(dr * dr + dg * dg + db * db);
+            };
+            const buttonsBox = buttons.getBoundingClientRect();
+            const captionBox = caption.getBoundingClientRect();
+            const parchment = [40, 34, 29];
+            const infobox = [55, 46, 39];
+            const buttonsBg = bg(buttons);
+            const captionBg = bg(caption);
+            const gutterEl = (captionBox.width - buttonsBox.width) > 8 ? caption : buttons;
+            const gutterBg = bg(gutterEl);
+            return {
+                buttonsBg: buttonsBg,
+                captionBg: captionBg,
+                tableBg: bg(table),
+                disclosureBg: bg(body),
+                pageBg: bg(page),
+                gutterBg: gutterBg,
+                gutterIsCaption: gutterEl === caption,
+                buttonsWidth: buttonsBox.width,
+                captionWidth: captionBox.width,
+                buttonsOverflowX: getComputedStyle(buttons).overflowX,
+                disclosureOverflowX: getComputedStyle(body).overflowX,
+                tableOverflowX: getComputedStyle(table).overflowX,
+                captionOverflowX: getComputedStyle(caption).overflowX,
+                gutterAlpha: channels(gutterBg)[3],
+                distParchment: dist(gutterBg, parchment),
+                distInfobox: dist(gutterBg, infobox)
+            };
+        })()
+        """)
+        let gutterAlpha = state["gutterAlpha"] as? Double ?? -1
+        let distParchment = state["distParchment"] as? Double ?? 999
+        let distInfobox = state["distInfobox"] as? Double ?? 999
+        XCTAssertGreaterThan(gutterAlpha, 0.99, "Uncharged-left spacer must not be transparent: \(state)")
+        XCTAssertLessThan(
+            distInfobox,
+            distParchment,
+            "Uncharged-left spacer must match infobox/collapsible, not parchment: \(state)"
+        )
+        XCTAssertGreaterThan(distParchment, 8, "Uncharged-left spacer must not be page parchment: \(state)")
+    }
+
     private func attachWebViewToWindow() {
         let host = UIViewController()
         host.view.frame = CGRect(x: 0, y: 0, width: 375, height: 812)
