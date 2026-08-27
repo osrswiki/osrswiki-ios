@@ -147,19 +147,20 @@ enum osrsSceneCompositor {
                 pinParkedArticlePaint(from: webView)
             }
         }
-        installParkedMetalFill()
+        // Cycle 51: no parked-metal-fill cover. The whole-page overlay fill
+        // was never WindowServer Metal above the scene tree; it was this
+        // app painting the full-screen UITextEffectsWindow opaque theme fill
+        // (cycle 49). osrsHostThemeFill.apply(to:) now guards that, so the
+        // live tree stays visible and Find highlights are not hidden under a
+        // stale bitmap.
         for window in allSceneWindows() where isAppContentWindow(window) {
             dumpWindow(window, reason: "overlay-depth-\(liveOverlaySessionDepth)")
-        }
-        if let fill = parkedMetalFillWindow, fill.isHidden == false {
-            dumpWindow(fill, reason: "parked-metal-fill")
         }
     }
 
     static func endLiveOverlaySession() {
         liveOverlaySessionDepth = max(0, liveOverlaySessionDepth - 1)
         if liveOverlaySessionDepth == 0 {
-            removeParkedMetalFill()
             for window in allSceneWindows() {
                 removeParkedArticlePaint(from: window)
                 if let webView = firstLiveArticleWebView(in: window) {
@@ -173,69 +174,7 @@ enum osrsSceneCompositor {
     }
 
     static let parkedArticlePaintIdentifier = "osrs_parked_article_paint"
-    static let parkedMetalFillIdentifier = "osrs_parked_metal_fill"
     private static var parkedArticleLastGood: UIImage?
-    private static var parkedMetalFillWindow: osrsParkedMetalFillWindow?
-
-    /// WindowServer Metal sits above the scene `UIWindow` CALayer tree (Cycles
-    /// 1–12). A last-good bitmap in a second window at `.statusBar` is above
-    /// that surface. This is not the background resume cover and not the
-    /// live-article overlay frame pin. Hits pass through to the live scene.
-    static func installParkedMetalFill() {
-        let image = parkedArticleLastGood ?? osrsResumeFrameOverlay.paintedArticleImage
-        guard let image, !osrsWebViewThemePaint.isUniformFill(image) else { return }
-        guard let sceneWindow = allSceneWindows().first(where: {
-            isAppContentWindow($0)
-                && !($0 is osrsParkedMetalFillWindow)
-                && !($0 is osrsResumeCoverWindow)
-        }), let scene = sceneWindow.windowScene else {
-            return
-        }
-        let overlay = parkedMetalFillWindow ?? osrsParkedMetalFillWindow(windowScene: scene)
-        overlay.windowScene = scene
-        overlay.frame = scene.coordinateSpace.bounds
-        overlay.windowLevel = .statusBar
-        // Hits must reach the live scene (Find/search/Name). A passthrough
-        // hitTest on an interaction-enabled window still occludes XCTest.
-        overlay.isUserInteractionEnabled = false
-        overlay.isOpaque = true
-        overlay.backgroundColor = .clear
-        overlay.osrsHitTarget = sceneWindow
-        overlay.accessibilityElementsHidden = true
-        let host = overlay.rootViewController ?? UIViewController()
-        host.view.frame = overlay.bounds
-        host.view.backgroundColor = .clear
-        let paint = host.view.subviews
-            .compactMap { $0 as? UIImageView }
-            .first { $0.accessibilityIdentifier == parkedMetalFillIdentifier }
-            ?? UIImageView()
-        paint.image = image
-        paint.contentMode = .scaleToFill
-        paint.frame = host.view.bounds
-        paint.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        paint.isUserInteractionEnabled = false
-        paint.accessibilityIdentifier = parkedMetalFillIdentifier
-        paint.accessibilityElementsHidden = true
-        if paint.superview !== host.view {
-            host.view.addSubview(paint)
-        }
-        overlay.rootViewController = host
-        overlay.isHidden = false
-        parkedMetalFillWindow = overlay
-        NSLog("osrsSceneCompositor parkedMetalFill installed")
-    }
-
-    static func removeParkedMetalFill() {
-        parkedMetalFillWindow?.isHidden = true
-        parkedMetalFillWindow?.osrsHitTarget = nil
-        parkedMetalFillWindow?.rootViewController = nil
-        parkedMetalFillWindow = nil
-        NSLog("osrsSceneCompositor parkedMetalFill removed")
-    }
-
-    static var parkedMetalFillInstalled: Bool {
-        parkedMetalFillWindow != nil && parkedMetalFillWindow?.isHidden == false
-    }
 
     /// Keep a painted article bitmap while GPU tiles are still live. Find then
     /// parks Metal and `drawHierarchy` is a uniform page color; pin that last-good
@@ -574,9 +513,6 @@ enum osrsSceneCompositor {
     }
 
     static func isAppContentWindow(_ window: UIWindow) -> Bool {
-        if window is osrsParkedMetalFillWindow {
-            return false
-        }
         if let overlay = window as? osrsResumeCoverWindow {
             return overlay.rootViewController is osrsAppSceneViewController
         }
@@ -1027,18 +963,6 @@ enum osrsSceneCompositor {
 /// frontmost window; returning nil from hitTest does not fall through.
 /// This window stays key and returns the live tree's hit view so SwiftUI
 /// and WK gesture recognizers still fire.
-/// Last-good article bitmap above iOS 26 WK Metal. Hits go to the live scene.
-final class osrsParkedMetalFillWindow: UIWindow {
-    weak var osrsHitTarget: UIWindow?
-
-    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
-        guard let target = osrsHitTarget else {
-            return super.hitTest(point, with: event)
-        }
-        return target.hitTest(convert(point, to: target), with: event)
-    }
-}
-
 final class osrsResumeCoverWindow: UIWindow {
     weak var osrsHitTarget: UIWindow?
 

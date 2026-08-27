@@ -20,6 +20,16 @@ enum osrsHostThemeFill {
     }
 
     static func apply(to window: UIWindow, themeBackground: UIColor) {
+        guard osrsSceneCompositor.isAppContentWindow(window) else {
+            // TF42 whole-page fill (cycle 49): UIKit's UITextEffectsWindow is
+            // a full-screen window above the scene window, created the moment
+            // a text field takes first responder (Find, search, Name).
+            // Painting it opaque theme fill blanks the whole page behind the
+            // keyboard. Never paint non-app-content windows; clear any fill a
+            // pre-guard pass left behind.
+            restoreSystemWindow(window, theme: themeBackground)
+            return
+        }
         let live = osrsSceneCompositor.containsLiveArticleWebView(window)
         let color = opaqueBackgroundColor(
             themeBackground: themeBackground,
@@ -87,6 +97,18 @@ enum osrsHostThemeFill {
             .compactMap { $0 as? UIWindowScene }
             .flatMap(\.windows)
             .forEach { apply(to: $0, themeBackground: themeBackground) }
+    }
+
+    private static func restoreSystemWindow(_ window: UIWindow, theme: UIColor) {
+        if isThemeFill(window.backgroundColor, theme: theme) {
+            window.backgroundColor = nil
+            window.isOpaque = false
+        }
+        if let root = window.rootViewController,
+           isThemeFill(root.view.backgroundColor, theme: theme) {
+            root.view.backgroundColor = nil
+            root.view.isOpaque = false
+        }
     }
 
     private static func paint(_ controller: UIViewController?, color: UIColor) {

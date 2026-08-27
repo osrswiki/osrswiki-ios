@@ -24,6 +24,43 @@ final class osrsHostThemeFillTests: XCTestCase {
         )
     }
 
+    /// TF42 whole-page fill (cycle 49): `apply(to:)` painted the full-screen
+    /// `UITextEffectsWindow` (keyboard support window, above the scene window)
+    /// opaque theme fill because it never contains an article WK. That opaque
+    /// system window was the whole-page `#28221d` at Find/search/Name
+    /// keyboard-second on device. Theme paint must skip non-app-content
+    /// windows and clear any fill an earlier pass left on them.
+    func testApplyNeverPaintsKeyboardSupportWindowOpaque() throws {
+        let theme = UIColor(red: 40 / 255, green: 34 / 255, blue: 29 / 255, alpha: 1)
+        guard let textEffectsClass = NSClassFromString("UITextEffectsWindow") as? UIWindow.Type else {
+            throw XCTSkip("UITextEffectsWindow unavailable")
+        }
+        let window = textEffectsClass.init(frame: CGRect(x: 0, y: 0, width: 420, height: 912))
+        defer { window.isHidden = true }
+
+        XCTAssertFalse(
+            osrsSceneCompositor.isAppContentWindow(window),
+            "UITextEffectsWindow must never be classified as app content"
+        )
+
+        osrsHostThemeFill.apply(to: window, themeBackground: theme)
+        XCTAssertFalse(
+            window.isOpaque && window.backgroundColor == theme,
+            "Theme paint must not make the keyboard support window an opaque fill"
+        )
+
+        // A pass that ran before the guard existed may have painted it; the
+        // next apply must restore transparency.
+        window.backgroundColor = theme
+        window.isOpaque = true
+        osrsHostThemeFill.apply(to: window, themeBackground: theme)
+        XCTAssertNil(
+            window.backgroundColor,
+            "apply(to:) must clear a theme fill left on a non-app-content window"
+        )
+        XCTAssertFalse(window.isOpaque)
+    }
+
     func testApplyClearsHostBackgroundOverLiveArticleWebViewAndKeepsItForEmptyHost() async throws {
         let theme = UIColor(red: 40 / 255, green: 34 / 255, blue: 29 / 255, alpha: 1)
 
@@ -352,7 +389,12 @@ final class osrsHostThemeFillTests: XCTestCase {
         XCTAssertEqual(live.backgroundColor, UIColor.clear)
     }
 
-    func testLiveOverlaySessionMintsParkedMetalFillWindowNotResumeCover() async throws {
+    /// Cycle 51: the overlay fill was never WindowServer Metal above the
+    /// scene tree; it was the theme-painted UITextEffectsWindow (cycle 49).
+    /// The overlay session must keep the live tree visible with no bitmap
+    /// cover window and no resume cover, and must leave the keyboard support
+    /// window unpainted.
+    func testLiveOverlaySessionKeepsLiveTreeWithNoCoverWindow() async throws {
         let themeColor = UIColor(red: 40 / 255, green: 34 / 255, blue: 29 / 255, alpha: 1)
         let live = makeWindow(theme: themeColor, includeArticleWebView: true)
         let webView = try XCTUnwrap(firstWebView(in: live))
@@ -363,26 +405,25 @@ final class osrsHostThemeFillTests: XCTestCase {
         osrsSceneCompositor.beginLiveOverlaySession()
         defer { osrsSceneCompositor.endLiveOverlaySession() }
 
-        XCTAssertTrue(
-            osrsSceneCompositor.parkedMetalFillInstalled,
-            "Find/search/Name overlay must place last-good above WindowServer Metal in a second window"
-        )
         XCTAssertFalse(live is osrsResumeCoverWindow)
         XCTAssertNil(
             firstOverlayFrame(in: live) ?? firstOverlayFrameAcrossScenes(),
-            "Parked-metal fill must not mint osrs_live_overlay_frame"
+            "Overlay session must not mint osrs_live_overlay_frame"
         )
         XCTAssertTrue(osrsSceneCompositor.containsLiveArticleWebView(live))
         XCTAssertFalse(
             osrsSceneCompositor.shouldRestoreResumeCover(didLeaveToBackground: false)
         )
-        let fillWindows = live.windowScene?.windows.compactMap { $0 as? osrsParkedMetalFillWindow } ?? []
-        XCTAssertFalse(fillWindows.isEmpty, "osrsParkedMetalFillWindow must be in the scene")
-        XCTAssertTrue(fillWindows.allSatisfy { $0.isUserInteractionEnabled == false })
-        XCTAssertTrue(fillWindows.allSatisfy { !($0 is osrsResumeCoverWindow) })
+        let coverWindows = (live.windowScene?.windows ?? []).filter {
+            $0 !== live && !osrsSceneCompositor.isAppContentWindow($0)
+                && $0.isOpaque && $0.backgroundColor != nil && $0.isHidden == false
+        }
+        XCTAssertTrue(
+            coverWindows.isEmpty,
+            "Overlay session must not leave an opaque non-content window over the live tree"
+        )
         let hit = live.hitTest(CGPoint(x: live.bounds.midX, y: live.bounds.midY), with: nil)
         XCTAssertFalse(hit is osrsResumeCoverWindow)
-        XCTAssertFalse(hit is osrsParkedMetalFillWindow)
     }
 
     func testResumeCoverInstallsOnlyAfterTrueBackground() {
