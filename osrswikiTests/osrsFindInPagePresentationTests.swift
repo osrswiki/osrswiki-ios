@@ -60,6 +60,7 @@ final class osrsFindInPagePresentationTests: XCTestCase {
             presented.fulfill()
         }
         await fulfillment(of: [presented], timeout: 5)
+        defer { viewModel.hideFindInPageAction() }
 
         try await waitUntil(timeout: 4) {
             viewModel.isNativeFindNavigatorVisible() || findNavigatorHostAnywhere() != nil
@@ -71,13 +72,9 @@ final class osrsFindInPagePresentationTests: XCTestCase {
         )
         let presentText = try await documentContains(webView, "Varrock")
         XCTAssertTrue(presentText, "after present: article document lost Varrock")
-        try await waitUntil(timeout: 2) {
-            !osrsWebViewThemePaint.isUniformFill(visibleSnapshot(webView))
-        }
-        let presentSnapshot = visibleSnapshot(webView)
-        XCTAssertFalse(
-            osrsWebViewThemePaint.isUniformFill(presentSnapshot),
-            "Find present must not blank the article compositor range=\(osrsWebViewThemePaint.luminanceRange(presentSnapshot))"
+        XCTAssertNil(
+            firstParkedArticlePaint(in: webView.window ?? webView),
+            "Find must not pin osrs_parked_article_paint over the live WK"
         )
 
         // Compositor-blank wake currently fires independently of Find. The shipped
@@ -445,6 +442,19 @@ final class osrsFindInPagePresentationTests: XCTestCase {
         }
         for child in root.subviews {
             if let found = findNavigatorHost(in: child) {
+                return found
+            }
+        }
+        return nil
+    }
+
+    private func firstParkedArticlePaint(in view: UIView) -> UIImageView? {
+        if let imageView = view as? UIImageView,
+           imageView.accessibilityIdentifier == "osrs_parked_article_paint" {
+            return imageView
+        }
+        for child in view.subviews {
+            if let found = firstParkedArticlePaint(in: child) {
                 return found
             }
         }

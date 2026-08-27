@@ -5519,13 +5519,12 @@ extension ArticleViewModel: WKNavigationDelegate {
                 print("🚨 ArticleViewModel: Error expanding collapsible content: \(error)")
             }
 
-            // After expanding content, pin in-tree paint then present Find.
+            // After expanding content, present Find on the live WK. Do not
+            // pin last-good: that overlay ghost covers the scrolled hits.
             DispatchQueue.main.async {
                 self?.logFillIsolate(webView: webView, js: result as? String, reason: "find-expand")
-                osrsSceneCompositor.pinParkedArticlePaint(from: webView) {
-                    self?.presentNativeFindInterface()
-                    onPresented?()
-                }
+                self?.presentNativeFindInterface()
+                onPresented?()
             }
         }
 
@@ -5566,7 +5565,6 @@ extension ArticleViewModel: WKNavigationDelegate {
         webView.isHidden = false
         webView.alpha = 1
         webView.scrollView.alpha = 1
-        osrsSceneCompositor.pinParkedArticlePaint(from: webView)
         logFillIsolate(webView: webView, js: nil, reason: "find-preserve")
     }
 

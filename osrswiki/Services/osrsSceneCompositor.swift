@@ -142,10 +142,11 @@ enum osrsSceneCompositor {
                 )
             }
         }
+        // Find/search/Name must not stamp last-good. The leftover parked
+        // sibling freezes the pre-overlay viewport over live Find hits.
+        // Clear any leftover sibling. Do not nil live WK layer.contents.
         for window in allSceneWindows() {
-            if let webView = firstLiveArticleWebView(in: window) {
-                pinParkedArticlePaint(from: webView)
-            }
+            removeParkedArticlePaint(from: window)
         }
         // Cycle 51: no parked-metal-fill cover. The whole-page overlay fill
         // was never WindowServer Metal above the scene tree; it was this

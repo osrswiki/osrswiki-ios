@@ -976,6 +976,12 @@ private struct ArticleViewContent: View {
     private func startFindInPage() {
         findSession += 1
         let session = findSession
+        if osrsContentsReveal.isVisuallyOpen(
+            isPresented: isShowingTableOfContents,
+            interactiveProgress: contentsRevealProgress
+        ) {
+            settleContents(to: 0, velocity: 0)
+        }
         isShowingFindInPage = true
         overlayManager?.hideArticleBottomBar(owner: articleIdentity)
         viewModel.performFindInPageAction {

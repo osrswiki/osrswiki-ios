@@ -268,21 +268,19 @@ final class osrsHostThemeFillTests: XCTestCase {
         )
         viewModel.setWebView(webView)
 
-        let presented = expectation(description: "find presented for parked paint")
+        let presented = expectation(description: "find presented without parked paint")
         viewModel.performFindInPageAction {
             presented.fulfill()
         }
         await fulfillment(of: [presented], timeout: 5)
         defer { viewModel.hideFindInPageAction() }
 
-        let paint = try await waitForParkedArticlePaint(in: live)
-        XCTAssertTrue(
-            paint.superview === webView.superview
-                || paint.superview === live.rootViewController?.view,
-            "Parked article paint must live in the same window as the article WK"
+        try await Task.sleep(nanoseconds: 400_000_000)
+
+        XCTAssertNil(
+            firstParkedArticlePaint(in: live),
+            "Find must not pin osrs_parked_article_paint over the live article"
         )
-        XCTAssertFalse(paint is UIWindow)
-        XCTAssertFalse(paint.isUserInteractionEnabled)
         XCTAssertNil(
             firstOverlayFrame(in: live) ?? firstOverlayFrameAcrossScenes(),
             "Find must not mint osrs_live_overlay_frame"
@@ -291,16 +289,10 @@ final class osrsHostThemeFillTests: XCTestCase {
         XCTAssertTrue(osrsSceneCompositor.containsLiveArticleWebView(live))
         XCTAssertFalse(
             webView.scrollView.isHidden,
-            "Hiding WKScrollView blanks the live tree for Name/search; last-good is a sibling, not a hide"
+            "Hiding WKScrollView blanks the live tree for Name/search"
         )
-
-        webView.isHidden = true
-        let parked = snapshot(live)
-        XCTAssertFalse(
-            osrsWebViewThemePaint.isUniformFill(parked),
-            "In-tree article paint must stay on the LCD after WK Metal parks range=\(osrsWebViewThemePaint.luminanceRange(parked))"
-        )
-        webView.isHidden = false
+        XCTAssertFalse(webView.isHidden)
+        XCTAssertEqual(webView.alpha, 1, accuracy: 0.01)
     }
 
     func testPinReinstallsLastGoodWhenLiveSnapshotIsUniformThemeFillWithoutACoverWindow() async throws {
@@ -320,24 +312,27 @@ final class osrsHostThemeFillTests: XCTestCase {
         XCTAssertFalse(osrsWebViewThemePaint.isUniformFill(painted))
         osrsSceneCompositor.rememberPaintedArticle(painted)
 
-        let parkedGPU = UIView(frame: live.bounds)
-        parkedGPU.backgroundColor = theme
-        parkedGPU.isOpaque = true
-        parkedGPU.accessibilityIdentifier = "parked-gpu-sim"
-        live.rootViewController?.view.addSubview(parkedGPU)
-        XCTAssertTrue(
-            osrsWebViewThemePaint.isUniformFill(snapshot(live)),
-            "Sanity: simulated parked compositor is a uniform #28221d fill"
-        )
-
         let name = UITextField(frame: CGRect(x: 24, y: 96, width: 200, height: 36))
         name.accessibilityIdentifier = "native-calc-field-name"
         live.rootViewController?.view.addSubview(name)
 
-        osrsSceneCompositor.pinParkedArticlePaint(from: webView)
-        let paint = try await waitForParkedArticlePaint(in: live)
-        XCTAssertFalse(paint is UIWindow)
-        XCTAssertFalse(paint.isUserInteractionEnabled)
+        let pinned = expectation(description: "plant leftover last-good sibling")
+        osrsSceneCompositor.pinParkedArticlePaint(from: webView) {
+            pinned.fulfill()
+        }
+        await fulfillment(of: [pinned], timeout: 4)
+        XCTAssertNotNil(
+            firstParkedArticlePaint(in: live),
+            "Sanity: leftover pin must be in the tree before overlay begin clears it"
+        )
+
+        osrsSceneCompositor.beginLiveOverlaySession()
+        defer { osrsSceneCompositor.endLiveOverlaySession() }
+
+        XCTAssertNil(
+            firstParkedArticlePaint(in: live),
+            "Overlay begin must clear osrs_parked_article_paint, not reinstall last-good"
+        )
         XCTAssertNil(
             firstOverlayFrame(in: live) ?? firstOverlayFrameAcrossScenes(),
             "Find/search/Name must not mint osrs_live_overlay_frame"
@@ -347,24 +342,24 @@ final class osrsHostThemeFillTests: XCTestCase {
         XCTAssertEqual(
             live.windowScene?.windows.count ?? windowsBefore,
             windowsBefore,
-            "In-tree pin must not mint a second UIWindow"
+            "Overlay begin must not mint a second UIWindow"
         )
-        parkedGPU.isHidden = true
-        let parked = snapshot(live)
-        parkedGPU.isHidden = false
-        XCTAssertFalse(
-            osrsWebViewThemePaint.isUniformFill(parked),
-            "Parked compositor must keep last-good in-tree, not #28221d fill range=\(osrsWebViewThemePaint.luminanceRange(parked))"
+        let viewModel = ArticleViewModel(
+            pageUrl: URL(string: "https://oldschool.runescape.wiki/w/Varrock")!,
+            pageTitle: "Varrock"
         )
-        XCTAssertNotNil(
-            webView.layer.contents,
-            "Last-good must stamp WK layer.contents (not nil) so parked Metal tiles are not the LCD"
+        viewModel.setWebView(webView)
+        viewModel.preserveRenderedArticleDuringFind(webView)
+        try await Task.sleep(nanoseconds: 80_000_000)
+        XCTAssertNil(
+            firstParkedArticlePaint(in: live),
+            "preserveRenderedArticleDuringFind must not re-pin last-good"
         )
         let hitPoint = name.convert(CGPoint(x: 8, y: 8), to: live)
         let hit = live.hitTest(hitPoint, with: nil)
         XCTAssertFalse(hit is osrsResumeCoverWindow)
         XCTAssertTrue(
-            hit === name || (hit?.isDescendant(of: name) ?? false) || paint.isUserInteractionEnabled == false,
+            hit === name || (hit?.isDescendant(of: name) ?? false),
             "Hits must still reach the live tree, not a cover window hit=\(String(describing: hit))"
         )
     }
@@ -378,6 +373,10 @@ final class osrsHostThemeFillTests: XCTestCase {
         osrsSceneCompositor.beginLiveOverlaySession()
         defer { osrsSceneCompositor.endLiveOverlaySession() }
 
+        XCTAssertNil(
+            firstParkedArticlePaint(in: live),
+            "Find/search/Name overlay must not pin osrs_parked_article_paint"
+        )
         XCTAssertNil(
             firstOverlayFrame(in: live) ?? firstOverlayFrameAcrossScenes(),
             "Find/search/Name must not mint a last-good cover window over a live WK"
@@ -401,11 +400,26 @@ final class osrsHostThemeFillTests: XCTestCase {
         try await loadArticleHTML(in: webView)
         live.makeKeyAndVisible()
         osrsSceneCompositor.rememberPaintedArticle(from: live)
+        let contentsBeforeBegin = webView.layer.contents as AnyObject?
 
         osrsSceneCompositor.beginLiveOverlaySession()
         defer { osrsSceneCompositor.endLiveOverlaySession() }
 
         XCTAssertFalse(live is osrsResumeCoverWindow)
+        XCTAssertNil(
+            firstParkedArticlePaint(in: live),
+            "Overlay session must not pin osrs_parked_article_paint"
+        )
+        if contentsBeforeBegin == nil {
+            XCTAssertNil(
+                webView.layer.contents,
+                "Overlay begin must not stamp last-good onto a WK whose contents were unset"
+            )
+            XCTAssertNil(
+                webView.scrollView.layer.contents,
+                "Overlay begin must not stamp last-good onto scrollView.layer.contents"
+            )
+        }
         XCTAssertNil(
             firstOverlayFrame(in: live) ?? firstOverlayFrameAcrossScenes(),
             "Overlay session must not mint osrs_live_overlay_frame"
@@ -501,6 +515,9 @@ final class osrsHostThemeFillTests: XCTestCase {
         let webView = try XCTUnwrap(firstWebView(in: live))
         try await loadArticleHTML(in: webView)
         live.makeKeyAndVisible()
+        for _ in 0..<8 {
+            osrsSceneCompositor.endLiveOverlaySession()
+        }
 
         osrsSceneCompositor.beginLiveOverlaySession()
         defer {
@@ -547,6 +564,7 @@ final class osrsHostThemeFillTests: XCTestCase {
         let sceneDelegate = try source(root, "platforms/ios/osrswiki/Services/osrsSceneDelegate.swift")
 
         XCTAssertTrue(fill.contains("shouldPaintOpaqueFill(liveArticleWebViewPresent:"))
+        XCTAssertTrue(fill.contains("guard osrsSceneCompositor.isAppContentWindow(window)"))
         XCTAssertTrue(fill.contains("osrsResumeCoverWindow"))
         XCTAssertTrue(fill.contains("underPageBackgroundColor = UIColor.clear"))
         XCTAssertTrue(fill.contains("clearThemeColoredHostViews"))
@@ -591,11 +609,35 @@ final class osrsHostThemeFillTests: XCTestCase {
         XCTAssertTrue(begin.contains("osrsWebViewThemePaint.apply"))
         XCTAssertFalse(begin.contains("layer.contents = nil"))
         XCTAssertFalse(begin.contains("pinLiveArticleFrame"))
-        XCTAssertTrue(begin.contains("pinParkedArticlePaint"))
+        XCTAssertFalse(
+            begin.contains("pinParkedArticlePaint(from:"),
+            "Find/search/Name overlay must not pin last-good"
+        )
+        XCTAssertFalse(
+            begin.contains("pinLastGoodOnWebViewLayer("),
+            "Overlay begin must not stamp last-good on WK layer.contents"
+        )
+        XCTAssertTrue(
+            begin.contains("removeParkedArticlePaint"),
+            "Overlay begin must clear any leftover osrs_parked_article_paint sibling"
+        )
         XCTAssertTrue(begin.contains("rememberPaintedArticle"))
         XCTAssertTrue(compositor.contains("osrs_parked_article_paint"))
         XCTAssertTrue(compositor.contains("parkedArticleLastGood"))
-        XCTAssertTrue(viewModel.contains("pinParkedArticlePaint"))
+        let findAction = viewModel
+            .components(separatedBy: "func performFindInPageAction")
+            .dropFirst()
+            .first?
+            .components(separatedBy: "func presentNativeFindInterface")
+            .first ?? ""
+        XCTAssertFalse(
+            findAction.contains("pinParkedArticlePaint(from:"),
+            "performFindInPageAction must present Find without pinning last-good"
+        )
+        XCTAssertFalse(
+            preserve.contains("pinParkedArticlePaint(from:"),
+            "preserveRenderedArticleDuringFind must not pin or re-pin last-good"
+        )
         XCTAssertTrue(viewModel.contains("rememberPaintedArticle(from:"))
         XCTAssertFalse(begin.contains("#if DEBUG"))
         let liveTheme = viewModel
@@ -606,7 +648,6 @@ final class osrsHostThemeFillTests: XCTestCase {
             .first ?? ""
         XCTAssertTrue(liveTheme.contains("osrsWebViewThemePaint.apply"))
         XCTAssertFalse(liveTheme.contains("underPageBackgroundColor = pageColor"))
-        XCTAssertTrue(compositor.contains("pinLastGoodOnWebViewLayer"))
         XCTAssertFalse(compositor.contains("webView.layer.contents = nil"))
         XCTAssertFalse(compositor.contains("pinLiveArticleFrame"))
         XCTAssertFalse(compositor.contains("osrs_live_overlay_frame"))
@@ -686,20 +727,6 @@ final class osrsHostThemeFillTests: XCTestCase {
             }
         }
         return nil
-    }
-
-    private func waitForParkedArticlePaint(in window: UIWindow) async throws -> UIImageView {
-        let deadline = Date().addingTimeInterval(4)
-        while Date() < deadline {
-            if let paint = firstParkedArticlePaint(in: window) {
-                return paint
-            }
-            try await Task.sleep(nanoseconds: 50_000_000)
-        }
-        return try XCTUnwrap(
-            firstParkedArticlePaint(in: window),
-            "Find must pin in-tree article paint before WK Metal parks"
-        )
     }
 
     private func firstWebView(in window: UIWindow) -> WKWebView? {
