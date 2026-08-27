@@ -90,6 +90,7 @@ final class osrsHostThemeFillTests: XCTestCase {
         live.rootViewController?.view.addSubview(field)
         XCTAssertTrue(field.becomeFirstResponder())
 
+        osrsWebViewThemePaint.apply(to: webView, theme: osrsDarkTheme())
         osrsHostThemeFill.apply(to: live, themeBackground: theme)
         XCTAssertEqual(live.backgroundColor, UIColor.clear)
         XCTAssertEqual(live.rootViewController?.view.backgroundColor, UIColor.clear)
@@ -101,7 +102,10 @@ final class osrsHostThemeFillTests: XCTestCase {
         )
         field.resignFirstResponder()
         XCTAssertFalse(live.rootViewController?.view.isOpaque ?? true)
-        XCTAssertLessThan(webView.underPageBackgroundColor.cgColor.alpha, 0.05)
+        XCTAssertTrue(
+            isThemeParchment(webView.underPageBackgroundColor, expected: theme),
+            "Host fill over a live WK must not isolate under-page to clear"
+        )
     }
 
     func testApplyClearsThemeColoredHostViewsOverLiveArticleWebView() async throws {
@@ -125,7 +129,7 @@ final class osrsHostThemeFillTests: XCTestCase {
         XCTAssertTrue(osrsSceneCompositor.containsLiveArticleWebView(live))
     }
 
-    func testLoadedArticleThemePaintDoesNotFillParkedCompositorWithPageColor() async throws {
+    func testLoadedArticleThemePaintKeepsThemeParchmentBehindLiveTiles() async throws {
         let themeColor = UIColor(red: 40 / 255, green: 34 / 255, blue: 29 / 255, alpha: 1)
         let live = makeWindow(theme: themeColor, includeArticleWebView: true)
         let webView = try XCTUnwrap(firstWebView(in: live))
@@ -134,22 +138,21 @@ final class osrsHostThemeFillTests: XCTestCase {
         osrsHostThemeFill.apply(to: live, themeBackground: themeColor)
         osrsWebViewThemePaint.apply(to: webView, theme: osrsDarkTheme())
 
-        XCTAssertLessThan(
-            webView.underPageBackgroundColor.cgColor.alpha,
-            0.05,
-            "Loaded article must not keep theme under-page fill; parked GPU then paints #28221d"
+        XCTAssertTrue(
+            isThemeParchment(webView.underPageBackgroundColor, expected: themeColor),
+            "Loaded apply() must keep theme parchment, not isolate under-page to clear"
         )
         XCTAssertFalse(webView.isOpaque)
         XCTAssertFalse(webView.scrollView.isOpaque)
-        XCTAssertLessThan(webView.backgroundColor?.cgColor.alpha ?? 1, 0.05)
+        XCTAssertTrue(isThemeParchment(webView.backgroundColor, expected: themeColor))
+        XCTAssertTrue(isThemeParchment(webView.scrollView.backgroundColor, expected: themeColor))
         XCTAssertFalse(live.rootViewController?.view.isOpaque ?? true)
+        XCTAssertNil(firstParkedArticlePaint(in: live))
     }
 
-    func testApplyLiveThemeOnLoadedArticleDoesNotRestoreOpaqueUnderPageFill() async throws {
-        let live = makeWindow(
-            theme: UIColor(red: 226 / 255, green: 219 / 255, blue: 200 / 255, alpha: 1),
-            includeArticleWebView: true
-        )
+    func testApplyLiveThemeOnLoadedArticleKeepsThemeParchment() async throws {
+        let parchment = UIColor(red: 226 / 255, green: 219 / 255, blue: 200 / 255, alpha: 1)
+        let live = makeWindow(theme: parchment, includeArticleWebView: true)
         let webView = try XCTUnwrap(firstWebView(in: live))
         try await loadArticleHTML(in: webView)
         let viewModel = ArticleViewModel(
@@ -158,25 +161,22 @@ final class osrsHostThemeFillTests: XCTestCase {
         )
         viewModel.setWebView(webView)
         osrsWebViewThemePaint.apply(to: webView, theme: osrsLightTheme())
-        XCTAssertLessThan(webView.underPageBackgroundColor.cgColor.alpha, 0.05)
+        XCTAssertTrue(isThemeParchment(webView.underPageBackgroundColor, expected: parchment))
 
         viewModel.applyLiveTheme(osrsLightTheme(), themeManager: osrsThemeManager())
 
-        XCTAssertLessThan(
-            webView.underPageBackgroundColor.cgColor.alpha,
-            0.05,
-            "applyLiveTheme must not put #E2DBC8 under a loaded article; Find then fills the LCD"
+        XCTAssertTrue(
+            isThemeParchment(webView.underPageBackgroundColor, expected: parchment),
+            "applyLiveTheme must keep #E2DBC8 parchment under a loaded article"
         )
-        XCTAssertLessThan(webView.backgroundColor?.cgColor.alpha ?? 1, 0.05)
-        XCTAssertLessThan(webView.scrollView.backgroundColor?.cgColor.alpha ?? 1, 0.05)
+        XCTAssertTrue(isThemeParchment(webView.backgroundColor, expected: parchment))
+        XCTAssertTrue(isThemeParchment(webView.scrollView.backgroundColor, expected: parchment))
         XCTAssertFalse(webView.isOpaque)
     }
 
-    func testLoadedArticleThemePaintClearsImportantHtmlBodyPageFill() async throws {
-        let live = makeWindow(
-            theme: UIColor(red: 226 / 255, green: 219 / 255, blue: 200 / 255, alpha: 1),
-            includeArticleWebView: true
-        )
+    func testLoadedArticleThemePaintLeavesImportantHtmlBodyParchment() async throws {
+        let parchment = UIColor(red: 226 / 255, green: 219 / 255, blue: 200 / 255, alpha: 1)
+        let live = makeWindow(theme: parchment, includeArticleWebView: true)
         let webView = try XCTUnwrap(firstWebView(in: live))
         let html = """
         <!doctype html>
@@ -197,17 +197,20 @@ final class osrsHostThemeFillTests: XCTestCase {
         osrsWebViewThemePaint.apply(to: webView, theme: osrsLightTheme())
         let computed = try await computedBodyBackground(webView)
         XCTAssertTrue(
-            computed.contains("0, 0, 0, 0") || computed.contains("transparent"),
-            "Find parks GPU on html/body #E2DBC8; theme paint must clear it computed=\(computed)"
+            computed.contains("226, 219, 200") || computed.lowercased().contains("e2dbc8"),
+            "Loaded apply() must not isolate html/body to transparent computed=\(computed)"
         )
-        XCTAssertLessThan(webView.underPageBackgroundColor.cgColor.alpha, 0.05)
+        XCTAssertTrue(isThemeParchment(webView.underPageBackgroundColor, expected: parchment))
+        let overlayId = try await evaluateString(
+            "document.getElementById('osrs-overlay-page-fill') ? 'present' : 'missing'",
+            in: webView
+        )
+        XCTAssertEqual(overlayId, "missing", "apply() must not inject overlay-page-fill isolate")
     }
 
-    func testFindExpandClearsImportantHtmlBodyFillBeforePresentingNavigator() async throws {
-        let live = makeWindow(
-            theme: UIColor(red: 226 / 255, green: 219 / 255, blue: 200 / 255, alpha: 1),
-            includeArticleWebView: true
-        )
+    func testFindExpandKeepsHtmlBodyParchmentAndDoesNotIsolate() async throws {
+        let parchment = UIColor(red: 226 / 255, green: 219 / 255, blue: 200 / 255, alpha: 1)
+        let live = makeWindow(theme: parchment, includeArticleWebView: true)
         let webView = try XCTUnwrap(firstWebView(in: live))
         let html = """
         <!doctype html>
@@ -230,6 +233,7 @@ final class osrsHostThemeFillTests: XCTestCase {
             pageTitle: "Varrock"
         )
         viewModel.setWebView(webView)
+        viewModel.applyLiveTheme(osrsLightTheme(), themeManager: osrsThemeManager())
 
         let presented = expectation(description: "find expand completed")
         viewModel.performFindInPageAction {
@@ -244,17 +248,22 @@ final class osrsHostThemeFillTests: XCTestCase {
         )
         XCTAssertEqual(
             overlayId,
-            "present",
-            "Find expand must inject overlay page-fill CSS before UIFindInteraction parks GPU"
+            "missing",
+            "Find must not inject overlay-page-fill isolate"
         )
         let computed = try await evaluateString(
             "getComputedStyle(document.body).backgroundColor",
             in: webView
         )
         XCTAssertTrue(
-            computed.contains("0, 0, 0, 0") || computed.contains("transparent"),
-            "Find present must not still see html/body #E2DBC8 computed=\(computed)"
+            computed.contains("226, 219, 200") || computed.lowercased().contains("e2dbc8"),
+            "Find present must keep html/body parchment, not transparent computed=\(computed)"
         )
+        XCTAssertTrue(
+            isThemeParchment(webView.underPageBackgroundColor, expected: parchment),
+            "Find preserve must keep theme parchment, not force under-page to clear"
+        )
+        XCTAssertNil(firstParkedArticlePaint(in: live))
     }
 
     func testFindKeepsInTreeArticlePaintWhenWebKitCompositorParksWithoutACoverWindow() async throws {
@@ -451,6 +460,64 @@ final class osrsHostThemeFillTests: XCTestCase {
         )
     }
 
+    func testResumeLastGoodComesDownOnceLiveWebViewPaints() async throws {
+        let theme = UIColor(red: 40 / 255, green: 34 / 255, blue: 29 / 255, alpha: 1)
+        let live = makeWindow(theme: theme, includeArticleWebView: true)
+        let webView = try XCTUnwrap(firstWebView(in: live))
+        try await loadArticleHTML(in: webView)
+        live.makeKeyAndVisible()
+        let painted = UIGraphicsImageRenderer(bounds: live.bounds).image { ctx in
+            UIColor.white.setFill()
+            ctx.fill(live.bounds)
+            UIColor.black.setFill()
+            ctx.fill(CGRect(x: 16, y: 48, width: 120, height: 180))
+            UIColor.systemOrange.setFill()
+            ctx.fill(CGRect(x: 180, y: 240, width: 90, height: 140))
+        }
+        XCTAssertFalse(osrsWebViewThemePaint.isUniformFill(painted))
+        osrsResumeFrameOverlay.rememberPaintedArticle(painted)
+        XCTAssertTrue(
+            osrsResumeFrameOverlay.hasCapturedFrame,
+            "Sanity: contrasting last-good must be captured"
+        )
+
+        osrsSceneCompositor.noteDidEnterBackground()
+        osrsResumeFrameOverlay.installOnWindowLayer(live)
+        XCTAssertEqual(
+            osrsSceneCompositor.layerContentsKind(live.layer.contents),
+            "CGImage",
+            "installOnWindowLayer must stamp last-good before live WK teardown"
+        )
+        XCTAssertTrue(
+            osrsSceneCompositor.shouldRestoreResumeCover(didLeaveToBackground: true)
+        )
+        XCTAssertNotNil(
+            osrsSceneCompositor.firstLiveArticleWebView(in: live),
+            "Hosted article WK must remain in the test window"
+        )
+
+        osrsResumeFrameOverlay.revealWhenLiveWebViewPaints()
+        XCTAssertTrue(
+            osrsResumeFrameOverlay.liveArticleIsPainting(),
+            "Hosted loaded article must count as painting so last-good can come down range=\(osrsWebViewThemePaint.luminanceRange(snapshot(live)))"
+        )
+        XCTAssertNil(
+            osrsResumeFrameOverlay.firstPassthroughImageView(),
+            "Passthrough UIImageView must come down once live WK is painting"
+        )
+        XCTAssertFalse(
+            osrsResumeFrameOverlay.lastGoodIsCoveringLiveArticle,
+            "window.layer last-good stamp must not stay over a painting WK"
+        )
+        XCTAssertEqual(
+            osrsSceneCompositor.layerContentsKind(live.layer.contents),
+            "nil",
+            "window.layer.contents last-good stamp must come down once live WK paints"
+        )
+        osrsResumeFrameOverlay.discard()
+        XCTAssertNil(osrsResumeFrameOverlay.firstPassthroughImageView())
+    }
+
     func testDumpWindowOnLiveArticleReportsWKAndHitsStayOffCover() async throws {
         let themeColor = UIColor(red: 40 / 255, green: 34 / 255, blue: 29 / 255, alpha: 1)
         let live = makeWindow(theme: themeColor, includeArticleWebView: true)
@@ -566,7 +633,10 @@ final class osrsHostThemeFillTests: XCTestCase {
         XCTAssertTrue(fill.contains("shouldPaintOpaqueFill(liveArticleWebViewPresent:"))
         XCTAssertTrue(fill.contains("guard osrsSceneCompositor.isAppContentWindow(window)"))
         XCTAssertTrue(fill.contains("osrsResumeCoverWindow"))
-        XCTAssertTrue(fill.contains("underPageBackgroundColor = UIColor.clear"))
+        XCTAssertFalse(
+            fill.contains("underPageBackgroundColor = UIColor.clear"),
+            "Host fill must not isolate a loaded article WK to clear"
+        )
         XCTAssertTrue(fill.contains("clearThemeColoredHostViews"))
         XCTAssertFalse(fill.contains("layer.contents = nil"))
         let viewModel = try source(root, "platforms/ios/osrswiki/ViewModels/ArticleViewModel.swift")
@@ -576,9 +646,12 @@ final class osrsHostThemeFillTests: XCTestCase {
             .first?
             .components(separatedBy: "func ")
             .first ?? ""
-        XCTAssertTrue(preserve.contains("isOpaque = false"))
+        XCTAssertTrue(preserve.contains("osrsWebViewThemePaint.apply"))
         XCTAssertFalse(preserve.contains("isOpaque = true"))
-        XCTAssertTrue(preserve.contains("underPageBackgroundColor = UIColor.clear"))
+        XCTAssertFalse(
+            preserve.contains("underPageBackgroundColor = UIColor.clear"),
+            "preserveRenderedArticleDuringFind must not force under-page to clear"
+        )
         XCTAssertFalse(fill.contains("#if DEBUG"))
         XCTAssertFalse(fill.contains("shouldPreserveLiveHierarchy"))
         XCTAssertFalse(fill.contains("layer.contents = nil"))
@@ -596,10 +669,21 @@ final class osrsHostThemeFillTests: XCTestCase {
         XCTAssertTrue(themeManager.contains("osrsHostThemeFill.apply(to:"))
         XCTAssertTrue(sceneDelegate.contains("osrsHostThemeFill.apply(to:"))
         let themePaint = try source(root, "platforms/ios/osrswiki/Utils/osrsWebViewThemePaint.swift")
-        XCTAssertTrue(themePaint.contains("emptyDocument ? pageColor : UIColor.clear"))
-        XCTAssertTrue(themePaint.contains("osrs-overlay-page-fill"))
-        XCTAssertTrue(themePaint.contains("background-color: transparent !important"))
-        XCTAssertTrue(viewModel.contains("osrs-overlay-page-fill") || viewModel.contains("clearLoadedDocumentPageFillScript"))
+        let applyBody = themePaint
+            .components(separatedBy: "static func apply(to webView: WKWebView, theme:")
+            .dropFirst()
+            .first?
+            .components(separatedBy: "static var keepCompositorAliveScript")
+            .first ?? ""
+        XCTAssertTrue(applyBody.contains("let compositorFill = pageColor"))
+        XCTAssertFalse(
+            applyBody.contains("UIColor.clear"),
+            "Loaded apply() must not isolate compositor fill to clear"
+        )
+        XCTAssertFalse(themePaint.contains("osrs-overlay-page-fill"))
+        XCTAssertFalse(themePaint.contains("background-color: transparent !important"))
+        XCTAssertFalse(viewModel.contains("osrs-overlay-page-fill"))
+        XCTAssertFalse(viewModel.contains("clearLoadedDocumentPageFillScript"))
         let begin = compositor
             .components(separatedBy: "static func beginLiveOverlaySession")
             .dropFirst()
@@ -647,13 +731,15 @@ final class osrsHostThemeFillTests: XCTestCase {
             .components(separatedBy: "func applyThemeColors")
             .first ?? ""
         XCTAssertTrue(liveTheme.contains("osrsWebViewThemePaint.apply"))
-        XCTAssertFalse(liveTheme.contains("underPageBackgroundColor = pageColor"))
         XCTAssertFalse(compositor.contains("webView.layer.contents = nil"))
         XCTAssertFalse(compositor.contains("pinLiveArticleFrame"))
         XCTAssertFalse(compositor.contains("osrs_live_overlay_frame"))
         XCTAssertFalse(compositor.contains("removePinnedArticleOverlay"))
         XCTAssertFalse(viewModel.contains("pinLiveArticleFrame"))
         XCTAssertTrue(compositor.contains("shouldRestoreResumeCover(didLeaveToBackground:"))
+        XCTAssertTrue(compositor.contains("revealWhenLiveWebViewPaints"))
+        XCTAssertTrue(compositor.contains("removeLastGoodCover"))
+        XCTAssertFalse(compositor.contains("passthrough retained"))
         let became = sceneDelegate
             .components(separatedBy: "func handleBecameActive")
             .dropFirst()
@@ -662,6 +748,20 @@ final class osrsHostThemeFillTests: XCTestCase {
             .first ?? ""
         XCTAssertTrue(became.contains("didLeaveToBackground"))
         XCTAssertTrue(became.contains("restoreResumedScene"))
+    }
+
+    private func isThemeParchment(_ color: UIColor?, expected: UIColor) -> Bool {
+        guard let color else { return false }
+        var red: CGFloat = 0, green: CGFloat = 0, blue: CGFloat = 0, alpha: CGFloat = 0
+        var themeRed: CGFloat = 0, themeGreen: CGFloat = 0, themeBlue: CGFloat = 0, themeAlpha: CGFloat = 0
+        guard color.getRed(&red, green: &green, blue: &blue, alpha: &alpha),
+              expected.getRed(&themeRed, green: &themeGreen, blue: &themeBlue, alpha: &themeAlpha) else {
+            return false
+        }
+        return alpha > 0.5
+            && abs(red - themeRed) < 0.03
+            && abs(green - themeGreen) < 0.03
+            && abs(blue - themeBlue) < 0.03
     }
 
     private func makeWindow(theme: UIColor, includeArticleWebView: Bool) -> UIWindow {

@@ -443,6 +443,7 @@ enum osrsSceneCompositor {
         if let scene = window.windowScene {
             osrsResumeFrameOverlay.installPassthroughResumePixels(on: scene)
         }
+        osrsResumeFrameOverlay.scheduleRevealWhenLiveWebViewPaints()
         dumpWindow(window)
         // osrsSceneCompositorLooksBlank must not be posted from restore():
         // that rebuilt the article WKWebView during the compositor race and
@@ -1119,6 +1120,7 @@ enum osrsResumeFrameOverlay {
         )
         osrsSceneCompositor.dumpWindow(overlay)
         NSLog("osrsResumeFrameOverlay adopted live root")
+        scheduleRevealWhenLiveWebViewPaints()
     }
 
     static func installOnWindowLayer(_ window: UIWindow) {
@@ -1230,16 +1232,67 @@ enum osrsResumeFrameOverlay {
         installOnWindowLayer(window)
     }
 
-    /// A healthy DOM is not proof the LCD is compositing UIKit children.
-    /// Keep window-layer resume pixels until the article is actually left.
+    /// Keep last-good only while live WK is not compositing after background.
+    /// Once tiles paint, the passthrough UIImageView and window.layer stamp
+    /// must come down. Do not drop the cover at didEnterBackground.
     static func revealWhenLiveWebViewPaints() {
+        guard lastGoodIsCoveringLiveArticle else { return }
+        guard liveArticleIsPainting() else { return }
+        removeLastGoodCover()
+    }
+
+    static func scheduleRevealWhenLiveWebViewPaints() {
+        for delayNs in [0, 80_000_000, 250_000_000, 500_000_000] as [UInt64] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + .nanoseconds(Int(delayNs))) {
+                revealWhenLiveWebViewPaints()
+            }
+        }
+    }
+
+    static var lastGoodIsCoveringLiveArticle: Bool {
+        firstPassthroughImageView() != nil
+            || overlayWindow?.layer.contents != nil
+            || coveredWindow?.layer.contents != nil
+    }
+
+    static func liveArticleIsPainting() -> Bool {
+        let windows = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap(\.windows)
+            .filter { osrsSceneCompositor.isAppContentWindow($0) }
+        for window in windows {
+            if let webView = osrsSceneCompositor.firstLiveArticleWebView(in: window),
+               articleWebViewLooksPainted(webView) {
+                return true
+            }
+        }
+        return false
+    }
+
+    private static func articleWebViewLooksPainted(_ webView: WKWebView) -> Bool {
+        if looksPainted(webView) { return true }
+        if let host = webView.superview, !(host is UIWindow), looksPainted(host) {
+            return true
+        }
+        return false
+    }
+
+    private static func looksPainted(_ view: UIView) -> Bool {
+        let bounds = view.bounds
+        guard bounds.width > 8, bounds.height > 8 else { return false }
+        let image = UIGraphicsImageRenderer(bounds: bounds).image { _ in
+            view.drawHierarchy(in: bounds, afterScreenUpdates: true)
+        }
+        return !osrsWebViewThemePaint.isUniformFill(image)
     }
 
     static func discard() {
+        if liveArticleIsPainting() {
+            removeLastGoodCover()
+            return
+        }
         if overlayWindow != nil && overlayWindow?.isHidden == false {
-            // Tab changes and article onDisappear must not uncover the
-            // parked live window. Keep LCD pixels and keep blitting.
-            NSLog("osrsResumeFrameOverlay discard skipped; passthrough retained")
+            NSLog("osrsResumeFrameOverlay discard skipped; live WK not painting yet")
             return
         }
         if let window = coveredWindow {
@@ -1253,8 +1306,12 @@ enum osrsResumeFrameOverlay {
     }
 
     static func remove(from root: UIView) {
+        if liveArticleIsPainting() {
+            removeLastGoodCover()
+            return
+        }
         if overlayWindow != nil && overlayWindow?.isHidden == false {
-            NSLog("osrsResumeFrameOverlay discard skipped; passthrough retained")
+            NSLog("osrsResumeFrameOverlay discard skipped; live WK not painting yet")
             return
         }
         if let window = coveredWindow ?? root as? UIWindow {
@@ -1272,6 +1329,71 @@ enum osrsResumeFrameOverlay {
         overlayWindow?.windowScene = nil
         overlayWindow = nil
         (root as? UIWindow)?.makeKeyAndVisible()
+    }
+
+    private static func removeLastGoodCover() {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        overlayWindow?.layer.contents = nil
+        coveredWindow?.layer.contents = nil
+        if let overlay = overlayWindow {
+            stripPassthrough(from: overlay)
+        }
+        if let covered = coveredWindow {
+            stripPassthrough(from: covered)
+        }
+        CATransaction.commit()
+        if hasAdoptedLiveRoot {
+            coveredWindow = nil
+            NSLog("osrsResumeFrameOverlay last-good removed; live WK painting")
+            return
+        }
+        overlayWindow?.isHidden = true
+        overlayWindow?.layer.contents = nil
+        overlayWindow?.windowScene = nil
+        overlayWindow = nil
+        coveredWindow = nil
+        previousBackgroundColor = nil
+        NSLog("osrsResumeFrameOverlay discarded; live WK painting")
+    }
+
+    private static func stripPassthrough(from view: UIView) {
+        for subview in view.subviews {
+            if let imageView = subview as? UIImageView,
+               imageView.accessibilityIdentifier == "osrs_resume_passthrough_frame" {
+                imageView.removeFromSuperview()
+            } else {
+                stripPassthrough(from: subview)
+            }
+        }
+    }
+
+    static func firstPassthroughImageView() -> UIImageView? {
+        let windows = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap(\.windows)
+        for window in windows {
+            if let found = firstPassthroughImageView(in: window) {
+                return found
+            }
+        }
+        if let overlay = overlayWindow, let found = firstPassthroughImageView(in: overlay) {
+            return found
+        }
+        return nil
+    }
+
+    static func firstPassthroughImageView(in view: UIView) -> UIImageView? {
+        if let imageView = view as? UIImageView,
+           imageView.accessibilityIdentifier == "osrs_resume_passthrough_frame" {
+            return imageView
+        }
+        for child in view.subviews {
+            if let found = firstPassthroughImageView(in: child) {
+                return found
+            }
+        }
+        return nil
     }
 
     private static func persistCapturedFrame(_ image: UIImage) {

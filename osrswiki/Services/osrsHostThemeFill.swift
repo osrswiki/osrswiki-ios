@@ -47,11 +47,11 @@ enum osrsHostThemeFill {
     private static func clearParkedWebViewFill(_ view: UIView) {
         if osrsSceneCompositor.containsLiveArticleWebView(view),
            let webView = view as? WKWebView {
+            // Keep theme parchment on a loaded article. Forcing under-page /
+            // background / scrollView to clear is the Find black compositor
+            // (Phase A). Type-1 fill was UITextEffectsWindow, not this WK.
             webView.isOpaque = false
-            webView.backgroundColor = UIColor.clear
-            webView.underPageBackgroundColor = UIColor.clear
             webView.scrollView.isOpaque = false
-            webView.scrollView.backgroundColor = UIColor.clear
         }
         for child in view.subviews {
             clearParkedWebViewFill(child)

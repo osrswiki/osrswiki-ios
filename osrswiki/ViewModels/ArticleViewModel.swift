@@ -5506,12 +5506,12 @@ extension ArticleViewModel: WKNavigationDelegate {
         }
         isFindInPageActive = true
 
-        // Expand collapsibles and clear html/body parchment before Find parks GPU.
+        // Expand collapsibles. Do not isolate html/body to transparent: that
+        // left black compositor after C53 stopped last-good pin.
         let expandScript = """
             document.querySelectorAll('.collapsible-closed').forEach(function(e) {
                 e.classList.remove('collapsible-closed');
             });
-            \(osrsWebViewThemePaint.clearLoadedDocumentPageFillScript)
             \(osrsWebViewThemePaint.keepCompositorAliveScript)
         """
         webView.evaluateJavaScript(expandScript) { [weak self] (result, error) in
@@ -5557,13 +5557,11 @@ extension ArticleViewModel: WKNavigationDelegate {
     /// Do not reparent WK: `removeFromSuperview` during UIFindInteraction blanks
     /// the compositor and can stick the navigator.
     func preserveRenderedArticleDuringFind(_ webView: WKWebView) {
-        webView.isOpaque = false
-        webView.backgroundColor = UIColor.clear
-        webView.underPageBackgroundColor = UIColor.clear
-        webView.scrollView.isOpaque = false
-        webView.scrollView.backgroundColor = UIColor.clear
+        let theme = lastAppliedArticleTheme ?? osrsAppRoot.themeManager.currentTheme
+        osrsWebViewThemePaint.apply(to: webView, theme: theme)
         webView.isHidden = false
         webView.alpha = 1
+        webView.scrollView.isHidden = false
         webView.scrollView.alpha = 1
         logFillIsolate(webView: webView, js: nil, reason: "find-preserve")
     }

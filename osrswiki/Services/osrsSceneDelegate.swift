@@ -285,6 +285,7 @@ final class osrsSceneDelegate: UIResponder, UIWindowSceneDelegate {
     private func nudgeCompositor(on windowScene: UIWindowScene) {
         if osrsResumeFrameOverlay.hasAdoptedLiveRoot {
             osrsResumeFrameOverlay.makeOverlayKeyIfInstalled()
+            osrsResumeFrameOverlay.revealWhenLiveWebViewPaints()
             return
         }
         guard let window, window.windowScene === windowScene else { return }

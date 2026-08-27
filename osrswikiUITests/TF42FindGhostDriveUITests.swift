@@ -1,13 +1,20 @@
 import XCTest
 
-/// SkipInstall HID drive for the last-good Find ghost. Empty Find+keyboard is
-/// not this bar; type a query and step hits.
+/// SkipInstall HID drive for Find parchment (Phase A) and last-good ghost.
 final class TF42FindGhostDriveUITests: XCTestCase {
     private var app: XCUIApplication!
 
     override func setUpWithError() throws {
         continueAfterFailure = false
         app = XCUIApplication()
+    }
+
+    func testFindEmptyGloryOnce() throws {
+        runGloryFindEmpty(mark: "find-empty-1")
+    }
+
+    func testFindEmptyGloryTwice() throws {
+        runGloryFindEmpty(mark: "find-empty-2")
     }
 
     func testFindTypeNextGloryOnce() throws {
@@ -74,6 +81,14 @@ final class TF42FindGhostDriveUITests: XCTestCase {
         print("TF42DRIVE MARK sleep-done")
     }
 
+    func testHomeResumeWikiOnce() throws {
+        runHomeResume(mark: "home-resume-1")
+    }
+
+    func testHomeResumeWikiTwice() throws {
+        runHomeResume(mark: "home-resume-2")
+    }
+
     func testResumeAfterSettingsWithoutTerminate() throws {
         launchArticle(title: "Amulet of glory", path: "Amulet_of_glory")
         XCTAssertTrue(app.webViews["article_web_view"].waitForExistence(timeout: 40))
@@ -88,6 +103,41 @@ final class TF42FindGhostDriveUITests: XCTestCase {
             "Settings→wiki must restore the live article without terminate"
         )
         print("TF42DRIVE MARK resume")
+        sleepHold()
+        print("TF42DRIVE MARK sleep-done")
+    }
+
+    private func runHomeResume(mark: String) {
+        launchArticle(title: "Amulet of glory", path: "Amulet_of_glory")
+        XCTAssertTrue(
+            app.webViews["article_web_view"].waitForExistence(timeout: 40),
+            "Amulet of glory did not open"
+        )
+        XCUIDevice.shared.press(.home)
+        sleep(2)
+        app.activate()
+        XCTAssertTrue(app.wait(for: .runningForeground, timeout: 8))
+        XCTAssertTrue(
+            app.webViews["article_web_view"].waitForExistence(timeout: 10),
+            "Home→wiki must restore the live article without terminate"
+        )
+        print("TF42DRIVE MARK \(mark)")
+        sleepHold()
+        print("TF42DRIVE MARK sleep-done")
+    }
+
+    private func runGloryFindEmpty(mark: String) {
+        launchArticle(title: "Amulet of glory", path: "Amulet_of_glory")
+        XCTAssertTrue(
+            app.webViews["article_web_view"].waitForExistence(timeout: 40),
+            "Amulet of glory did not open"
+        )
+        let findButton = waitForArticleFindButton()
+        findButton.tap()
+        dismissKeyboardOnboardingIfPresent()
+        let field = app.searchFields["find.searchField"]
+        XCTAssertTrue(field.waitForExistence(timeout: 8), "find.searchField missing")
+        print("TF42DRIVE MARK \(mark)")
         sleepHold()
         print("TF42DRIVE MARK sleep-done")
     }

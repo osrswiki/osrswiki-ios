@@ -260,7 +260,7 @@ final class osrsArticleLoadRegressionContractTests: XCTestCase {
         XCTAssertTrue(compositor.contains("static func discard()"))
         XCTAssertTrue(compositor.contains("installOnWindowLayer"))
         XCTAssertTrue(compositor.contains("hasCapturedFrame"))
-        XCTAssertTrue(compositor.contains("Keep window-layer resume pixels"))
+        XCTAssertTrue(compositor.contains("Keep last-good only while live WK is not compositing"))
         XCTAssertFalse(
             compositor.contains("!containsWebView(view) && layerContentsLookUniform(view)"),
             "skipping every WK ancestor left the DropShadow snapshot covering the LCD"
@@ -280,6 +280,7 @@ final class osrsArticleLoadRegressionContractTests: XCTestCase {
         XCTAssertTrue(restoreBody.contains("nudgeLayer(root.view)"))
         XCTAssertTrue(restoreBody.contains("installOnWindowLayer"))
         XCTAssertTrue(restoreBody.contains("installPassthroughResumePixels"))
+        XCTAssertTrue(restoreBody.contains("scheduleRevealWhenLiveWebViewPaints"))
         XCTAssertTrue(compositor.contains("isUserInteractionEnabled = false"))
         XCTAssertTrue(compositor.contains("osrs_resume_passthrough_frame"))
         XCTAssertTrue(compositor.contains("blitPassthroughResumePixels"))
@@ -292,7 +293,13 @@ final class osrsArticleLoadRegressionContractTests: XCTestCase {
         XCTAssertTrue(compositor.contains("live.isHidden = true"))
         XCTAssertTrue(compositor.contains("makeOverlayKeyIfInstalled"))
         XCTAssertTrue(compositor.contains("imageView.image = image"))
-        XCTAssertTrue(compositor.contains("passthrough retained"))
+        XCTAssertFalse(
+            compositor.contains("passthrough retained"),
+            "discard() must tear down last-good once live WK is painting, not no-op"
+        )
+        XCTAssertTrue(compositor.contains("live WK not painting yet"))
+        XCTAssertTrue(compositor.contains("removeLastGoodCover"))
+        XCTAssertTrue(compositor.contains("liveArticleIsPainting"))
         XCTAssertTrue(
             sceneDelegate.contains("osrsResumeFrameOverlay.makeOverlayKeyIfInstalled()"),
             "Resume nudge must not steal key from the LCD overlay"
