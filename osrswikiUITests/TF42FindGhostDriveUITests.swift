@@ -89,6 +89,39 @@ final class TF42FindGhostDriveUITests: XCTestCase {
         runHomeResume(mark: "home-resume-2")
     }
 
+    func testPhase0Cell2GloryBonusesFindUp() throws {
+        openGloryEquipmentBonuses()
+        scrollCollapsibleIntoFindBand(prefix: "Equipment bonuses")
+        presentEmptyFindKeyboard()
+        print("TF42DRIVE MARK cell2-bonuses-find-up")
+        sleepHold()
+        print("TF42DRIVE MARK sleep-done")
+    }
+
+    func testPhase0Cell4VersionsFindUp() throws {
+        launchArticle(title: "Sea Shanty 2", path: "Sea_Shanty_2")
+        XCTAssertTrue(articleWebView().waitForExistence(timeout: 40), "Sea Shanty 2 did not open")
+        let contents = app.buttons["Contents"].firstMatch
+        if contents.waitForExistence(timeout: 8), contents.isHittable {
+            contents.tap()
+            sleep(1)
+        }
+        ensureCollapsibleOpen(prefix: "Versions")
+        scrollCollapsibleIntoFindBand(prefix: "Versions")
+        presentEmptyFindKeyboard()
+        print("TF42DRIVE MARK cell4-versions-find-up")
+        sleepHold()
+        print("TF42DRIVE MARK sleep-done")
+    }
+
+    func testPhase0Cell5Requirements() throws {
+        openGloryEquipmentBonuses()
+        ensureCollapsibleOpen(prefix: "Requirements")
+        print("TF42DRIVE MARK cell5-requirements")
+        sleepHold()
+        print("TF42DRIVE MARK sleep-done")
+    }
+
     func testResumeAfterSettingsWithoutTerminate() throws {
         launchArticle(title: "Amulet of glory", path: "Amulet_of_glory")
         XCTAssertTrue(app.webViews["article_web_view"].waitForExistence(timeout: 40))
@@ -171,6 +204,68 @@ final class TF42FindGhostDriveUITests: XCTestCase {
         print("TF42DRIVE MARK \(mark)")
         sleepHold()
         print("TF42DRIVE MARK sleep-done")
+    }
+
+    private func openGloryEquipmentBonuses() {
+        launchArticle(title: "Amulet of glory", path: "Amulet_of_glory")
+        XCTAssertTrue(
+            articleWebView().waitForExistence(timeout: 40),
+            "Amulet of glory did not open"
+        )
+        ensureCollapsibleOpen(prefix: "Equipment bonuses")
+    }
+
+    private func articleWebView() -> XCUIElement {
+        app.webViews["article_web_view"]
+    }
+
+    private func ensureCollapsibleOpen(prefix: String) {
+        let collapsed = app.buttons["\(prefix) Tap to expand"].firstMatch
+        let expanded = app.buttons["\(prefix) Tap to collapse"].firstMatch
+        let webView = articleWebView()
+        for _ in 0..<12 {
+            if expanded.exists {
+                return
+            }
+            if collapsed.exists {
+                collapsed.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+                if expanded.waitForExistence(timeout: 3) {
+                    return
+                }
+            }
+            webView.swipeUp()
+        }
+        XCTAssertTrue(expanded.exists, "\(prefix) never opened (no Tap to collapse)")
+    }
+
+    private func scrollCollapsibleIntoFindBand(prefix: String) {
+        let webView = articleWebView()
+        let expanded = app.buttons["\(prefix) Tap to collapse"].firstMatch
+        XCTAssertTrue(expanded.exists, "\(prefix) must be expanded before scrolling into the Find band")
+        for _ in 0..<8 {
+            let minY = expanded.frame.minY
+            if minY >= 90, minY <= 180 {
+                return
+            }
+            if minY > 180 {
+                webView.swipeUp()
+            } else {
+                webView.swipeDown()
+            }
+        }
+    }
+
+    private func presentEmptyFindKeyboard() {
+        let findButton = waitForArticleFindButton()
+        findButton.tap()
+        dismissKeyboardOnboardingIfPresent()
+        let field = app.searchFields["find.searchField"]
+        XCTAssertTrue(field.waitForExistence(timeout: 8), "find.searchField missing")
+        if !app.keyboards.firstMatch.waitForExistence(timeout: 4) {
+            field.tap()
+            dismissKeyboardOnboardingIfPresent()
+        }
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 8), "Find keyboard missing")
     }
 
     private func launchArticle(title: String, path: String) {

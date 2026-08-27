@@ -9,13 +9,16 @@
 //  that worse.
 //
 
+import Darwin
 import IOSurface
+import QuartzCore
 import UIKit
 import WebKit
 
 @MainActor
 enum osrsSceneCompositor {
     private static var pendingBackgroundRestore = false
+    private static var lastCssCaptionLines: [String] = []
 
     static func shouldRestoreResumeCover(didLeaveToBackground: Bool) -> Bool {
         didLeaveToBackground
@@ -829,6 +832,24 @@ enum osrsSceneCompositor {
             lines.append("firstResponder=nil")
         }
         lines.append("wkBackground=\(webViewIsBackground(in: window))")
+        final class CssProbe {
+            var lines: [String] = ["cssCap=pending"]
+            var finished = false
+        }
+        let cssProbe = CssProbe()
+        if let webView = firstLiveArticleWebView(in: window) {
+            requestCssComputedCaptionTabber(in: webView) { result in
+                cssProbe.lines = result
+                cssProbe.finished = true
+            }
+        } else {
+            cssProbe.lines = ["cssCap=no-wk"]
+            cssProbe.finished = true
+        }
+        let cssEarlyDeadline = Date().addingTimeInterval(0.2)
+        while !cssProbe.finished, Date() < cssEarlyDeadline {
+            RunLoop.current.run(mode: .common, before: Date().addingTimeInterval(0.02))
+        }
         var tabBars: [String] = []
         collectTabBars(in: window, into: &tabBars)
         lines.append("tabBar \(tabBars.isEmpty ? "none" : tabBars.joined(separator: " | "))")
@@ -869,6 +890,23 @@ enum osrsSceneCompositor {
             }
         }
         walk(window, depth: 0)
+        // Dump-only C49-class census. Do not call the C46 client-info SPI
+        // that crashed launch. Names which process CAContext paints the
+        // Uncharged-left crop and the live caption/tabber computed style.
+        appendAllContextCensus(for: window, into: &lines)
+        let cssDeadline = Date().addingTimeInterval(0.15)
+        while !cssProbe.finished, Date() < cssDeadline {
+            RunLoop.current.run(mode: .common, before: Date().addingTimeInterval(0.02))
+        }
+        if !cssProbe.finished {
+            cssProbe.lines = lastCssCaptionLines.isEmpty ? ["cssCap=timeout"] : lastCssCaptionLines
+            if !lastCssCaptionLines.isEmpty {
+                cssProbe.lines.insert("cssCap=stale-cache", at: 0)
+            }
+        } else {
+            lastCssCaptionLines = cssProbe.lines
+        }
+        lines.append(contentsOf: cssProbe.lines)
         let header = "appState=\(UIApplication.shared.applicationState.rawValue) scene=\(window.windowScene?.activationState.rawValue ?? -1) key=\(window.isKeyWindow) sceneWindows=\(window.windowScene?.windows.count ?? -1) overlay=\(osrsResumeFrameOverlay.hasCapturedFrame)\n"
         let text = header + lines.joined(separator: "\n")
         print("🪟 osrsSceneCompositor dump\n\(text)")
@@ -956,6 +994,336 @@ enum osrsSceneCompositor {
         typealias BackgroundIMP = @convention(c) (AnyObject, Selector) -> Bool
         let imp = unsafeBitCast(method, to: BackgroundIMP.self)
         return imp(webView, selector) ? "true" : "false"
+    }
+
+    /// Process-local CAContext roots + Release-safe layer render (C44/C49).
+    /// Do not call the C46 client-info SPI that crashed launch.
+    private static func appendAllContextCensus(for window: UIWindow, into lines: inout [String]) {
+        let windows = allSceneWindows()
+        for (index, candidate) in windows.prefix(8).enumerated() {
+            let cls = NSStringFromClass(type(of: candidate))
+            let ctx = compositorContextId(of: candidate)
+            lines.append(
+                "winCtx=win\(index)(\(cls)) level=\(Int(candidate.windowLevel.rawValue)) hidden=\(candidate.isHidden) opaque=\(candidate.isOpaque) bg=\(describeDumpColor(candidate.backgroundColor)) ctx=\(ctx)"
+            )
+        }
+        let contexts = allCAContexts()
+        if contexts.isEmpty {
+            lines.append("allCtx=n/a")
+            appendContextLayerWalk(for: window, into: &lines)
+            return
+        }
+        lines.append("allCtx=\(contexts.count)")
+        let scale = window.traitCollection.displayScale
+        for (index, context) in contexts.prefix(8).enumerated() {
+            let idString = compositorContextId(of: context)
+            let contextId = UInt32(idString) ?? 0
+            var owner = "ORPHAN"
+            for (winIndex, candidate) in windows.enumerated() {
+                if compositorContextId(of: candidate) == idString {
+                    owner = "win\(winIndex)(\(NSStringFromClass(type(of: candidate))))"
+                    break
+                }
+            }
+            var rootName = "nil"
+            var rootLayer: CALayer?
+            var rootSize = "0x0"
+            var rootHidden = true
+            var subCount = 0
+            if context.responds(to: NSSelectorFromString("layer")),
+               let layer = context.value(forKey: "layer") as? CALayer {
+                rootLayer = layer
+                rootName = NSStringFromClass(type(of: layer))
+                rootSize = "\(Int(layer.bounds.width))x\(Int(layer.bounds.height))"
+                rootHidden = layer.isHidden
+                subCount = layer.sublayers?.count ?? 0
+            }
+            let render: String
+            if let rootLayer, contextId != 0 {
+                render = renderLayerMeanStd(
+                    contextId: contextId,
+                    layer: rootLayer,
+                    scale: scale,
+                    gutterIn: window.bounds
+                )
+            } else {
+                render = "n/a"
+            }
+            lines.append(
+                "allCtx\(index)=id=\(idString) owner=\(owner) root=\(rootName) \(rootSize) hidden=\(rootHidden) subs=\(subCount) \(render)"
+            )
+        }
+        appendContextLayerWalk(for: window, into: &lines)
+    }
+
+    private static func appendContextLayerWalk(for window: UIWindow, into lines: inout [String]) {
+        guard window.layer.responds(to: NSSelectorFromString("context")),
+              let context = window.layer.value(forKey: "context") as AnyObject?,
+              context.responds(to: NSSelectorFromString("layer")),
+              let root = context.value(forKey: "layer") as? CALayer else {
+            lines.append("ctxL=n/a")
+            return
+        }
+        var owned = Set<ObjectIdentifier>()
+        func collect(_ view: UIView) {
+            owned.insert(ObjectIdentifier(view.layer))
+            for child in view.subviews {
+                collect(child)
+            }
+        }
+        collect(window)
+        var count = 0
+        func walk(_ layer: CALayer, depth: Int) {
+            guard depth < 6, count < 24 else { return }
+            let name = NSStringFromClass(type(of: layer))
+            let owner: String
+            if layer === window.layer {
+                owner = "WINDOW-LAYER"
+            } else if owned.contains(ObjectIdentifier(layer)) {
+                owner = "VIEW"
+            } else {
+                owner = "UNOWNED"
+            }
+            let bg: String
+            if let cg = layer.backgroundColor {
+                bg = describeDumpColor(UIColor(cgColor: cg))
+            } else {
+                bg = "nil"
+            }
+            let contents = layer.contents == nil ? "nil" : "set"
+            lines.append(
+                String(repeating: "  ", count: depth)
+                    + "ctxL \(name) owner=\(owner) frame=\(Int(layer.frame.minX)),\(Int(layer.frame.minY)) \(Int(layer.frame.width))x\(Int(layer.frame.height)) z=\(Int(layer.zPosition)) hidden=\(layer.isHidden) op=\(String(format: "%.2f", layer.opacity)) opaque=\(layer.isOpaque) bg=\(bg) contents=\(contents) kind=\(layerContentsKind(layer.contents)) subs=\(layer.sublayers?.count ?? 0)"
+            )
+            count += 1
+            for sub in layer.sublayers ?? [] {
+                walk(sub, depth: depth + 1)
+            }
+        }
+        walk(root, depth: 0)
+    }
+
+    private static func requestCssComputedCaptionTabber(
+        in webView: WKWebView,
+        completion: @escaping ([String]) -> Void
+    ) {
+        let script = """
+        (() => {
+          const css = (el) => {
+            if (!el) return null;
+            const s = getComputedStyle(el);
+            const r = el.getBoundingClientRect();
+            return {
+              tag: el.tagName,
+              cls: (el.className || '').toString().slice(0, 80),
+              id: el.id || '',
+              text: (el.textContent || '').trim().slice(0, 24),
+              bg: s.backgroundColor,
+              image: s.backgroundImage,
+              isolation: s.isolation,
+              overflow: s.overflow + '/' + s.overflowX + '/' + s.overflowY,
+              opacity: s.opacity,
+              mix: s.mixBlendMode,
+              transform: s.transform,
+              rect: [Math.round(r.x), Math.round(r.y), Math.round(r.width), Math.round(r.height)]
+            };
+          };
+          const compact = (label, info) => {
+            if (!info) return label + '=missing';
+            return label + '=tag=' + info.tag + ' cls=' + info.cls + ' id=' + info.id
+              + ' text=' + JSON.stringify(info.text)
+              + ' bg=' + info.bg + ' image=' + String(info.image).slice(0, 40)
+              + ' isolation=' + info.isolation + ' overflow=' + info.overflow
+              + ' opacity=' + info.opacity + ' mix=' + info.mix
+              + ' transform=' + String(info.transform).slice(0, 24)
+              + ' rect=' + info.rect.join(',');
+          };
+          const buttons = Array.from(document.querySelectorAll(
+            '.infobox-bonuses .infobox-buttons .button, .infobox-buttons .button, caption .button'
+          ));
+          const uncharged = buttons.find((el) => (el.textContent || '').trim() === 'Uncharged') || null;
+          const caption = uncharged ? uncharged.closest('caption, .infobox-switch-buttons-caption') : document.querySelector('.infobox-switch-buttons-caption, caption');
+          const row = uncharged ? uncharged.closest('.infobox-buttons') : document.querySelector('.infobox-bonuses .infobox-buttons, .infobox-buttons');
+          const table = uncharged ? uncharged.closest('table') : document.querySelector('table.infobox-bonuses, table.infobox');
+          let fromPoint = null;
+          let point = [0, 0];
+          if (uncharged) {
+            const r = uncharged.getBoundingClientRect();
+            point = [Math.max(2, r.left - 14), r.top + Math.min(10, r.height / 2)];
+            fromPoint = document.elementFromPoint(point[0], point[1]);
+          }
+          const ancestors = [];
+          let node = fromPoint;
+          for (let i = 0; i < 8 && node && node !== document.body; i++) {
+            ancestors.push(compact('a' + i, css(node)));
+            node = node.parentElement;
+          }
+          return [
+            compact('cssUncharged', css(uncharged)),
+            compact('cssCap', css(caption)),
+            compact('cssButtons', css(row)),
+            compact('cssTable', css(table)),
+            compact('cssBody', css(document.body)),
+            compact('cssFromPoint', css(fromPoint)) + ' pt=' + point.join(','),
+            'cssAncestors=' + (ancestors.join(' | ') || 'none')
+          ].join('\\n');
+        })()
+        """
+        webView.evaluateJavaScript(script) { value, error in
+            let result: String
+            if let error {
+                result = "cssCap=error \(error.localizedDescription)"
+            } else if let text = value as? String {
+                result = text
+            } else {
+                result = "cssCap=\(String(describing: value))"
+            }
+            completion(
+                result.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+            )
+        }
+    }
+
+    private static func allCAContexts() -> [NSObject] {
+        let selector = NSSelectorFromString("allContexts")
+        guard let contextClass = NSClassFromString("CAContext") as? NSObject.Type,
+              contextClass.responds(to: selector),
+              let method = class_getClassMethod(contextClass, selector) else {
+            return []
+        }
+        typealias AllContextsIMP = @convention(c) (AnyClass, Selector) -> Any?
+        let imp = unsafeBitCast(method_getImplementation(method), to: AllContextsIMP.self)
+        guard let raw = imp(contextClass, selector) else { return [] }
+        if let array = raw as? [NSObject] {
+            return array
+        }
+        if let array = raw as? NSArray {
+            return array.compactMap { $0 as? NSObject }
+        }
+        return []
+    }
+
+    private static func compositorContextId(of object: AnyObject) -> String {
+        for key in ["contextId", "_contextId", "contextID", "_contextID"] {
+            if object.responds(to: NSSelectorFromString(key)),
+               let number = object.value(forKey: key) as? NSNumber {
+                return String(number.uint32Value)
+            }
+        }
+        return "n/a"
+    }
+
+    /// C44/C49 Release-safe render of one CAContext root. Crops the
+    /// Uncharged-left spacer (logical 28,148–48,168 on 420×912) plus a
+    /// top-half mean so a whole-window fill vs a local gutter is distinct.
+    private static func renderLayerMeanStd(
+        contextId: UInt32,
+        layer: CALayer,
+        scale: CGFloat,
+        gutterIn bounds: CGRect
+    ) -> String {
+        let pixelW = max(8, Int((max(layer.bounds.width, bounds.width) * scale).rounded()))
+        let pixelH = max(8, Int((max(layer.bounds.height, bounds.height) * scale).rounded()))
+        let bytesPerRow = pixelW * 4
+        let properties: [IOSurfacePropertyKey: Any] = [
+            .width: pixelW,
+            .height: pixelH,
+            .bytesPerElement: 4,
+            .bytesPerRow: bytesPerRow,
+            .pixelFormat: 0x4247_5241
+        ]
+        guard let surface = IOSurface(properties: properties) else {
+            return "render=n/a"
+        }
+        guard let quartz = dlopen(
+            "/System/Library/Frameworks/QuartzCore.framework/QuartzCore",
+            RTLD_NOW
+        ) else {
+            return "render=n/a"
+        }
+        defer { dlclose(quartz) }
+        let symbol = dlsym(quartz, "CARenderServerRenderLayerWithTransform")
+        guard Int(bitPattern: symbol) != 0 else {
+            return "render=n/a"
+        }
+        typealias RenderIMP = @convention(c) (
+            mach_port_t,
+            UInt32,
+            UInt64,
+            IOSurfaceRef,
+            Int32,
+            Int32,
+            UnsafePointer<CATransform3D>
+        ) -> Void
+        let render = unsafeBitCast(symbol, to: RenderIMP.self)
+        var transform = CATransform3DMakeScale(scale, scale, 1)
+        let layerId = UInt64(UInt(bitPattern: Unmanaged.passUnretained(layer).toOpaque()))
+        render(0, contextId, layerId, unsafeBitCast(surface, to: IOSurfaceRef.self), 0, 0, &transform)
+        return ioSurfaceCropSummary(
+            surface,
+            width: pixelW,
+            height: pixelH,
+            bytesPerRow: bytesPerRow,
+            scale: scale,
+            logicalBounds: bounds
+        )
+    }
+
+    private static func ioSurfaceCropSummary(
+        _ surface: IOSurface,
+        width: Int,
+        height: Int,
+        bytesPerRow: Int,
+        scale: CGFloat,
+        logicalBounds: CGRect
+    ) -> String {
+        let cropHeight = max(1, min(height, Int(Double(height) * 0.45)))
+        IOSurfaceLock(unsafeBitCast(surface, to: IOSurfaceRef.self), IOSurfaceLockOptions(), nil)
+        defer {
+            IOSurfaceUnlock(unsafeBitCast(surface, to: IOSurfaceRef.self), IOSurfaceLockOptions(), nil)
+        }
+        let base = IOSurfaceGetBaseAddress(unsafeBitCast(surface, to: IOSurfaceRef.self))
+        guard Int(bitPattern: base) != 0 else { return "render=n/a" }
+        let ptr = base.assumingMemoryBound(to: UInt8.self)
+
+        func sample(x0: Int, y0: Int, x1: Int, y1: Int) -> (r: Double, g: Double, b: Double, a: Double, std: Double) {
+            let left = max(0, min(width, x0))
+            let right = max(left + 1, min(width, x1))
+            let top = max(0, min(height, y0))
+            let bottom = max(top + 1, min(height, y1))
+            var sumR = 0.0, sumG = 0.0, sumB = 0.0, sumA = 0.0
+            var sumR2 = 0.0, sumG2 = 0.0, sumB2 = 0.0
+            let n = Double((right - left) * (bottom - top))
+            for y in top..<bottom {
+                let row = ptr.advanced(by: y * bytesPerRow)
+                for x in left..<right {
+                    let o = x * 4
+                    let b = Double(row[o])
+                    let g = Double(row[o + 1])
+                    let r = Double(row[o + 2])
+                    let a = Double(row[o + 3])
+                    sumR += r; sumG += g; sumB += b; sumA += a
+                    sumR2 += r * r; sumG2 += g * g; sumB2 += b * b
+                }
+            }
+            let meanR = sumR / n, meanG = sumG / n, meanB = sumB / n, meanA = sumA / n
+            let varR = max(0, sumR2 / n - meanR * meanR)
+            let varG = max(0, sumG2 / n - meanG * meanG)
+            let varB = max(0, sumB2 / n - meanB * meanB)
+            return (meanR, meanG, meanB, meanA, sqrt((varR + varG + varB) / 3))
+        }
+
+        let top = sample(x0: 0, y0: 0, x1: width, y1: cropHeight)
+        let sx = Double(width) / max(1, logicalBounds.width)
+        let sy = Double(height) / max(1, logicalBounds.height)
+        let gx0 = Int(28 * sx), gy0 = Int(148 * sy)
+        let gx1 = Int(48 * sx), gy1 = Int(168 * sy)
+        let gutter = sample(x0: gx0, y0: gy0, x1: gx1, y1: gy1)
+        return String(
+            format: "render=mean=rgb(%.0f,%.0f,%.0f) std=%.2f meanA=%.0f crop=%dx%d gutter=rgb(%.0f,%.0f,%.0f) gStd=%.2f gA=%.0f",
+            top.r, top.g, top.b, top.std, top.a, width, cropHeight,
+            gutter.r, gutter.g, gutter.b, gutter.std, gutter.a
+        )
     }
 }
 

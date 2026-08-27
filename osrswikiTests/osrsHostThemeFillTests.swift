@@ -617,6 +617,50 @@ final class osrsHostThemeFillTests: XCTestCase {
         XCTAssertTrue(second.contains("firstResponder="))
     }
 
+    func testDumpWindowCensusNamesAllContextsAndLiveCaptionComputedStyle() async throws {
+        let themeColor = UIColor(red: 40 / 255, green: 34 / 255, blue: 29 / 255, alpha: 1)
+        let live = makeWindow(theme: themeColor, includeArticleWebView: true)
+        let webView = try XCTUnwrap(firstWebView(in: live))
+        try await loadHTML(
+            """
+            <!doctype html>
+            <html>
+            <head><meta name="viewport" content="width=device-width, initial-scale=1"></head>
+            <body style="visibility: visible; background: #28221d;">
+            <table class="infobox infobox-switch infobox-bonuses" id="bonuses">
+              <caption class="infobox-switch-buttons-caption">
+                <div class="infobox-buttons" id="chargeRow">
+                  <span class="button">Uncharged</span>
+                  <span class="button">1</span>
+                </div>
+              </caption>
+              <tbody><tr><th>Attack bonuses</th><td>+10</td></tr></tbody>
+            </table>
+            </body>
+            </html>
+            """,
+            in: webView
+        )
+        live.makeKeyAndVisible()
+        osrsSceneCompositor.dumpWindow(live)
+        let dumpURL = try XCTUnwrap(
+            FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
+        ).appendingPathComponent("osrs-scene-dump.txt")
+        let dump = try String(contentsOf: dumpURL, encoding: .utf8)
+        XCTAssertTrue(dump.contains("allCtx="), "C49-class dump must enumerate process CAContexts: \(dump.suffix(400))")
+        XCTAssertTrue(dump.contains("winCtx="), "C49-class dump must map windows to context ids")
+        XCTAssertTrue(
+            dump.contains("cssUncharged=") || dump.contains("cssCap="),
+            "Dump must include computed style of the live Uncharged caption/tabber node"
+        )
+        XCTAssertTrue(
+            dump.contains("cssFromPoint=") || dump.contains("cssCap=no-wk") || dump.contains("cssCap=timeout"),
+            "Dump must name the elementFromPoint node left of Uncharged"
+        )
+        XCTAssertFalse(dump.contains("CARenderServerGetInfo"))
+        XCTAssertFalse(dump.contains("GetClientProcessId"))
+    }
+
 
 
 
@@ -748,6 +792,23 @@ final class osrsHostThemeFillTests: XCTestCase {
             .first ?? ""
         XCTAssertTrue(became.contains("didLeaveToBackground"))
         XCTAssertTrue(became.contains("restoreResumedScene"))
+        XCTAssertTrue(
+            compositor.contains("appendAllContextCensus"),
+            "dumpWindow must keep the C49-class CAContext census"
+        )
+        XCTAssertTrue(
+            compositor.contains("requestCssComputedCaptionTabber"),
+            "dumpWindow must keep live caption/tabber computed-style census"
+        )
+        XCTAssertTrue(compositor.contains("CARenderServerRenderLayerWithTransform"))
+        XCTAssertFalse(
+            compositor.contains("CARenderServerGetClientProcessId"),
+            "C46 client-process SPI must stay out of dumpWindow"
+        )
+        XCTAssertFalse(
+            compositor.contains("dlsym(quartz, \"CARenderServerGetInfo\")"),
+            "C46 render-server info SPI must stay out of dumpWindow"
+        )
     }
 
     private func isThemeParchment(_ color: UIColor?, expected: UIColor) -> Bool {
