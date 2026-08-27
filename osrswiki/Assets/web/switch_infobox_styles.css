@@ -15,18 +15,13 @@
     margin: 0 auto; /* Center the container horizontally */
 }
 
-/* When inside an infobox, give the button container the infobox's background color.
-   Fill the caption width: margin:auto shrinks this row to the chips, so
-   Uncharged-left is empty caption padding. At Find-up WK keeps chip tiles
-   and that padding is scene-window parchment (ip allCtx0 gutter). */
+/* When inside an infobox, give the button container the infobox's background color. */
 .infobox .infobox-buttons {
     background-color: var(--colorsurfacevariant);
     border-radius: 4px; /* Add rounded corners to match the container */
-    box-sizing: border-box;
-    width: 100%;
-    max-width: 100%;
-    margin: 4px 0;
+    margin: 4px auto; /* Add some vertical margin for spacing */
     padding: 4px; /* Add some internal padding */
+    /* Removed max-width: fit-content to respect parent's 300px limit */
 }
 
 /* Make the caption element that holds the button container transparent */

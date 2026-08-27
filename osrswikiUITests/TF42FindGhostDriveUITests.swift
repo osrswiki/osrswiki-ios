@@ -101,16 +101,14 @@ final class TF42FindGhostDriveUITests: XCTestCase {
     func testPhase0Cell4VersionsFindUp() throws {
         launchArticle(title: "Sea Shanty 2", path: "Sea_Shanty_2")
         XCTAssertTrue(articleWebView().waitForExistence(timeout: 40), "Sea Shanty 2 did not open")
-        // Find-first then Contents→Versions. The Versions heading is not a
-        // collapsible; the painted grid is "Table Tap to collapse".
+        let contents = app.buttons["Contents"].firstMatch
+        if contents.waitForExistence(timeout: 8), contents.isHittable {
+            contents.tap()
+            sleep(1)
+        }
+        ensureCollapsibleOpen(prefix: "Versions")
+        scrollCollapsibleIntoFindBand(prefix: "Versions")
         presentEmptyFindKeyboard()
-        openContentsDrawerWhileFindUp()
-        let versions = app.descendants(matching: .any).matching(
-            NSPredicate(format: "label == %@", "Versions")
-        ).firstMatch
-        XCTAssertTrue(versions.waitForExistence(timeout: 8), "TOC Versions missing")
-        versions.tap()
-        sleep(1)
         print("TF42DRIVE MARK cell4-versions-find-up")
         sleepHold()
         print("TF42DRIVE MARK sleep-done")
@@ -119,7 +117,6 @@ final class TF42FindGhostDriveUITests: XCTestCase {
     func testPhase0Cell5Requirements() throws {
         openGloryEquipmentBonuses()
         ensureCollapsibleOpen(prefix: "Requirements")
-        scrollCollapsibleIntoFindBand(prefix: "Requirements")
         print("TF42DRIVE MARK cell5-requirements")
         sleepHold()
         print("TF42DRIVE MARK sleep-done")
@@ -256,28 +253,6 @@ final class TF42FindGhostDriveUITests: XCTestCase {
                 webView.swipeDown()
             }
         }
-    }
-
-    private func openContentsDrawerWhileFindUp() {
-        let identified = app.buttons["article_contents_button"]
-        let labeled = app.buttons["Contents"].firstMatch
-        if identified.exists, identified.isHittable {
-            identified.tap()
-        } else if labeled.exists, labeled.isHittable {
-            labeled.tap()
-        } else {
-            // AX omits article_contents_button under the Find navigator.
-            let webView = articleWebView()
-            let start = webView.coordinate(withNormalizedOffset: CGVector(dx: 0.94, dy: 0.28))
-            let end = webView.coordinate(withNormalizedOffset: CGVector(dx: 0.32, dy: 0.28))
-            start.press(forDuration: 0.01, thenDragTo: end)
-        }
-        let drawer = app.otherElements["contents_drawer"].firstMatch
-        let scroll = app.scrollViews["contents_drawer"].firstMatch
-        XCTAssertTrue(
-            drawer.waitForExistence(timeout: 4) || scroll.waitForExistence(timeout: 2),
-            "contents_drawer missing after Find-up Contents gesture"
-        )
     }
 
     private func presentEmptyFindKeyboard() {

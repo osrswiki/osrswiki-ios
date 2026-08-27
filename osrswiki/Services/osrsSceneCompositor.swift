@@ -1213,9 +1213,9 @@ enum osrsSceneCompositor {
         return "n/a"
     }
 
-    /// C44/C49 Release-safe render of one CAContext root. Crops the
-    /// Uncharged-left spacer (logical 28,148–48,168 on 420×912) plus a
-    /// top-half mean so a whole-window fill vs a local gutter is distinct.
+    /// C44/C49 Release-safe render of one CAContext root. Crops a fixed
+    /// y=148 band (historical; misses a scrolled chip row) plus an
+    /// Uncharged-locked gutter found by a parchment→chip edge scan.
     private static func renderLayerMeanStd(
         contextId: UInt32,
         layer: CALayer,
@@ -1319,10 +1319,57 @@ enum osrsSceneCompositor {
         let gx0 = Int(28 * sx), gy0 = Int(148 * sy)
         let gx1 = Int(48 * sx), gy1 = Int(168 * sy)
         let gutter = sample(x0: gx0, y0: gy0, x1: gx1, y1: gy1)
+        // Lock to Uncharged: scan logical y 160–280 / x 70–170 for a
+        // parchment→chip edge, then sample 12px left of that edge.
+        func distParchment(r: Double, g: Double, b: Double) -> Double {
+            let dr = r - 40, dg = g - 34, db = b - 29
+            return sqrt(dr * dr + dg * dg + db * db)
+        }
+        var uncharged = "unchargedY=n/a ugutter=n/a"
+        // Chip row has several parchment→button edges (Uncharged, 1, 2, …).
+        // A single edge at y≈160 is the infobox chrome, not Uncharged.
+        rowScan: for ly in stride(from: 180, through: 260, by: 2) {
+            let y = Int(Double(ly) * sy)
+            guard y >= 0, y < height else { continue }
+            let row = ptr.advanced(by: y * bytesPerRow)
+            var prevR = 0.0, prevG = 0.0, prevB = 0.0
+            var jumps: [Int] = []
+            for lx in 70...250 {
+                let x = Int(Double(lx) * sx)
+                guard x >= 0, x < width else { continue }
+                let o = x * 4
+                let b = Double(row[o])
+                let g = Double(row[o + 1])
+                let r = Double(row[o + 2])
+                if lx > 70 {
+                    let dPrev = distParchment(r: prevR, g: prevG, b: prevB)
+                    let dHere = distParchment(r: r, g: g, b: b)
+                    if dPrev < 12, dHere > 18, r > 48 {
+                        jumps.append(lx)
+                    }
+                }
+                prevR = r
+                prevG = g
+                prevB = b
+            }
+            if jumps.count >= 3, let lx = jumps.first, lx >= 100 {
+                let leftX = Int(Double(lx - 16) * sx)
+                let rightX = Int(Double(lx - 4) * sx)
+                let topY = Int(Double(ly) * sy)
+                let botY = Int(Double(ly + 12) * sy)
+                let ug = sample(x0: leftX, y0: topY, x1: rightX, y1: botY)
+                uncharged = String(
+                    format: "unchargedY=%d ugutter=rgb(%.0f,%.0f,%.0f) ugStd=%.2f ugA=%.0f",
+                    ly, ug.r, ug.g, ug.b, ug.std, ug.a
+                )
+                break rowScan
+            }
+        }
         return String(
-            format: "render=mean=rgb(%.0f,%.0f,%.0f) std=%.2f meanA=%.0f crop=%dx%d gutter=rgb(%.0f,%.0f,%.0f) gStd=%.2f gA=%.0f",
+            format: "render=mean=rgb(%.0f,%.0f,%.0f) std=%.2f meanA=%.0f crop=%dx%d gutter=rgb(%.0f,%.0f,%.0f) gStd=%.2f gA=%.0f %@",
             top.r, top.g, top.b, top.std, top.a, width, cropHeight,
-            gutter.r, gutter.g, gutter.b, gutter.std, gutter.a
+            gutter.r, gutter.g, gutter.b, gutter.std, gutter.a,
+            uncharged
         )
     }
 }

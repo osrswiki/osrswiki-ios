@@ -650,6 +650,10 @@ final class osrsHostThemeFillTests: XCTestCase {
         XCTAssertTrue(dump.contains("allCtx="), "C49-class dump must enumerate process CAContexts: \(dump.suffix(400))")
         XCTAssertTrue(dump.contains("winCtx="), "C49-class dump must map windows to context ids")
         XCTAssertTrue(
+            dump.contains("unchargedY="),
+            "Dump must lock a gutter sample to an Uncharged chip Y, not only y=148: \(dump.suffix(400))"
+        )
+        XCTAssertTrue(
             dump.contains("cssUncharged=") || dump.contains("cssCap="),
             "Dump must include computed style of the live Uncharged caption/tabber node"
         )
