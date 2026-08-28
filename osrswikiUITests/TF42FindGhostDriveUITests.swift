@@ -46,7 +46,7 @@ final class TF42FindGhostDriveUITests: XCTestCase {
 
     func testAgilityNameKeyboard() throws {
         launchArticle(title: "Calculator:Agility", path: "Calculator:Agility")
-        let namedById = app.textFields["native-calc-field-name"].firstMatch
+        let namedById = app.webViews.textFields["Name"].firstMatch
         let namedByPlaceholder = app.textFields["Name"].firstMatch
         var appeared = namedById.waitForExistence(timeout: 35) || namedByPlaceholder.waitForExistence(timeout: 2)
         let webView = app.webViews["article_web_view"].exists

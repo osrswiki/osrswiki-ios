@@ -676,3 +676,196 @@ html body #osrs-calculator-status:empty {
     padding: 0 !important;
     margin: 0 !important;
 }
+
+/* In-document native calc chrome (verdict C). Article parchment, not OOUI. */
+html.osrs-indoc-calc pre.jcConfig,
+html.osrs-indoc-calc .jcTable,
+html.osrs-indoc-calc .jcSubmit,
+html.osrs-indoc-calc .jsCalc-field,
+html.osrs-indoc-calc .oo-ui-fieldsetLayout,
+html.osrs-indoc-calc .oo-ui-panelLayout-framed,
+html.osrs-indoc-calc .osrs-calculator-panel,
+html.osrs-indoc-calc noscript {
+    display: none !important;
+    visibility: hidden !important;
+    height: 0 !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    overflow: hidden !important;
+    pointer-events: none !important;
+}
+
+html.osrs-indoc-calc #osrs-native-calc-slot,
+html.osrs-native-calc-slot-active #osrs-native-calc-slot {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    height: auto !important;
+    min-height: 0 !important;
+    box-sizing: border-box !important;
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    overflow: visible !important;
+}
+
+html.osrs-indoc-calc .collapsible-calculator,
+html.osrs-indoc-calc .collapsible-calculator .osrs-calculator-layout {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+    float: none !important;
+    overflow: visible !important;
+}
+
+html.osrs-indoc-calc #osrs-native-calc-slot input,
+html.osrs-indoc-calc #osrs-native-calc-slot button,
+html.osrs-indoc-calc #osrs-native-calc-slot select {
+    display: revert !important;
+    visibility: visible !important;
+    height: auto !important;
+    pointer-events: auto !important;
+}
+
+.osrs-indoc-calc-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    overflow: visible;
+    padding: 0.15rem 0 0.35rem;
+    color: var(--text-color);
+    font-family: inherit;
+    font-size: 1rem;
+    line-height: 1.35;
+}
+
+.osrs-indoc-calc-banner {
+    color: var(--redlink-color, #ba0000);
+    font-size: 0.95rem;
+}
+
+.osrs-indoc-calc-banner:empty,
+.osrs-indoc-calc-status:empty {
+    display: none;
+}
+
+.osrs-indoc-calc-status {
+    color: var(--subtle-color, #777);
+    font-size: 0.9rem;
+}
+
+.osrs-indoc-calc-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+}
+
+.osrs-indoc-calc-field[hidden] {
+    display: none !important;
+}
+
+.osrs-indoc-calc-label {
+    color: var(--text-color);
+    font-size: 0.92rem;
+    font-weight: 600;
+}
+
+.osrs-indoc-calc-control,
+.osrs-indoc-calc-form input[type="text"],
+.osrs-indoc-calc-form input[type="number"],
+.osrs-indoc-calc-select,
+.osrs-indoc-calc-step input {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    min-height: 2.5rem;
+    padding: 0.45rem 0.65rem;
+    color: var(--text-color);
+    background: var(--wikitable-bg, var(--body-light));
+    border: 1px solid var(--body-border);
+    border-radius: 4px;
+    font: inherit;
+    -webkit-appearance: none;
+    appearance: none;
+}
+
+.osrs-indoc-calc-row {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    gap: 0.4rem;
+    width: 100%;
+    min-width: 0;
+}
+
+.osrs-indoc-calc-row > input,
+.osrs-indoc-calc-row > .osrs-indoc-calc-select {
+    flex: 1 1 0;
+    min-width: 0;
+}
+
+.osrs-indoc-calc-btn,
+.osrs-indoc-calc-step-btn,
+.osrs-indoc-calc-chip {
+    flex: 0 0 auto;
+    min-height: 2.5rem;
+    padding: 0.4rem 0.75rem;
+    color: var(--text-color);
+    background: var(--body-light, var(--wikitable-bg));
+    border: 1px solid var(--body-border);
+    border-radius: 4px;
+    font: inherit;
+    font-weight: 600;
+}
+
+.osrs-indoc-calc-submit {
+    color: var(--ooui-on-progressive, #fff);
+    background: var(--ooui-progressive, #744e2f);
+    border-color: var(--ooui-progressive, #744e2f);
+}
+
+html.theme-osrs-dark .osrs-indoc-calc-submit,
+body.wgl-theme-dark .osrs-indoc-calc-submit {
+    color: #f4efe6;
+}
+
+.osrs-indoc-calc-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+    width: 100%;
+}
+
+.osrs-indoc-calc-chip[aria-pressed="true"] {
+    background: var(--ooui-progressive, #744e2f);
+    border-color: var(--ooui-progressive, #744e2f);
+    color: var(--ooui-on-progressive, #fff);
+}
+
+.osrs-indoc-calc-switch {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-height: 2.5rem;
+}
+
+.osrs-indoc-calc-switch input {
+    width: 1.15rem;
+    height: 1.15rem;
+    min-height: 0;
+    accent-color: var(--ooui-progressive, #744e2f);
+}

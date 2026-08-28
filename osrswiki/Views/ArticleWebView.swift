@@ -124,6 +124,10 @@ class IOSAssetHandler: NSObject, WKURLSchemeHandler {
             return "web/switch_infobox_styles.css"
         case "gadget_calc_core.js":
             return "js/mediawiki/gadget_calc_core.js"
+        case "osrs_calculator_runtime.js":
+            return "web/osrs_calculator_runtime.js"
+        case "osrs_native_calc_indoc.js":
+            return "web/osrs_native_calc_indoc.js"
         default:
             return path
         }

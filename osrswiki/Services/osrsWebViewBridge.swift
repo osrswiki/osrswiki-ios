@@ -74,14 +74,6 @@ class osrsWebViewBridge: NSObject, WKScriptMessageHandler {
                 )
             }
 
-        case "nativeCalcCollapsed":
-            let collapsed = (body["collapsed"] as? Bool) ?? false
-            NotificationCenter.default.post(
-                name: .osrsNativeCalcCollapsed,
-                object: nil,
-                userInfo: ["collapsed": collapsed]
-            )
-
         default:
             print("[WebViewBridge] Unknown method: \(method)")
         }
@@ -205,15 +197,6 @@ class osrsWebViewBridge: NSObject, WKScriptMessageHandler {
                 } catch (e) {
                     console.warn('Failed to log message:', e);
                 }
-            },
-
-            nativeCalcCollapsed: function(collapsed) {
-                try {
-                    window.webkit.messageHandlers.OsrsWikiBridge.postMessage({
-                        method: 'nativeCalcCollapsed',
-                        collapsed: !!collapsed
-                    });
-                } catch (e) {}
             },
 
             playYouTube: function(videoId) {

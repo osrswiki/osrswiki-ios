@@ -76,7 +76,7 @@ final class osrsArticleFirstResponderBlankUITests: XCTestCase {
                 app.webViews.firstMatch.waitForExistence(timeout: 2),
             app.debugDescription
         )
-        let namedById = app.textFields["native-calc-field-name"].firstMatch
+        let namedById = app.webViews.textFields["Name"].firstMatch
         let namedByPlaceholder = app.textFields["Name"].firstMatch
         let nameField = namedById.exists ? namedById : namedByPlaceholder
         var appeared = namedById.waitForExistence(timeout: 35) || namedByPlaceholder.waitForExistence(timeout: 2)
@@ -109,10 +109,9 @@ final class osrsArticleFirstResponderBlankUITests: XCTestCase {
             app.textFields["search_input"].exists && app.buttons["search_back_button"].exists,
             "Tapping Name must stay on Calculator:Agility, not article→search"
         )
-        let nameStillPresent = app.textFields["native-calc-field-name"].firstMatch.exists
+        let nameStillPresent = app.webViews.textFields["Name"].firstMatch.exists
             || app.textFields["Name"].firstMatch.exists
-            || app.webViews.textFields["Name"].firstMatch.exists
-            || app.buttons["native-calc-lookup"].firstMatch.exists
+            || app.webViews.buttons["Lookup"].firstMatch.exists
             || app.buttons["Lookup"].firstMatch.exists
             || app.staticTexts["Calculator"].firstMatch.exists
         XCTAssertTrue(

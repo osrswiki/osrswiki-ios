@@ -25,7 +25,7 @@ final class osrsCalculatorLiveUserUITests: XCTestCase {
                 app.webViews.firstMatch.waitForExistence(timeout: 2),
             app.debugDescription
         )
-        let namedById = app.textFields["native-calc-field-name"].firstMatch
+        let namedById = app.webViews.textFields["Name"].firstMatch
         let namedByPlaceholder = app.textFields["Name"].firstMatch
         let nameField = namedById.exists ? namedById : namedByPlaceholder
         var appeared = namedById.waitForExistence(timeout: articleLoadTimeout)
@@ -82,7 +82,7 @@ final class osrsCalculatorLiveUserUITests: XCTestCase {
                 }
             }
         }
-        let submitById = app.buttons["native-calc-submit"].firstMatch
+        let submitById = app.webViews.buttons["Submit calculator"].firstMatch
         let submitByLabel = app.buttons["Submit"].firstMatch
         let submit = submitById.exists ? submitById : submitByLabel
         XCTAssertTrue(

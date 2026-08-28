@@ -88,7 +88,6 @@ private struct ArticleViewContent: View {
     // Make overlayManager optional to handle preview rendering
     @Environment(\.overlayManager) var overlayManager: GlobalOverlayManager?
     @StateObject private var viewModel: ArticleViewModel
-    @StateObject private var nativeCalc = osrsNativeCalcSession()
     @State private var isShowingShareSheet = false
     @State private var isShowingTableOfContents = false
     @State private var contentsRevealProgress: CGFloat = 0
@@ -132,7 +131,6 @@ private struct ArticleViewContent: View {
         self.showProgressBar = showProgressBar
         self.managesMainTabBarVisibility = managesMainTabBarVisibility
         self._viewModel = StateObject(wrappedValue: ArticleViewModel(pageUrl: pageUrl, pageTitle: pageTitle, pageId: nil, snippet: snippet, thumbnailUrl: thumbnailUrl, collapseTablesEnabled: collapseTablesEnabled, excludeFromHistory: excludeFromHistory))
-        self._nativeCalc = StateObject(wrappedValue: osrsNativeCalcSession())
         print("🏗️ ArticleView: Created with title='\(pageTitle ?? "nil")' url=\(pageUrl), snippet='\(snippet ?? "nil")', thumbnail='\(thumbnailUrl?.absoluteString ?? "nil")', collapseTables=\(collapseTablesEnabled), excludeFromHistory=\(excludeFromHistory)")
     }
 
@@ -417,11 +415,6 @@ private struct ArticleViewContent: View {
         hideMainTabBar()
         isArticleVisible = true
         viewModel.setArticleVisibility(true, allowsPassiveCaching: savedPageId == nil)
-        let calculatorTitle = osrsNativeCalcSession.calculatorTitle(pageTitle: pageTitle, pageURL: pageUrl)
-        if osrsNativeCalcSession.shouldAttemptNativeChrome(title: calculatorTitle),
-           nativeCalc.phase == .idle {
-            nativeCalc.start(title: calculatorTitle, usesDarkTheme: osrsTheme is osrsDarkTheme)
-        }
 
         if hasLoadedBefore {
             if viewModel.shouldReloadArticleOnReappear {
@@ -1086,8 +1079,6 @@ private struct ArticleViewContent: View {
 
     @ViewBuilder
     private var contentView: some View {
-        let hideArticleShell = osrsNativeCalcSession.hidesArticleShell(phase: nativeCalc.phase)
-        let showNativeForm = nativeCalc.phase == .native || nativeCalc.phase == .submitting
         ZStack {
         // WebView always present to allow loading completion and WebView fallback.
         ArticleWebView(
@@ -1133,12 +1124,6 @@ private struct ArticleViewContent: View {
         )
             .id(viewModel.webViewRenderGeneration)
             .background(Color.clear)
-            .opacity(hideArticleShell ? 0 : 1)
-            .allowsHitTesting(!hideArticleShell)
-            .accessibilityHidden(hideArticleShell)
-        if showNativeForm {
-            osrsNativeCalcSlotOverlay(session: nativeCalc, webView: viewModel.webView)
-        }
         }
     }
 

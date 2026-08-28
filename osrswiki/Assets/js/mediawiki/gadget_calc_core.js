@@ -2377,7 +2377,35 @@ function lookupCalc(calcId) {
 /**
  * @todo
  */
+function osrsIndocPageShouldSkipGadget() {
+    if (document.documentElement && (
+        document.documentElement.classList.contains('osrs-indoc-calc') ||
+        document.documentElement.classList.contains('osrs-native-calc-slot-active')
+    )) {
+        return true;
+    }
+    var names = [];
+    try {
+        if (window.RLCONF) {
+            names.push(window.RLCONF.wgPageName, window.RLCONF.wgTitle);
+        }
+    } catch (e) {}
+    try {
+        if (window.mw && mw.config && typeof mw.config.get === 'function') {
+            names.push(mw.config.get('wgPageName'), mw.config.get('wgTitle'));
+        }
+    } catch (e2) {}
+    for (var i = 0; i < names.length; i++) {
+        var n = String(names[i] || '').replace(/_/g, ' ').trim();
+        if (n === 'Calculator:Agility' || n === 'Calculator:Combat level') return true;
+    }
+    return false;
+}
+
 function init() {
+    if (osrsIndocPageShouldSkipGadget()) {
+        return;
+    }
     if (document.documentElement.getAttribute('data-osrs-calc-inited') === '1' &&
         document.querySelector('.jsCalc-field')) {
         return;
@@ -2419,7 +2447,40 @@ rs.calc.lookup = lookupCalc;
         }
     }
     window.__osrsKickCalcCore = osrsRunCalcCoreFactory;
+    function osrsIndocPageShouldSkipGadgetBoot() {
+        if (document.documentElement && (
+            document.documentElement.classList.contains('osrs-indoc-calc') ||
+            document.documentElement.classList.contains('osrs-native-calc-slot-active')
+        )) {
+            return true;
+        }
+        var names = [];
+        try {
+            if (window.RLCONF) {
+                names.push(window.RLCONF.wgPageName, window.RLCONF.wgTitle);
+            }
+        } catch (e) {}
+        try {
+            if (window.mw && mw.config && typeof mw.config.get === 'function') {
+                names.push(mw.config.get('wgPageName'), mw.config.get('wgTitle'));
+            }
+        } catch (e2) {}
+        for (var i = 0; i < names.length; i++) {
+            var n = String(names[i] || '').replace(/_/g, ' ').trim();
+            if (n === 'Calculator:Agility' || n === 'Calculator:Combat level') return true;
+        }
+        return false;
+    }
     function osrsBootCalcCore() {
+        try {
+            if (osrsIndocPageShouldSkipGadgetBoot()) {
+                if (document.documentElement) {
+                    document.documentElement.classList.add('osrs-indoc-calc');
+                    document.documentElement.classList.add('osrs-native-calc-slot-active');
+                }
+                return;
+            }
+        } catch (skipErr) {}
         if (!window.mw || !mw.loader) {
             setTimeout(osrsBootCalcCore, 25);
             return;

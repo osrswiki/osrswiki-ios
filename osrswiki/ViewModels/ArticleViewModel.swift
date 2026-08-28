@@ -26,7 +26,6 @@ extension Notification.Name {
     static let showAppearanceSettings = Notification.Name("showAppearanceSettings")
     static let osrsInternalArticleLinkRequested = Notification.Name("osrsInternalArticleLinkRequested")
     static let osrsPlayYouTubeRequested = Notification.Name("osrsPlayYouTubeRequested")
-    static let osrsNativeCalcCollapsed = Notification.Name("osrsNativeCalcCollapsed")
     static let osrsSceneCompositorLooksBlank = Notification.Name("osrs.sceneCompositorLooksBlank")
 }
 
@@ -3268,6 +3267,7 @@ class ArticleViewModel: NSObject, ObservableObject {
             "tablesort.min.js",
             "tablesort_init.js",
             "gadget_calc_core.js",
+            "osrs_native_calc_indoc.js",
             "osrs_calculator_runtime.js",
             "article_tools.js",
             "collapsible_content.js",
@@ -3611,6 +3611,7 @@ class ArticleViewModel: NSObject, ObservableObject {
             "js/tablesort.min.js",
             "js/tablesort_init.js",
             "js/mediawiki/gadget_calc_core.js",
+            "web/osrs_native_calc_indoc.js",
             "web/osrs_calculator_runtime.js",
             "web/article_tools.js",
             "web/collapsible_content.js",

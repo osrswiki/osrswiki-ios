@@ -1,4 +1,3 @@
-import Combine
 import WebKit
 import XCTest
 @testable import osrswiki
@@ -131,22 +130,6 @@ final class osrsNativeCalcDefinitionTests: XCTestCase {
         ))
     }
 
-    func testIntroCopyAndDarkResultWrapperAvoidBlackOnDark() {
-        let copy = osrsNativeCalcDefinition.introCopy(from: """
-        ===Assumptions===
-        * The bonus experience gained at the Agility Pyramid is only calculated for the current level.
-        ===Calculator===
-        """)
-        XCTAssertTrue(copy.contains("live wiki calculator"))
-        XCTAssertTrue(copy.contains("Assumptions"))
-        XCTAssertTrue(copy.contains("Agility Pyramid"))
-        let dark = osrsNativeCalcDefinition.wrapResultHTML("<table><tr><td>Plank</td></tr></table>", dark: true)
-        XCTAssertTrue(dark.contains("#28221d"))
-        XCTAssertTrue(dark.contains("#f4eaea"))
-        XCTAssertFalse(dark.contains("background: #000"))
-        XCTAssertFalse(dark.contains("color: #000"))
-    }
-
     func testFallbackReasons() {
         XCTAssertEqual(
             osrsNativeCalcDefinition.fallbackReason(
@@ -211,9 +194,6 @@ final class osrsNativeCalcDefinitionTests: XCTestCase {
             "{{Calculator:Combat level/Template|attack=1|strength=1|ranged=1|magic=1|defence=1|hitpoints=10|prayer=1}}"
         )
         XCTAssertFalse(wikitext.contains("|skill="))
-        let copy = osrsNativeCalcDefinition.introCopy(from: config, title: "Calculator:Combat level")
-        XCTAssertTrue(copy.lowercased().contains("combat"))
-        XCTAssertFalse(copy.contains("Agility"))
         XCTAssertFalse(osrsNativeCalcDefinition.parseResultIsError("<p>Your combat level is 3, balanced.</p>"))
     }
 
@@ -279,11 +259,6 @@ final class osrsNativeCalcDefinitionTests: XCTestCase {
 
     @MainActor
     func testNativeCalcKeepsArticleWebViewAsPageShell() throws {
-        XCTAssertFalse(osrsNativeCalcSession.hidesArticleShell(phase: .idle))
-        XCTAssertFalse(osrsNativeCalcSession.hidesArticleShell(phase: .loading))
-        XCTAssertFalse(osrsNativeCalcSession.hidesArticleShell(phase: .native))
-        XCTAssertFalse(osrsNativeCalcSession.hidesArticleShell(phase: .submitting))
-        XCTAssertFalse(osrsNativeCalcSession.hidesArticleShell(phase: .fallback))
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
@@ -291,37 +266,15 @@ final class osrsNativeCalcDefinitionTests: XCTestCase {
             contentsOf: root.appendingPathComponent("osrswiki/Views/ArticleView.swift"),
             encoding: .utf8
         )
-        XCTAssertTrue(articleView.contains("osrsNativeCalcSession.hidesArticleShell"))
-        XCTAssertFalse(articleView.contains(".opacity(showNative ? 0 : 1)"))
-        XCTAssertTrue(articleView.contains("osrsNativeCalcSlotOverlay"))
-        let view = try String(
-            contentsOf: root.appendingPathComponent("osrswiki/Views/osrsNativeCalcView.swift"),
-            encoding: .utf8
-        )
-        XCTAssertTrue(view.contains("Picker(input.label"))
-        XCTAssertTrue(view.contains("native-calc-label-\\(input.name)"))
-        XCTAssertTrue(view.contains("osrsNativeCalcChrome"))
-        XCTAssertFalse(view.contains("native-calc-collapsible-header"))
-        XCTAssertTrue(view.contains("native-calc-overflow"))
-        XCTAssertFalse(view.contains("Menu {"))
-        XCTAssertTrue(view.contains("osrsNativeCalcDraftField"))
-        XCTAssertTrue(view.contains("native-calc-error"))
-        let overlay = try String(
-            contentsOf: root.appendingPathComponent("osrswiki/Views/osrsNativeCalcSlotOverlay.swift"),
-            encoding: .utf8
-        )
-        XCTAssertTrue(overlay.contains("osrsNativeCalcSlotGeometry.formTopY"))
-        XCTAssertTrue(overlay.contains("osrsNativeCalcControlPanBridge"))
-        XCTAssertTrue(overlay.contains(".clipped()"))
-        XCTAssertFalse(overlay.contains("max(0, slotY)"))
-        XCTAssertFalse(overlay.contains("max(0, slotDocumentY"))
-        XCTAssertFalse(view.contains("listStyle(.insetGrouped)"))
-        XCTAssertFalse(view.contains("osrsNativeCalcResultWebView"))
+        XCTAssertFalse(articleView.contains("osrsNativeCalcSession"))
+        XCTAssertFalse(articleView.contains("osrsNativeCalcSlotOverlay"))
+        XCTAssertFalse(articleView.contains("osrsNativeCalcView"))
         let runtime = try String(
             contentsOf: root.appendingPathComponent("osrswiki/Assets/web/osrs_calculator_runtime.js"),
             encoding: .utf8
         )
         XCTAssertTrue(runtime.contains("osrsInstallNativeCalcSlot"))
+        XCTAssertTrue(runtime.contains("osrsBootIndocCalc"))
         XCTAssertTrue(runtime.contains("osrs-native-calc-slot"))
         XCTAssertTrue(runtime.contains("osrsNativeCalcSetResult"))
         XCTAssertTrue(runtime.contains("osrsWrapCollapsible"))
@@ -349,40 +302,13 @@ final class osrsNativeCalcDefinitionTests: XCTestCase {
         )
         XCTAssertTrue(resultScript.contains("osrsNativeCalcSetResult"))
         XCTAssertTrue(resultScript.contains("Plank"))
-    }
-
-    @MainActor
-    func testNameFieldEditsDoNotPublishOrClearArticleDocuments() throws {
-        let session = osrsNativeCalcSession()
-        let definition = try XCTUnwrap(osrsNativeCalcDefinition.parse(agilityConfig, title: "Calculator:Agility"))
-        session.seedNativeStateForTesting(
-            definition: definition,
-            values: Dictionary(uniqueKeysWithValues: definition.inputs.map { ($0.name, $0.defaultValue) }),
-            resultDocument: "<html>Plank</html>",
-            resultHTML: "<td>Plank</td>"
+        let indoc = try String(
+            contentsOf: root.appendingPathComponent("osrswiki/Assets/web/osrs_native_calc_indoc.js"),
+            encoding: .utf8
         )
-        var publishes = 0
-        let cancellable = session.objectWillChange.sink { _ in publishes += 1 }
-        session.setValue("name", "osa", submit: false)
-        session.setValue("name", "osamo", submit: false)
-        XCTAssertEqual(publishes, 0)
-        XCTAssertEqual(session.phase, .native)
-        XCTAssertEqual(session.resultDocument, "<html>Plank</html>")
-        XCTAssertEqual(session.resultHTML, "<td>Plank</td>")
-        XCTAssertEqual(session.values["name"], "osamo")
-        session.applyLookupResult(
-            ok: false,
-            body: "",
-            player: "osamosis",
-            mapping: "XPInput,17,2;lvlInput,17,1"
-        )
-        XCTAssertEqual(session.phase, .native)
-        XCTAssertEqual(session.resultDocument, "<html>Plank</html>")
-        XCTAssertEqual(
-            session.hiscoresError,
-            osrsNativeCalcDefinition.hiscoresUnavailableMessage(player: "osamosis")
-        )
-        cancellable.cancel()
+        XCTAssertTrue(indoc.contains("osrs-indoc-calc-form"))
+        XCTAssertTrue(indoc.contains("Calculator:Agility"))
+        XCTAssertTrue(indoc.contains("Calculator:Combat level"))
     }
 
     @MainActor
@@ -552,162 +478,16 @@ final class osrsNativeCalcDefinitionTests: XCTestCase {
         XCTAssertEqual(result["exists"] as? Bool, true)
         XCTAssertEqual(payload["category"] as? String, "calculator")
         XCTAssertTrue(((payload["boxClass"] as? String) ?? "").contains("collapsible-calculator"))
-        XCTAssertEqual(payload["overflowX"] as? String, "auto")
+        XCTAssertEqual(payload["overflowX"] as? String, "visible")
         XCTAssertEqual(payload["collapsedHidesSlot"] as? Bool, true)
         XCTAssertEqual(payload["isCollapsedFn"] as? Bool, false)
         window.isHidden = true
     }
 
     @MainActor
-    func testSlotGeometryScrollsOffInsteadOfPinningToTop() throws {
-        XCTAssertEqual(osrsNativeCalcSlotGeometry.formTopY(slotDocumentY: 420, contentOffsetY: 0), 420)
-        XCTAssertEqual(osrsNativeCalcSlotGeometry.formTopY(slotDocumentY: 420, contentOffsetY: 600), -180)
-        XCTAssertFalse(
-            osrsNativeCalcSlotGeometry.isPinnedToWebViewTop(
-                formTopY: -180,
-                slotDocumentY: 420,
-                contentOffsetY: 600
-            )
-        )
-        XCTAssertTrue(
-            osrsNativeCalcSlotGeometry.isPinnedToWebViewTop(
-                formTopY: 0,
-                slotDocumentY: 420,
-                contentOffsetY: 600
-            )
-        )
-        XCTAssertTrue(
-            osrsNativeCalcSlotGeometry.formHasLeftViewport(
-                formTopY: -180,
-                formHeight: 160,
-                viewportHeight: 800
-            )
-        )
-        XCTAssertFalse(
-            osrsNativeCalcSlotGeometry.overlayMayShow(slotResolved: false),
-            "unresolved slotY=0 must not paint the form over search chrome"
-        )
-        XCTAssertTrue(osrsNativeCalcSlotGeometry.overlayMayShow(slotResolved: true))
-        XCTAssertFalse(
-            osrsNativeCalcSlotGeometry.overlayMayShow(slotResolved: true, collapsed: true),
-            "collapsed article header must stay tappable; overlay hides"
-        )
-        XCTAssertFalse(
-            osrsNativeCalcSlotGeometry.overlayCoversArticleHeader(
-                overlayIncludesHeader: false,
-                collapsed: true
-            )
-        )
-        let overlay = try String(
-            contentsOf: URL(fileURLWithPath: #filePath)
-                .deletingLastPathComponent()
-                .deletingLastPathComponent()
-                .appendingPathComponent("osrswiki/Views/osrsNativeCalcSlotOverlay.swift"),
-            encoding: .utf8
-        )
-        XCTAssertTrue(overlay.contains("overlayMayShow"))
-        XCTAssertTrue(overlay.contains("slotResolved"))
-        XCTAssertTrue(
-            overlay.contains("startDisclosurePollIfNeeded"),
-            "WebView header tap never calls updateUIView; overlay must poll collapsed like Android"
-        )
-        XCTAssertTrue(overlay.contains("osrsNativeCalcCollapsed"))
-        XCTAssertEqual(osrsNativeCalcSlotGeometry.disclosurePollInterval, 0.2)
-        XCTAssertFalse(
-            overlay.contains("maxHeight: .infinity"),
-            "full-height overlay frame swallows article pans so the calc cannot scroll away"
-        )
-        XCTAssertEqual(
-            osrsNativeCalcSlotGeometry.firstLayoutWidth(
-                slotWidth: 96,
-                contentColumnWidth: 366,
-                viewportWidth: 390
-            ),
-            366,
-            accuracy: 0.5,
-            "overlay must use the content column on first paint, not a leftover slot rect"
-        )
-        XCTAssertEqual(
-            osrsNativeCalcSlotGeometry.firstLayoutWidth(
-                slotWidth: 96,
-                contentColumnWidth: 366,
-                viewportWidth: 390,
-                intersected: true
-            ),
-            366,
-            accuracy: 0.5
-        )
-        XCTAssertEqual(
-            osrsNativeCalcSlotGeometry.firstLayoutWidth(
-                slotWidth: 366,
-                contentColumnWidth: 366,
-                viewportWidth: 390
-            ),
-            366,
-            accuracy: 0.5
-        )
-        XCTAssertTrue(overlay.contains("overlayClipWidth"))
-        XCTAssertTrue(overlay.contains("contentColumn"))
-        XCTAssertEqual(
-            osrsNativeCalcSlotGeometry.overlayVisibleHeight(
-                formHeight: 1800,
-                viewportHeight: 800,
-                formTopY: 200
-            ),
-            600,
-            accuracy: 0.5,
-            "Agility overlay must cap to remaining viewport so chrome stays in the collapsible box"
-        )
-        XCTAssertEqual(
-            osrsNativeCalcSlotGeometry.overlayVisibleHeight(
-                formHeight: 1800,
-                viewportHeight: 800,
-                formTopY: 200,
-                boxHeight: 480
-            ),
-            480,
-            accuracy: 0.5,
-            "collapsible body shorter than remaining viewport wins"
-        )
-        XCTAssertEqual(
-            osrsNativeCalcSlotGeometry.overlayVisibleHeight(
-                formHeight: 360,
-                viewportHeight: 800,
-                formTopY: 200
-            ),
-            360,
-            accuracy: 0.5,
-            "Combat-sized form must keep its intrinsic height"
-        )
-        XCTAssertEqual(
-            osrsNativeCalcSlotGeometry.overlayClipWidth(
-                slotWidth: 520,
-                contentColumnWidth: 366,
-                viewportWidth: 390
-            ),
-            366,
-            accuracy: 0.5,
-            "wider-than-box chrome clips to the collapsible column like article tables"
-        )
-        XCTAssertTrue(overlay.contains("overlayVisibleHeight"))
-        XCTAssertFalse(
-            overlay.contains("maxHeight: formHeight"),
-            "full formHeight frame is taller than the box and swallows article pans"
-        )
-        XCTAssertTrue(overlay.contains("overlayClipWidth") || overlay.contains("firstLayoutWidth"))
-    }
-
-    @MainActor
     func testAgilitySelectLabelsRenderFromJcConfig() throws {
-        let session = osrsNativeCalcSession()
         let definition = try XCTUnwrap(osrsNativeCalcDefinition.parse(agilityConfig, title: "Calculator:Agility"))
-        session.seedNativeStateForTesting(
-            definition: definition,
-            values: Dictionary(uniqueKeysWithValues: definition.inputs.map { ($0.name, $0.defaultValue) }),
-            resultDocument: "<html>Plank</html>",
-            resultHTML: "<td>Plank</td>"
-        )
-        let labels = session.visibleInputs().filter { $0.type == .select }.map(\.label)
+        let labels = definition.inputs.filter { $0.type == .select }.map(\.label)
         XCTAssertEqual(
             labels,
             [
@@ -719,30 +499,27 @@ final class osrsNativeCalcDefinitionTests: XCTestCase {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-        let view = try String(
-            contentsOf: root.appendingPathComponent("osrswiki/Views/osrsNativeCalcView.swift"),
+        let indoc = try String(
+            contentsOf: root.appendingPathComponent("osrswiki/Assets/web/osrs_native_calc_indoc.js"),
             encoding: .utf8
         )
-        let selectStart = try XCTUnwrap(view.range(of: "case .select:"))
-        let selectEnd = try XCTUnwrap(view.range(of: "case .buttonSelect:"))
-        let selectBranch = String(view[selectStart.lowerBound..<selectEnd.lowerBound])
-        XCTAssertTrue(selectBranch.contains("Text(input.label)"))
-        XCTAssertTrue(selectBranch.contains("native-calc-label-\\(input.name)"))
-        XCTAssertTrue(view.contains(".accessibilityLabel(input.label)"))
-        let chromeStart = try XCTUnwrap(view.range(of: "struct osrsNativeCalcChrome"))
-        let chromeEnd = try XCTUnwrap(view.range(of: "struct osrsNativeCalcView"))
-        let chrome = String(view[chromeStart.lowerBound..<chromeEnd.lowerBound])
-        XCTAssertFalse(chrome.contains("native-calc-collapsible-header"))
-        XCTAssertTrue(chrome.contains("native-calc-overflow"))
+        XCTAssertTrue(indoc.contains("osrs-indoc-calc-form"))
+        XCTAssertTrue(indoc.contains("aria-label"))
+        let runtime = try String(
+            contentsOf: root.appendingPathComponent("osrswiki/Assets/web/osrs_calculator_runtime.js"),
+            encoding: .utf8
+        )
+        XCTAssertTrue(runtime.contains("showChoicePicker"))
         XCTAssertFalse(
-            chrome.contains("ScrollView("),
-            "article owns vertical scrolling; the chrome is intrinsic like an on-wiki collapsible (ip clip/pan spec)"
+            FileManager.default.fileExists(
+                atPath: root.appendingPathComponent("osrswiki/Views/osrsNativeCalcView.swift").path
+            )
         )
-        XCTAssertTrue(
-            view.contains(".background(osrsTheme.background.opacity(0.97).allowsHitTesting(false))"),
-            "a hit-testing chrome background absorbs pans in the SwiftUI layer; the article never sees them (ip clip/pan spec)"
+        XCTAssertFalse(
+            FileManager.default.fileExists(
+                atPath: root.appendingPathComponent("osrswiki/Views/osrsNativeCalcSlotOverlay.swift").path
+            )
         )
-        XCTAssertFalse(chrome.contains(".fixedSize(horizontal: true"))
     }
 
     @MainActor
@@ -813,12 +590,18 @@ final class osrsNativeCalcDefinitionTests: XCTestCase {
           if (header) header.click();
           var afterExpand = boxInfo('.collapsible-calculator');
           var slot = document.getElementById('osrs-native-calc-slot');
+          var expandedBox = document.querySelector('.collapsible-calculator');
           return {
             article: article,
             calc: calc,
             afterCollapse: afterCollapse,
             afterExpand: afterExpand,
-            slotVisibleAfterExpand: !!(slot && slot.getBoundingClientRect().height > 0),
+            slotVisibleAfterExpand: !!(
+              slot &&
+              expandedBox &&
+              expandedBox.contains(slot) &&
+              !expandedBox.classList.contains('collapsed')
+            ),
             wrapFn: typeof window.osrsWrapCollapsible,
             toggleFn: typeof window.osrsToggleCollapsible
           };

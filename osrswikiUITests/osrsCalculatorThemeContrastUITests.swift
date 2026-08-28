@@ -43,13 +43,14 @@ final class osrsCalculatorThemeContrastUITests: XCTestCase {
             let app = launchArticle(title: "Calculator:Agility", path: "Calculator:Agility")
             let webView = articleWebView(in: app)
             XCTAssertTrue(webView.waitForExistence(timeout: articleLoadTimeout), app.debugDescription)
-            let form = app.descendants(matching: .any)["native-calc-form"].firstMatch
+            let form = app.webViews.otherElements["Agility calculator"].firstMatch
+            let nameField = app.webViews.textFields["Name"].firstMatch
             let header = labeledControl("Calculator Tap to collapse", in: app)
-            _ = form.waitForExistence(timeout: 12)
+            _ = form.waitForExistence(timeout: 12) || nameField.waitForExistence(timeout: 2)
             _ = header.waitForExistence(timeout: 2)
             writeScratchScreenshot(from: app, name: shot)
             attachScreenshot(from: app, name: shot)
-            let box = header.exists && header.frame.width > 1 ? header : form
+            let box = header.exists && header.frame.width > 1 ? header : (form.exists ? form : nameField)
             XCTAssertTrue(
                 box.exists && box.frame.width > 1,
                 "calc box missing on first open without swipe. \(app.debugDescription)"
@@ -71,7 +72,8 @@ final class osrsCalculatorThemeContrastUITests: XCTestCase {
         let webView = articleWebView(in: app)
         XCTAssertTrue(webView.waitForExistence(timeout: articleLoadTimeout), app.debugDescription)
 
-        let form = app.descendants(matching: .any)["native-calc-form"].firstMatch
+        let form = app.webViews.otherElements["Agility calculator"].firstMatch
+        let nameField = app.webViews.textFields["Name"].firstMatch
         var header = labeledControl("Calculator Tap to collapse", in: app)
         for _ in 0..<16 {
             if header.exists, header.frame.height > 4, header.frame.minY > 80 {
@@ -102,11 +104,12 @@ final class osrsCalculatorThemeContrastUITests: XCTestCase {
             expandHint.waitForExistence(timeout: 6),
             "collapse did not show Tap to expand. \(app.debugDescription)"
         )
-        let collapsedForm = app.descendants(matching: .any)["native-calc-form"].firstMatch
-        _ = collapsedForm.waitForNonExistence(timeout: 4)
+        let collapsedForm = app.webViews.otherElements["Agility calculator"].firstMatch
+        let collapsedName = app.webViews.textFields["Name"].firstMatch
+        _ = collapsedName.waitForNonExistence(timeout: 4)
         XCTAssertFalse(
-            collapsedForm.exists && collapsedForm.isHittable,
-            "native-calc-form leaked after collapse. \(app.debugDescription)"
+            (collapsedForm.exists && collapsedForm.isHittable) || (collapsedName.exists && collapsedName.isHittable),
+            "in-document calc form leaked after collapse. \(app.debugDescription)"
         )
         writeScratchScreenshot(from: app, name: "ios-agility-collapsed.png")
         attachScreenshot(from: app, name: "ios-agility-collapsed")
