@@ -150,6 +150,34 @@ final class osrsHostThemeFillTests: XCTestCase {
         XCTAssertNil(firstParkedArticlePaint(in: live))
     }
 
+    func testApplyLeavesWebKitInternalScrollViewsUnpainted() async throws {
+        let themeColor = UIColor(red: 40 / 255, green: 34 / 255, blue: 29 / 255, alpha: 1)
+        let live = makeWindow(theme: themeColor, includeArticleWebView: true)
+        let webView = try XCTUnwrap(firstWebView(in: live))
+        try await loadArticleHTML(in: webView)
+        // WebKit's composited-overflow scrollport (WKChildScrollView) is a
+        // plain UIScrollView the app does not own. Its scrolled content's
+        // alpha reveals WebKit's own page tile below; an opaque app fill
+        // there was the Uncharged-left parchment band (gutter spec Phase 16).
+        let scroller = UIScrollView(frame: CGRect(x: 0, y: 0, width: 340, height: 287))
+        scroller.backgroundColor = themeColor // stale fill from an earlier apply
+        scroller.isOpaque = true
+        webView.scrollView.addSubview(scroller)
+        defer { scroller.removeFromSuperview() }
+
+        osrsWebViewThemePaint.apply(to: webView, theme: osrsDarkTheme())
+
+        XCTAssertTrue(
+            isThemeParchment(webView.scrollView.backgroundColor, expected: themeColor),
+            "The WKWebView's own scrollView keeps the theme underlay"
+        )
+        XCTAssertNil(
+            scroller.backgroundColor,
+            "WK-internal scroll views must stay unpainted (nil); an opaque theme fill covers WebKit's correctly painted page tile"
+        )
+        XCTAssertFalse(scroller.isOpaque)
+    }
+
     func testApplyLiveThemeOnLoadedArticleKeepsThemeParchment() async throws {
         let parchment = UIColor(red: 226 / 255, green: 219 / 255, blue: 200 / 255, alpha: 1)
         let live = makeWindow(theme: parchment, includeArticleWebView: true)
@@ -646,7 +674,19 @@ final class osrsHostThemeFillTests: XCTestCase {
         let dumpURL = try XCTUnwrap(
             FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
         ).appendingPathComponent("osrs-scene-dump.txt")
-        let dump = try String(contentsOf: dumpURL, encoding: .utf8)
+        var dump = try String(contentsOf: dumpURL, encoding: .utf8)
+        let cssDeadline = Date().addingTimeInterval(2)
+        while Date() < cssDeadline,
+              !dump.contains("btnCount="),
+              !dump.contains("cssCap=no-wk"),
+              !dump.contains("cssUncharged=") {
+            RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+            dump = (try? String(contentsOf: dumpURL, encoding: .utf8)) ?? dump
+        }
+        XCTAssertTrue(
+            dump.contains("dumpCssV=js-first-v3"),
+            "Installed dumpWindow must be the JS-first census, not stale-cache: \(dump.suffix(400))"
+        )
         XCTAssertTrue(dump.contains("allCtx="), "C49-class dump must enumerate process CAContexts: \(dump.suffix(400))")
         XCTAssertTrue(dump.contains("winCtx="), "C49-class dump must map windows to context ids")
         XCTAssertTrue(
@@ -654,12 +694,56 @@ final class osrsHostThemeFillTests: XCTestCase {
             "Dump must lock a gutter sample to an Uncharged chip Y, not only y=148: \(dump.suffix(400))"
         )
         XCTAssertTrue(
-            dump.contains("cssUncharged=") || dump.contains("cssCap="),
+            dump.contains("btnCount="),
+            "Hosted dump with a live article WK must count .button nodes, not cssCap=no-wk: \(dump.suffix(400))"
+        )
+        XCTAssertTrue(
+            dump.contains("cssFromPoint="),
+            "Hosted dump must name the elementFromPoint node left of Uncharged: \(dump.suffix(400))"
+        )
+        XCTAssertTrue(
+            dump.contains("cssUncharged=") || dump.contains("cssCap=tag="),
             "Dump must include computed style of the live Uncharged caption/tabber node"
         )
         XCTAssertTrue(
-            dump.contains("cssFromPoint=") || dump.contains("cssCap=no-wk") || dump.contains("cssCap=timeout"),
-            "Dump must name the elementFromPoint node left of Uncharged"
+            dump.contains("dumpTileV=owner-v2"),
+            "Dump must stamp the Uncharged-Y IOSurface owner census: \(dump.suffix(400))"
+        )
+        XCTAssertTrue(
+            dump.contains("tileProbe="),
+            "Dump must name the window Uncharged-left probe: \(dump.suffix(400))"
+        )
+        XCTAssertTrue(
+            dump.contains("tileOwner="),
+            "Dump must name which WK contents layer owns Uncharged-left: \(dump.suffix(400))"
+        )
+        XCTAssertTrue(
+            dump.contains("cls=page")
+                || dump.contains("cls=chip")
+                || dump.contains("cls=scroll-snapshot")
+                || dump.contains("cls=other")
+                || dump.contains("cls=n/a"),
+            "Tile owner must report frame class page|chip|scroll-snapshot, not caption CSS: \(dump.suffix(400))"
+        )
+        XCTAssertTrue(
+            dump.contains("dumpRemoteV=layer-v4"),
+            "Dump must census the full window layer tree in paint order: \(dump.suffix(400))"
+        )
+        XCTAssertTrue(
+            dump.contains("bands="),
+            "layer-v4 must sample band-only 4pt crops at Uncharged-Y per covering layer: \(dump.suffix(400))"
+        )
+        XCTAssertTrue(
+            dump.contains("bgExtends="),
+            "Dump must name _backgroundExtendsBeyondPage at Find-up: \(dump.suffix(400))"
+        )
+        XCTAssertTrue(
+            dump.contains("remoteOwner="),
+            "Dump must name covering contributing layers in paint order: \(dump.suffix(400))"
+        )
+        XCTAssertTrue(
+            dump.contains("gutterDeepestParchment="),
+            "layer-v4 must summarize the deepest parchment-opaque gutterL layer: \(dump.suffix(400))"
         )
         XCTAssertFalse(dump.contains("CARenderServerGetInfo"))
         XCTAssertFalse(dump.contains("GetClientProcessId"))
@@ -803,6 +887,38 @@ final class osrsHostThemeFillTests: XCTestCase {
         XCTAssertTrue(
             compositor.contains("requestCssComputedCaptionTabber"),
             "dumpWindow must keep live caption/tabber computed-style census"
+        )
+        XCTAssertTrue(
+            compositor.contains("dumpCssV=js-first-v3"),
+            "dumpWindow must stamp a version so a stale Release binary cannot fake the live DOM census"
+        )
+        XCTAssertTrue(
+            compositor.contains("appendTileOwnerCensus"),
+            "dumpWindow must census WK contents IOSurfaces at Uncharged-Y"
+        )
+        XCTAssertTrue(
+            compositor.contains("dumpTileV=owner-v2"),
+            "dumpWindow must stamp tile-owner census version"
+        )
+        XCTAssertTrue(
+            compositor.contains("appendRemoteTileCensus"),
+            "dumpWindow must census contents=nil page tiled CALayers"
+        )
+        XCTAssertTrue(
+            compositor.contains("dumpRemoteV=layer-v4"),
+            "dumpWindow must stamp remote-tile census version"
+        )
+        XCTAssertTrue(
+            compositor.contains("walk(window.layer, depth: 0)"),
+            "layer-v4 must walk the full window layer tree in paint order, not name-filtered WK views"
+        )
+        XCTAssertTrue(
+            compositor.contains("gutterDeepestParchment"),
+            "layer-v4 must summarize the deepest parchment-opaque layer at gutterL"
+        )
+        XCTAssertTrue(
+            compositor.contains("descendsFromOverlay"),
+            "dumpWindow must name find-overlay descent for covering layers"
         )
         XCTAssertTrue(compositor.contains("CARenderServerRenderLayerWithTransform"))
         XCTAssertFalse(

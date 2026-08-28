@@ -219,8 +219,10 @@ class AppState: ObservableObject {
             }
         }
 
-#if DEBUG
+        // Release throwaway drives use SkipInstall XCTest against a Release
+        // app. -startArticleURL must still open Glory; it is not DEBUG-only.
         handleUITestNavigationArguments(arguments)
+#if DEBUG
         handleUITestDeepNavigationFixtureArguments(arguments)
 #endif
 
@@ -316,6 +318,7 @@ class AppState: ObservableObject {
             }
         }
     }
+#endif
 
     private func handleUITestNavigationArguments(_ arguments: [String]) {
         if let articleURLIndex = arguments.firstIndex(of: "-startArticleURL"),
@@ -369,6 +372,7 @@ class AppState: ObservableObject {
         print("UITest: starting More destination \(arguments[moreDestinationIndex + 1])")
     }
 
+#if DEBUG
     private func handleUITestDeepNavigationFixtureArguments(_ arguments: [String]) {
         guard osrsTestEnvironment.runsDeepNavigationFixtureAuditForUITests else {
             return

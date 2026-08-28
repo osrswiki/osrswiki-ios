@@ -19,6 +19,8 @@ import WebKit
 enum osrsSceneCompositor {
     private static var pendingBackgroundRestore = false
     private static var lastCssCaptionLines: [String] = []
+    private static var dumpCssGeneration: UInt64 = 0
+    private static var lastDumpPrefix: String = ""
 
     static func shouldRestoreResumeCover(didLeaveToBackground: Bool) -> Bool {
         didLeaveToBackground
@@ -628,18 +630,29 @@ enum osrsSceneCompositor {
     }
 
     static func firstLiveArticleWebView(in view: UIView) -> WKWebView? {
-        if isPreparedWarmer(view) {
-            return nil
+        let views = allLiveArticleWebViews(in: view)
+        if let named = views.first(where: { $0.accessibilityIdentifier == "article_web_view" }) {
+            return named
         }
-        if let webView = view as? WKWebView {
-            return webView
-        }
-        for child in view.subviews {
-            if let found = firstLiveArticleWebView(in: child) {
-                return found
+        return views.first
+    }
+
+    static func allLiveArticleWebViews(in view: UIView) -> [WKWebView] {
+        var found: [WKWebView] = []
+        func walk(_ node: UIView) {
+            if isPreparedWarmer(node) {
+                return
+            }
+            if let webView = node as? WKWebView {
+                found.append(webView)
+                return
+            }
+            for child in node.subviews {
+                walk(child)
             }
         }
-        return nil
+        walk(view)
+        return found
     }
 
     private static func removeStaleSnapshotOverlays(from root: UIView) {
@@ -813,7 +826,11 @@ enum osrsSceneCompositor {
         )
     }
 
-    static func dumpWindow(_ window: UIWindow, reason: String = "dump") {
+    static func dumpWindow(
+        _ window: UIWindow,
+        reason: String = "dump",
+        includeLayerCensus: Bool = true
+    ) {
         var lines: [String] = []
         let keyWindow = allSceneWindows().first(where: \.isKeyWindow)
         let keyClass = keyWindow.map { NSStringFromClass(type(of: $0)) } ?? "nil"
@@ -832,24 +849,6 @@ enum osrsSceneCompositor {
             lines.append("firstResponder=nil")
         }
         lines.append("wkBackground=\(webViewIsBackground(in: window))")
-        final class CssProbe {
-            var lines: [String] = ["cssCap=pending"]
-            var finished = false
-        }
-        let cssProbe = CssProbe()
-        if let webView = firstLiveArticleWebView(in: window) {
-            requestCssComputedCaptionTabber(in: webView) { result in
-                cssProbe.lines = result
-                cssProbe.finished = true
-            }
-        } else {
-            cssProbe.lines = ["cssCap=no-wk"]
-            cssProbe.finished = true
-        }
-        let cssEarlyDeadline = Date().addingTimeInterval(0.2)
-        while !cssProbe.finished, Date() < cssEarlyDeadline {
-            RunLoop.current.run(mode: .common, before: Date().addingTimeInterval(0.02))
-        }
         var tabBars: [String] = []
         collectTabBars(in: window, into: &tabBars)
         lines.append("tabBar \(tabBars.isEmpty ? "none" : tabBars.joined(separator: " | "))")
@@ -890,25 +889,50 @@ enum osrsSceneCompositor {
             }
         }
         walk(window, depth: 0)
-        // Dump-only C49-class census. Do not call the C46 client-info SPI
-        // that crashed launch. Names which process CAContext paints the
-        // Uncharged-left crop and the live caption/tabber computed style.
-        appendAllContextCensus(for: window, into: &lines)
-        let cssDeadline = Date().addingTimeInterval(0.15)
-        while !cssProbe.finished, Date() < cssDeadline {
-            RunLoop.current.run(mode: .common, before: Date().addingTimeInterval(0.02))
-        }
-        if !cssProbe.finished {
-            cssProbe.lines = lastCssCaptionLines.isEmpty ? ["cssCap=timeout"] : lastCssCaptionLines
-            if !lastCssCaptionLines.isEmpty {
-                cssProbe.lines.insert("cssCap=stale-cache", at: 0)
-            }
-        } else {
-            lastCssCaptionLines = cssProbe.lines
-        }
-        lines.append(contentsOf: cssProbe.lines)
+        let webView = firstLiveArticleWebView(in: window)
+        lines.append("dumpCssV=js-first-v3")
+        lines.append(
+            "wkAid=\(webView?.accessibilityIdentifier ?? "none") wkFound=\(webView != nil)"
+        )
         let header = "appState=\(UIApplication.shared.applicationState.rawValue) scene=\(window.windowScene?.activationState.rawValue ?? -1) key=\(window.isKeyWindow) sceneWindows=\(window.windowScene?.windows.count ?? -1) overlay=\(osrsResumeFrameOverlay.hasCapturedFrame)\n"
-        let text = header + lines.joined(separator: "\n")
+        let hasBtnCount = lastCssCaptionLines.contains(where: { $0.hasPrefix("btnCount=") })
+        func cssLines() -> [String] {
+            if lastCssCaptionLines.contains(where: { $0.hasPrefix("btnCount=") }) {
+                return lastCssCaptionLines
+            }
+            if webView == nil {
+                return ["cssCap=no-wk"]
+            }
+            return ["cssCap=pending"]
+        }
+        func publish(censusLines: [String]) {
+            lastDumpPrefix = header + (lines + censusLines).joined(separator: "\n")
+            writeSceneDump(lastDumpPrefix + "\n" + cssLines().joined(separator: "\n"))
+        }
+        // Kick WebContent JS before C49 CARender so Find-up btnCount is not
+        // stuck behind three serial layer renders on main. keyboardDidShow
+        // +80/+250 must not bump dumpCssGeneration or they drop the +0 probe.
+        publish(censusLines: [])
+        let mayStartProbe = includeLayerCensus || reason.hasSuffix("+0")
+        if let webView, mayStartProbe, !hasBtnCount {
+            dumpCssGeneration += 1
+            let generation = dumpCssGeneration
+            requestCssComputedCaptionTabber(in: webView) { result in
+                guard generation == dumpCssGeneration else { return }
+                lastCssCaptionLines = result
+                writeSceneDump(lastDumpPrefix + "\n" + result.joined(separator: "\n"))
+            }
+        }
+        if includeLayerCensus {
+            var census: [String] = []
+            appendAllContextCensus(for: window, into: &census)
+            appendTileOwnerCensus(for: window, into: &census)
+            appendRemoteTileCensus(for: window, into: &census)
+            publish(censusLines: census)
+        }
+    }
+
+    private static func writeSceneDump(_ text: String) {
         print("🪟 osrsSceneCompositor dump\n\(text)")
         NSLog("osrsSceneCompositor dump\n%@", text)
         if let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
@@ -1103,48 +1127,482 @@ enum osrsSceneCompositor {
         walk(root, depth: 0)
     }
 
+    /// Dump-only: name which WK contents IOSurface owns Uncharged-left.
+    /// Frame class is page (viewport), chip (infobox-sized compositing), or
+    /// scroll-snapshot (WKScrollView parked viewport). Samples the layer's
+    /// own backing (sublayers hidden for the CARender, restored immediately).
+    private static func appendTileOwnerCensus(for window: UIWindow, into lines: inout [String]) {
+        lines.append("dumpTileV=owner-v2")
+        var unchargedY = 196
+        for line in lines {
+            guard let range = line.range(of: "unchargedY=") else { continue }
+            let digits = line[range.upperBound...].prefix(while: { $0.isNumber })
+            if let value = Int(digits), value > 0 {
+                unchargedY = value
+            }
+        }
+        let probe = CGPoint(x: 110, y: CGFloat(unchargedY))
+        lines.append("tileProbe=win=\(Int(probe.x)),\(Int(probe.y))")
+        guard let webView = firstLiveArticleWebView(in: window) else {
+            lines.append("tileOwner=none contents=nil cls=n/a")
+            lines.append("tileWinner=none")
+            return
+        }
+        let contextId = UInt32(compositorContextId(of: window)) ?? 0
+        let scale = window.traitCollection.displayScale
+        struct Owner {
+            let name: String
+            let cls: String
+            let area: CGFloat
+            let covers: Bool
+            let parchment: Bool
+        }
+        var owners: [Owner] = []
+        var count = 0
+        func walk(_ view: UIView) {
+            guard count < 12 else { return }
+            let name = NSStringFromClass(type(of: view))
+            let isCandidate = view is WKWebView
+                || name.contains("WKScrollView")
+                || name.contains("WKCompositingView")
+            if isCandidate, view.layer.contents != nil {
+                count += 1
+                let width = view.bounds.width
+                let height = view.bounds.height
+                let cls: String
+                if name.contains("WKScrollView"), width >= 400, height >= 800 {
+                    cls = "scroll-snapshot"
+                } else if width >= 400, height >= 800 {
+                    cls = "page"
+                } else if width >= 200, width <= 420, height >= 80, height <= 450 {
+                    cls = "chip"
+                } else {
+                    cls = "other"
+                }
+                let local = view.convert(probe, from: nil)
+                // UIScrollView.bounds.origin is contentOffset; the parked
+                // IOSurface is viewport-sized, so sample in layer-bounds space.
+                let inLayer = CGPoint(
+                    x: local.x - view.layer.bounds.origin.x,
+                    y: local.y - view.layer.bounds.origin.y
+                )
+                let covers = CGRect(origin: .zero, size: view.layer.bounds.size)
+                    .insetBy(dx: -2, dy: -2)
+                    .contains(inLayer)
+                let kind = layerContentsKind(view.layer.contents)
+                var rgb = "rgb=n/a"
+                var parchment = false
+                if covers, contextId != 0 {
+                    let sample = sampleLayerOwnContents(
+                        view.layer,
+                        contextId: contextId,
+                        scale: scale,
+                        localPoint: inLayer
+                    )
+                    rgb = sample.text
+                    parchment = sample.parchment
+                }
+                lines.append(
+                    "tileOwner=\(name) cls=\(cls) contents=set kind=\(kind) frame=\(Int(view.frame.minX)),\(Int(view.frame.minY)) \(Int(width))x\(Int(height)) covers=\(covers ? "yes" : "no") local=\(Int(local.x)),\(Int(local.y)) layer=\(Int(inLayer.x)),\(Int(inLayer.y)) \(rgb)"
+                )
+                owners.append(
+                    Owner(
+                        name: name,
+                        cls: cls,
+                        area: width * height,
+                        covers: covers,
+                        parchment: parchment
+                    )
+                )
+            }
+            for child in view.subviews {
+                walk(child)
+            }
+        }
+        walk(webView)
+        if count == 0 {
+            lines.append("tileOwner=none contents=nil cls=n/a")
+        }
+        let covering = owners.filter(\.covers)
+        if covering.isEmpty {
+            lines.append("tileWinner=none")
+        } else if let parchmentOwner = covering.filter(\.parchment).min(by: { $0.area < $1.area }) {
+            lines.append(
+                "tileWinner=\(parchmentOwner.name) cls=\(parchmentOwner.cls) parchment=yes area=\(Int(parchmentOwner.area))"
+            )
+        } else if let smallest = covering.min(by: { $0.area < $1.area }) {
+            lines.append(
+                "tileWinner=\(smallest.name) cls=\(smallest.cls) parchment=no area=\(Int(smallest.area))"
+            )
+        }
+    }
+
+    /// Dump-only: contents=nil WKCompositingView / CALayer tile children that
+    /// cover Uncharged-Y. Phase 11 only sampled UIView.contents=set. Remote
+    /// PageTiledBacking tiles are LayerTypeTiledBackingTileLayer children
+    /// (`RemoteLayerBackingStore` setContents on the tile CALayer).
+    /// layer-v2 (Phase 14): dedupe by layer identity, name each covering
+    /// layer's parent chain and find-overlay descent, walk the
+    /// `_layerForFindOverlay` subtree explicitly (`findTile=`), and report
+    /// chip-vs-overlay z-order for the dim hypothesis.
+    /// layer-v3 (Phase 15): walk `WKChildScrollView` scrollports too
+    /// (`cls=scrollport`, `viewBg=`), and sample band-only 4pt crops at
+    /// Uncharged-Y (`bands=`) so chip pixels stop polluting the crop mean.
+    /// layer-v4 (Phase 16): the v3 name-filtered walk burned its 16-emit cap
+    /// on transparent page-root wrappers and never rendered the branch that
+    /// actually composites parchment at gutterL (window root renders 40,34,29
+    /// where the scrollport subtree renders 62,54,47). Walk the whole window
+    /// layer tree in sublayer (paint) order, emit only contributing layers
+    /// (crop a>8, bg set, or scroll-backed), and name the host view + bg so
+    /// the deepest parchment-opaque layer identifies the painter.
+    private static func appendRemoteTileCensus(for window: UIWindow, into lines: inout [String]) {
+        lines.append("dumpRemoteV=layer-v4")
+        var unchargedY = 196
+        for line in lines {
+            guard let range = line.range(of: "unchargedY=") else { continue }
+            let digits = line[range.upperBound...].prefix(while: { $0.isNumber })
+            if let value = Int(digits), value > 0 {
+                unchargedY = value
+            }
+        }
+        let probe = CGPoint(x: 110, y: CGFloat(unchargedY))
+        // Band-only window points at Uncharged-Y: left gutter and a
+        // chip-interior control.
+        let bandPoints: [(String, CGPoint)] = [
+            ("gutterL", CGPoint(x: probe.x - 10, y: probe.y)),
+            ("chipIn", CGPoint(x: probe.x + 16, y: probe.y)),
+        ]
+        guard let webView = firstLiveArticleWebView(in: window) else {
+            lines.append("bgExtends=n/a")
+            lines.append("findOverlay=n/a")
+            lines.append("remoteOwner=none cls=n/a")
+            lines.append("zOrder=n/a")
+            return
+        }
+        let extendsKey = "_backgroundExtendsBeyondPage"
+        if webView.responds(to: NSSelectorFromString(extendsKey)),
+           let flag = webView.value(forKey: extendsKey) as? Bool {
+            lines.append("bgExtends=\(flag ? "yes" : "no")")
+        } else {
+            lines.append("bgExtends=n/a")
+        }
+        var overlayLayer: CALayer?
+        let overlaySel = NSSelectorFromString("_layerForFindOverlay")
+        if webView.responds(to: overlaySel),
+           let overlay = webView.perform(overlaySel)?.takeUnretainedValue() as? CALayer {
+            overlayLayer = overlay
+            lines.append(
+                "findOverlay=set \(Int(overlay.bounds.width))x\(Int(overlay.bounds.height)) contents=\(overlay.contents == nil ? "nil" : "set") subs=\(overlay.sublayers?.count ?? 0)"
+            )
+        } else {
+            lines.append("findOverlay=nil")
+        }
+        let contextId = UInt32(compositorContextId(of: window)) ?? 0
+        let scale = window.traitCollection.displayScale
+        var emitted = 0
+        var paintIndex = 0
+        var parchmentHits = 0
+        var deepestParchment: String?
+        func descendsFromOverlay(_ layer: CALayer) -> Bool {
+            guard let overlayLayer else { return false }
+            var cursor: CALayer? = layer
+            while let current = cursor {
+                if current === overlayLayer { return true }
+                cursor = current.superlayer
+            }
+            return false
+        }
+        // Full paint-order walk. DFS in sublayers order is CoreAnimation
+        // back-to-front compositing order (zPosition aside), so within one
+        // parent a later pi composites above an earlier pi, and a deeper
+        // parchment crop localizes the painter better than a shallower one.
+        func walk(_ layer: CALayer, depth: Int) {
+            guard depth < 40, emitted < 32 else { return }
+            let local = layer.convert(probe, from: window.layer)
+            let covers = layer.bounds.insetBy(dx: -2, dy: -2).contains(local)
+            if covers {
+                paintIndex += 1
+                let hostView = layer.delegate as? UIView
+                let hostName = hostView.map { NSStringFromClass(type(of: $0)) } ?? "none"
+                let layerBg = layer.backgroundColor.map { describeDumpColor(UIColor(cgColor: $0)) } ?? "nil"
+                let interesting = layer.backgroundColor != nil
+                    || layer.contents != nil
+                    || hostView is UIScrollView
+                    || layer === window.layer
+                if interesting, contextId != 0 {
+                    var bands: [String] = []
+                    var gutterParchment = false
+                    var gutterAlpha = 0.0
+                    for (label, windowPoint) in bandPoints {
+                        let bandLocal = layer.convert(windowPoint, from: window.layer)
+                        guard layer.bounds.insetBy(dx: -2, dy: -2).contains(bandLocal) else {
+                            bands.append("\(label):off")
+                            continue
+                        }
+                        let sample = sampleLayerCrop(
+                            layer,
+                            contextId: contextId,
+                            scale: scale,
+                            localPoint: CGPoint(
+                                x: bandLocal.x - layer.bounds.origin.x,
+                                y: bandLocal.y - layer.bounds.origin.y
+                            ),
+                            cropPt: 4
+                        )
+                        bands.append(
+                            "\(label):" + sample.text.replacingOccurrences(of: " ", with: ",")
+                        )
+                        if label == "gutterL" {
+                            gutterParchment = sample.parchment
+                            if let aRange = sample.text.range(of: "a=") {
+                                gutterAlpha = Double(
+                                    sample.text[aRange.upperBound...].prefix(while: { $0.isNumber })
+                                ) ?? 0
+                            }
+                        }
+                    }
+                    let contributes = gutterAlpha > 8
+                        || layer.backgroundColor != nil
+                        || hostView is UIScrollView
+                        || layer === window.layer
+                    if contributes {
+                        emitted += 1
+                        if gutterParchment { parchmentHits += 1 }
+                        var offsetPart = ""
+                        if let scroll = hostView as? UIScrollView {
+                            offsetPart = " offset=\(Int(scroll.contentOffset.x)),\(Int(scroll.contentOffset.y))"
+                        }
+                        let under = descendsFromOverlay(layer) ? "findOverlay" : "content"
+                        let line = "remoteOwner=pi\(paintIndex) d\(depth) \(NSStringFromClass(type(of: layer))) host=\(hostName) \(Int(layer.bounds.width))x\(Int(layer.bounds.height)) bo=\(Int(layer.bounds.origin.x)),\(Int(layer.bounds.origin.y))\(offsetPart) bg=\(layerBg) opq=\(layer.isOpaque) op=\(String(format: "%.2f", layer.opacity)) kind=\(layerContentsKind(layer.contents)) under=\(under) bands=\(bands.joined(separator: "|"))"
+                        lines.append(line)
+                        if gutterParchment {
+                            deepestParchment = "pi\(paintIndex) d\(depth) \(NSStringFromClass(type(of: layer))) host=\(hostName) bg=\(layerBg)"
+                        }
+                    }
+                }
+            }
+            for sub in layer.sublayers ?? [] {
+                walk(sub, depth: depth + 1)
+            }
+        }
+        walk(window.layer, depth: 0)
+        if emitted == 0 {
+            lines.append("remoteOwner=none cls=n/a")
+        }
+        lines.append("gutterDeepestParchment=\(deepestParchment ?? "none")")
+        lines.append("remoteParchmentHits=\(parchmentHits) remoteEmitted=\(emitted) paintNodes=\(paintIndex)")
+    }
+
+    /// Cropped CARender around one layer-local point so tall PageTiledBacking
+    /// layers (10k+ pt) do not allocate a full-document IOSurface.
+    private static func sampleLayerCrop(
+        _ layer: CALayer,
+        contextId: UInt32,
+        scale: CGFloat,
+        localPoint: CGPoint,
+        cropPt: CGFloat = 16
+    ) -> (text: String, parchment: Bool) {
+        let pixel = max(8, Int((cropPt * scale).rounded()))
+        let bytesPerRow = pixel * 4
+        let properties: [IOSurfacePropertyKey: Any] = [
+            .width: pixel,
+            .height: pixel,
+            .bytesPerElement: 4,
+            .bytesPerRow: bytesPerRow,
+            .pixelFormat: 0x4247_5241
+        ]
+        guard let surface = IOSurface(properties: properties) else {
+            return ("rgb=n/a", false)
+        }
+        guard let quartz = dlopen(
+            "/System/Library/Frameworks/QuartzCore.framework/QuartzCore",
+            RTLD_NOW
+        ) else {
+            return ("rgb=n/a", false)
+        }
+        defer { dlclose(quartz) }
+        let symbol = dlsym(quartz, "CARenderServerRenderLayerWithTransform")
+        guard Int(bitPattern: symbol) != 0 else {
+            return ("rgb=n/a", false)
+        }
+        typealias RenderIMP = @convention(c) (
+            mach_port_t,
+            UInt32,
+            UInt64,
+            IOSurfaceRef,
+            Int32,
+            Int32,
+            UnsafePointer<CATransform3D>
+        ) -> Void
+        let render = unsafeBitCast(symbol, to: RenderIMP.self)
+        let half = CGFloat(pixel) / 2
+        var transform = CATransform3DMakeScale(scale, scale, 1)
+        transform = CATransform3DConcat(
+            CATransform3DMakeTranslation(
+                half - localPoint.x * scale,
+                half - localPoint.y * scale,
+                0
+            ),
+            transform
+        )
+        let layerId = UInt64(UInt(bitPattern: Unmanaged.passUnretained(layer).toOpaque()))
+        render(0, contextId, layerId, unsafeBitCast(surface, to: IOSurfaceRef.self), 0, 0, &transform)
+        IOSurfaceLock(unsafeBitCast(surface, to: IOSurfaceRef.self), IOSurfaceLockOptions(), nil)
+        defer {
+            IOSurfaceUnlock(unsafeBitCast(surface, to: IOSurfaceRef.self), IOSurfaceLockOptions(), nil)
+        }
+        let base = IOSurfaceGetBaseAddress(unsafeBitCast(surface, to: IOSurfaceRef.self))
+        guard Int(bitPattern: base) != 0 else { return ("rgb=n/a", false) }
+        let ptr = base.assumingMemoryBound(to: UInt8.self)
+        var sumR = 0.0, sumG = 0.0, sumB = 0.0, sumA = 0.0
+        var sumR2 = 0.0, sumG2 = 0.0, sumB2 = 0.0
+        let n = Double(pixel * pixel)
+        for y in 0..<pixel {
+            let row = ptr.advanced(by: y * bytesPerRow)
+            for x in 0..<pixel {
+                let o = x * 4
+                let b = Double(row[o])
+                let g = Double(row[o + 1])
+                let r = Double(row[o + 2])
+                let a = Double(row[o + 3])
+                sumR += r; sumG += g; sumB += b; sumA += a
+                sumR2 += r * r; sumG2 += g * g; sumB2 += b * b
+            }
+        }
+        let meanR = sumR / n, meanG = sumG / n, meanB = sumB / n, meanA = sumA / n
+        let varR = max(0, sumR2 / n - meanR * meanR)
+        let varG = max(0, sumG2 / n - meanG * meanG)
+        let varB = max(0, sumB2 / n - meanB * meanB)
+        let std = sqrt((varR + varG + varB) / 3)
+        let dP = sqrt((meanR - 40) * (meanR - 40) + (meanG - 34) * (meanG - 34) + (meanB - 29) * (meanB - 29))
+        let dI = sqrt((meanR - 55) * (meanR - 55) + (meanG - 46) * (meanG - 46) + (meanB - 39) * (meanB - 39))
+        let parchment = dP < 12 && std < 8 && meanA > 200
+        let text = String(
+            format: "rgb=%.0f,%.0f,%.0f std=%.2f a=%.0f dP=%.1f dI=%.1f",
+            meanR, meanG, meanB, std, meanA, dP, dI
+        )
+        return (text, parchment)
+    }
+
+    /// Render one layer with sublayers hidden so the sample is that layer's
+    /// own IOSurface, not the composited subtree.
+    private static func sampleLayerOwnContents(
+        _ layer: CALayer,
+        contextId: UInt32,
+        scale: CGFloat,
+        localPoint: CGPoint
+    ) -> (text: String, parchment: Bool) {
+        let pixelW = max(8, Int((max(layer.bounds.width, 1) * scale).rounded()))
+        let pixelH = max(8, Int((max(layer.bounds.height, 1) * scale).rounded()))
+        let bytesPerRow = pixelW * 4
+        let properties: [IOSurfacePropertyKey: Any] = [
+            .width: pixelW,
+            .height: pixelH,
+            .bytesPerElement: 4,
+            .bytesPerRow: bytesPerRow,
+            .pixelFormat: 0x4247_5241
+        ]
+        guard let surface = IOSurface(properties: properties) else {
+            return ("rgb=n/a", false)
+        }
+        guard let quartz = dlopen(
+            "/System/Library/Frameworks/QuartzCore.framework/QuartzCore",
+            RTLD_NOW
+        ) else {
+            return ("rgb=n/a", false)
+        }
+        defer { dlclose(quartz) }
+        let symbol = dlsym(quartz, "CARenderServerRenderLayerWithTransform")
+        guard Int(bitPattern: symbol) != 0 else {
+            return ("rgb=n/a", false)
+        }
+        typealias RenderIMP = @convention(c) (
+            mach_port_t,
+            UInt32,
+            UInt64,
+            IOSurfaceRef,
+            Int32,
+            Int32,
+            UnsafePointer<CATransform3D>
+        ) -> Void
+        let render = unsafeBitCast(symbol, to: RenderIMP.self)
+        let subs = layer.sublayers ?? []
+        let hidden = subs.map(\.isHidden)
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        for sub in subs {
+            sub.isHidden = true
+        }
+        CATransaction.commit()
+        var transform = CATransform3DMakeScale(scale, scale, 1)
+        let layerId = UInt64(UInt(bitPattern: Unmanaged.passUnretained(layer).toOpaque()))
+        render(0, contextId, layerId, unsafeBitCast(surface, to: IOSurfaceRef.self), 0, 0, &transform)
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        for (sub, wasHidden) in zip(subs, hidden) {
+            sub.isHidden = wasHidden
+        }
+        CATransaction.commit()
+        IOSurfaceLock(unsafeBitCast(surface, to: IOSurfaceRef.self), IOSurfaceLockOptions(), nil)
+        defer {
+            IOSurfaceUnlock(unsafeBitCast(surface, to: IOSurfaceRef.self), IOSurfaceLockOptions(), nil)
+        }
+        let base = IOSurfaceGetBaseAddress(unsafeBitCast(surface, to: IOSurfaceRef.self))
+        guard Int(bitPattern: base) != 0 else { return ("rgb=n/a", false) }
+        let ptr = base.assumingMemoryBound(to: UInt8.self)
+        let sx = Double(pixelW) / max(1, layer.bounds.width)
+        let sy = Double(pixelH) / max(1, layer.bounds.height)
+        let cx = Int((Double(localPoint.x) * sx).rounded())
+        let cy = Int((Double(localPoint.y) * sy).rounded())
+        let left = max(0, min(pixelW - 1, cx - 4))
+        let right = max(left + 1, min(pixelW, cx + 4))
+        let top = max(0, min(pixelH - 1, cy - 4))
+        let bottom = max(top + 1, min(pixelH, cy + 4))
+        var sumR = 0.0, sumG = 0.0, sumB = 0.0, sumA = 0.0
+        var sumR2 = 0.0, sumG2 = 0.0, sumB2 = 0.0
+        let n = Double((right - left) * (bottom - top))
+        guard n > 0 else { return ("rgb=n/a", false) }
+        for y in top..<bottom {
+            let row = ptr.advanced(by: y * bytesPerRow)
+            for x in left..<right {
+                let o = x * 4
+                let b = Double(row[o])
+                let g = Double(row[o + 1])
+                let r = Double(row[o + 2])
+                let a = Double(row[o + 3])
+                sumR += r; sumG += g; sumB += b; sumA += a
+                sumR2 += r * r; sumG2 += g * g; sumB2 += b * b
+            }
+        }
+        let meanR = sumR / n, meanG = sumG / n, meanB = sumB / n, meanA = sumA / n
+        let varR = max(0, sumR2 / n - meanR * meanR)
+        let varG = max(0, sumG2 / n - meanG * meanG)
+        let varB = max(0, sumB2 / n - meanB * meanB)
+        let std = sqrt((varR + varG + varB) / 3)
+        let dP = sqrt((meanR - 40) * (meanR - 40) + (meanG - 34) * (meanG - 34) + (meanB - 29) * (meanB - 29))
+        let dI = sqrt((meanR - 55) * (meanR - 55) + (meanG - 46) * (meanG - 46) + (meanB - 39) * (meanB - 39))
+        let parchment = dP < 12 && std < 8 && meanA > 200
+        let text = String(
+            format: "rgb=%.0f,%.0f,%.0f std=%.2f a=%.0f dP=%.1f dI=%.1f",
+            meanR, meanG, meanB, std, meanA, dP, dI
+        )
+        return (text, parchment)
+    }
+
     private static func requestCssComputedCaptionTabber(
         in webView: WKWebView,
         completion: @escaping ([String]) -> Void
     ) {
         let script = """
         (() => {
-          const css = (el) => {
-            if (!el) return null;
-            const s = getComputedStyle(el);
-            const r = el.getBoundingClientRect();
-            return {
-              tag: el.tagName,
-              cls: (el.className || '').toString().slice(0, 80),
-              id: el.id || '',
-              text: (el.textContent || '').trim().slice(0, 24),
-              bg: s.backgroundColor,
-              image: s.backgroundImage,
-              isolation: s.isolation,
-              overflow: s.overflow + '/' + s.overflowX + '/' + s.overflowY,
-              opacity: s.opacity,
-              mix: s.mixBlendMode,
-              transform: s.transform,
-              rect: [Math.round(r.x), Math.round(r.y), Math.round(r.width), Math.round(r.height)]
-            };
-          };
-          const compact = (label, info) => {
-            if (!info) return label + '=missing';
-            return label + '=tag=' + info.tag + ' cls=' + info.cls + ' id=' + info.id
-              + ' text=' + JSON.stringify(info.text)
-              + ' bg=' + info.bg + ' image=' + String(info.image).slice(0, 40)
-              + ' isolation=' + info.isolation + ' overflow=' + info.overflow
-              + ' opacity=' + info.opacity + ' mix=' + info.mix
-              + ' transform=' + String(info.transform).slice(0, 24)
-              + ' rect=' + info.rect.join(',');
-          };
           const buttons = Array.from(document.querySelectorAll(
             '.infobox-bonuses .infobox-buttons .button, .infobox-buttons .button, caption .button'
           ));
+          const texts = buttons.map((el) => (el.textContent || '').trim().slice(0, 16));
           const uncharged = buttons.find((el) => (el.textContent || '').trim() === 'Uncharged') || null;
-          const caption = uncharged ? uncharged.closest('caption, .infobox-switch-buttons-caption') : document.querySelector('.infobox-switch-buttons-caption, caption');
-          const row = uncharged ? uncharged.closest('.infobox-buttons') : document.querySelector('.infobox-bonuses .infobox-buttons, .infobox-buttons');
-          const table = uncharged ? uncharged.closest('table') : document.querySelector('table.infobox-bonuses, table.infobox');
+          const caption = uncharged
+            ? uncharged.closest('caption, .infobox-switch-buttons-caption')
+            : document.querySelector('.infobox-switch-buttons-caption, caption');
           let fromPoint = null;
           let point = [0, 0];
           if (uncharged) {
@@ -1152,20 +1610,24 @@ enum osrsSceneCompositor {
             point = [Math.max(2, r.left - 14), r.top + Math.min(10, r.height / 2)];
             fromPoint = document.elementFromPoint(point[0], point[1]);
           }
-          const ancestors = [];
-          let node = fromPoint;
-          for (let i = 0; i < 8 && node && node !== document.body; i++) {
-            ancestors.push(compact('a' + i, css(node)));
-            node = node.parentElement;
-          }
+          const bg = (el) => el ? getComputedStyle(el).backgroundColor : 'missing';
+          const htmlBg = bg(document.documentElement);
+          const bodyBg = bg(document.body);
+          const cls = (el) => el ? String(el.className || '').slice(0, 72) : '';
+          const rect = (el) => {
+            if (!el) return '0,0,0,0';
+            const r = el.getBoundingClientRect();
+            return [Math.round(r.x), Math.round(r.y), Math.round(r.width), Math.round(r.height)].join(',');
+          };
           return [
-            compact('cssUncharged', css(uncharged)),
-            compact('cssCap', css(caption)),
-            compact('cssButtons', css(row)),
-            compact('cssTable', css(table)),
-            compact('cssBody', css(document.body)),
-            compact('cssFromPoint', css(fromPoint)) + ' pt=' + point.join(','),
-            'cssAncestors=' + (ancestors.join(' | ') || 'none')
+            'htmlBg=' + htmlBg,
+            'bodyBg=' + bodyBg,
+            'btnCount=' + buttons.length,
+            'btnTexts=' + texts.join('|'),
+            'gutterChip=' + (document.querySelector('[data-osrs-gutter-chip]') ? 'yes' : 'no'),
+            'cssUncharged=tag=' + (uncharged ? uncharged.tagName : 'missing') + ' cls=' + cls(uncharged) + ' bg=' + bg(uncharged) + ' rect=' + rect(uncharged),
+            'cssCap=tag=' + (caption ? caption.tagName : 'missing') + ' cls=' + cls(caption) + ' bg=' + bg(caption) + ' rect=' + rect(caption),
+            'cssFromPoint=tag=' + (fromPoint ? fromPoint.tagName : 'missing') + ' cls=' + cls(fromPoint) + ' bg=' + bg(fromPoint) + ' pt=' + point.join(',')
           ].join('\\n');
         })()
         """

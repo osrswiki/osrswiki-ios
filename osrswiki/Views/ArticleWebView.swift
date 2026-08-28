@@ -2111,6 +2111,7 @@ struct ArticleWebView: UIViewRepresentable {
         private var keyboardObservers: [NSObjectProtocol] = []
 
         func installCalculatorKeyboardRecovery(on webView: WKWebView) {
+            osrsBlankViewFirstResponderDump.installPeriodicDumpIfRequested()
             removeCalculatorKeyboardObservers()
             let center = NotificationCenter.default
             let restore: (Notification) -> Void = { [weak self] _ in
@@ -2140,6 +2141,7 @@ struct ArticleWebView: UIViewRepresentable {
                         osrsSceneCompositor.endLiveOverlaySession()
                     }
                     self?.restoreWebViewAfterCalculatorKeyboard()
+                    osrsBlankViewFirstResponderDump.capture(reason: "keyboardDidHide")
                 }
             })
         }

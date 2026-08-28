@@ -85,7 +85,7 @@ enum osrsWebViewThemePaint {
         webView.scrollView.backgroundColor = compositorFill
         webView.isOpaque = false
         webView.scrollView.isOpaque = false
-        paintViewTree(webView, color: compositorFill)
+        paintViewTree(webView, root: webView, color: compositorFill)
     }
 
     static var keepCompositorAliveScript: String {
@@ -155,18 +155,28 @@ enum osrsWebViewThemePaint {
     }
 
     @MainActor
-    private static func paintViewTree(_ view: UIView, color: UIColor) {
+    private static func paintViewTree(_ view: UIView, root: WKWebView, color: UIColor) {
         let name = NSStringFromClass(type(of: view))
         let isWebKitSurface = name.contains("Compositing") || name.contains("WKContent")
-        if isWebKitSurface {
+        // WebKit-internal scroll views (WKChildScrollView composited-overflow
+        // scrollports) host scrolled web content whose alpha intentionally
+        // reveals WebKit's own page tile below. An app opaque fill there
+        // covers the correctly painted tile — device-proven as the
+        // Uncharged-left parchment band (gutter spec Phase 16,
+        // gutterDeepestParchment=WKChildScrollView bg=theme parchment). Only
+        // the WKWebView's own top-level scrollView keeps the theme underlay;
+        // every other scroll view in the WK subtree stays unpainted (nil, the
+        // WebKit default), and a previously painted one is healed back to nil.
+        let isForeignScroller = view is UIScrollView && view !== root.scrollView
+        if isWebKitSurface || isForeignScroller {
             view.isOpaque = false
-            view.backgroundColor = .clear
+            view.backgroundColor = isForeignScroller ? nil : .clear
         } else {
             view.backgroundColor = color
             let transparent = color.cgColor.alpha < 0.05
             view.isOpaque = !transparent && !(view is WKWebView || view is UIScrollView)
         }
-        view.subviews.forEach { paintViewTree($0, color: color) }
+        view.subviews.forEach { paintViewTree($0, root: root, color: color) }
     }
 
     @MainActor

@@ -98,6 +98,51 @@ final class TF42FindGhostDriveUITests: XCTestCase {
         print("TF42DRIVE MARK sleep-done")
     }
 
+    func testPhase15Cell1NeverFind() throws {
+        launchArticle(
+            title: "Amulet of glory",
+            path: "Amulet_of_glory",
+            extraArguments: ["-osrsPeriodicSceneDump"]
+        )
+        XCTAssertTrue(
+            articleWebView().waitForExistence(timeout: 40),
+            "Amulet of glory did not open"
+        )
+        ensureCollapsibleOpen(prefix: "Equipment bonuses")
+        scrollCollapsibleIntoFindBand(prefix: "Equipment bonuses")
+        sleep(8)
+        print("TF42DRIVE MARK cell1-never-find")
+        sleepHold()
+        print("TF42DRIVE MARK sleep-done")
+    }
+
+    func testPhase14Cell2FindUpThenHide() throws {
+        openGloryEquipmentBonuses()
+        scrollCollapsibleIntoFindBand(prefix: "Equipment bonuses")
+        presentEmptyFindKeyboard()
+        print("TF42DRIVE MARK cell2-bonuses-find-up")
+        sleep(10)
+        dismissFind()
+        sleep(5)
+        print("TF42DRIVE MARK cell2-hide-find-restore")
+        sleepHold()
+        print("TF42DRIVE MARK sleep-done")
+    }
+
+    private func dismissFind() {
+        let identified = app.buttons["find.doneButton"]
+        if identified.waitForExistence(timeout: 3), identified.isHittable {
+            identified.tap()
+            return
+        }
+        let labeled = app.buttons["Done"].firstMatch
+        if labeled.waitForExistence(timeout: 3), labeled.isHittable {
+            labeled.tap()
+            return
+        }
+        app.typeText(XCUIKeyboardKey.escape.rawValue)
+    }
+
     func testPhase0Cell4VersionsFindUp() throws {
         launchArticle(title: "Sea Shanty 2", path: "Sea_Shanty_2")
         XCTAssertTrue(articleWebView().waitForExistence(timeout: 40), "Sea Shanty 2 did not open")
@@ -268,7 +313,7 @@ final class TF42FindGhostDriveUITests: XCTestCase {
         XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 8), "Find keyboard missing")
     }
 
-    private func launchArticle(title: String, path: String) {
+    private func launchArticle(title: String, path: String, extraArguments: [String] = []) {
         app.launchArguments = [
             "-osrsUITestHarness",
             "-screenshotMode",
@@ -278,7 +323,7 @@ final class TF42FindGhostDriveUITests: XCTestCase {
             "-startTab", "search",
             "-startArticleTitle", title,
             "-startArticleURL", "https://oldschool.runescape.wiki/w/\(path)"
-        ]
+        ] + extraArguments
         app.launch()
         XCTAssertTrue(app.wait(for: .runningForeground, timeout: 15))
     }
