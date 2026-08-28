@@ -6,24 +6,31 @@ struct osrsNativeCalcChrome: View {
     var onHeightChange: (CGFloat) -> Void
     @Environment(\.osrsTheme) private var osrsTheme
 
+    // No inner vertical scroller: like an on-wiki collapsible, the chrome is
+    // intrinsic height and the article scrolls through it. Only controls hit
+    // test, so off-control pans reach the article WebView underneath.
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: true) {
-            osrsNativeCalcView(session: session)
-                .fixedSize(horizontal: true, vertical: false)
-        }
-        .accessibilityIdentifier("native-calc-overflow")
-        .frame(maxWidth: .infinity, alignment: .topLeading)
-        .accessibilityElement(children: .contain)
-        .accessibilityValue("calculator")
-        .background(
-            GeometryReader { geo in
-                Color.clear.preference(
-                    key: osrsNativeCalcFormHeightKey.self,
-                    value: max(geo.size.height, 160)
-                )
-            }
-        )
-        .onPreferenceChange(osrsNativeCalcFormHeightKey.self, perform: onHeightChange)
+        formContent
+            .clipped()
+            .accessibilityIdentifier("native-calc-overflow")
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+            .accessibilityElement(children: .contain)
+            .accessibilityValue("calculator")
+            .onPreferenceChange(osrsNativeCalcFormHeightKey.self, perform: onHeightChange)
+    }
+
+    private var formContent: some View {
+        osrsNativeCalcView(session: session)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+            .fixedSize(horizontal: false, vertical: true)
+            .background(
+                GeometryReader { geo in
+                    Color.clear.preference(
+                        key: osrsNativeCalcFormHeightKey.self,
+                        value: max(geo.size.height, 160)
+                    )
+                }
+            )
     }
 }
 
@@ -49,6 +56,7 @@ struct osrsNativeCalcView: View {
                 .accessibilityHidden(bannerError == nil)
                 .accessibilityIdentifier("native-calc-error")
                 .accessibilityValue(bannerError ?? "")
+                .allowsHitTesting(false)
 
             ForEach(session.visibleInputs(), id: \.name) { input in
                 control(for: input)
@@ -64,11 +72,15 @@ struct osrsNativeCalcView: View {
                 Text(session.statusMessage)
                     .font(.footnote)
                     .foregroundStyle(osrsTheme.secondaryTextColor)
+                    .allowsHitTesting(false)
             }
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .topLeading)
-        .background(osrsTheme.background.opacity(0.97))
+        // The opaque background must stay visual-only: when it hit tests, it
+        // absorbs pans in the SwiftUI layer and the article never sees them
+        // (named on ip; see 2026-08-28 clip/pan spec).
+        .background(osrsTheme.background.opacity(0.97).allowsHitTesting(false))
         .foregroundStyle(osrsTheme.primaryTextColor)
         .tint(osrsTheme.primary)
         .accessibilityElement(children: .contain)
@@ -89,6 +101,7 @@ struct osrsNativeCalcView: View {
                 Text(input.label)
                     .font(.subheadline.weight(.medium))
                     .foregroundStyle(osrsTheme.primaryTextColor)
+                    .allowsHitTesting(false)
                 HStack {
                     osrsNativeCalcDraftField(
                         name: input.name,
@@ -110,6 +123,7 @@ struct osrsNativeCalcView: View {
                 Text(input.label)
                     .font(.subheadline.weight(.medium))
                     .foregroundStyle(osrsTheme.primaryTextColor)
+                    .allowsHitTesting(false)
                 stepper(input)
             }
         case .select:
@@ -119,6 +133,7 @@ struct osrsNativeCalcView: View {
                     .foregroundStyle(osrsTheme.primaryTextColor)
                     .accessibilityLabel(input.label)
                     .accessibilityIdentifier("native-calc-label-\(input.name)")
+                    .allowsHitTesting(false)
                 picker(input)
                     .labelsHidden()
                     .pickerStyle(.menu)
@@ -128,6 +143,7 @@ struct osrsNativeCalcView: View {
                 Text(input.label)
                     .font(.subheadline.weight(.medium))
                     .foregroundStyle(osrsTheme.primaryTextColor)
+                    .allowsHitTesting(false)
                 chips(input)
             }
         case .toggleSwitch, .toggleButton, .check:

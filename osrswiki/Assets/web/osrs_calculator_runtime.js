@@ -85,10 +85,28 @@
         return osrsNativeCalcDocumentOffset(el, 'offsetLeft');
     }
 
-    function osrsNativeCalcContentColumnWidth() {
-        var sibling = document.querySelector(
-            '.mw-parser-output > .collapsible-container:not(.collapsible-calculator)'
-        ) || document.querySelector('.collapsible-container:not(.collapsible-calculator)');
+    function osrsNativeCalcUsableColumnSibling(box) {
+        var nodes = document.querySelectorAll(
+            '.collapsible-container:not(.collapsible-calculator)'
+        );
+        var fallback = null;
+        var i;
+        for (i = 0; i < nodes.length; i++) {
+            var el = nodes[i];
+            if (box && typeof box.contains === 'function' && box.contains(el)) continue;
+            if (el.closest && el.closest('.collapsible-calculator')) continue;
+            if (!(el.offsetWidth > 1)) continue;
+            if (el.parentElement && el.parentElement.classList &&
+                el.parentElement.classList.contains('mw-parser-output')) {
+                return el;
+            }
+            if (!fallback) fallback = el;
+        }
+        return fallback;
+    }
+
+    function osrsNativeCalcContentColumnWidth(box) {
+        var sibling = osrsNativeCalcUsableColumnSibling(box);
         if (sibling && sibling.offsetWidth > 1) {
             return Math.round(sibling.offsetWidth);
         }
@@ -104,7 +122,7 @@
     window.osrsNativeCalcContentColumnWidth = osrsNativeCalcContentColumnWidth;
 
     function osrsNativeCalcApplyContentColumnWidth(box) {
-        var width = osrsNativeCalcContentColumnWidth();
+        var width = osrsNativeCalcContentColumnWidth(box);
         if (!(width > 1)) return width;
         var stop = document.querySelector('.mw-parser-output') || document.body;
         var node = box;

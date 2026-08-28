@@ -616,7 +616,6 @@ final class osrsNativeCalcDefinitionTests: XCTestCase {
             overlay.contains("maxHeight: .infinity"),
             "full-height overlay frame swallows article pans so the calc cannot scroll away"
         )
-        XCTAssertTrue(overlay.contains("maxHeight: formHeight"))
         XCTAssertEqual(
             osrsNativeCalcSlotGeometry.firstLayoutWidth(
                 slotWidth: 96,
@@ -646,8 +645,55 @@ final class osrsNativeCalcDefinitionTests: XCTestCase {
             366,
             accuracy: 0.5
         )
-        XCTAssertTrue(overlay.contains("firstLayoutWidth"))
+        XCTAssertTrue(overlay.contains("overlayClipWidth"))
         XCTAssertTrue(overlay.contains("contentColumn"))
+        XCTAssertEqual(
+            osrsNativeCalcSlotGeometry.overlayVisibleHeight(
+                formHeight: 1800,
+                viewportHeight: 800,
+                formTopY: 200
+            ),
+            600,
+            accuracy: 0.5,
+            "Agility overlay must cap to remaining viewport so chrome stays in the collapsible box"
+        )
+        XCTAssertEqual(
+            osrsNativeCalcSlotGeometry.overlayVisibleHeight(
+                formHeight: 1800,
+                viewportHeight: 800,
+                formTopY: 200,
+                boxHeight: 480
+            ),
+            480,
+            accuracy: 0.5,
+            "collapsible body shorter than remaining viewport wins"
+        )
+        XCTAssertEqual(
+            osrsNativeCalcSlotGeometry.overlayVisibleHeight(
+                formHeight: 360,
+                viewportHeight: 800,
+                formTopY: 200
+            ),
+            360,
+            accuracy: 0.5,
+            "Combat-sized form must keep its intrinsic height"
+        )
+        XCTAssertEqual(
+            osrsNativeCalcSlotGeometry.overlayClipWidth(
+                slotWidth: 520,
+                contentColumnWidth: 366,
+                viewportWidth: 390
+            ),
+            366,
+            accuracy: 0.5,
+            "wider-than-box chrome clips to the collapsible column like article tables"
+        )
+        XCTAssertTrue(overlay.contains("overlayVisibleHeight"))
+        XCTAssertFalse(
+            overlay.contains("maxHeight: formHeight"),
+            "full formHeight frame is taller than the box and swallows article pans"
+        )
+        XCTAssertTrue(overlay.contains("overlayClipWidth") || overlay.contains("firstLayoutWidth"))
     }
 
     @MainActor
@@ -687,7 +733,15 @@ final class osrsNativeCalcDefinitionTests: XCTestCase {
         let chrome = String(view[chromeStart.lowerBound..<chromeEnd.lowerBound])
         XCTAssertFalse(chrome.contains("native-calc-collapsible-header"))
         XCTAssertTrue(chrome.contains("native-calc-overflow"))
-        XCTAssertTrue(chrome.contains("ScrollView(.horizontal"))
+        XCTAssertFalse(
+            chrome.contains("ScrollView("),
+            "article owns vertical scrolling; the chrome is intrinsic like an on-wiki collapsible (ip clip/pan spec)"
+        )
+        XCTAssertTrue(
+            view.contains(".background(osrsTheme.background.opacity(0.97).allowsHitTesting(false))"),
+            "a hit-testing chrome background absorbs pans in the SwiftUI layer; the article never sees them (ip clip/pan spec)"
+        )
+        XCTAssertFalse(chrome.contains(".fixedSize(horizontal: true"))
     }
 
     @MainActor
@@ -811,6 +865,81 @@ final class osrsNativeCalcDefinitionTests: XCTestCase {
     }
 
     @MainActor
+    func testContentColumnWidthIgnoresNestedCollapsibleInsideCalculatorBox() async throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let runtime = try String(
+            contentsOf: root.appendingPathComponent("osrswiki/Assets/web/osrs_calculator_runtime.js"),
+            encoding: .utf8
+        )
+        let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 420, height: 844))
+        let window = UIWindow(frame: webView.bounds)
+        window.addSubview(webView)
+        window.makeKeyAndVisible()
+        let html = """
+        <!DOCTYPE html>
+        <html>
+        <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <style>
+          html, body { margin: 0; }
+          .mw-parser-output { width: 420px; padding: 16px; box-sizing: border-box; }
+          .collapsible-calculator { padding: 25px; box-sizing: border-box; }
+          .collapsible-wikitable { width: 100%; height: 24px; box-sizing: border-box; background: #ccc; }
+        </style>
+        </head>
+        <body>
+          <div class="mw-parser-output">
+            <p>Notes</p>
+            <div id="box" class="collapsible-container collapsible-calculator">
+              <div id="nested" class="collapsible-container collapsible-wikitable primary-collapsible"></div>
+            </div>
+          </div>
+        </body>
+        </html>
+        """
+        try await loadHTML(html, in: webView)
+        _ = try await webView.evaluateJavaScript(runtime)
+        let probe = """
+        (function () {
+          var box = document.getElementById('box');
+          var nested = document.getElementById('nested');
+          var widths = [];
+          for (var i = 0; i < 9; i++) {
+            widths.push(window.osrsNativeCalcContentColumnWidth(box));
+            window.osrsNativeCalcApplyContentColumnWidth(box);
+          }
+          var output = document.querySelector('.mw-parser-output');
+          var cs = window.getComputedStyle(output);
+          var parserInner = (output.clientWidth || 0)
+            - (parseFloat(cs.paddingLeft) || 0)
+            - (parseFloat(cs.paddingRight) || 0);
+          return {
+            nestedInside: !!(box && box.contains(nested)),
+            widths: widths,
+            parserInner: Math.round(parserInner)
+          };
+        })()
+        """
+        let raw = try await webView.evaluateJavaScript(probe)
+        let payload = try XCTUnwrap(raw as? [String: Any])
+        XCTAssertEqual(payload["nestedInside"] as? Bool, true)
+        let widths = try XCTUnwrap(payload["widths"] as? [NSNumber]).map { $0.doubleValue }
+        XCTAssertEqual(widths.count, 9)
+        let unique = Set(widths.map { Int($0.rounded()) })
+        XCTAssertEqual(
+            unique.count,
+            1,
+            "cold-cache nested wikitable must not staircase the column: \(widths)"
+        )
+        let parserInner = (payload["parserInner"] as? NSNumber)?.doubleValue ?? -1
+        XCTAssertEqual(widths[0], parserInner, accuracy: 2)
+        XCTAssertGreaterThan(parserInner, 300)
+        window.isHidden = true
+    }
+
+    @MainActor
     func testCalculatorCollapsibleUsesContentColumnWidthOnFirstPaintBelowFold() async throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
@@ -906,6 +1035,10 @@ final class osrsNativeCalcDefinitionTests: XCTestCase {
         XCTAssertEqual(calcWidth, afterWidth, accuracy: 4, "width must not jump after intersection/scroll")
         XCTAssertTrue(runtime.contains("osrsNativeCalcContentColumnWidth"))
         XCTAssertTrue(runtime.contains("osrsNativeCalcApplyContentColumnWidth"))
+        XCTAssertTrue(
+            runtime.contains("box.contains"),
+            "column measure must skip nested collapsibles inside the calculator box"
+        )
         window.isHidden = true
     }
 

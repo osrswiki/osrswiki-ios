@@ -70,4 +70,48 @@ enum osrsNativeCalcSlotGeometry {
         }
         return column
     }
+
+    /// Visible overlay height inside the collapsible / remaining article
+    /// viewport. Tall Agility chrome inner-scrolls; Combat keeps intrinsic
+    /// height. Box height wins when it is a real body, not leftover shrink-wrap.
+    static func overlayVisibleHeight(
+        formHeight: CGFloat,
+        viewportHeight: CGFloat,
+        formTopY: CGFloat,
+        boxHeight: CGFloat = 0
+    ) -> CGFloat {
+        if formHeight <= 0 { return 0 }
+        let remaining = max(0, viewportHeight - max(formTopY, 0))
+        var cap = remaining
+        if boxHeight > 1, remaining < 1 || boxHeight >= remaining * 0.35 {
+            cap = remaining < 1 ? boxHeight : min(cap, boxHeight)
+        }
+        if cap < 1 { return 0 }
+        return min(formHeight, cap)
+    }
+
+    /// Width of the overlay frame. Wider-than-box chrome clips to the
+    /// collapsible column the same way wide article tables do.
+    static func overlayClipWidth(
+        slotWidth: CGFloat,
+        contentColumnWidth: CGFloat,
+        viewportWidth: CGFloat,
+        intersected: Bool = false
+    ) -> CGFloat {
+        let fitted = firstLayoutWidth(
+            slotWidth: slotWidth,
+            contentColumnWidth: contentColumnWidth,
+            viewportWidth: viewportWidth,
+            intersected: intersected
+        )
+        let cap: CGFloat
+        if contentColumnWidth > 1 {
+            cap = contentColumnWidth
+        } else if viewportWidth > 1 {
+            cap = viewportWidth
+        } else {
+            cap = fitted
+        }
+        return min(fitted, cap)
+    }
 }
