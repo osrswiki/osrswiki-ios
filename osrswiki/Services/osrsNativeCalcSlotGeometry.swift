@@ -114,4 +114,46 @@ enum osrsNativeCalcSlotGeometry {
         }
         return min(fitted, cap)
     }
+
+    /// UIKit analogue of Android `ViewConfiguration.getScaledTouchSlop()`.
+    /// UIPanGestureRecognizer begins around this distance.
+    static let controlPanSlop: CGFloat = 10
+
+    static func movementExceededSlop(
+        dx: CGFloat,
+        dy: CGFloat,
+        slop: CGFloat = controlPanSlop
+    ) -> Bool {
+        dx * dx + dy * dy > slop * slop
+    }
+
+    static func isVerticalArticlePan(dx: CGFloat, dy: CGFloat) -> Bool {
+        abs(dy) >= abs(dx)
+    }
+
+    /// True when a control-started pan should cancel the control and scroll
+    /// the article. Horizontal pans fail this so chip-row scrollers and
+    /// article back-swipe arbitration are not stolen.
+    static func shouldBeginVerticalArticlePan(
+        translation: CGPoint,
+        slop: CGFloat = controlPanSlop
+    ) -> Bool {
+        movementExceededSlop(dx: translation.x, dy: translation.y, slop: slop) &&
+            isVerticalArticlePan(dx: translation.x, dy: translation.y)
+    }
+
+    static func articleScrollOffset(
+        startOffset: CGPoint,
+        translationY: CGFloat,
+        contentSize: CGSize,
+        boundsHeight: CGFloat,
+        adjustedInsetTop: CGFloat,
+        adjustedInsetBottom: CGFloat
+    ) -> CGPoint {
+        var y = startOffset.y - translationY
+        let minY = -adjustedInsetTop
+        let maxY = max(minY, contentSize.height - boundsHeight + adjustedInsetBottom)
+        y = min(max(y, minY), maxY)
+        return CGPoint(x: startOffset.x, y: y)
+    }
 }

@@ -351,6 +351,7 @@ struct osrsNativeCalcSlotOverlay: View {
                         formHeight = newHeight
                     }
                 )
+                .background(osrsNativeCalcControlPanBridge(webView: webView))
                 .frame(width: width, height: max(formHeight, 1), alignment: .top)
                 .clipped()
                 .offset(x: slotX, y: top)

@@ -311,6 +311,7 @@ final class osrsNativeCalcDefinitionTests: XCTestCase {
             encoding: .utf8
         )
         XCTAssertTrue(overlay.contains("osrsNativeCalcSlotGeometry.formTopY"))
+        XCTAssertTrue(overlay.contains("osrsNativeCalcControlPanBridge"))
         XCTAssertTrue(overlay.contains(".clipped()"))
         XCTAssertFalse(overlay.contains("max(0, slotY)"))
         XCTAssertFalse(overlay.contains("max(0, slotDocumentY"))
