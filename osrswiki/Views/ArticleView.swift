@@ -230,6 +230,14 @@ private struct ArticleViewContent: View {
                 let stillThisArticle = appState.activeArticleDestination?.navigationIdentity == articleIdentity
                 let stillShowingArticle = appState.activeArticleDestination != nil
                 let sceneIsBackgrounded = scenePhase != .active
+                if !stillThisArticle {
+                    // Leaving the article (back, another article, tab change) is a product
+                    // stop for in-article audio regardless of scene phase: an unfocused
+                    // Simulator/device window reports .inactive while the navigation still
+                    // visibly happens, and scene background without navigation keeps the
+                    // destination set, so this cannot fire on plain app-backgrounding.
+                    viewModel.pauseAllInArticleAudio()
+                }
                 if !(sceneIsBackgrounded || stillThisArticle) {
                     findSession += 1
                     viewModel.hideFindInPageAction()
@@ -245,7 +253,6 @@ private struct ArticleViewContent: View {
                     return
                 }
                 isArticleVisible = false
-                viewModel.pauseAllInArticleAudio()
                 viewModel.setArticleVisibility(false, allowsPassiveCaching: savedPageId == nil)
                 viewModel.cancelActiveWorkForNavigation()
                 osrsResumeFrameOverlay.discard()
