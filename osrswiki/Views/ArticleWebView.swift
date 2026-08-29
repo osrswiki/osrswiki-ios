@@ -2123,10 +2123,20 @@ struct ArticleWebView: UIViewRepresentable {
             }
             keyboardObservers.append(center.addObserver(forName: UIResponder.keyboardWillShowNotification, object: nil, queue: .main) { [weak self] _ in
                 Task { @MainActor in
-                    guard let viewModel = self?.parent.viewModel else { return }
+                    guard let self else { return }
+                    let viewModel = self.parent.viewModel
                     if !viewModel.isArticleSoftwareKeyboardVisible {
                         viewModel.isArticleSoftwareKeyboardVisible = true
-                        osrsSceneCompositor.beginLiveOverlaySession()
+                        // In-document fields (Calculator:Agility Name) live in an
+                        // overflow-x:auto WKChildScrollView. overlay begin theme-paints
+                        // the WK tree and those child tiles go 0x0 — article-colored
+                        // empty well. Find/search still start overlay from Find/native
+                        // chrome, not from this WK first-responder path. Calculator:
+                        // title is a willShow-race fallback if WKContent is not yet first responder.
+                        let isCalculatorPage = viewModel.pageTitle.hasPrefix("Calculator:")
+                        if !self.isWebKitDocumentFieldFirstResponder() && !isCalculatorPage {
+                            osrsSceneCompositor.beginLiveOverlaySession()
+                        }
                     }
                     osrsBlankViewFirstResponderDump.capture(reason: "keyboardWillShow")
                 }
@@ -2148,6 +2158,18 @@ struct ArticleWebView: UIViewRepresentable {
                     osrsBlankViewFirstResponderDump.capture(reason: "keyboardDidHide")
                 }
             })
+        }
+
+        func isWebKitDocumentFieldFirstResponder() -> Bool {
+            guard let webView else { return false }
+            func walk(_ view: UIView) -> Bool {
+                if view.isFirstResponder {
+                    let name = NSStringFromClass(type(of: view))
+                    return name.contains("WKContent") || name.contains("WKChild")
+                }
+                return view.subviews.contains { walk($0) }
+            }
+            return walk(webView)
         }
 
         func restoreWebViewAfterCalculatorKeyboard() {

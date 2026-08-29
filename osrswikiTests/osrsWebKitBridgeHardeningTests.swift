@@ -522,6 +522,23 @@ final class osrsWebKitBridgeHardeningTests: XCTestCase {
         XCTAssertTrue(articleWebView.contains("restoreWebViewAfterCalculatorKeyboard"))
         XCTAssertTrue(articleWebView.contains("wakeLiveArticleWebView"))
         XCTAssertTrue(articleWebView.contains("osrsEnsureCalculatorPageVisible"))
+        XCTAssertTrue(articleWebView.contains("isWebKitDocumentFieldFirstResponder"))
+        let keyboardShow = articleWebView
+            .components(separatedBy: "UIResponder.keyboardWillShowNotification")
+            .dropFirst()
+            .first
+            .flatMap { chunk in
+                chunk.components(separatedBy: "UIResponder.keyboardDidShowNotification").first
+            } ?? ""
+        XCTAssertTrue(
+            keyboardShow.contains("isWebKitDocumentFieldFirstResponder"),
+            "Name-keyboard must not beginLiveOverlaySession on WKContentView"
+        )
+        XCTAssertTrue(
+            keyboardShow.contains("Calculator:"),
+            "Calculator pages must skip overlay even if first-responder walk loses the willShow race"
+        )
+        XCTAssertTrue(keyboardShow.contains("beginLiveOverlaySession"))
         XCTAssertFalse(articleWebView.contains("as? [[String: String]]"))
         XCTAssertTrue(osrsWebKitSecurityPolicy.productionHandlerNames.contains("osrsLiveAssetWarm"))
         XCTAssertTrue(osrsWebKitSecurityPolicy.productionHandlerNames.contains("osrsFirstViewComplete"))
