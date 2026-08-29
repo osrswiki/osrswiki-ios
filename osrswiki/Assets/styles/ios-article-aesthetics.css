@@ -379,9 +379,7 @@ table.wikitable > tbody > tr > :is(th, td) {
     background-color: transparent !important;
 }
 
-.collapsible-container:not(.collapsed) > .collapsible-content > .osrs-disclosure-body,
-.recipe-table.osrs-recipe-unit > .collapsible-recipe-table:not(.collapsed) > .collapsible-content > .osrs-disclosure-body,
-.collapsible-content > .osrs-disclosure-body {
+.collapsible-container:not(.collapsed) > .collapsible-content > .osrs-disclosure-body {
     box-sizing: border-box !important;
     display: flow-root !important;
     width: auto !important;
@@ -392,6 +390,77 @@ table.wikitable > tbody > tr > :is(th, td) {
     padding-inline: 0 !important;
     padding-block: var(--osrs-disclosure-content-block-inset, 8px) !important;
     overflow-x: auto !important;
+}
+
+/* Nested-in-collapsible wells. Do not pad the overflow-x:auto disclosure-body
+   scrollport. Nested cards fill the already-inset body; parent chrome stays
+   a frame. Stretch a parent that contains nested containers to the article
+   column so children can use leftover width. Infoboxes stay shrink-wrapped.
+   Alternate: parchment → chrome → nested well = --body-main. */
+.collapsible-container.collapsible-calculator,
+.collapsible-container:not(.collapsible-infobox):not(.collapsible-primary-infobox):has(> .collapsible-content .collapsible-container),
+.collapsible-container:not(.collapsible-infobox):not(.collapsible-primary-infobox):has(> .collapsible-content .osrs-calculator-result),
+.collapsible-container:not(.collapsible-infobox):not(.collapsible-primary-infobox):has(> .collapsible-content .osrs-local-scroll-surface) {
+    box-sizing: border-box !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    float: none !important;
+}
+
+.osrs-disclosure-body > .collapsible-container,
+.osrs-disclosure-body > .osrs-calculator-result,
+.osrs-disclosure-body > .osrs-local-scroll-surface,
+.collapsible-container .osrs-calculator-result {
+    box-sizing: border-box !important;
+    display: flow-root !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    margin-inline: 0 !important;
+    background-color: var(--osrs-disclosure-nested-well-bg, var(--body-main)) !important;
+}
+
+.collapsible-container .collapsible-container {
+    background-color: var(--osrs-disclosure-nested-well-bg, var(--body-main)) !important;
+}
+
+.collapsible-container .collapsible-container > .collapsible-header,
+.collapsible-container .collapsible-container .collapsible-close-footer,
+.collapsible-container .collapsible-container .collapsible-close-button {
+    background-color: var(--osrs-disclosure-nested-well-bg, var(--body-main)) !important;
+}
+
+.collapsible-container .collapsible-container:not(.collapsed) > .collapsible-content > .osrs-disclosure-body {
+    margin-inline: 0 !important;
+}
+
+.collapsible-container .collapsible-container .collapsible-container {
+    background-color: var(--osrs-disclosure-chrome-bg, var(--body-mid)) !important;
+}
+
+.collapsible-container .collapsible-container .collapsible-container > .collapsible-header,
+.collapsible-container .collapsible-container .collapsible-container .collapsible-close-footer,
+.collapsible-container .collapsible-container .collapsible-container .collapsible-close-button {
+    background-color: var(--osrs-disclosure-chrome-bg, var(--body-mid)) !important;
+}
+
+.collapsible-container .collapsible-container .collapsible-container:not(.collapsed) > .collapsible-content > .osrs-disclosure-body {
+    margin-inline: var(--osrs-disclosure-content-inline-inset, 12px) !important;
+}
+
+.collapsible-container .collapsible-container .collapsible-container .collapsible-container {
+    background-color: var(--osrs-disclosure-nested-well-bg, var(--body-main)) !important;
+}
+
+.collapsible-container .collapsible-container .collapsible-container .collapsible-container > .collapsible-header,
+.collapsible-container .collapsible-container .collapsible-container .collapsible-container .collapsible-close-footer,
+.collapsible-container .collapsible-container .collapsible-container .collapsible-container .collapsible-close-button {
+    background-color: var(--osrs-disclosure-nested-well-bg, var(--body-main)) !important;
+}
+
+.collapsible-container .collapsible-container .collapsible-container .collapsible-container:not(.collapsed) > .collapsible-content > .osrs-disclosure-body {
+    margin-inline: 0 !important;
 }
 
 .collapsible-container:not(.collapsed) > .collapsible-content > .osrs-disclosure-body > :first-child,
