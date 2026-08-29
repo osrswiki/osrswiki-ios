@@ -93,9 +93,20 @@ final class StaticSettingsPreviewSourceGuardTest: XCTestCase {
         XCTAssertTrue(article.contains(".ignoresSafeArea()"))
         XCTAssertFalse(article.contains(".safeAreaBar(edge: .top"))
         XCTAssertTrue(article.contains("osrsPairedEdgeChrome(edge: .top)"))
+        XCTAssertTrue(article.contains("articleStatusPocketScrim"))
+        XCTAssertTrue(article.contains("LinearGradient("))
+        XCTAssertTrue(article.contains("allowsHitTesting(false)"))
+        XCTAssertTrue(
+            article.contains(".overlay(alignment: .top)") && article.contains("articleStatusPocketScrim"),
+            "Status-pocket scrim must overlay articleCanvas at the physical top"
+        )
         XCTAssertTrue(customMain.contains("osrsOverlayChromeMetrics.screenEdgeGap"))
         XCTAssertTrue(customMain.contains(".ignoresSafeArea(edges: .bottom)"))
         let chromeHelper = try source(root, "platforms/ios/osrswiki/Utils/osrsVoiceSearchAnimationHelper.swift")
+        XCTAssertFalse(
+            chromeHelper.contains("LinearGradient("),
+            "Status-pocket scrim must not live in osrsPairedEdgeChrome"
+        )
         XCTAssertTrue(chromeHelper.contains("osrsOverlayChromeMetrics.pairedEdgeGap"))
         XCTAssertTrue(chromeHelper.contains("func osrsPairedEdgeChrome"))
         XCTAssertTrue(chromeHelper.contains("static func pillShape(height: CGFloat) -> RoundedRectangle"))

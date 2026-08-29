@@ -580,6 +580,9 @@ private struct ArticleViewContent: View {
             if #available(iOS 26.0, *) {
                 articleCanvas
                     .ignoresSafeArea()
+                    .overlay(alignment: .top) {
+                        articleStatusPocketScrim
+                    }
                     .osrsPairedEdgeChrome(edge: .top) {
                         articleTopChrome
                     }
@@ -600,6 +603,18 @@ private struct ArticleViewContent: View {
                 .ignoresSafeArea()
             articleDebugMarker
         }
+    }
+
+    // Physical-top overlay. Do not move into osrsPairedEdgeChrome — that helper pads by topInset.
+    private var articleStatusPocketScrim: some View {
+        LinearGradient(
+            colors: [osrsTheme.background, osrsTheme.background.opacity(0)],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+        .frame(height: osrsOverlayChromeMetrics.topInset + 20)
+        .frame(maxWidth: .infinity)
+        .allowsHitTesting(false)
     }
 
     @ViewBuilder
