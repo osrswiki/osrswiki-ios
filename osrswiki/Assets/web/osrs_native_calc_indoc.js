@@ -413,6 +413,23 @@
         return lowered.indexOf('scribunto-error') >= 0 || lowered.indexOf('lua error') >= 0;
     }
 
+    function missingPlayerMessage(player) {
+        return 'The player "' + String(player || '') +
+            '" does not exist, is banned or unranked, or we couldn\'t fetch your hiscores. Please enter the data manually.';
+    }
+
+    // First-party stand-in for OOUI FieldLayout setErrors (stop + exclamation)
+    // plus gadget helper.showError's <strong class="error"> in #result.
+    function lookupErrorHtml(message) {
+        return '<div class="osrs-indoc-calc-error" role="alert">' +
+            '<svg class="osrs-indoc-calc-error-icon" viewBox="0 0 20 20" width="20" height="20" aria-hidden="true" focusable="false">' +
+            '<polygon class="osrs-indoc-calc-error-stop" points="6,1.5 14,1.5 18.5,6 18.5,14 14,18.5 6,18.5 1.5,14 1.5,6"/>' +
+            '<rect class="osrs-indoc-calc-error-bang" x="9" y="5" width="2" height="6.5" rx="0.6"/>' +
+            '<rect class="osrs-indoc-calc-error-bang" x="9" y="13.2" width="2" height="2" rx="0.6"/>' +
+            '</svg>' +
+            '<strong class="error">' + escapeHtml(message) + '</strong></div>';
+    }
+
     return {
         titles: TITLES,
         normalizeTitle: normalizeTitle,
@@ -428,6 +445,8 @@
         renderFormHtml: renderFormHtml,
         applyHiscores: applyHiscores,
         parseResultIsError: parseResultIsError,
+        missingPlayerMessage: missingPlayerMessage,
+        lookupErrorHtml: lookupErrorHtml,
         boolToken: boolToken
     };
 }));

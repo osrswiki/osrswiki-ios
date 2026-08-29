@@ -667,6 +667,7 @@ html body .osrs-calculator-layout .oo-ui-numberInputWidget .oo-ui-inputWidget-in
 html body .osrs-calculator-layout .jsCalc-field-fixed > .oo-ui-fieldLayout-body > .oo-ui-fieldLayout-field > .oo-ui-labelElement-label:empty,
 html body .osrs-calculator-layout .osrs-calculator-result:empty,
 html body .osrs-calculator-layout [id$="Result"]:empty,
+html body .osrs-calculator-layout [id$="Results"]:empty,
 html body #osrs-calculator-status:empty {
     display: none !important;
     background: none !important;
@@ -750,6 +751,48 @@ html.osrs-indoc-calc #osrs-native-calc-slot select {
 .osrs-indoc-calc-banner {
     color: var(--redlink-color, #ba0000);
     font-size: 0.95rem;
+}
+
+.osrs-indoc-calc-error {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.45rem;
+    margin: 0.35rem 0 0.65rem;
+    color: var(--redlink-color, #ba0000);
+    font-size: 0.95rem;
+    line-height: 1.4;
+}
+
+.osrs-indoc-calc-error .error {
+    color: inherit;
+    font-weight: 700;
+}
+
+.osrs-indoc-calc-error-icon {
+    flex: 0 0 1.25rem;
+    width: 1.25rem;
+    height: 1.25rem;
+    margin-top: 0.12rem;
+}
+
+.osrs-indoc-calc-error-stop {
+    fill: #d33;
+}
+
+.osrs-indoc-calc-error-bang {
+    fill: #fff;
+}
+
+html.theme-osrs-dark .osrs-indoc-calc-error,
+html body.theme-osrs-dark .osrs-indoc-calc-error,
+body.wgl-theme-dark .osrs-indoc-calc-error {
+    color: #ff8a8a;
+}
+
+html.theme-osrs-dark .osrs-indoc-calc-error-stop,
+html body.theme-osrs-dark .osrs-indoc-calc-error-stop,
+body.wgl-theme-dark .osrs-indoc-calc-error-stop {
+    fill: #e85c5c;
 }
 
 .osrs-indoc-calc-banner:empty,

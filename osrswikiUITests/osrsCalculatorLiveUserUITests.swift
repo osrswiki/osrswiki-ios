@@ -205,6 +205,25 @@ final class osrsCalculatorLiveUserUITests: XCTestCase {
         attachScreenshot(from: app, name: "calculator-combat-lookup")
     }
 
+    func testIndocHiscoresFailThenSuccessClearsStaleMissingPlayer() throws {
+        try runIndocFailThenSuccessLookup(
+            title: "Calculator:Combat level",
+            path: "Calculator:Combat_level",
+            expectedControl: "Attack",
+            nameLabel: "Player name",
+            successSnippet: "Your combat level is",
+            evidencePrefix: "ios-combat"
+        )
+        try runIndocFailThenSuccessLookup(
+            title: "Calculator:Agility",
+            path: "Calculator:Agility",
+            expectedControl: "Name",
+            nameLabel: "Name",
+            successSnippet: "To train Agility",
+            evidencePrefix: "ios-agility"
+        )
+    }
+
     func testSavedCombatCalculatorComputesOfflineFromWarmedDefaultParse() throws {
         let onlineApp = makeApp(
             extraArguments: articleArguments(
@@ -284,6 +303,103 @@ final class osrsCalculatorLiveUserUITests: XCTestCase {
             "Calculator still showing an app leftover JS placeholder on \(title); wiki 'requires JavaScript' disclaimer above a live form is ignored"
         )
         return app
+    }
+
+    private func runIndocFailThenSuccessLookup(
+        title: String,
+        path: String,
+        expectedControl: String,
+        nameLabel: String,
+        successSnippet: String,
+        evidencePrefix: String
+    ) throws {
+        let app = try openCalculator(title: title, path: path, expectedControl: expectedControl)
+        let webView = articleWebView(in: app)
+        let nameField = calculatorNameField(label: nameLabel, in: app, webView: webView)
+        XCTAssertTrue(nameField.waitForExistence(timeout: articleLoadTimeout), "Missing \(nameLabel) on \(title)")
+        try lookupPlayer("osamosis", in: nameField, app: app, webView: webView)
+        XCTAssertTrue(
+            waitForCalculatorText("does not exist", in: app),
+            "Failed hiscores lookup should show the missing-player sentence on \(title). \(app.debugDescription)"
+        )
+        XCTAssertTrue(
+            waitForCalculatorText("osamosis", in: app, timeout: 4),
+            "Missing-player sentence should name osamosis on \(title)"
+        )
+        saveEvidence(from: app, name: "\(evidencePrefix)-fail")
+
+        try lookupPlayer("mctile", in: nameField, app: app, webView: webView)
+        XCTAssertTrue(
+            waitForCalculatorText(successSnippet, in: app),
+            "Successful lookup should replace the error with \(successSnippet) on \(title). \(app.debugDescription)"
+        )
+        XCTAssertFalse(
+            waitForCalculatorText("osamosis", in: app, timeout: 2),
+            "Stale osamosis missing-player sentence must not remain after mctile on \(title)"
+        )
+        saveEvidence(from: app, name: "\(evidencePrefix)-success")
+    }
+
+    private func calculatorNameField(label: String, in app: XCUIApplication, webView: XCUIElement) -> XCUIElement {
+        let webField = webView.textFields[label].firstMatch
+        if webField.exists {
+            return webField
+        }
+        let appField = app.textFields[label].firstMatch
+        return appField.exists ? appField : webField
+    }
+
+    private func lookupPlayer(
+        _ player: String,
+        in nameField: XCUIElement,
+        app: XCUIApplication,
+        webView: XCUIElement
+    ) throws {
+        if nameField.isHittable {
+            nameField.tap()
+        } else {
+            nameField.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        }
+        try? clearFocusedTextWithSoftwareKeyboard(in: app)
+        try enterWithSoftwareKeyboard(player, in: app, numeric: false)
+        let lookup = firstMatchingControl("Lookup", in: app, webView: webView)
+        if lookup.waitForExistence(timeout: 4) && lookup.isHittable {
+            lookup.tap()
+            return
+        }
+        dismissSoftwareKeyboard(in: app)
+        if lookup.waitForExistence(timeout: 4) {
+            if lookup.isHittable {
+                lookup.tap()
+            } else {
+                lookup.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+            }
+        }
+    }
+
+    private func clearFocusedTextWithSoftwareKeyboard(in app: XCUIApplication) throws {
+        let keyboard = app.keyboards.firstMatch
+        XCTAssertTrue(keyboard.waitForExistence(timeout: 8), "Software keyboard did not appear for text delete")
+        let deleteCandidates = ["Delete", "delete"]
+        var deleteKey: XCUIElement?
+        for name in deleteCandidates {
+            let key = keyboard.keys[name]
+            if key.exists {
+                deleteKey = key
+                break
+            }
+            let button = keyboard.buttons[name]
+            if button.exists {
+                deleteKey = button
+                break
+            }
+        }
+        guard let deleteKey else {
+            return
+        }
+        for _ in 0..<24 {
+            deleteKey.tap()
+        }
     }
 
     private func makeApp(

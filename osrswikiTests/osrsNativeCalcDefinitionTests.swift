@@ -550,6 +550,32 @@ final class osrsNativeCalcDefinitionTests: XCTestCase {
         XCTAssertTrue(runtime.contains("existingHint !== 'go' && existingHint !== 'search'"))
     }
 
+    func testIndocLookupFailWritesResultErrorIconAndPublisherIgnoresStatus() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let indoc = try String(
+            contentsOf: root.appendingPathComponent("osrswiki/Assets/web/osrs_native_calc_indoc.js"),
+            encoding: .utf8
+        )
+        XCTAssertTrue(indoc.contains("function lookupErrorHtml"))
+        XCTAssertTrue(indoc.contains("osrs-indoc-calc-error-icon"))
+        XCTAssertTrue(indoc.contains("<strong class=\"error\">"))
+        let runtime = try String(
+            contentsOf: root.appendingPathComponent("osrswiki/Assets/web/osrs_calculator_runtime.js"),
+            encoding: .utf8
+        )
+        let lookup = runtime.components(separatedBy: "function lookupHiscores() {").dropFirst().first ?? ""
+        XCTAssertTrue(lookup.contains("clearLookupOutput()"))
+        XCTAssertTrue(lookup.contains("showLookupError(player)"))
+        let publish = (runtime.components(separatedBy: "function osrsPublishCalculatorResult() {").dropFirst().first ?? "")
+            .components(separatedBy: "function osrsRevealCalculatorNode").first ?? ""
+        XCTAssertFalse(publish.contains("innerText"))
+        XCTAssertFalse(publish.contains("document.body"))
+        XCTAssertTrue(publish.contains("osrsCalculatorResultSourceNode()"))
+        XCTAssertTrue(runtime.contains("node.id === 'osrs-calculator-status'"))
+    }
+
     @MainActor
     func testCalculatorCollapsibleMatchesArticleDisclosureChromeAndToggle() async throws {
         let root = URL(fileURLWithPath: #filePath)
