@@ -832,6 +832,16 @@ html body .osrs-calculator-panel .oo-ui-checkboxInputWidget.oo-ui-widget-enabled
 html body .osrs-calculator-panel .oo-ui-checkboxInputWidget.oo-ui-widget-enabled [type='checkbox']:checked + span {
     background-color: var(--ooui-progressive) !important;
     border-color: var(--ooui-progressive) !important;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='%23fff' d='M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0z'/%3E%3C/svg%3E") !important;
+    background-repeat: no-repeat !important;
+    background-position: center !important;
+    background-size: 0.72em !important;
+}
+
+html.theme-osrs-dark .osrs-calculator-panel .oo-ui-checkboxInputWidget.oo-ui-widget-enabled [type='checkbox']:checked + span,
+html body.theme-osrs-dark .osrs-calculator-panel .oo-ui-checkboxInputWidget.oo-ui-widget-enabled [type='checkbox']:checked + span,
+html body.wgl-theme-dark .osrs-calculator-panel .oo-ui-checkboxInputWidget.oo-ui-widget-enabled [type='checkbox']:checked + span {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='%2328221d' d='M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0z'/%3E%3C/svg%3E") !important;
 }
 
 html body .osrs-calculator-panel .jsCalc-field-fixed > .oo-ui-fieldLayout-body > .oo-ui-fieldLayout-field > .oo-ui-labelElement-label:empty,
@@ -1842,8 +1852,11 @@ table.wikitable :is(th, td) > :is(
 }
 
 /* Nested-in-collapsible wells. The disclosure-body above stays an unpadded
-   overflow-x:auto scrollport. Nested cards fill that already-inset column
+   overflow-x:auto scrollport.    Nested cards fill that already-inset column
    (width:100% of the body, not fit-content). Parent chrome remains a frame.
+   Nested collapsible-content uses the same inline inset as a regular
+   collapsible so wide max-content tables cannot expand the body and clip
+   the gutter. Nested disclosure-body margin stays 0 (inset is on content).
    Alternate container fills: article parchment → disclosure chrome → nested
    well = --body-main. Do not alternate wikitable cells.
 
@@ -1887,8 +1900,15 @@ table.wikitable :is(th, td) > :is(
     background-color: var(--osrs-disclosure-nested-well-bg, var(--body-main)) !important;
 }
 
+.collapsible-container .collapsible-container:not(.collapsed) > .collapsible-content {
+    padding-inline: var(--osrs-disclosure-content-inline-inset) !important;
+}
+
 .collapsible-container .collapsible-container:not(.collapsed) > .collapsible-content > .osrs-disclosure-body {
     margin-inline: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
 }
 
 .collapsible-container .collapsible-container .collapsible-container {
@@ -1902,7 +1922,10 @@ table.wikitable :is(th, td) > :is(
 }
 
 .collapsible-container .collapsible-container .collapsible-container:not(.collapsed) > .collapsible-content > .osrs-disclosure-body {
-    margin-inline: var(--osrs-disclosure-content-inline-inset) !important;
+    margin-inline: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
 }
 
 .collapsible-container .collapsible-container .collapsible-container .collapsible-container {
@@ -1917,6 +1940,9 @@ table.wikitable :is(th, td) > :is(
 
 .collapsible-container .collapsible-container .collapsible-container .collapsible-container:not(.collapsed) > .collapsible-content > .osrs-disclosure-body {
     margin-inline: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
 }
 
 .collapsible-container:not(.collapsed) > .collapsible-content > .osrs-disclosure-body > :first-child,

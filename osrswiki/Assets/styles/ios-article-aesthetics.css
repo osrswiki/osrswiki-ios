@@ -431,8 +431,15 @@ table.wikitable > tbody > tr > :is(th, td) {
     background-color: var(--osrs-disclosure-nested-well-bg, var(--body-main)) !important;
 }
 
+.collapsible-container .collapsible-container:not(.collapsed) > .collapsible-content {
+    padding-inline: var(--osrs-disclosure-content-inline-inset, 12px) !important;
+}
+
 .collapsible-container .collapsible-container:not(.collapsed) > .collapsible-content > .osrs-disclosure-body {
     margin-inline: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
 }
 
 .collapsible-container .collapsible-container .collapsible-container {
@@ -446,7 +453,10 @@ table.wikitable > tbody > tr > :is(th, td) {
 }
 
 .collapsible-container .collapsible-container .collapsible-container:not(.collapsed) > .collapsible-content > .osrs-disclosure-body {
-    margin-inline: var(--osrs-disclosure-content-inline-inset, 12px) !important;
+    margin-inline: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
 }
 
 .collapsible-container .collapsible-container .collapsible-container .collapsible-container {
@@ -461,6 +471,9 @@ table.wikitable > tbody > tr > :is(th, td) {
 
 .collapsible-container .collapsible-container .collapsible-container .collapsible-container:not(.collapsed) > .collapsible-content > .osrs-disclosure-body {
     margin-inline: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
 }
 
 .collapsible-container:not(.collapsed) > .collapsible-content > .osrs-disclosure-body > :first-child,
