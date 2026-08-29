@@ -255,10 +255,42 @@
     errorEl.style.fontSize = '0.9em';
     wrap.appendChild(errorEl);
 
+    var seeking = false;
+    // WebKit ignores currentTime writes before metadata exists (readyState 0),
+    // and assigning audio.src resets position to 0. Park the requested time and
+    // commit it once the element can actually seek.
+    var pendingSeekTime = null;
+
+    function requestSeek(next) {
+      if (!isFinite(next) || next < 0) return;
+      pendingSeekTime = next;
+      applyPendingSeek();
+    }
+
+    function applyPendingSeek() {
+      if (pendingSeekTime === null || audio.readyState < 1) return;
+      var next = pendingSeekTime;
+      pendingSeekTime = null;
+      try {
+        audio.currentTime = next;
+      } catch (e) {
+        pendingSeekTime = next;
+      }
+    }
+
+    function displayedPosition() {
+      if (pendingSeekTime !== null) return pendingSeekTime;
+      return audio.currentTime || 0;
+    }
+
     function syncTime() {
       var dur = durationSeconds(audio);
       seek.max = String(dur || 0);
-      timeEl.textContent = formatTime(audio.currentTime || 0);
+      if (!seeking) {
+        var pos = displayedPosition();
+        seek.value = String(Math.min(pos, dur || pos));
+        timeEl.textContent = formatTime(pos);
+      }
       durationEl.textContent = formatTime(dur);
     }
     syncTime();
@@ -276,10 +308,10 @@
       if (mpegNow) {
         var mpegSrc = mpegNow.getAttribute('src');
         if (mpegSrc && audio.getAttribute('src') !== mpegSrc) {
-          var pos = audio.currentTime || 0;
+          var pos = displayedPosition();
           audio.src = mpegSrc;
           if (pos > 0) {
-            try { audio.currentTime = pos; } catch (e) {}
+            pendingSeekTime = pos;
           }
         }
       }
@@ -301,21 +333,20 @@
       applyMpegAndPlay();
     });
 
-    var seeking = false;
     seek.addEventListener('input', function () {
       seeking = true;
       var next = parseFloat(seek.value);
       if (isFinite(next)) {
-        try { audio.currentTime = next; } catch (e) {}
-        syncTime();
+        requestSeek(next);
+        timeEl.textContent = formatTime(next);
       }
     });
     seek.addEventListener('change', function () {
-      seeking = false;
       var next = parseFloat(seek.value);
       if (isFinite(next)) {
-        try { audio.currentTime = next; } catch (e) {}
+        requestSeek(next);
       }
+      seeking = false;
       syncTime();
     });
 
@@ -354,7 +385,11 @@
     audio.addEventListener('timeupdate', function () {
       if (!seeking) syncTime();
     });
-    audio.addEventListener('loadedmetadata', syncTime);
+    audio.addEventListener('loadedmetadata', function () {
+      applyPendingSeek();
+      syncTime();
+    });
+    audio.addEventListener('canplay', applyPendingSeek);
     audio.addEventListener('durationchange', syncTime);
     audio.addEventListener('error', function () {
       if (audio.dataset.osrsPlayAttempted !== '1') return;

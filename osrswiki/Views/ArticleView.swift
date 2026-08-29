@@ -245,6 +245,7 @@ private struct ArticleViewContent: View {
                     return
                 }
                 isArticleVisible = false
+                viewModel.pauseAllInArticleAudio()
                 viewModel.setArticleVisibility(false, allowsPassiveCaching: savedPageId == nil)
                 viewModel.cancelActiveWorkForNavigation()
                 osrsResumeFrameOverlay.discard()

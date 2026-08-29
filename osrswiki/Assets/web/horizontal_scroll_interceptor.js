@@ -380,6 +380,12 @@
         return !!(target && target.closest && (target.closest('.GEdatachart') || target.closest('.GEChartBox')));
     }
 
+    // The in-article audio seek slider owns its whole pointer sequence: a drag
+    // on the thumb must scrub, never open article back or the contents drawer.
+    function isInArticleAudioSeek(target) {
+        return !!(target && target.closest && target.closest('.osrs-article-audio-seek'));
+    }
+
     function isInProtectedNonlocalTableRole(target) {
         return !!(target && target.closest && target.closest(
             '.collapsible-primary-infobox, .collapsible-map-table, .osrs-recipe-unit'
@@ -485,11 +491,14 @@
             const owner = scrollOwnerForTarget(target);
             const mapPlaceholder = target && target.closest ? target.closest('.mw-kartographer-map') : null;
             const chart = isInGEChart(target);
-            const isLocalOwner = !!(owner || mapPlaceholder || chart);
+            const audioSeek = isInArticleAudioSeek(target);
+            const isLocalOwner = !!(owner || mapPlaceholder || chart || audioSeek);
             return {
                 isLocalOwner: isLocalOwner,
                 ownerId: chart
                     ? 'price-chart'
+                    : audioSeek
+                    ? 'article-audio-seek'
                     : (mapPlaceholder?.id || owner?.getAttribute('aria-label') || owner?.id || (isLocalOwner ? 'local-scroll-surface' : 'article-navigation')),
                 targetTag: String(target?.tagName || ''),
                 targetClass: String(target?.className || '').slice(0, 160)
@@ -572,6 +581,14 @@
             notifyGesturePhase('begin', activeGestureId, activeGestureOwner, true);
             log('GE chart touchstart: claimed gesture ' + activeGestureId);
             return; // don't run generic check to avoid flipping state
+        }
+        // Audio seek slider: claim unconditionally at touchstart, like GE charts.
+        // The generic path would decline it (a range input has no scroll overflow),
+        // letting a scrub drag read as an article back/contents swipe.
+        if (isInArticleAudioSeek(target)) {
+            notifyTouchSequence(activeTouchSequence);
+            claimLocalSequence(target.closest('.osrs-article-audio-seek'));
+            return;
         }
         log('Touch on: ' + target.tagName + ' ' + (target.className || '') + 
             ' at (' + Math.round(event.touches[0].clientX) + ', ' + Math.round(event.touches[0].clientY) + ')');

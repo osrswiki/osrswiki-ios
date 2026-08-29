@@ -141,14 +141,21 @@ td.infobox-media-player,
 .infobox-media-player {
     display: table-cell !important;
     height: auto !important;
+    line-height: normal !important;
     max-width: 100% !important;
     min-width: 0 !important;
     width: 100% !important;
 }
 
+/* Collapse the TimedMediaHandler mw:File span stack exactly like Android so the
+   pill does not sit inside a tall inline box (empty band above/below it). */
+.infobox-media-player span.mw-default-size[typeof^="mw:File"],
+.infobox-media-player span.mw-default-size[typeof^="mw:File"] > span,
 .infobox-media-player .osrs-article-audio,
 .osrs-article-audio {
     display: block !important;
+    height: auto !important;
+    line-height: normal !important;
     max-width: 100% !important;
     min-width: 0 !important;
     width: 100% !important;

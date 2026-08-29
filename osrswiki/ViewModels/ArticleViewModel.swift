@@ -1850,6 +1850,19 @@ class ArticleViewModel: NSObject, ObservableObject {
         generation == currentLoadGeneration
     }
 
+    /// The retained WKWebView keeps in-article audio playing after the article
+    /// leaves view. Leaving view (back, another article) is a product stop; scene
+    /// background is not and must not route here.
+    func pauseAllInArticleAudio() {
+        guard let webView else { return }
+        let script = """
+        document.querySelectorAll('audio, video').forEach(function (media) {
+            try { media.pause(); } catch (e) {}
+        });
+        """
+        webView.evaluateJavaScript(script, completionHandler: nil)
+    }
+
     /// Navigation-away must not leave parsing, WebKit, or readiness callbacks competing with Home.
     func cancelActiveWorkForNavigation() {
         articleIsVisible = false
