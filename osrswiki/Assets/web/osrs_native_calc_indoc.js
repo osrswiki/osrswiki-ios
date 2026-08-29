@@ -318,10 +318,13 @@
             var lookup = input.type === 'hs'
                 ? '<button type="button" class="osrs-indoc-calc-btn" data-osrs-indoc-lookup="1" aria-label="Lookup">Lookup</button>'
                 : '';
+            // hs Name+Lookup: software-keyboard primary key is Go/Search, not Done.
+            var enterHint = input.type === 'hs' ? 'go' : 'done';
             control = '<div class="osrs-indoc-calc-row">' +
                 '<input id="osrs-indoc-field-' + name + '" class="osrs-indoc-calc-control" type="text"' +
                 attr('name', input.name) + attr('value', value) + attr('aria-label', input.label) +
-                ' inputmode="text" autocomplete="off" enterkeyhint="done">' + lookup + '</div>';
+                attr('data-osrs-indoc-type', input.type) +
+                ' inputmode="text" autocomplete="off" enterkeyhint="' + enterHint + '">' + lookup + '</div>';
         } else if (input.type === 'int' || input.type === 'number') {
             var inputMode = input.type === 'int' ? 'numeric' : 'decimal';
             control = '<div class="osrs-indoc-calc-row osrs-indoc-calc-step">' +
@@ -329,6 +332,7 @@
                 attr('aria-label', 'Decrease ' + input.label) + '>-</button>' +
                 '<input id="osrs-indoc-field-' + name + '" class="osrs-indoc-calc-control" type="number"' +
                 attr('name', input.name) + attr('value', value) + attr('aria-label', input.label) +
+                attr('data-osrs-indoc-type', input.type) +
                 attr('inputmode', inputMode) + ' enterkeyhint="done"' +
                 (input.minValue != null ? attr('min', input.minValue) : '') +
                 (input.maxValue != null ? attr('max', input.maxValue) : '') + '>' +

@@ -760,12 +760,46 @@
             });
         }
 
+        function fieldTypeFor(name) {
+            var model = definition.inputs.filter(function (input) { return input.name === name; })[0];
+            return model ? model.type : '';
+        }
+
+        function isIndocEnterKey(event) {
+            return event.key === 'Enter' || event.which === 13 || event.keyCode === 13;
+        }
+
+        function isIndocTextOrNumberField(node) {
+            if (!node || node.tagName !== 'INPUT') return false;
+            if (node.type === 'checkbox' || node.type === 'hidden' || node.type === 'button' || node.type === 'submit') {
+                return false;
+            }
+            return true;
+        }
+
+        function dismissIndocKeyboard(node) {
+            try { node.blur(); } catch (e) {}
+        }
+
         function bind() {
             var form = slot.querySelector('#osrs-indoc-calc-form');
             if (!form) return;
             form.addEventListener('submit', function (event) {
                 event.preventDefault();
                 submit();
+            });
+            // Gadget calc-core binds keydown which===13 → lookupHS. In-doc never did.
+            // hs Name: Go/Search must Lookup then blur. Other fields: Done/check blurs.
+            // Do not treat +/- steppers as Enter-equivalents (they are type=button).
+            form.addEventListener('keydown', function (event) {
+                if (!isIndocEnterKey(event)) return;
+                var target = event.target;
+                if (!isIndocTextOrNumberField(target)) return;
+                event.preventDefault();
+                if (fieldTypeFor(target.name) === 'hs') {
+                    lookupHiscores();
+                }
+                dismissIndocKeyboard(target);
             });
             form.addEventListener('click', function (event) {
                 var target = event.target;
@@ -1064,14 +1098,20 @@ function osrsPromoteCalculatorDescription(layout, formHost) {
                     }
                 }
                 input.setAttribute('inputmode', mode);
-                input.setAttribute('enterkeyhint', 'done');
+                var existingHint = input.getAttribute('enterkeyhint');
+                if (existingHint !== 'go' && existingHint !== 'search') {
+                    input.setAttribute('enterkeyhint', 'done');
+                }
                 input.setAttribute('autocomplete', 'off');
                 // Keep OOUI type as-is; only hint the soft keyboard.
             } catch (e) {}
         });
         // Also catch bare tel-style quantity fields without OOUI wrappers.
         root.querySelectorAll('input[inputmode="decimal"], input[inputmode="numeric"]').forEach(function (input) {
-            try { input.setAttribute('enterkeyhint', 'done'); } catch (e) {}
+            try {
+                var hint = input.getAttribute('enterkeyhint');
+                if (hint !== 'go' && hint !== 'search') input.setAttribute('enterkeyhint', 'done');
+            } catch (e) {}
         });
     }
 

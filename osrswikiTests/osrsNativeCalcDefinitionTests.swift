@@ -522,6 +522,34 @@ final class osrsNativeCalcDefinitionTests: XCTestCase {
         )
     }
 
+    func testIndocEnterKeyHintIsGoOnHiscoresAndDoneOnOtherFields() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let indoc = try String(
+            contentsOf: root.appendingPathComponent("osrswiki/Assets/web/osrs_native_calc_indoc.js"),
+            encoding: .utf8
+        )
+        XCTAssertTrue(indoc.contains("input.type === 'hs' ? 'go' : 'done'"))
+        XCTAssertTrue(indoc.contains("enterkeyhint=\"done\""))
+        XCTAssertTrue(indoc.contains("data-osrs-indoc-type"))
+        let runtime = try String(
+            contentsOf: root.appendingPathComponent("osrswiki/Assets/web/osrs_calculator_runtime.js"),
+            encoding: .utf8
+        )
+        let bind = runtime.components(separatedBy: "function bind() {").dropFirst().first ?? ""
+        let keydown = bind.components(separatedBy: "form.addEventListener('click'").first ?? ""
+        XCTAssertTrue(keydown.contains("isIndocEnterKey"))
+        XCTAssertTrue(keydown.contains("keydown"))
+        XCTAssertTrue(keydown.contains("fieldTypeFor(target.name) === 'hs'"))
+        XCTAssertTrue(keydown.contains("lookupHiscores()"))
+        XCTAssertTrue(keydown.contains("dismissIndocKeyboard"))
+        XCTAssertTrue(keydown.contains("preventDefault"))
+        XCTAssertTrue(keydown.contains("isIndocTextOrNumberField"))
+        XCTAssertFalse(keydown.contains("data-osrs-indoc-step"))
+        XCTAssertTrue(runtime.contains("existingHint !== 'go' && existingHint !== 'search'"))
+    }
+
     @MainActor
     func testCalculatorCollapsibleMatchesArticleDisclosureChromeAndToggle() async throws {
         let root = URL(fileURLWithPath: #filePath)
