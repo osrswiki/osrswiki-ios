@@ -93,12 +93,23 @@ final class StaticSettingsPreviewSourceGuardTest: XCTestCase {
         XCTAssertTrue(article.contains(".ignoresSafeArea()"))
         XCTAssertFalse(article.contains(".safeAreaBar(edge: .top"))
         XCTAssertTrue(article.contains("osrsPairedEdgeChrome(edge: .top)"))
-        XCTAssertTrue(article.contains("articleStatusPocketScrim"))
-        XCTAssertTrue(article.contains("LinearGradient("))
-        XCTAssertTrue(article.contains("allowsHitTesting(false)"))
+        XCTAssertFalse(
+            article.contains("articleStatusPocketScrim"),
+            "Article inherits the shared shell scrim; a local scrim double-fades the pocket"
+        )
+        XCTAssertFalse(article.contains("LinearGradient("))
+        let scrim = try source(root, "platforms/ios/osrswiki/Views/Components/osrsStatusPocketScrim.swift")
+        XCTAssertTrue(scrim.contains("LinearGradient("))
+        XCTAssertTrue(scrim.contains("allowsHitTesting(false)"))
+        XCTAssertTrue(scrim.contains("osrsOverlayChromeMetrics.topInset"))
+        XCTAssertTrue(scrim.contains(".ignoresSafeArea(edges: .top)"))
+        XCTAssertFalse(
+            scrim.contains("osrsPairedEdgeChrome") || scrim.contains("osrsTabGlassAccessoryBar"),
+            "Status-pocket scrim must not live in the topInset-padded chrome helpers"
+        )
         XCTAssertTrue(
-            article.contains(".overlay(alignment: .top)") && article.contains("articleStatusPocketScrim"),
-            "Status-pocket scrim must overlay articleCanvas at the physical top"
+            customMain.contains(".overlay(alignment: .top)") && customMain.contains("osrsStatusPocketScrim()"),
+            "Shared status-pocket scrim must overlay the tab shell at the physical top"
         )
         XCTAssertTrue(customMain.contains("osrsOverlayChromeMetrics.screenEdgeGap"))
         XCTAssertTrue(customMain.contains(".ignoresSafeArea(edges: .bottom)"))

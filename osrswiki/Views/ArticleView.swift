@@ -578,11 +578,11 @@ private struct ArticleViewContent: View {
     private var articleLayout: some View {
         Group {
             if #available(iOS 26.0, *) {
+                // Status-pocket scrim is inherited from the shared shell
+                // overlay in CustomMainTabView; do not add one here or the
+                // pocket double-fades.
                 articleCanvas
                     .ignoresSafeArea()
-                    .overlay(alignment: .top) {
-                        articleStatusPocketScrim
-                    }
                     .osrsPairedEdgeChrome(edge: .top) {
                         articleTopChrome
                     }
@@ -603,18 +603,6 @@ private struct ArticleViewContent: View {
                 .ignoresSafeArea()
             articleDebugMarker
         }
-    }
-
-    // Physical-top overlay. Do not move into osrsPairedEdgeChrome — that helper pads by topInset.
-    private var articleStatusPocketScrim: some View {
-        LinearGradient(
-            colors: [osrsTheme.background, osrsTheme.background.opacity(0)],
-            startPoint: .top,
-            endPoint: .bottom
-        )
-        .frame(height: osrsOverlayChromeMetrics.topInset + 20)
-        .frame(maxWidth: .infinity)
-        .allowsHitTesting(false)
     }
 
     @ViewBuilder

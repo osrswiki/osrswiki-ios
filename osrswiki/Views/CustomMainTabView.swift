@@ -271,6 +271,12 @@ struct CustomMainTabView: View {
                 .allowsHitTesting(!overlayManager.articleBottomBarCovered)
             }
         }
+        // Shared status-pocket scrim: every root and pushed Article inherit
+        // this one physical-top gradient, so no per-screen copies and no
+        // stacked double fade on Article.
+        .overlay(alignment: .top) {
+            osrsStatusPocketScrim()
+        }
     }
 
     @available(iOS 26.0, *)
