@@ -1145,6 +1145,18 @@ html body .osrs-calculator-panel .oo-ui-horizontalLayout.jsCalc-group {
     width: max-content !important;
 }
 
+/* Calculator boxes must not inherit the max-content table-widening that
+   turns the disclosure into an outer scrollport. Inner result tables that
+   are actually wider keep their own local scroll surfaces. */
+.collapsible-container.collapsible-calculator .osrs-local-scroll-surface > table:not(.infobox):not(.infobox-bonuses),
+.collapsible-container.collapsible-calculator .osrs-local-scroll-surface > .osrs-disclosure-body > table:not(.infobox):not(.infobox-bonuses),
+.collapsible-container.collapsible-calculator .collapsible-content.osrs-local-scroll-surface > table:not(.infobox):not(.infobox-bonuses),
+.collapsible-container.collapsible-calculator .collapsible-content.osrs-local-scroll-surface > .osrs-disclosure-body > table:not(.infobox):not(.infobox-bonuses) {
+    max-width: 100% !important;
+    min-width: 0 !important;
+    width: auto !important;
+}
+
 /* Generic load-time minmax (width:max-content / max-width:none) must not undo
    infobox and equipment-bonuses polish. Glory-style bonuses tables stay
    viewport-fit with equal columns. */
@@ -2357,10 +2369,16 @@ ul.tabbernav > li {
     width: 100% !important;
 }
 
+/* One overflow owner for native and gadget calculator boxes: the
+   collapsible itself fits the viewport. Content and disclosure body are
+   not scrollports. Do not scope this to html.osrs-native-calc-slot-active. */
 .collapsible-container.collapsible-calculator:not(.collapsed) > .collapsible-content,
 .collapsible-container.collapsible-calculator:not(.collapsed) > .collapsible-content > .osrs-disclosure-body {
-    overflow-x: auto !important;
-    -webkit-overflow-scrolling: touch;
+    overflow-x: visible !important;
+    overflow-y: visible !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
 }
 
 ul.gallery,
@@ -2725,11 +2743,5 @@ table.infobox-bonuses [data-attr-param="slot"] a {
     white-space: normal !important;
     display: inline !important;
     width: auto !important;
-}
-
-.collapsible-container.collapsible-calculator:not(.collapsed) > .collapsible-content,
-.collapsible-container.collapsible-calculator:not(.collapsed) > .collapsible-content > .osrs-disclosure-body {
-    overflow-x: auto !important;
-    -webkit-overflow-scrolling: touch;
 }
 

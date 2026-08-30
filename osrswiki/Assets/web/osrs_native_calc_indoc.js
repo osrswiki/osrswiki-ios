@@ -297,6 +297,12 @@
         return type !== 'hs' && type !== 'rsn' && type !== 'string';
     }
 
+    function shouldAutosubmit(definition, fieldType) {
+        if (!definition || !definition.ui || definition.ui.autosubmit !== 'on') return false;
+        if (fieldType == null || fieldType === '') return true;
+        return shouldAutosubmitOnEdit(fieldType);
+    }
+
     function chromeTitle(calcId) {
         var rest = normalizeTitle(calcId);
         if (rest.indexOf('Calculator:') === 0) rest = rest.slice('Calculator:'.length);
@@ -425,7 +431,10 @@
         var body = String(html || '');
         if (!body.trim()) return true;
         var lowered = body.toLowerCase();
-        return lowered.indexOf('scribunto-error') >= 0 || lowered.indexOf('lua error') >= 0;
+        if (lowered.indexOf('scribunto-error') >= 0 || lowered.indexOf('lua error') >= 0) return true;
+        if (lowered.indexOf('class="error"') >= 0 || lowered.indexOf("class='error'") >= 0) return true;
+        if (lowered.indexOf('expression error') >= 0) return true;
+        return false;
     }
 
     function missingPlayerMessage(player) {
@@ -457,6 +466,7 @@
         visibleInputNames: visibleInputNames,
         invokeWikitext: invokeWikitext,
         shouldAutosubmitOnEdit: shouldAutosubmitOnEdit,
+        shouldAutosubmit: shouldAutosubmit,
         chromeTitle: chromeTitle,
         renderFormHtml: renderFormHtml,
         applyHiscores: applyHiscores,

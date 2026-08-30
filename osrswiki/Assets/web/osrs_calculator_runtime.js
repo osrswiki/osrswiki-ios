@@ -266,12 +266,6 @@
             'html.osrs-native-calc-slot-active #osrs-native-calc-slot input[type="radio"] {',
             'display:inline-block!important;visibility:visible!important;height:1.15rem!important;width:1.15rem!important;min-height:1.15rem!important;max-height:1.15rem!important;min-width:1.15rem!important;max-width:1.15rem!important;overflow:visible!important;pointer-events:auto!important;padding:0!important;',
             '}',
-            'html.osrs-native-calc-slot-active .collapsible-calculator .osrs-calculator-layout {',
-            'width:100%!important;max-width:100%!important;min-width:0!important;box-sizing:border-box!important;overflow:visible!important;',
-            '}',
-            'html.osrs-native-calc-slot-active .collapsible-calculator:not(.collapsed) > .collapsible-content > .osrs-disclosure-body {',
-            'overflow:visible!important;',
-            '}',
             'html.osrs-native-calc-slot-active .collapsible-calculator.collapsed > .collapsible-content {',
             'display:block!important;height:0!important;max-height:0!important;min-height:0!important;overflow:hidden!important;padding:0!important;margin:0!important;border:0!important;',
             '}',
@@ -719,9 +713,11 @@
             }).then(function (body) {
                 var html = osrsIndocParseHtml(body);
                 if (api.parseResultIsError(html)) {
-                    var match = String(html).match(/Lua error[^<]*/i);
+                    var match = String(html).match(/Expression error[^<]*/i) ||
+                        String(html).match(/Lua error[^<]*/i);
                     setBanner((match && match[0]) || 'The wiki could not calculate a result. Please check your inputs and try again.');
                     setStatus('');
+                    window.osrsNativeCalcSetResult(definition.ui.resultId, '');
                     return;
                 }
                 window.osrsNativeCalcSetResult(definition.ui.resultId, html);
@@ -850,7 +846,7 @@
                         if (max != null && !isNaN(max)) next = Math.min(max, next);
                         input.value = String(next);
                         values[input.name] = input.value;
-                        submit();
+                        if (api.shouldAutosubmit(definition)) submit();
                     }
                     return;
                 }
@@ -860,7 +856,7 @@
                     var chipName = chip.getAttribute('data-osrs-indoc-name');
                     values[chipName] = chip.getAttribute('data-osrs-indoc-option');
                     rerender();
-                    submit();
+                    if (api.shouldAutosubmit(definition)) submit();
                     return;
                 }
                 var select = target.closest('.osrs-indoc-calc-select');
@@ -872,7 +868,7 @@
                     osrsIndocShowPicker(model.label, model.options, values[selectName] || model.defaultValue, function (picked) {
                         values[selectName] = picked;
                         rerender();
-                        submit();
+                        if (api.shouldAutosubmit(definition)) submit();
                     });
                 }
             });
@@ -884,12 +880,12 @@
                     var span = target.parentNode && target.parentNode.querySelector('span');
                     if (span) span.textContent = target.checked ? 'On' : 'Off';
                     applyVisibility();
-                    submit();
+                    if (api.shouldAutosubmit(definition)) submit();
                     return;
                 }
                 values[target.name] = target.value;
                 var type = (definition.inputs.filter(function (input) { return input.name === target.name; })[0] || {}).type;
-                if (api.shouldAutosubmitOnEdit(type)) submit();
+                if (api.shouldAutosubmit(definition, type)) submit();
             });
             form.addEventListener('input', function (event) {
                 var target = event.target;
@@ -899,7 +895,7 @@
         }
 
         bind();
-        submit();
+        if (api.shouldAutosubmit(definition)) submit();
     }
 
     window.osrsBootIndocCalc = function () {
@@ -1652,6 +1648,7 @@ function parseCalculatorConfig(pre) {
             osrsInstallCalculatorKeyboardGuards();
             osrsApplyNumericKeyboards(existing);
             osrsCollapseTemplatesUsed(document);
+            osrsWrapGadgetCalculatorLayout(existing);
             return;
         }
 
@@ -1681,6 +1678,18 @@ function parseCalculatorConfig(pre) {
         pre.hidden = true;
         formHost.classList.add('osrs-calculator-panel');
         osrsReassertCalculatorThemeSheets();
+        osrsWrapGadgetCalculatorLayout(layout);
+    }
+
+    function osrsWrapGadgetCalculatorLayout(layout) {
+        if (!layout || typeof window.osrsWrapCollapsible !== 'function') return;
+        window.osrsWrapCollapsible({
+            kind: 'calculator',
+            elementToWrap: layout,
+            captionText: 'Calculator',
+            defaultTitle: 'Calculator',
+            isPrimary: true
+        });
     }
 
     function osrsReassertCalculatorThemeSheets() {
