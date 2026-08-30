@@ -9,6 +9,9 @@ enum osrsNativeCalcParamType: String, Equatable {
     case check
     case toggleSwitch = "toggleswitch"
     case toggleButton = "togglebutton"
+    case toggleButtonGroup = "togglebuttongroup"
+    case combobox
+    case group
     case hs
     case rsn
     case hidden
@@ -54,6 +57,7 @@ struct osrsNativeCalcInput: Equatable {
     var toggleOff: [String: [String]]
     var minValue: Int?
     var maxValue: Int?
+    var help: String = ""
 }
 
 struct osrsNativeCalcDefinitionModel: Equatable {
@@ -72,7 +76,8 @@ struct osrsNativeCalcDefinitionModel: Equatable {
 enum osrsNativeCalcDefinition {
     static let kitTypes: Set<osrsNativeCalcParamType> = [
         .string, .int, .number, .select, .buttonSelect, .check,
-        .toggleSwitch, .toggleButton, .hs, .rsn, .hidden, .fixed, .semiHidden
+        .toggleSwitch, .toggleButton, .toggleButtonGroup, .combobox, .group,
+        .hs, .rsn, .hidden, .fixed, .semiHidden
     ]
 
     static func normalizeAutosubmit(_ raw: String?) -> String {
@@ -88,7 +93,7 @@ enum osrsNativeCalcDefinition {
 
     static func countJcConfigs(in html: String?) -> Int {
         guard let html, !html.isEmpty else { return 0 }
-        guard let regex = try? NSRegularExpression(pattern: #"(?i)<pre[^>]*class="[^"]*jcConfig[^"]*""#) else {
+        guard let regex = try? NSRegularExpression(pattern: #"(?i)<(?:pre|div)[^>]*class="[^"]*jcConfig[^"]*""#) else {
             return 0
         }
         let range = NSRange(html.startIndex..<html.endIndex, in: html)
@@ -104,8 +109,8 @@ enum osrsNativeCalcDefinition {
         var moduleFunc: String?
         var inputs: [osrsNativeCalcInput] = []
         var unknownTypes: [String] = []
-        for rawLine in config.split(whereSeparator: \.isNewline) {
-            let line = String(rawLine)
+        for rawLine in configLines(config) {
+            let line = rawLine
             guard let (key, value) = splitConfigLine(line) else { continue }
             if key != "param" {
                 switch key {
@@ -137,17 +142,16 @@ enum osrsNativeCalcDefinition {
             let rawType = fields[3].lowercased()
             let range = fields[4]
             let rawToggles = fields[5]
+            let help = parseHelp(fields)
             let type = osrsNativeCalcParamType(rawValue: rawType) ?? .unknown
             if type == .unknown, !rawType.isEmpty {
                 unknownTypes.append(rawType)
             }
             let toggleDefault: String
-            if !defaultValue.isEmpty {
-                toggleDefault = defaultValue
-            } else if type == .toggleSwitch || type == .toggleButton || type == .check {
+            if type == .toggleSwitch || type == .toggleButton || type == .check {
                 toggleDefault = "true"
             } else {
-                toggleDefault = name
+                toggleDefault = defaultValue.isEmpty ? name : defaultValue
             }
             if type == .toggleSwitch, defaultValue.isEmpty {
                 defaultValue = "false"
@@ -165,7 +169,8 @@ enum osrsNativeCalcDefinition {
                     toggles: parsedToggles.on,
                     toggleOff: parsedToggles.off,
                     minValue: intBounds.min,
-                    maxValue: intBounds.max
+                    maxValue: intBounds.max,
+                    help: help
                 )
             )
         }
@@ -233,13 +238,19 @@ enum osrsNativeCalcDefinition {
         }
         let visible = visibleInputNames(definition, values: merged)
         for input in definition.inputs {
-            if input.type == .unknown { continue }
+            if input.type == .unknown || input.type == .group { continue }
             let always = input.type == .hidden || input.type == .fixed
             if !always && !visible.contains(input.name) { continue }
             var value = merged[input.name] ?? ""
             if (input.type == .hs || input.type == .rsn) && value.isEmpty { continue }
             if input.type == .toggleSwitch {
                 value = boolToken(value)
+            }
+            if input.type == .check {
+                value = checkToken(input, on: checkIsOn(input, value))
+            }
+            if input.type == .toggleButtonGroup {
+                value = csvTokens(value).joined(separator: ",")
             }
             parts.append("|\(input.name)=\(value)")
         }
@@ -283,7 +294,7 @@ enum osrsNativeCalcDefinition {
 
     static func shouldAutosubmitOnEdit(_ type: osrsNativeCalcParamType) -> Bool {
         switch type {
-        case .hs, .rsn, .string:
+        case .hs, .rsn, .string, .group:
             return false
         default:
             return true
@@ -381,11 +392,11 @@ enum osrsNativeCalcDefinition {
     }
 
     static func firstConfig(in html: String) -> String? {
-        if let pre = firstMatch(#"(?is)<pre[^>]*class="[^"]*jcConfig[^"]*"[^>]*>(.*?)</pre>"#, in: html) {
-            return pre
+        if let match = firstTaggedConfig(in: html) {
+            return match
         }
         guard let regex = try? NSRegularExpression(
-            pattern: #"(?is)(?:^|\n)\s*(?:template|module)\s*=.+?(?=\n\s*(?:\{\||----|<pre|$))"#
+            pattern: #"(?is)(?:^|\n)\s*(?:template|module)\s*=.+?(?=\n\s*(?:\{\||----|<pre|<div|$))"#
         ) else {
             return nil
         }
@@ -395,6 +406,48 @@ enum osrsNativeCalcDefinition {
             return nil
         }
         return String(html[matched])
+    }
+
+    private static func firstTaggedConfig(in html: String) -> String? {
+        guard let regex = try? NSRegularExpression(
+            pattern: #"(?is)<(pre|div)[^>]*class="[^"]*jcConfig[^"]*"[^>]*>(.*?)</\1>"#
+        ) else {
+            return nil
+        }
+        let range = NSRange(html.startIndex..<html.endIndex, in: html)
+        guard let match = regex.firstMatch(in: html, range: range),
+              match.numberOfRanges > 2,
+              let tagRange = Range(match.range(at: 1), in: html),
+              let innerRange = Range(match.range(at: 2), in: html) else {
+            return nil
+        }
+        let tag = String(html[tagRange]).lowercased()
+        let inner = String(html[innerRange])
+        if tag == "pre" {
+            return decodeEntities(inner)
+        }
+        return unwrapDivConfig(inner)
+    }
+
+    private static let configKeyBreak = try! NSRegularExpression(
+        pattern: #"\s+(?=(?:param|form|result|template|modulefunc|module|name|autosubmit|suggestns)\s*=)"#,
+        options: [.caseInsensitive]
+    )
+
+    private static func configLines(_ config: String) -> [String] {
+        var text = config
+            .replacingOccurrences(of: #"<br\s*/?>"#, with: "\n", options: [.regularExpression, .caseInsensitive])
+            .replacingOccurrences(of: #"</p>"#, with: "\n", options: [.regularExpression, .caseInsensitive])
+            .replacingOccurrences(of: #"<p\b[^>]*>"#, with: "", options: [.regularExpression, .caseInsensitive])
+        text = decodeEntities(text.replacingOccurrences(of: #"<[^>]+>"#, with: " ", options: .regularExpression))
+        let ns = text as NSString
+        text = configKeyBreak.stringByReplacingMatches(
+            in: text,
+            options: [],
+            range: NSRange(location: 0, length: ns.length),
+            withTemplate: "\n"
+        )
+        return text.split(whereSeparator: \.isNewline).map(String.init)
     }
 
     private static func splitConfigLine(_ line: String) -> (String, String)? {
@@ -441,7 +494,8 @@ enum osrsNativeCalcDefinition {
     }
 
     private static func options(for type: osrsNativeCalcParamType, range: String) -> [String] {
-        guard type == .select || type == .buttonSelect || type == .check, !range.isEmpty else {
+        guard type == .select || type == .buttonSelect || type == .check ||
+            type == .combobox || type == .toggleButtonGroup, !range.isEmpty else {
             return []
         }
         return range.split(separator: ",").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
@@ -473,7 +527,69 @@ enum osrsNativeCalcDefinition {
                 }
             }
         }
+        for input in definition.inputs where input.type == .group {
+            guard !visible.contains(input.name) else { continue }
+            groupMembers(input).forEach { visible.remove($0) }
+        }
         return visible
+    }
+
+    private static func groupMembers(_ input: osrsNativeCalcInput) -> [String] {
+        input.range.split(separator: ",").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+    }
+
+    private static func csvTokens(_ value: String) -> [String] {
+        value.split(separator: ",").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+    }
+
+    private static func parseHelp(_ fields: [String]) -> String {
+        guard fields.count >= 7 else { return "" }
+        var raw = fields.dropFirst(6).joined(separator: "|").trimmingCharacters(in: .whitespacesAndNewlines)
+        if raw.isEmpty { return "" }
+        if raw.lowercased().hasPrefix("inline=") {
+            raw = String(raw.dropFirst(7))
+        }
+        return stripTags(raw)
+    }
+
+    private static func decodeEntities(_ text: String) -> String {
+        text
+            .replacingOccurrences(of: "&lt;", with: "<")
+            .replacingOccurrences(of: "&gt;", with: ">")
+            .replacingOccurrences(of: "&quot;", with: "\"")
+            .replacingOccurrences(of: "&#39;", with: "'")
+            .replacingOccurrences(of: "&amp;", with: "&")
+    }
+
+    private static func stripTags(_ text: String) -> String {
+        decodeEntities(text.replacingOccurrences(of: "<[^>]+>", with: " ", options: .regularExpression))
+            .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func unwrapDivConfig(_ inner: String) -> String {
+        let pattern = #"^\s*<([a-z][a-z0-9]*)\b[^>]*>(.*)</\1>\s*$"#
+        if let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive, .dotMatchesLineSeparators]),
+           let match = regex.firstMatch(in: inner, options: [], range: NSRange(inner.startIndex..<inner.endIndex, in: inner)),
+           match.numberOfRanges > 2,
+           let captured = Range(match.range(at: 2), in: inner) {
+            return String(inner[captured])
+        }
+        return inner
+    }
+
+    private static func checkIsOn(_ input: osrsNativeCalcInput, _ value: String) -> Bool {
+        if input.options.count >= 2 {
+            return value == input.options[0]
+        }
+        return boolToken(value) == "true"
+    }
+
+    private static func checkToken(_ input: osrsNativeCalcInput, on: Bool) -> String {
+        if input.options.count >= 2 {
+            return on ? input.options[0] : input.options[1]
+        }
+        return on ? "true" : "false"
     }
 
     private static func boolToken(_ value: String) -> String {

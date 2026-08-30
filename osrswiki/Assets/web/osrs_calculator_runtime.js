@@ -210,7 +210,7 @@
         var height = Math.max(1, parseInt(opts.height, 10) || 420);
         var form = (formId && document.getElementById(formId)) ||
             document.querySelector('.jcTable, [id$="Calc"], [id$="Form"]');
-        var config = document.querySelector('pre.jcConfig');
+        var config = document.querySelector(osrsJcConfigSelector());
         var layout = document.querySelector('.osrs-calculator-layout');
         var existingSlot = document.getElementById('osrs-native-calc-slot');
         var indoc = !!(opts.indoc || (existingSlot && existingSlot.getAttribute('data-osrs-indoc-calc') === '1'));
@@ -235,6 +235,7 @@
         }
         style.textContent = [
             'html.osrs-native-calc-slot-active pre.jcConfig,',
+            'html.osrs-native-calc-slot-active div.jcConfig,',
             'html.osrs-native-calc-slot-active .jcTable,',
             'html.osrs-native-calc-slot-active .jcSubmit,',
             'html.osrs-native-calc-slot-active .jsCalc-field,',
@@ -288,7 +289,7 @@
         hideUnlessResult(panel);
         var hideRoot = layout || document;
         hideRoot.querySelectorAll(
-            '.jcTable, .jcSubmit, .oo-ui-fieldsetLayout, pre.jcConfig, .jsCalc-field, .oo-ui-textInputWidget, .osrs-calculator-panel, .oo-ui-panelLayout-framed'
+            '.jcTable, .jcSubmit, .oo-ui-fieldsetLayout, pre.jcConfig, div.jcConfig, .jsCalc-field, .oo-ui-textInputWidget, .osrs-calculator-panel, .oo-ui-panelLayout-framed'
         ).forEach(hideUnlessResult);
         function neutralizeGadgetSelect(node) {
             if (!node || (result && result.contains && result.contains(node))) return;
@@ -544,6 +545,11 @@
         delete window.osrsNativeCalcIsCollapsed;
     };
 
+    function osrsJcConfigSelector() {
+        var api = window.osrsIndocCalc;
+        return (api && api.JC_CONFIG_SELECTOR) || 'pre.jcConfig, div.jcConfig';
+    }
+
     function osrsIndocReadPageTitle() {
         var api = window.osrsIndocCalc;
         if (api && typeof api.resolvePageTitle === 'function') {
@@ -572,9 +578,11 @@
             return api.isPageEligible(null, osrsIndocReadPageTitle());
         }
         if (typeof api.isEligible !== 'function') return false;
-        var nodes = document.querySelectorAll('pre.jcConfig');
+        var nodes = document.querySelectorAll(osrsJcConfigSelector());
         if (nodes.length !== 1) return false;
-        var definition = api.parse(nodes[0].textContent || nodes[0].innerText || '', osrsIndocReadPageTitle());
+        var source = (api.configSourceFromNode && api.configSourceFromNode(nodes[0])) ||
+            nodes[0].textContent || nodes[0].innerText || '';
+        var definition = api.parse(source, osrsIndocReadPageTitle());
         return api.isEligible(definition);
     }
 
@@ -605,7 +613,7 @@
         return '';
     }
 
-    function osrsIndocShowPicker(label, options, currentValue, onPick) {
+    function osrsIndocShowPicker(label, options, currentValue, onPick, searchable) {
         var payloadOpts = options.map(function (option) {
             return { label: option, value: option };
         });
@@ -617,7 +625,8 @@
                 var raw = window.osrsCalculatorApi.showChoicePicker(JSON.stringify({
                     label: label,
                     options: payloadOpts,
-                    currentValue: currentValue
+                    currentValue: currentValue,
+                    searchable: !!searchable
                 }));
                 apply(JSON.parse(raw));
                 return true;
@@ -635,6 +644,7 @@
                 label: label,
                 options: payloadOpts,
                 currentValue: currentValue,
+                searchable: !!searchable,
                 callbackId: callbackId
             });
             return true;
@@ -655,12 +665,28 @@
                 var name = node.getAttribute('data-osrs-indoc-name') || node.getAttribute('name');
                 if (!name) return;
                 if (node.type === 'checkbox') {
-                    next[name] = node.checked ? 'true' : 'false';
+                    var checkModel = definition.inputs.filter(function (input) { return input.name === name; })[0];
+                    if (checkModel && checkModel.type === 'check' && checkModel.options && checkModel.options.length >= 2) {
+                        next[name] = node.checked ? checkModel.options[0] : checkModel.options[1];
+                    } else {
+                        next[name] = node.checked ? 'true' : 'false';
+                    }
                 } else if (node.tagName === 'BUTTON' && node.classList.contains('osrs-indoc-calc-select')) {
                     next[name] = (node.textContent || '').trim();
                 } else if (node.value != null && node.type !== 'button' && node.type !== 'submit') {
                     next[name] = node.value;
                 }
+            });
+            definition.inputs.forEach(function (input) {
+                if (input.type !== 'togglebuttongroup') return;
+                var pressed = [];
+                slot.querySelectorAll(
+                    '[data-osrs-indoc-chip="togglebuttongroup"][data-osrs-indoc-name="' + input.name + '"][aria-pressed="true"]'
+                ).forEach(function (chip) {
+                    var option = chip.getAttribute('data-osrs-indoc-option');
+                    if (option) pressed.push(option);
+                });
+                next[input.name] = pressed.join(',');
             });
             return next;
         }
@@ -854,7 +880,19 @@
                 if (chip) {
                     event.preventDefault();
                     var chipName = chip.getAttribute('data-osrs-indoc-name');
-                    values[chipName] = chip.getAttribute('data-osrs-indoc-option');
+                    var option = chip.getAttribute('data-osrs-indoc-option');
+                    var chipKind = chip.getAttribute('data-osrs-indoc-chip') || 'buttonselect';
+                    if (chipKind === 'togglebuttongroup') {
+                        var selected = String(values[chipName] || '').split(',').map(function (s) {
+                            return s.trim();
+                        }).filter(Boolean);
+                        var idx = selected.indexOf(option);
+                        if (idx >= 0) selected.splice(idx, 1);
+                        else selected.push(option);
+                        values[chipName] = selected.join(',');
+                    } else {
+                        values[chipName] = option;
+                    }
                     rerender();
                     if (api.shouldAutosubmit(definition)) submit();
                     return;
@@ -865,18 +903,29 @@
                     var selectName = select.getAttribute('data-osrs-indoc-name');
                     var model = definition.inputs.filter(function (input) { return input.name === selectName; })[0];
                     if (!model) return;
-                    osrsIndocShowPicker(model.label, model.options, values[selectName] || model.defaultValue, function (picked) {
-                        values[selectName] = picked;
-                        rerender();
-                        if (api.shouldAutosubmit(definition)) submit();
-                    });
+                    osrsIndocShowPicker(
+                        model.label,
+                        model.options,
+                        values[selectName] || model.defaultValue,
+                        function (picked) {
+                            values[selectName] = picked;
+                            rerender();
+                            if (api.shouldAutosubmit(definition)) submit();
+                        },
+                        model.type === 'combobox'
+                    );
                 }
             });
             form.addEventListener('change', function (event) {
                 var target = event.target;
                 if (!target || !target.name) return;
                 if (target.type === 'checkbox') {
-                    values[target.name] = target.checked ? 'true' : 'false';
+                    var checkModel = definition.inputs.filter(function (input) { return input.name === target.name; })[0];
+                    if (checkModel && checkModel.type === 'check' && checkModel.options && checkModel.options.length >= 2) {
+                        values[target.name] = target.checked ? checkModel.options[0] : checkModel.options[1];
+                    } else {
+                        values[target.name] = target.checked ? 'true' : 'false';
+                    }
                     var span = target.parentNode && target.parentNode.querySelector('span');
                     if (span) span.textContent = target.checked ? 'On' : 'Off';
                     applyVisibility();
@@ -902,14 +951,16 @@
         var api = window.osrsIndocCalc;
         if (!api || !osrsIndocShouldTakeover()) return false;
         osrsIndocMarkPending();
-        var nodes = document.querySelectorAll('pre.jcConfig');
+        var nodes = document.querySelectorAll(osrsJcConfigSelector());
         if (nodes.length !== 1) {
             document.documentElement.classList.remove('osrs-indoc-calc');
             document.documentElement.classList.remove('osrs-native-calc-slot-active');
             return false;
         }
-        var pre = nodes[0];
-        var definition = api.parse(pre.textContent || pre.innerText || '', osrsIndocReadPageTitle());
+        var node = nodes[0];
+        var source = (api.configSourceFromNode && api.configSourceFromNode(node)) ||
+            node.textContent || node.innerText || '';
+        var definition = api.parse(source, osrsIndocReadPageTitle());
         if (!api.isEligible(definition)) {
             document.documentElement.classList.remove('osrs-indoc-calc');
             document.documentElement.classList.remove('osrs-native-calc-slot-active');
@@ -1068,12 +1119,12 @@ function osrsPromoteCalculatorDescription(layout, formHost) {
                     break;
                 }
             }
-            if (prev.querySelector && prev.querySelector('pre.jcConfig, .jcTable, .oo-ui-widget')) break;
+            if (prev.querySelector && prev.querySelector('pre.jcConfig, div.jcConfig, .jcTable, .oo-ui-widget')) break;
             prev = prev.previousElementSibling;
         }
         if (!desc) {
             var root = document.querySelector('.mw-parser-output') || document.body;
-            var pre = root.querySelector('pre.jcConfig');
+            var pre = root.querySelector(osrsJcConfigSelector());
             if (pre) {
                 var cursor = pre.previousElementSibling;
                 while (cursor) {
@@ -1292,7 +1343,7 @@ function osrsPromoteCalculatorDescription(layout, formHost) {
 
                 // Last resort: parse from jcConfig select param options in nearby pre (not ideal)
                 if (!options.length && label) {
-                    var pre = document.querySelector('pre.jcConfig');
+                    var pre = document.querySelector(osrsJcConfigSelector());
                     if (pre) {
                         var lines = (pre.textContent || '').split('\n');
                         for (var li = 0; li < lines.length; li++) {
@@ -1590,7 +1641,7 @@ function parseCalculatorConfig(pre) {
             if (previous.matches('table.archivelist, .archivelist') && /templates used/i.test(text)) {
                 return previous;
             }
-            if (previous.matches('table, pre.jcConfig, h1, h2, h3')) {
+            if (previous.matches('table, pre.jcConfig, div.jcConfig, h1, h2, h3')) {
                 break;
             }
             previous = previous.previousElementSibling;
@@ -1693,7 +1744,7 @@ function parseCalculatorConfig(pre) {
     }
 
     function osrsReassertCalculatorThemeSheets() {
-        if (!document.querySelector('.osrs-calculator-layout, pre.jcConfig')) {
+        if (!document.querySelector('.osrs-calculator-layout, pre.jcConfig, div.jcConfig')) {
             return;
         }
         var head = document.head || document.documentElement;
@@ -1930,7 +1981,7 @@ function parseCalculatorConfig(pre) {
             document.documentElement.classList.contains('osrs-indoc-calc')) {
             return;
         }
-        if (!document.querySelector('pre.jcConfig')) {
+        if (!document.querySelector(osrsJcConfigSelector())) {
             return;
         }
         if (!window.mw || !mw.loader) {
@@ -1960,7 +2011,7 @@ function parseCalculatorConfig(pre) {
         function osrsCalcOOUIReady() {
             var cfg = '';
             try {
-                var pre = document.querySelector('pre.jcConfig');
+                var pre = document.querySelector(osrsJcConfigSelector());
                 cfg = pre && pre.textContent ? String(pre.textContent) : '';
             } catch (ignore) {}
             if (!(window.OO && OO.ui &&
@@ -2239,7 +2290,7 @@ function parseCalculatorConfig(pre) {
             return;
         }
         osrsInstallCalculatorKeyboardGuards();
-        document.querySelectorAll('pre.jcConfig').forEach(function(pre) {
+        document.querySelectorAll(osrsJcConfigSelector()).forEach(function(pre) {
             var config = parseCalculatorConfig(pre);
             var formTarget = config.form && document.getElementById(config.form);
             if (formTarget) {

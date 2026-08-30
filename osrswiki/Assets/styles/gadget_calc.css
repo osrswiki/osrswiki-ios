@@ -680,6 +680,7 @@ html body #osrs-calculator-status:empty {
 
 /* In-document native calc chrome (verdict C). Article parchment, not OOUI. */
 html.osrs-indoc-calc pre.jcConfig,
+html.osrs-indoc-calc div.jcConfig,
 html.osrs-indoc-calc .jcTable,
 html.osrs-indoc-calc .jcSubmit,
 html.osrs-indoc-calc .jsCalc-field,
@@ -820,6 +821,31 @@ body.wgl-theme-dark .osrs-indoc-calc-error-stop {
 }
 
 .osrs-indoc-calc-label {
+    color: var(--text-color);
+    font-size: 0.92rem;
+    font-weight: 600;
+}
+
+.osrs-indoc-calc-help {
+    margin: 0.15rem 0 0.4rem;
+    font-size: 0.82rem;
+    line-height: 1.35;
+    font-weight: 400;
+    opacity: 0.82;
+}
+
+.osrs-indoc-calc-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    margin: 0.5rem 0 0.15rem;
+}
+
+.osrs-indoc-calc-group[hidden] {
+    display: none !important;
+}
+
+.osrs-indoc-calc-group-label {
     color: var(--text-color);
     font-size: 0.92rem;
     font-weight: 600;

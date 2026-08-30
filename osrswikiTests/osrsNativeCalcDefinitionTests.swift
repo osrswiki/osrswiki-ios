@@ -144,14 +144,14 @@ final class osrsNativeCalcDefinitionTests: XCTestCase {
         XCTAssertTrue(osrsNativeCalcDefinition.isNativeChromeEligible(agility))
         XCTAssertTrue(osrsNativeCalcDefinition.isNativeChromeEligible(cooking))
         XCTAssertFalse(osrsNativeCalcDefinition.isNativeChromeEligible(unknown))
-        XCTAssertFalse(osrsNativeCalcDefinition.isNativeChromeEligible(barrows))
+        XCTAssertTrue(osrsNativeCalcDefinition.isNativeChromeEligible(barrows))
         XCTAssertFalse(osrsNativeCalcDefinition.isNativeChromeEligible(nil))
         XCTAssertFalse(osrsNativeCalcDefinition.isNativeChromeEligible(
             osrsNativeCalcDefinition.parse("no config here")
         ))
         XCTAssertTrue(osrsNativeCalcDefinition.isPageNativeChromeEligible(agilityConfig, title: "Calculator:Agility"))
         XCTAssertTrue(osrsNativeCalcDefinition.isPageNativeChromeEligible(dry, title: "Calculator:Dry calc"))
-        XCTAssertFalse(osrsNativeCalcDefinition.isPageNativeChromeEligible(barrowsHtml, title: "Calculator:Barrows"))
+        XCTAssertTrue(osrsNativeCalcDefinition.isPageNativeChromeEligible(barrowsHtml, title: "Calculator:Barrows"))
         XCTAssertEqual(osrsNativeCalcDefinition.countJcConfigs(in: coordinates), 2)
         XCTAssertFalse(osrsNativeCalcDefinition.isPageNativeChromeEligible(coordinates, title: "Calculator:Coordinates"))
         XCTAssertTrue(osrsNativeCalcDefinition.isNativeChromeEligible(
@@ -160,6 +160,63 @@ final class osrsNativeCalcDefinitionTests: XCTestCase {
         XCTAssertEqual(osrsNativeCalcDefinition.normalizeAutosubmit("enabled"), "on")
         XCTAssertEqual(osrsNativeCalcDefinition.normalizeAutosubmit("true"), "on")
         XCTAssertEqual(osrsNativeCalcDefinition.normalizeAutosubmit("disabled"), "off")
+    }
+
+    func testLeftoverSingleConfigPagesTakeNativeChrome() {
+        let barrows = """
+            <pre class="jcConfig">
+            template=Calculator:Barrows/Template
+            param = Ahrim|Ahrim?|yes|check|yes,no
+            param = toggleUnitKill|Select units killed instead of combat level sum|false|toggleswitch||unitKill
+            param = unitKill|Barrows crypt units||group|bloodworm,cryptRat
+            param = bloodworm|Bloodworms killed|0|int|0-
+            param = cryptRat|Crypt rats killed|0|int|0-
+            </pre>
+            """
+        let wrench = """
+            <div class="jcConfig" style="display: none;">
+            <p>template = Calculator:Prayer/Holy wrench/Template
+            form = HWForm
+            result = HWResult
+            param = PrayerLevel|Prayer level|99|int|1-99|
+            autosubmit = enabled
+            </p>
+            </div>
+            """
+        let quests = """
+            <div class="jcConfig">
+            <p>template = Template:Recursive_Questreq
+            param = 1|Quest name|While Guthix Sleeps|combobox|,A Kingdom Divided,A Night at the Theatre
+            </p>
+            </div>
+            """
+        let rumours = """
+            <pre class="jcConfig">
+            template=Calculator:Hunter/Rumours/Template
+            param = leaguesRegions|Select Leagues Regions?|false|toggleswitch||regionOptions|This will assume the Karamja and Varlamore regions are unlocked by default.
+            param = regionOptions|Regions:||togglebuttongroup|Karamja,Desert,Fremennik
+            </pre>
+            """
+        let barrowsDef = osrsNativeCalcDefinition.parse(barrows, title: "Calculator:Barrows")!
+        let toggle = barrowsDef.inputs.first { $0.name == "toggleUnitKill" }!
+        XCTAssertNotNil(toggle.toggles["true"])
+        XCTAssertNil(toggle.toggles["false"])
+        let off = osrsNativeCalcDefinition.invokeWikitext(barrowsDef)!
+        let on = osrsNativeCalcDefinition.invokeWikitext(barrowsDef, values: ["toggleUnitKill": "true"])!
+        XCTAssertFalse(off.contains("|bloodworm="))
+        XCTAssertFalse(off.contains("|unitKill="))
+        XCTAssertTrue(on.contains("|bloodworm="))
+        XCTAssertFalse(on.contains("|unitKill="))
+        XCTAssertTrue(osrsNativeCalcDefinition.isPageNativeChromeEligible(wrench, title: "Calculator:Prayer/Holy wrench"))
+        let questDef = osrsNativeCalcDefinition.parse(quests, title: "Calculator:Recursive Quest Requirements")!
+        XCTAssertEqual(questDef.inputs.first?.type, .combobox)
+        XCTAssertTrue(questDef.inputs.first?.options.contains("A Kingdom Divided") == true)
+        let rumoursDef = osrsNativeCalcDefinition.parse(rumours, title: "Calculator:Hunter/Rumours")!
+        XCTAssertEqual(
+            rumoursDef.inputs.first?.help,
+            "This will assume the Karamja and Varlamore regions are unlocked by default."
+        )
+        XCTAssertEqual(rumoursDef.inputs[1].type, .toggleButtonGroup)
     }
 
     func testParseResultDetectsScribuntoError() {

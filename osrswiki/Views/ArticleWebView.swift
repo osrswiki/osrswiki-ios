@@ -2907,6 +2907,9 @@ struct ArticleWebView: UIViewRepresentable {
             let label = rawLabel.isEmpty ? "Choose option" : rawLabel
             let callbackId = body["callbackId"] as? String ?? ""
             let currentValue = Self.osrsStringValue(body["currentValue"]) ?? ""
+            let searchable = (body["searchable"] as? Bool)
+                ?? (body["searchable"] as? NSNumber)?.boolValue
+                ?? false
             let options = Self.osrsCalculatorPickerOptions(from: body["options"])
 
             guard !options.isEmpty else {
@@ -2922,6 +2925,7 @@ struct ArticleWebView: UIViewRepresentable {
                     label: label,
                     options: options,
                     currentValue: currentValue,
+                    searchable: searchable || options.count > 12,
                     callbackId: callbackId
                 )
             }
@@ -2956,7 +2960,7 @@ struct ArticleWebView: UIViewRepresentable {
             return nil
         }
 
-        private func showIOSChoicePicker(label: String, options: [(label: String, value: String)], currentValue: String, callbackId: String) {
+        private func showIOSChoicePicker(label: String, options: [(label: String, value: String)], currentValue: String, searchable: Bool, callbackId: String) {
             guard let webView else {
                 completeChoicePicker(callbackId: callbackId, selected: false, value: nil)
                 return
@@ -2965,7 +2969,8 @@ struct ArticleWebView: UIViewRepresentable {
             let picker = osrsCalculatorChoicePickerController(
                 titleText: label,
                 options: options,
-                currentValue: currentValue
+                currentValue: currentValue,
+                searchable: searchable
             ) { [weak self] selected, value in
                 self?.completeChoicePicker(callbackId: callbackId, selected: selected, value: value)
             }
@@ -3284,20 +3289,26 @@ struct ArticleWebView: UIViewRepresentable {
     }
 }
 
-private final class osrsCalculatorChoicePickerController: UITableViewController {
+private final class osrsCalculatorChoicePickerController: UITableViewController, UISearchResultsUpdating {
     private let options: [(label: String, value: String)]
     private let currentValue: String
     private let onComplete: (Bool, String?) -> Void
+    private let searchable: Bool
+    private var filtered: [(label: String, value: String)]
     private var didComplete = false
+    private let searchController = UISearchController(searchResultsController: nil)
 
     init(
         titleText: String,
         options: [(label: String, value: String)],
         currentValue: String,
+        searchable: Bool = false,
         onComplete: @escaping (Bool, String?) -> Void
     ) {
         self.options = options
+        self.filtered = options
         self.currentValue = currentValue
+        self.searchable = searchable
         self.onComplete = onComplete
         super.init(style: .insetGrouped)
         title = titleText
@@ -3316,15 +3327,23 @@ private final class osrsCalculatorChoicePickerController: UITableViewController 
             target: self,
             action: #selector(cancelTapped)
         )
+        if searchable {
+            searchController.searchResultsUpdater = self
+            searchController.obscuresBackgroundDuringPresentation = false
+            searchController.searchBar.placeholder = "Filter"
+            navigationItem.searchController = searchController
+            navigationItem.preferredSearchBarPlacement = .stacked
+            definesPresentationContext = true
+        }
     }
 
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        options.count
+        filtered.count
     }
 
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = tableView.dequeueReusableCell(withIdentifier: "option", for: indexPath)
-        let option = options[indexPath.row]
+        let option = filtered[indexPath.row]
         var content = cell.defaultContentConfiguration()
         content.text = option.label
         cell.contentConfiguration = content
@@ -3334,7 +3353,19 @@ private final class osrsCalculatorChoicePickerController: UITableViewController 
 
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
-        finish(selected: true, value: options[indexPath.row].value)
+        finish(selected: true, value: filtered[indexPath.row].value)
+    }
+
+    func updateSearchResults(for searchController: UISearchController) {
+        let needle = (searchController.searchBar.text ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        if needle.isEmpty {
+            filtered = options
+        } else {
+            filtered = options.filter { $0.label.lowercased().contains(needle) }
+        }
+        tableView.reloadData()
     }
 
     @objc private func cancelTapped() {

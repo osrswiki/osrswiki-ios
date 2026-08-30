@@ -314,7 +314,7 @@
         var $ = window.jQuery || window.$;
         var cfg = '';
         try {
-            var pre = document.querySelector('pre.jcConfig');
+            var pre = document.querySelector('.jcConfig');
             cfg = pre && pre.textContent ? String(pre.textContent) : '';
         } catch (ignore) {}
         var base = !!( $ && window.OO && OO.ui &&

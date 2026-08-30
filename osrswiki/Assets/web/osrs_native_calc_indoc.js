@@ -14,10 +14,13 @@
 
     var KIT = {
         string: true, int: true, number: true, select: true, buttonselect: true,
-        check: true, toggleswitch: true, togglebutton: true, hs: true, rsn: true,
+        check: true, toggleswitch: true, togglebutton: true, togglebuttongroup: true,
+        combobox: true, group: true, hs: true, rsn: true,
         hidden: true, fixed: true, semihidden: true
     };
-    var JCCONFIG_OPEN = /<pre[^>]*class="[^"]*jcConfig[^"]*"/gi;
+    var JC_CONFIG_SELECTOR = 'pre.jcConfig, div.jcConfig';
+    var JCCONFIG_OPEN = /<(?:pre|div)[^>]*class="[^"]*jcConfig[^"]*"/gi;
+    var JCCONFIG_BLOCK = /<(pre|div)[^>]*class="[^"]*jcConfig[^"]*"[^>]*>([\s\S]*?)<\/\1>/i;
 
     function normalizeTitle(title) {
         return String(title || '').replace(/_/g, ' ').trim();
@@ -112,10 +115,87 @@
         return { on: on, off: off };
     }
 
+    function decodeEntities(text) {
+        return String(text || '')
+            .replace(/&lt;/g, '<')
+            .replace(/&gt;/g, '>')
+            .replace(/&quot;/g, '"')
+            .replace(/&#39;/g, "'")
+            .replace(/&amp;/g, '&');
+    }
+
+    function stripTags(text) {
+        return decodeEntities(String(text || '').replace(/<[^>]+>/g, ' '))
+            .replace(/\s+/g, ' ')
+            .trim();
+    }
+
+    function parseHelp(fields) {
+        if (!fields || fields.length < 7) return '';
+        var raw = fields.slice(6).join('|').trim();
+        if (!raw) return '';
+        if (raw.toLowerCase().indexOf('inline=') === 0) raw = raw.slice(7);
+        return stripTags(raw);
+    }
+
+    function unwrapDivConfig(inner) {
+        var trimmed = String(inner || '');
+        var wrapped = trimmed.match(/^\s*<([a-z][a-z0-9]*)\b[^>]*>([\s\S]*)<\/\1>\s*$/i);
+        if (wrapped) return wrapped[2];
+        return trimmed;
+    }
+
+    var CONFIG_KEY_BREAK = /\s+(?=(?:param|form|result|template|modulefunc|module|name|autosubmit|suggestns)\s*=)/gi;
+
+    function configLines(config) {
+        var text = String(config || '');
+        text = text.replace(/<br\s*\/?>/gi, '\n');
+        text = text.replace(/<\/p>/gi, '\n');
+        text = text.replace(/<p\b[^>]*>/gi, '');
+        text = decodeEntities(text.replace(/<[^>]+>/g, ' '));
+        text = text.replace(CONFIG_KEY_BREAK, '\n');
+        return text.split('\n');
+    }
+
+    function configSourceFromNode(node) {
+        if (!node) return '';
+        var tag = String(node.tagName || '').toLowerCase();
+        if (tag === 'div' && node.children && node.children.length) {
+            var html = '';
+            for (var i = 0; i < node.children.length; i++) {
+                html += node.children[i].innerHTML;
+                if (i === 0) break;
+            }
+            return html;
+        }
+        return node.textContent || node.innerText || '';
+    }
+
     function optionsFor(type, range) {
-        if (type !== 'select' && type !== 'buttonselect' && type !== 'check') return [];
+        if (type !== 'select' && type !== 'buttonselect' && type !== 'check' &&
+            type !== 'combobox' && type !== 'togglebuttongroup') return [];
         if (!range) return [];
         return range.split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+    }
+
+    function csvTokens(value) {
+        return String(value || '').split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+    }
+
+    function groupMembers(input) {
+        return String((input && input.range) || '').split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+    }
+
+    function checkIsOn(input, value) {
+        var options = (input && input.options) || [];
+        if (options.length >= 2) return String(value == null ? '' : value) === options[0];
+        return boolToken(value) === 'true';
+    }
+
+    function checkToken(input, on) {
+        var options = (input && input.options) || [];
+        if (options.length >= 2) return on ? options[0] : options[1];
+        return on ? 'true' : 'false';
     }
 
     function intRange(range, type) {
@@ -132,9 +212,14 @@
 
     function firstConfig(text) {
         var html = String(text || '');
-        var pre = html.match(/<pre[^>]*class="[^"]*jcConfig[^"]*"[^>]*>([\s\S]*?)<\/pre>/i);
-        if (pre) return pre[1];
-        var loose = html.match(/(?:^|\n)\s*(?:template|module)\s*=[\s\S]+?(?=\n\s*(?:\{\||----|<pre|$))/i);
+        var block = html.match(JCCONFIG_BLOCK);
+        if (block) {
+            var tag = String(block[1] || '').toLowerCase();
+            var inner = block[2];
+            if (tag === 'pre') return decodeEntities(inner);
+            return unwrapDivConfig(inner);
+        }
+        var loose = html.match(/(?:^|\n)\s*(?:template|module)\s*=[\s\S]+?(?=\n\s*(?:\{\||----|<pre|<div|$))/i);
         return loose ? loose[0] : html;
     }
 
@@ -151,7 +236,7 @@
         var moduleFunc = null;
         var inputs = [];
         var unknownTypes = [];
-        String(config).split('\n').forEach(function (rawLine) {
+        configLines(config).forEach(function (rawLine) {
             var parsed = splitConfigLine(rawLine);
             if (!parsed) return;
             if (parsed.key !== 'param') {
@@ -179,11 +264,12 @@
             var rawType = (fields[3] || '').toLowerCase();
             var range = fields[4];
             var rawToggles = fields[5];
+            var help = parseHelp(fields);
             var type = rawType && KIT[rawType] ? rawType : (rawType ? 'unknown' : 'string');
             if (type === 'unknown') unknownTypes.push(rawType);
-            var toggleDefault = defaultValue || (
-                (type === 'toggleswitch' || type === 'togglebutton' || type === 'check') ? 'true' : inputName
-            );
+            var toggleDefault = (type === 'toggleswitch' || type === 'togglebutton' || type === 'check')
+                ? 'true'
+                : (defaultValue || inputName);
             if (type === 'toggleswitch' && !defaultValue) defaultValue = 'false';
             var toggles = parseToggles(rawToggles, toggleDefault);
             var bounds = intRange(range, type);
@@ -197,7 +283,8 @@
                 toggles: toggles.on,
                 toggleOff: toggles.off,
                 minValue: bounds.min,
-                maxValue: bounds.max
+                maxValue: bounds.max,
+                help: help
             });
         });
         if (!invokeKind) return null;
@@ -226,10 +313,10 @@
         var count;
         var source;
         if (html == null && typeof document !== 'undefined') {
-            var nodes = document.querySelectorAll('pre.jcConfig');
+            var nodes = document.querySelectorAll(JC_CONFIG_SELECTOR);
             count = nodes.length;
             if (count !== 1) return false;
-            source = nodes[0].textContent || nodes[0].innerText || '';
+            source = configSourceFromNode(nodes[0]);
             return isEligible(parse(source, title));
         }
         count = countJcConfigs(html);
@@ -253,6 +340,11 @@
                     (input.toggles[key] || []).forEach(function (name) { delete visible[name]; });
                 });
             }
+        });
+        definition.inputs.forEach(function (input) {
+            if (input.type !== 'group') return;
+            if (visible[input.name]) return;
+            groupMembers(input).forEach(function (name) { delete visible[name]; });
         });
         return visible;
     }
@@ -281,12 +373,14 @@
         Object.keys(values).forEach(function (key) { merged[key] = values[key]; });
         var visible = visibleInputNames(definition, merged);
         definition.inputs.forEach(function (input) {
-            if (input.type === 'unknown') return;
+            if (input.type === 'unknown' || input.type === 'group') return;
             var always = input.type === 'hidden' || input.type === 'fixed';
             if (!always && !visible[input.name]) return;
             var value = merged[input.name] == null ? '' : String(merged[input.name]);
             if ((input.type === 'hs' || input.type === 'rsn') && !value) return;
             if (input.type === 'toggleswitch') value = boolToken(value);
+            if (input.type === 'check') value = checkToken(input, checkIsOn(input, value));
+            if (input.type === 'togglebuttongroup') value = csvTokens(value).join(',');
             parts.push('|' + input.name + '=' + value);
         });
         parts.push('}}');
@@ -294,7 +388,7 @@
     }
 
     function shouldAutosubmitOnEdit(type) {
-        return type !== 'hs' && type !== 'rsn' && type !== 'string';
+        return type !== 'hs' && type !== 'rsn' && type !== 'string' && type !== 'group';
     }
 
     function shouldAutosubmit(definition, fieldType) {
@@ -331,9 +425,18 @@
         var hidden = visible ? '' : ' hidden';
         var label = escapeHtml(input.label);
         var name = escapeHtml(input.name);
+        var help = input.help
+            ? '<p class="osrs-indoc-calc-help">' + escapeHtml(input.help) + '</p>'
+            : '';
+        if (input.type === 'group') {
+            return '<div class="osrs-indoc-calc-group"' + hidden +
+                attr('data-osrs-indoc-field', input.name) + '>' +
+                '<div class="osrs-indoc-calc-group-label">' + label + '</div>' + help + '</div>';
+        }
         var start = '<div class="osrs-indoc-calc-field"' + hidden +
             attr('data-osrs-indoc-field', input.name) + '>' +
-            '<label class="osrs-indoc-calc-label" for="osrs-indoc-field-' + name + '">' + label + '</label>';
+            '<label class="osrs-indoc-calc-label" for="osrs-indoc-field-' + name + '">' + label + '</label>' +
+            help;
         var control = '';
         if (input.type === 'hs' || input.type === 'rsn' || input.type === 'string') {
             var lookup = input.type === 'hs'
@@ -359,21 +462,26 @@
                 (input.maxValue != null ? attr('max', input.maxValue) : '') + '>' +
                 '<button type="button" class="osrs-indoc-calc-step-btn" data-osrs-indoc-step="1"' +
                 attr('aria-label', 'Increase ' + input.label) + '>+</button></div>';
-        } else if (input.type === 'select') {
+        } else if (input.type === 'select' || input.type === 'combobox') {
             control = '<button type="button" class="osrs-indoc-calc-select" id="osrs-indoc-field-' + name + '"' +
-                attr('data-osrs-indoc-name', input.name) + attr('aria-label', input.label) +
+                attr('data-osrs-indoc-name', input.name) + attr('data-osrs-indoc-type', input.type) +
+                attr('aria-label', input.label) +
                 ' aria-haspopup="listbox">' + escapeHtml(value || (input.options[0] || 'Choose')) + '</button>';
-        } else if (input.type === 'buttonselect') {
+        } else if (input.type === 'buttonselect' || input.type === 'togglebuttongroup') {
+            var selected = input.type === 'togglebuttongroup' ? csvTokens(value) : [];
             var chips = input.options.map(function (option) {
-                var pressed = option === value ? 'true' : 'false';
+                var pressed = input.type === 'togglebuttongroup'
+                    ? (selected.indexOf(option) >= 0 ? 'true' : 'false')
+                    : (option === value ? 'true' : 'false');
                 return '<button type="button" class="osrs-indoc-calc-chip"' +
                     attr('data-osrs-indoc-name', input.name) + attr('data-osrs-indoc-option', option) +
+                    attr('data-osrs-indoc-chip', input.type) +
                     attr('aria-pressed', pressed) + '>' + escapeHtml(option) + '</button>';
             }).join('');
             control = '<div class="osrs-indoc-calc-chips" role="group"' + attr('aria-label', input.label) + '>' +
                 chips + '</div>';
         } else if (input.type === 'toggleswitch' || input.type === 'check' || input.type === 'togglebutton') {
-            var on = boolToken(value) === 'true';
+            var on = input.type === 'check' ? checkIsOn(input, value) : boolToken(value) === 'true';
             control = '<label class="osrs-indoc-calc-switch">' +
                 '<input id="osrs-indoc-field-' + name + '" type="checkbox" role="switch"' +
                 attr('name', input.name) + attr('aria-label', input.label) +
@@ -462,6 +570,8 @@
         resolvePageTitle: resolvePageTitle,
         parse: parse,
         isEligible: isEligible,
+        JC_CONFIG_SELECTOR: JC_CONFIG_SELECTOR,
+        configSourceFromNode: configSourceFromNode,
         isPageEligible: isPageEligible,
         visibleInputNames: visibleInputNames,
         invokeWikitext: invokeWikitext,
