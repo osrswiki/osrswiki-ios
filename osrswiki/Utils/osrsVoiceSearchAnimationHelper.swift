@@ -743,6 +743,9 @@ struct osrsUIKitSearchTextField: UIViewRepresentable {
 
         func textFieldShouldReturn(_ textField: UITextField) -> Bool {
             deliverTextImmediately(textField.text ?? "")
+            // Unfocus before resign so updateUIView cannot re-apply shouldFocus.
+            parent.onFocusChange(false)
+            textField.resignFirstResponder()
             parent.onSubmit()
             return true
         }

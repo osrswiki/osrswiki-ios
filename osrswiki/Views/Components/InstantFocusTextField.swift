@@ -104,6 +104,7 @@ struct InstantFocusTextField: UIViewRepresentable {
         
         func textFieldShouldReturn(_ textField: UITextField) -> Bool {
             parent.onSubmit()
+            textField.resignFirstResponder()
             return true
         }
         
