@@ -18,16 +18,11 @@ struct FeedbackView: View {
     @State private var showingErrorAlert = false
     @State private var alertMessage = ""
     @State private var isSubmitting = false
-    
-    // App Store availability flag - set to true when app is live on App Store
-    private let isAppOnAppStore = false
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: osrsMorePageMetrics.pageStackSpacing) {
-                if isAppOnAppStore {
-                    rateAppCard
-                }
+                rateAppCard
                 reportIssueCard
                 requestFeatureCard
             }

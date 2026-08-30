@@ -43,15 +43,6 @@ class MoreViewModel: ObservableObject {
     }
     
     func rateApp() {
-        // App is not yet live on App Store - disable rating until public launch
-        // TODO: Enable this when app is published to App Store
-        let isAppOnAppStore = false
-        
-        if !isAppOnAppStore {
-            print("[MoreViewModel] Rate App disabled - app not yet on App Store")
-            return
-        }
-        
         if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
             AppStore.requestReview(in: windowScene)
         }
