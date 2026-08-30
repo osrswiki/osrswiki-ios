@@ -114,7 +114,9 @@ class SearchRepository {
                     limit: min(limit, 10),
                     offsetItemName: nil,
                     offset: 0,
-                    extraItems: [],
+                    extraItems: [
+                        URLQueryItem(name: "gpsnamespace", value: osrsMediaWikiNamespace.defaultSearch)
+                    ],
                     includeExtracts: true
                 )
                 : SearchGeneratorPageFetch(pages: [], hasMore: false)
@@ -127,6 +129,7 @@ class SearchRepository {
                 offsetItemName: "gsroffset",
                 offset: offset,
                 extraItems: [
+                    URLQueryItem(name: "gsrnamespace", value: osrsMediaWikiNamespace.defaultSearch),
                     URLQueryItem(name: "gsrprop", value: "snippet|size|wordcount|timestamp"),
                     URLQueryItem(name: "gsrsort", value: "relevance")
                 ],
@@ -140,7 +143,7 @@ class SearchRepository {
                 prefix: prefixFetch.pages,
                 fulltext: fulltextFetch.pages,
                 for: query
-            )
+            ).filter { osrsWikiWebViewUrl.isIncludedInDefaultSearch($0.title) }
             return makeSearchResponse(
                 pages: fillOpenSearchPreviews(pages: rankedPages, openSearchPages: openSearchPages)
                     .map { $0.withPreviewFallback() },
@@ -242,7 +245,8 @@ class SearchRepository {
             URLQueryItem(name: "format", value: "json"),
             URLQueryItem(name: "redirects", value: "resolve"),
             URLQueryItem(name: "search", value: SearchQueryPolicy.apiQuery(query)),
-            URLQueryItem(name: "limit", value: String(limit))
+            URLQueryItem(name: "limit", value: String(limit)),
+            URLQueryItem(name: "namespace", value: osrsMediaWikiNamespace.defaultSearch)
         ]
         guard let url = components.url else { throw SearchError.invalidURL }
         let (data, response) = try await dataClient.fetchSearchBytes(from: url)
@@ -261,7 +265,9 @@ class SearchRepository {
         return titles.enumerated().map { index, title in
             let snippet = descriptions.indices.contains(index) ? descriptions[index] : nil
             return WikiGeneratedSearchPage(
-                ns: 0,
+                ns: osrsWikiWebViewUrl.isCalculatorNamespaceTitle(title)
+                    ? osrsMediaWikiNamespace.calculator
+                    : osrsMediaWikiNamespace.main,
                 pageid: 0,
                 title: title,
                 index: index + 1,
@@ -549,6 +555,7 @@ class SearchRepository {
         case 14: return "Category"
         case 15: return "Category talk"
         case 112: return "Update"
+        case 116: return "Calculator"
         default: return "Namespace \(namespaceId)"
         }
     }

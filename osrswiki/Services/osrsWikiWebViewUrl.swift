@@ -49,6 +49,10 @@ enum osrsWikiWebViewUrl {
         }
     }
 
+    static func isIncludedInDefaultSearch(_ title: String) -> Bool {
+        !isCalculatorNamespaceTitle(title) || isUserFacingCalculator(title)
+    }
+
     static func mediaWikiPageConfig(canonicalTitle: String, displayTitle: String) -> (namespaceNumber: Int, canonicalNamespace: String, pageName: String, title: String) {
         let source = canonicalTitle.isEmpty ? displayTitle : canonicalTitle
         if isCalculatorNamespaceTitle(source) {

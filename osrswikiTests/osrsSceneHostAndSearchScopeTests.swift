@@ -9,6 +9,22 @@ final class osrsSceneHostAndSearchScopeTests: XCTestCase {
         XCTAssertNil(osrsSearchScope.all.namespace)
     }
 
+    func testDefaultSearchLocksMainAndCalculatorNamespacesWithoutACalculatorsTab() throws {
+        let root = try repositoryRoot()
+        let repository = try source(root, "platforms/ios/osrswiki/Repositories/SearchRepository.swift")
+        let scope = try source(root, "platforms/ios/osrswiki/Models/osrsSearchScope.swift")
+
+        XCTAssertEqual(osrsMediaWikiNamespace.defaultSearch, "0|116")
+        XCTAssertEqual(osrsMediaWikiNamespace.calculator, 116)
+        XCTAssertTrue(repository.contains("gpsnamespace"))
+        XCTAssertTrue(repository.contains("osrsMediaWikiNamespace.defaultSearch"))
+        XCTAssertTrue(repository.contains("URLQueryItem(name: \"namespace\", value: osrsMediaWikiNamespace.defaultSearch)"))
+        XCTAssertTrue(repository.contains("isIncludedInDefaultSearch"))
+        XCTAssertFalse(scope.contains("calculators"))
+        XCTAssertFalse(scope.contains("Calculators"))
+        XCTAssertNil(osrsSearchScope.all.namespace)
+    }
+
     func testNewsViewMoreOpensScopedSearchAndRepositoryFiltersNamespace() throws {
         let root = try repositoryRoot()
         let news = try source(root, "platforms/ios/osrswiki/Views/NewsView.swift")

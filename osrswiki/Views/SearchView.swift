@@ -455,7 +455,6 @@ struct SearchView: View {
     }
     
     private func performSearch() {
-        isSearchFocused = false
         guard !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         
         // Add to recent searches when user explicitly submits

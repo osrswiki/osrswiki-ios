@@ -46,6 +46,16 @@ final class osrsCalculatorParityTests: XCTestCase {
         XCTAssertTrue(titles.contains("Calculator:Barrows"))
     }
 
+    func testDefaultSearchKeepsUserFacingCalculatorsAndDropsTemplatePages() {
+        XCTAssertTrue(osrsWikiWebViewUrl.isIncludedInDefaultSearch("Agility"))
+        XCTAssertTrue(osrsWikiWebViewUrl.isIncludedInDefaultSearch("Calculator:Coordinates"))
+        XCTAssertTrue(osrsWikiWebViewUrl.isIncludedInDefaultSearch("Calculator:Cooking/Fish"))
+        XCTAssertFalse(osrsWikiWebViewUrl.isIncludedInDefaultSearch("Calculator:Combat level/Template"))
+        XCTAssertFalse(osrsWikiWebViewUrl.isIncludedInDefaultSearch("Calculator:Fletching/Ammo/Template1"))
+        XCTAssertFalse(osrsWikiWebViewUrl.isIncludedInDefaultSearch("Calculator:Herblore/Potions/doc"))
+        XCTAssertFalse(osrsWikiWebViewUrl.isIncludedInDefaultSearch("Calculator:Foo/sandbox"))
+    }
+
     func testSubpageCalculatorTitleInsertsWbrAfterColonAndSlash() {
         let builder = osrsPageHtmlBuilder()
         let html = builder.buildFullHtmlDocument(

@@ -26,4 +26,7 @@ struct osrsSearchScope: Hashable, Sendable {
 enum osrsMediaWikiNamespace {
     static let main = 0
     static let updates = 112
+    static let calculator = 116
+    /// Default Home search: main articles plus user-facing Calculator: pages.
+    static let defaultSearch = "\(main)|\(calculator)"
 }

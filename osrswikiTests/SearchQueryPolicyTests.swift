@@ -64,6 +64,15 @@ final class SearchQueryPolicyTests: XCTestCase {
         )
     }
 
+    func testAgilitySkillOutranksCalculatorAgility() {
+        let ranked = SearchQueryPolicy.rank(
+            [page("Calculator:Agility", 2), page("Agility", 1), page("Agility training", 3)],
+            for: "agility"
+        )
+        XCTAssertEqual(ranked.first?.title, "Agility")
+        XCTAssertTrue(ranked.contains(where: { $0.title == "Calculator:Agility" }))
+    }
+
     func testFullTokenCoverageOutranksShortTitlePrefix() {
         let results = [page("Amulet", 1), page("Amulet of glory", 2)]
         XCTAssertEqual(SearchQueryPolicy.rank(results, for: "amulet glo").first?.title, "Amulet of glory")
