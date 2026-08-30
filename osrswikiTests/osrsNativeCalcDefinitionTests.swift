@@ -153,10 +153,12 @@ final class osrsNativeCalcDefinitionTests: XCTestCase {
         XCTAssertTrue(osrsNativeCalcDefinition.isPageNativeChromeEligible(dry, title: "Calculator:Dry calc"))
         XCTAssertTrue(osrsNativeCalcDefinition.isPageNativeChromeEligible(barrowsHtml, title: "Calculator:Barrows"))
         XCTAssertEqual(osrsNativeCalcDefinition.countJcConfigs(in: coordinates), 2)
-        XCTAssertFalse(osrsNativeCalcDefinition.isPageNativeChromeEligible(coordinates, title: "Calculator:Coordinates"))
+        XCTAssertTrue(osrsNativeCalcDefinition.isPageNativeChromeEligible(coordinates, title: "Calculator:Coordinates"))
         XCTAssertTrue(osrsNativeCalcDefinition.isNativeChromeEligible(
             osrsNativeCalcDefinition.parse(coordinates, title: "Calculator:Coordinates")
         ))
+        let mixed = coordinates.replacingOccurrences(of: "int | 0-180", with: "voiceofseren |")
+        XCTAssertFalse(osrsNativeCalcDefinition.isPageNativeChromeEligible(mixed, title: "Calculator:Coordinates"))
         XCTAssertEqual(osrsNativeCalcDefinition.normalizeAutosubmit("enabled"), "on")
         XCTAssertEqual(osrsNativeCalcDefinition.normalizeAutosubmit("true"), "on")
         XCTAssertEqual(osrsNativeCalcDefinition.normalizeAutosubmit("disabled"), "off")

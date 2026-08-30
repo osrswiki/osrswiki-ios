@@ -21,6 +21,7 @@
     var JC_CONFIG_SELECTOR = 'pre.jcConfig, div.jcConfig';
     var JCCONFIG_OPEN = /<(?:pre|div)[^>]*class="[^"]*jcConfig[^"]*"/gi;
     var JCCONFIG_BLOCK = /<(pre|div)[^>]*class="[^"]*jcConfig[^"]*"[^>]*>([\s\S]*?)<\/\1>/i;
+    var JCCONFIG_BLOCK_ALL = /<(pre|div)[^>]*class="[^"]*jcConfig[^"]*"[^>]*>([\s\S]*?)<\/\1>/gi;
 
     function normalizeTitle(title) {
         return String(title || '').replace(/_/g, ' ').trim();
@@ -220,7 +221,21 @@
             return unwrapDivConfig(inner);
         }
         var loose = html.match(/(?:^|\n)\s*(?:template|module)\s*=[\s\S]+?(?=\n\s*(?:\{\||----|<pre|<div|$))/i);
+        if (!/<(?:pre|div)[^>]*jcConfig/i.test(html)) return html;
         return loose ? loose[0] : html;
+    }
+
+    function eachConfigSource(html) {
+        var sources = [];
+        var text = String(html || '');
+        var re = new RegExp(JCCONFIG_BLOCK_ALL.source, 'gi');
+        var match;
+        while ((match = re.exec(text))) {
+            var tag = String(match[1] || '').toLowerCase();
+            var inner = match[2];
+            sources.push(tag === 'pre' ? decodeEntities(inner) : unwrapDivConfig(inner));
+        }
+        return sources;
     }
 
     function parse(text, title) {
@@ -310,18 +325,20 @@
     }
 
     function isPageEligible(html, title) {
-        var count;
-        var source;
         if (html == null && typeof document !== 'undefined') {
             var nodes = document.querySelectorAll(JC_CONFIG_SELECTOR);
-            count = nodes.length;
-            if (count !== 1) return false;
-            source = configSourceFromNode(nodes[0]);
-            return isEligible(parse(source, title));
+            if (!nodes.length) return false;
+            for (var i = 0; i < nodes.length; i++) {
+                if (!isEligible(parse(configSourceFromNode(nodes[i]), title))) return false;
+            }
+            return true;
         }
-        count = countJcConfigs(html);
-        if (count !== 1) return false;
-        return isEligible(parse(html, title));
+        var sources = eachConfigSource(html);
+        if (!sources.length) return false;
+        for (var j = 0; j < sources.length; j++) {
+            if (!isEligible(parse(sources[j], title))) return false;
+        }
+        return true;
     }
 
     function visibleInputNames(definition, values) {
@@ -417,7 +434,17 @@
         return ' ' + name + '="' + escapeHtml(value) + '"';
     }
 
-    function fieldHtml(input, value, visible) {
+    function instanceSuffix(instanceIndex) {
+        var index = parseInt(instanceIndex, 10) || 0;
+        return index ? ('-' + index) : '';
+    }
+
+    function fieldDomId(name, instanceIndex) {
+        var index = parseInt(instanceIndex, 10) || 0;
+        return index ? ('osrs-indoc-field-' + index + '-' + name) : ('osrs-indoc-field-' + name);
+    }
+
+    function fieldHtml(input, value, visible, instanceIndex) {
         if (input.type === 'hidden' || input.type === 'fixed' || input.type === 'semihidden') {
             return '<input type="hidden"' + attr('name', input.name) + attr('value', value) +
                 attr('data-osrs-indoc-name', input.name) + '>';
@@ -435,7 +462,7 @@
         }
         var start = '<div class="osrs-indoc-calc-field"' + hidden +
             attr('data-osrs-indoc-field', input.name) + '>' +
-            '<label class="osrs-indoc-calc-label" for="osrs-indoc-field-' + name + '">' + label + '</label>' +
+            '<label class="osrs-indoc-calc-label" for="' + fieldDomId(name, instanceIndex) + '">' + label + '</label>' +
             help;
         var control = '';
         if (input.type === 'hs' || input.type === 'rsn' || input.type === 'string') {
@@ -445,7 +472,7 @@
             // hs Name+Lookup: software-keyboard primary key is Go/Search, not Done.
             var enterHint = input.type === 'hs' ? 'go' : 'done';
             control = '<div class="osrs-indoc-calc-row">' +
-                '<input id="osrs-indoc-field-' + name + '" class="osrs-indoc-calc-control" type="text"' +
+                '<input id="' + fieldDomId(name, instanceIndex) + '" class="osrs-indoc-calc-control" type="text"' +
                 attr('name', input.name) + attr('value', value) + attr('aria-label', input.label) +
                 attr('data-osrs-indoc-type', input.type) +
                 ' inputmode="text" autocomplete="off" enterkeyhint="' + enterHint + '">' + lookup + '</div>';
@@ -454,7 +481,7 @@
             control = '<div class="osrs-indoc-calc-row osrs-indoc-calc-step">' +
                 '<button type="button" class="osrs-indoc-calc-step-btn" data-osrs-indoc-step="-1"' +
                 attr('aria-label', 'Decrease ' + input.label) + '>-</button>' +
-                '<input id="osrs-indoc-field-' + name + '" class="osrs-indoc-calc-control" type="number"' +
+                '<input id="' + fieldDomId(name, instanceIndex) + '" class="osrs-indoc-calc-control" type="number"' +
                 attr('name', input.name) + attr('value', value) + attr('aria-label', input.label) +
                 attr('data-osrs-indoc-type', input.type) +
                 attr('inputmode', inputMode) + ' enterkeyhint="done"' +
@@ -463,7 +490,7 @@
                 '<button type="button" class="osrs-indoc-calc-step-btn" data-osrs-indoc-step="1"' +
                 attr('aria-label', 'Increase ' + input.label) + '>+</button></div>';
         } else if (input.type === 'select' || input.type === 'combobox') {
-            control = '<button type="button" class="osrs-indoc-calc-select" id="osrs-indoc-field-' + name + '"' +
+            control = '<button type="button" class="osrs-indoc-calc-select" id="' + fieldDomId(name, instanceIndex) + '"' +
                 attr('data-osrs-indoc-name', input.name) + attr('data-osrs-indoc-type', input.type) +
                 attr('aria-label', input.label) +
                 ' aria-haspopup="listbox">' + escapeHtml(value || (input.options[0] || 'Choose')) + '</button>';
@@ -483,33 +510,34 @@
         } else if (input.type === 'toggleswitch' || input.type === 'check' || input.type === 'togglebutton') {
             var on = input.type === 'check' ? checkIsOn(input, value) : boolToken(value) === 'true';
             control = '<label class="osrs-indoc-calc-switch">' +
-                '<input id="osrs-indoc-field-' + name + '" type="checkbox" role="switch"' +
+                '<input id="' + fieldDomId(name, instanceIndex) + '" type="checkbox" role="switch"' +
                 attr('name', input.name) + attr('aria-label', input.label) +
                 (on ? ' checked' : '') + '>' +
                 '<span>' + (on ? 'On' : 'Off') + '</span></label>';
         } else {
-            control = '<input id="osrs-indoc-field-' + name + '" class="osrs-indoc-calc-control" type="text"' +
+            control = '<input id="' + fieldDomId(name, instanceIndex) + '" class="osrs-indoc-calc-control" type="text"' +
                 attr('name', input.name) + attr('value', value) + attr('aria-label', input.label) + '>';
         }
         return start + control + '</div>';
     }
 
-    function renderFormHtml(definition, values) {
+    function renderFormHtml(definition, values, instanceIndex) {
         values = values || {};
         var merged = {};
         definition.inputs.forEach(function (input) { merged[input.name] = input.defaultValue; });
         Object.keys(values).forEach(function (key) { merged[key] = values[key]; });
         var visible = visibleInputNames(definition, merged);
         var title = chromeTitle(definition.id);
+        var suffix = instanceSuffix(instanceIndex);
         var fields = definition.inputs.map(function (input) {
-            return fieldHtml(input, merged[input.name] == null ? '' : merged[input.name], !!visible[input.name]);
+            return fieldHtml(input, merged[input.name] == null ? '' : merged[input.name], !!visible[input.name], instanceIndex);
         }).join('');
-        return '<form class="osrs-indoc-calc-form" id="osrs-indoc-calc-form" role="form"' +
+        return '<form class="osrs-indoc-calc-form" id="osrs-indoc-calc-form' + suffix + '" role="form"' +
             attr('aria-label', title) + '>' +
-            '<div class="osrs-indoc-calc-banner" id="osrs-indoc-calc-banner" role="alert"></div>' +
+            '<div class="osrs-indoc-calc-banner" id="osrs-indoc-calc-banner' + suffix + '" role="alert"></div>' +
             fields +
             '<button type="submit" class="osrs-indoc-calc-btn osrs-indoc-calc-submit" aria-label="Submit calculator">Submit</button>' +
-            '<div class="osrs-indoc-calc-status" id="osrs-indoc-calc-status"></div>' +
+            '<div class="osrs-indoc-calc-status" id="osrs-indoc-calc-status' + suffix + '"></div>' +
             '</form>';
     }
 
@@ -572,6 +600,7 @@
         isEligible: isEligible,
         JC_CONFIG_SELECTOR: JC_CONFIG_SELECTOR,
         configSourceFromNode: configSourceFromNode,
+        eachConfigSource: eachConfigSource,
         isPageEligible: isPageEligible,
         visibleInputNames: visibleInputNames,
         invokeWikitext: invokeWikitext,

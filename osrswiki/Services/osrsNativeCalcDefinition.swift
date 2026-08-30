@@ -208,8 +208,10 @@ enum osrsNativeCalcDefinition {
     }
 
     static func isPageNativeChromeEligible(_ html: String?, title: String? = nil) -> Bool {
-        guard let html, countJcConfigs(in: html) == 1 else { return false }
-        return isNativeChromeEligible(parse(html, title: title))
+        guard let html else { return false }
+        let sources = eachConfig(in: html)
+        guard !sources.isEmpty else { return false }
+        return sources.allSatisfy { isNativeChromeEligible(parse($0, title: title)) }
     }
 
     static func invokeWikitext(
@@ -378,7 +380,7 @@ enum osrsNativeCalcDefinition {
         if let html, parseResultIsError(html) {
             return .parseError
         }
-        if let html, countJcConfigs(in: html) > 1 {
+        if let html, countJcConfigs(in: html) > 1, !isPageNativeChromeEligible(html, title: title) {
             return .unsupportedTitle
         }
         guard let definition else { return .missingConfig }
@@ -392,41 +394,63 @@ enum osrsNativeCalcDefinition {
     }
 
     static func firstConfig(in html: String) -> String? {
-        if let match = firstTaggedConfig(in: html) {
-            return match
+        eachConfig(in: html).first
+    }
+
+    static func eachConfig(in html: String) -> [String] {
+        let tagged = allTaggedConfigs(in: html)
+        if !tagged.isEmpty { return tagged }
+        let hasConfigKeys = html.range(of: #"(?i)\b(?:template|module|param)\s*="#, options: .regularExpression) != nil
+        let hasTaggedOpen = html.range(of: #"(?i)<(?:pre|div)[^>]*jcConfig"#, options: .regularExpression) != nil
+        if hasConfigKeys && !hasTaggedOpen {
+            return [html]
         }
         guard let regex = try? NSRegularExpression(
             pattern: #"(?is)(?:^|\n)\s*(?:template|module)\s*=.+?(?=\n\s*(?:\{\||----|<pre|<div|$))"#
         ) else {
-            return nil
+            return []
         }
         let range = NSRange(html.startIndex..<html.endIndex, in: html)
-        guard let match = regex.firstMatch(in: html, range: range),
-              let matched = Range(match.range, in: html) else {
-            return nil
+        if let match = regex.firstMatch(in: html, range: range),
+           let matched = Range(match.range, in: html) {
+            return [String(html[matched])]
         }
-        return String(html[matched])
+        let trimmed = html.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.range(of: #"(?i)\b(?:template|module)\s*="#, options: .regularExpression) != nil,
+           !trimmed.hasPrefix("<") {
+            return [html]
+        }
+        return []
     }
 
     private static func firstTaggedConfig(in html: String) -> String? {
+        allTaggedConfigs(in: html).first
+    }
+
+    private static func allTaggedConfigs(in html: String) -> [String] {
         guard let regex = try? NSRegularExpression(
             pattern: #"(?is)<(pre|div)[^>]*class="[^"]*jcConfig[^"]*"[^>]*>(.*?)</\1>"#
         ) else {
-            return nil
+            return []
         }
         let range = NSRange(html.startIndex..<html.endIndex, in: html)
-        guard let match = regex.firstMatch(in: html, range: range),
-              match.numberOfRanges > 2,
-              let tagRange = Range(match.range(at: 1), in: html),
-              let innerRange = Range(match.range(at: 2), in: html) else {
-            return nil
+        let matches = regex.matches(in: html, options: [], range: range)
+        var sources: [String] = []
+        for match in matches {
+            guard match.numberOfRanges > 2,
+                  let tagRange = Range(match.range(at: 1), in: html),
+                  let innerRange = Range(match.range(at: 2), in: html) else {
+                continue
+            }
+            let tag = String(html[tagRange]).lowercased()
+            let inner = String(html[innerRange])
+            if tag == "pre" {
+                sources.append(decodeEntities(inner))
+            } else {
+                sources.append(unwrapDivConfig(inner))
+            }
         }
-        let tag = String(html[tagRange]).lowercased()
-        let inner = String(html[innerRange])
-        if tag == "pre" {
-            return decodeEntities(inner)
-        }
-        return unwrapDivConfig(inner)
+        return sources
     }
 
     private static let configKeyBreak = try! NSRegularExpression(
