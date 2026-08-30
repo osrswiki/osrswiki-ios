@@ -12,22 +12,27 @@
 }(typeof globalThis !== 'undefined' ? globalThis : this, function () {
     'use strict';
 
-    var TITLES = {
-        'Calculator:Agility': true,
-        'Calculator:Combat level': true
-    };
     var KIT = {
         string: true, int: true, number: true, select: true, buttonselect: true,
         check: true, toggleswitch: true, togglebutton: true, hs: true, rsn: true,
         hidden: true, fixed: true, semihidden: true
     };
+    var JCCONFIG_OPEN = /<pre[^>]*class="[^"]*jcConfig[^"]*"/gi;
 
     function normalizeTitle(title) {
         return String(title || '').replace(/_/g, ' ').trim();
     }
 
-    function isAllowlisted(title) {
-        return !!TITLES[normalizeTitle(title)];
+    function normalizeAutosubmit(raw) {
+        var v = String(raw == null ? 'off' : raw).toLowerCase().trim();
+        if (!v || v === 'off' || v === 'disabled' || v === 'false') return 'off';
+        if (v === 'enabled' || v === 'on' || v === 'true') return 'on';
+        return 'on';
+    }
+
+    function countJcConfigs(html) {
+        var matches = String(html || '').match(JCCONFIG_OPEN);
+        return matches ? matches.length : 0;
     }
 
     function collectPageTitles() {
@@ -53,10 +58,6 @@
 
     function resolvePageTitle(fallback) {
         var candidates = collectPageTitles();
-        var i;
-        for (i = 0; i < candidates.length; i++) {
-            if (isAllowlisted(candidates[i])) return candidates[i];
-        }
         if (candidates.length) return candidates[0];
         return normalizeTitle(fallback);
     }
@@ -157,7 +158,7 @@
                 if (parsed.key === 'form') formId = parsed.value;
                 else if (parsed.key === 'result') resultId = parsed.value;
                 else if (parsed.key === 'name' && parsed.value) name = parsed.value;
-                else if (parsed.key === 'autosubmit') autosubmit = parsed.value || 'off';
+                else if (parsed.key === 'autosubmit') autosubmit = normalizeAutosubmit(parsed.value);
                 else if (parsed.key === 'template') {
                     invokeKind = 'template';
                     template = parsed.value;
@@ -214,12 +215,26 @@
 
     function isEligible(definition) {
         if (!definition) return false;
-        if (!isAllowlisted(definition.id)) return false;
         if (definition.invoke.kind === 'template' && !definition.invoke.template) return false;
         if (definition.invoke.kind === 'module' && !definition.invoke.module) return false;
         if (definition.unknownTypes.length) return false;
         if (!definition.inputs.length) return false;
         return definition.inputs.every(function (input) { return KIT[input.type]; });
+    }
+
+    function isPageEligible(html, title) {
+        var count;
+        var source;
+        if (html == null && typeof document !== 'undefined') {
+            var nodes = document.querySelectorAll('pre.jcConfig');
+            count = nodes.length;
+            if (count !== 1) return false;
+            source = nodes[0].textContent || nodes[0].innerText || '';
+            return isEligible(parse(source, title));
+        }
+        count = countJcConfigs(html);
+        if (count !== 1) return false;
+        return isEligible(parse(html, title));
     }
 
     function visibleInputNames(definition, values) {
@@ -431,13 +446,14 @@
     }
 
     return {
-        titles: TITLES,
         normalizeTitle: normalizeTitle,
-        isAllowlisted: isAllowlisted,
+        normalizeAutosubmit: normalizeAutosubmit,
+        countJcConfigs: countJcConfigs,
         collectPageTitles: collectPageTitles,
         resolvePageTitle: resolvePageTitle,
         parse: parse,
         isEligible: isEligible,
+        isPageEligible: isPageEligible,
         visibleInputNames: visibleInputNames,
         invokeWikitext: invokeWikitext,
         shouldAutosubmitOnEdit: shouldAutosubmitOnEdit,
@@ -455,8 +471,7 @@
     if (typeof document === 'undefined' || !document.documentElement) return;
     var api = typeof globalThis !== 'undefined' ? globalThis.osrsIndocCalc : null;
     if (!api) return;
-    var title = api.resolvePageTitle();
-    if (!api.isAllowlisted(title)) return;
+    if (!api.isPageEligible(null, api.resolvePageTitle())) return;
     document.documentElement.classList.add('osrs-indoc-calc');
     document.documentElement.classList.add('osrs-native-calc-slot-active');
 }());

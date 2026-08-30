@@ -31,7 +31,7 @@ final class osrsNativeCalcDefinitionTests: XCTestCase {
         XCTAssertEqual(definition.invoke.template, "Calculator:Skill calc/Template")
         XCTAssertEqual(definition.ui.formId, "AgilityCalc")
         XCTAssertEqual(definition.ui.resultId, "AgilityResults")
-        XCTAssertEqual(definition.ui.autosubmit, "enabled")
+        XCTAssertEqual(definition.ui.autosubmit, "on")
         XCTAssertEqual(
             definition.inputs.map(\.name),
             [
@@ -95,7 +95,7 @@ final class osrsNativeCalcDefinitionTests: XCTestCase {
         XCTAssertTrue(wikitext.contains("|skill=Agility"))
     }
 
-    func testNativeChromeIsAgilityOnlyAndFallsBackOnUnknownTypes() {
+    func testNativeChromeIsKitNotTitleAndFallsBackOnUnknownTypes() {
         let agility = osrsNativeCalcDefinition.parse(agilityConfig, title: "Calculator:Agility")
         let cooking = osrsNativeCalcDefinition.parse(
             agilityConfig.replacingOccurrences(of: "Agility", with: "Cooking"),
@@ -111,13 +111,55 @@ final class osrsNativeCalcDefinitionTests: XCTestCase {
             """,
             title: "Calculator:Agility"
         )
+        let barrowsHtml = """
+            <pre class="jcConfig">
+            template=Calculator:Barrows/Template
+            form=BarrowsForm
+            result=BarrowsResult
+            param = Ahrim|Ahrim?|yes|check|yes,no
+            param = unitKill|Barrows crypt units||group|bloodworm,cryptRat
+            </pre>
+            """
+        let barrows = osrsNativeCalcDefinition.parse(barrowsHtml, title: "Calculator:Barrows")
+        let coordinates = """
+            <pre class="jcConfig">
+            template = Calculator:Coordinates/PlanarToGeo
+            param = x || 2441 | int | 1024-3967
+            </pre>
+            <pre class="jcConfig">
+            template = Calculator:Coordinates/GeoToPlanar
+            param = ndeg | Degrees N/S | 0 | int | 0-180
+            </pre>
+            """
+        let dry = """
+            <pre class="jcConfig">
+            module = Dry calc
+            form = dryin
+            result = dryout
+            param = chance|Chance of drop|1/128|string|
+            param = kills|Number of kills|128|int|1-inf
+            param = dropped|Number of drops obtained thus far|0|int|0-inf
+            </pre>
+            """
         XCTAssertTrue(osrsNativeCalcDefinition.isNativeChromeEligible(agility))
-        XCTAssertFalse(osrsNativeCalcDefinition.isNativeChromeEligible(cooking))
+        XCTAssertTrue(osrsNativeCalcDefinition.isNativeChromeEligible(cooking))
         XCTAssertFalse(osrsNativeCalcDefinition.isNativeChromeEligible(unknown))
+        XCTAssertFalse(osrsNativeCalcDefinition.isNativeChromeEligible(barrows))
         XCTAssertFalse(osrsNativeCalcDefinition.isNativeChromeEligible(nil))
         XCTAssertFalse(osrsNativeCalcDefinition.isNativeChromeEligible(
             osrsNativeCalcDefinition.parse("no config here")
         ))
+        XCTAssertTrue(osrsNativeCalcDefinition.isPageNativeChromeEligible(agilityConfig, title: "Calculator:Agility"))
+        XCTAssertTrue(osrsNativeCalcDefinition.isPageNativeChromeEligible(dry, title: "Calculator:Dry calc"))
+        XCTAssertFalse(osrsNativeCalcDefinition.isPageNativeChromeEligible(barrowsHtml, title: "Calculator:Barrows"))
+        XCTAssertEqual(osrsNativeCalcDefinition.countJcConfigs(in: coordinates), 2)
+        XCTAssertFalse(osrsNativeCalcDefinition.isPageNativeChromeEligible(coordinates, title: "Calculator:Coordinates"))
+        XCTAssertTrue(osrsNativeCalcDefinition.isNativeChromeEligible(
+            osrsNativeCalcDefinition.parse(coordinates, title: "Calculator:Coordinates")
+        ))
+        XCTAssertEqual(osrsNativeCalcDefinition.normalizeAutosubmit("enabled"), "on")
+        XCTAssertEqual(osrsNativeCalcDefinition.normalizeAutosubmit("true"), "on")
+        XCTAssertEqual(osrsNativeCalcDefinition.normalizeAutosubmit("disabled"), "off")
     }
 
     func testParseResultDetectsScribuntoError() {
@@ -307,8 +349,9 @@ final class osrsNativeCalcDefinitionTests: XCTestCase {
             encoding: .utf8
         )
         XCTAssertTrue(indoc.contains("osrs-indoc-calc-form"))
-        XCTAssertTrue(indoc.contains("Calculator:Agility"))
-        XCTAssertTrue(indoc.contains("Calculator:Combat level"))
+        XCTAssertTrue(indoc.contains("isPageEligible"))
+        XCTAssertTrue(indoc.contains("countJcConfigs"))
+        XCTAssertFalse(indoc.contains("isAllowlisted"))
     }
 
     @MainActor

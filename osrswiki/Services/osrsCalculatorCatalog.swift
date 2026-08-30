@@ -14,7 +14,7 @@ struct osrsCalculatorCatalogSnapshot {
 
 enum osrsCalculatorCatalog {
     static let assetPath = "manifests/osrs-wiki-calculators.json"
-    static let liveAPI = URL(string: "https://oldschool.runescape.wiki/api.php?action=query&list=allpages&apnamespace=116&aplimit=500&format=json")!
+    static let liveAPI = URL(string: "https://oldschool.runescape.wiki/api.php?action=query&list=allpages&apnamespace=116&aplimit=500&apfilterredir=nonredirects&format=json")!
 
     static func loadSnapshot(json: Data) throws -> osrsCalculatorCatalogSnapshot {
         let root = try JSONSerialization.jsonObject(with: json) as? [String: Any] ?? [:]

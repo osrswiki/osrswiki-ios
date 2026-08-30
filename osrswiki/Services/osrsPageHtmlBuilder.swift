@@ -51,6 +51,7 @@ class osrsPageHtmlBuilder {
     // MediaWiki ResourceLoader artifacts
     private let mediawikiArtifacts = [
         "startup.js",
+        "web/osrs_native_calc_indoc.js",
         "js/mediawiki/gadget_calc_core.js"
     ]
 
@@ -72,7 +73,6 @@ class osrsPageHtmlBuilder {
         "js/tablesort.min.js",
         "js/tablesort_init.js",
         "web/article_tools.js",
-        "web/osrs_native_calc_indoc.js",
         "web/osrs_calculator_runtime.js",
         "web/tabber_init.js",
         "web/responsive_videos.js",

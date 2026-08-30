@@ -2,10 +2,10 @@
   "schema_version": 1,
   "wiki_origin": "https://oldschool.runescape.wiki",
   "namespace": 116,
-  "fetched_at": "2026-08-20T02:21:15Z",
-  "source": "api.php?action=query&list=allpages&apnamespace=116",
-  "calculator_count": 154,
-  "excluded_count": 79,
+  "fetched_at": "2026-08-29T23:24:31Z",
+  "source": "api.php?action=query&list=allpages&apnamespace=116&apfilterredir=nonredirects",
+  "calculator_count": 139,
+  "excluded_count": 76,
   "calculators": [
     {
       "title": "Calculator:Abyssal pearls",
@@ -51,11 +51,6 @@
       "title": "Calculator:Barrows item repair",
       "pageid": 242908,
       "url": "https://oldschool.runescape.wiki/w/Calculator:Barrows_item_repair"
-    },
-    {
-      "title": "Calculator:Barrows item repairs",
-      "pageid": 341288,
-      "url": "https://oldschool.runescape.wiki/w/Calculator:Barrows_item_repairs"
     },
     {
       "title": "Calculator:Bestiary",
@@ -338,11 +333,6 @@
       "url": "https://oldschool.runescape.wiki/w/Calculator:Giants_Foundry_experience_calculator"
     },
     {
-      "title": "Calculator:Herb run profit",
-      "pageid": 322170,
-      "url": "https://oldschool.runescape.wiki/w/Calculator:Herb_run_profit"
-    },
-    {
       "title": "Calculator:Herblore",
       "pageid": 253231,
       "url": "https://oldschool.runescape.wiki/w/Calculator:Herblore"
@@ -388,19 +378,9 @@
       "url": "https://oldschool.runescape.wiki/w/Calculator:Hunter/Rumours"
     },
     {
-      "title": "Calculator:Lamp",
-      "pageid": 546915,
-      "url": "https://oldschool.runescape.wiki/w/Calculator:Lamp"
-    },
-    {
-      "title": "Calculator:Lamp xp",
-      "pageid": 546916,
-      "url": "https://oldschool.runescape.wiki/w/Calculator:Lamp_xp"
-    },
-    {
-      "title": "Calculator:Lamps",
-      "pageid": 546914,
-      "url": "https://oldschool.runescape.wiki/w/Calculator:Lamps"
+      "title": "Calculator:Hunter/Rumours/Requirements",
+      "pageid": 682996,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Hunter/Rumours/Requirements"
     },
     {
       "title": "Calculator:Magic",
@@ -416,11 +396,6 @@
       "title": "Calculator:Magic/Enchant jewellery",
       "pageid": 94672,
       "url": "https://oldschool.runescape.wiki/w/Calculator:Magic/Enchant_jewellery"
-    },
-    {
-      "title": "Calculator:Magic/High alchemy",
-      "pageid": 102004,
-      "url": "https://oldschool.runescape.wiki/w/Calculator:Magic/High_alchemy"
     },
     {
       "title": "Calculator:Magic/Magic Dart",
@@ -448,11 +423,6 @@
       "url": "https://oldschool.runescape.wiki/w/Calculator:Mining/Clue_geodes"
     },
     {
-      "title": "Calculator:Miscellania",
-      "pageid": 80173,
-      "url": "https://oldschool.runescape.wiki/w/Calculator:Miscellania"
-    },
-    {
       "title": "Calculator:Miscellania loot",
       "pageid": 301892,
       "url": "https://oldschool.runescape.wiki/w/Calculator:Miscellania_loot"
@@ -466,21 +436,6 @@
       "title": "Calculator:Moons item repair",
       "pageid": 641037,
       "url": "https://oldschool.runescape.wiki/w/Calculator:Moons_item_repair"
-    },
-    {
-      "title": "Calculator:Name generator",
-      "pageid": 632938,
-      "url": "https://oldschool.runescape.wiki/w/Calculator:Name_generator"
-    },
-    {
-      "title": "Calculator:Other/Miscellania",
-      "pageid": 256185,
-      "url": "https://oldschool.runescape.wiki/w/Calculator:Other/Miscellania"
-    },
-    {
-      "title": "Calculator:Other/Miscellania dynamic",
-      "pageid": 342250,
-      "url": "https://oldschool.runescape.wiki/w/Calculator:Other/Miscellania_dynamic"
     },
     {
       "title": "Calculator:Pharaohs sceptre calc",
@@ -503,19 +458,9 @@
       "url": "https://oldschool.runescape.wiki/w/Calculator:PlatinumToken"
     },
     {
-      "title": "Calculator:Potion calculator",
-      "pageid": 209355,
-      "url": "https://oldschool.runescape.wiki/w/Calculator:Potion_calculator"
-    },
-    {
       "title": "Calculator:Prayer",
       "pageid": 253268,
       "url": "https://oldschool.runescape.wiki/w/Calculator:Prayer"
-    },
-    {
-      "title": "Calculator:Prayer/Blessed Bone Shards",
-      "pageid": 583533,
-      "url": "https://oldschool.runescape.wiki/w/Calculator:Prayer/Blessed_Bone_Shards"
     },
     {
       "title": "Calculator:Prayer/Blessed bone shards",
@@ -548,14 +493,14 @@
       "url": "https://oldschool.runescape.wiki/w/Calculator:Prayer/Prayer_point_cost"
     },
     {
+      "title": "Calculator:Recursive Quest Requirements",
+      "pageid": 681630,
+      "url": "https://oldschool.runescape.wiki/w/Calculator:Recursive_Quest_Requirements"
+    },
+    {
       "title": "Calculator:Runecraft",
       "pageid": 253278,
       "url": "https://oldschool.runescape.wiki/w/Calculator:Runecraft"
-    },
-    {
-      "title": "Calculator:Runecrafting/Abyssal pearls",
-      "pageid": 353272,
-      "url": "https://oldschool.runescape.wiki/w/Calculator:Runecrafting/Abyssal_pearls"
     },
     {
       "title": "Calculator:Sailing",
@@ -601,11 +546,6 @@
       "title": "Calculator:Skilling success rate",
       "pageid": 392572,
       "url": "https://oldschool.runescape.wiki/w/Calculator:Skilling_success_rate"
-    },
-    {
-      "title": "Calculator:Slayer",
-      "pageid": 565566,
-      "url": "https://oldschool.runescape.wiki/w/Calculator:Slayer"
     },
     {
       "title": "Calculator:Slayer/Imbued heart",
@@ -658,11 +598,6 @@
       "url": "https://oldschool.runescape.wiki/w/Calculator:Soul_Wars_rewards"
     },
     {
-      "title": "Calculator:Swimming",
-      "pageid": 551031,
-      "url": "https://oldschool.runescape.wiki/w/Calculator:Swimming"
-    },
-    {
       "title": "Calculator:Teleportation jewellery",
       "pageid": 120274,
       "url": "https://oldschool.runescape.wiki/w/Calculator:Teleportation_jewellery"
@@ -703,11 +638,6 @@
       "url": "https://oldschool.runescape.wiki/w/Calculator:Thieving/Master_farmer_success"
     },
     {
-      "title": "Calculator:Thieving/Pickpocket rates/",
-      "pageid": 262772,
-      "url": "https://oldschool.runescape.wiki/w/Calculator:Thieving/Pickpocket_rates/"
-    },
-    {
       "title": "Calculator:Title generator",
       "pageid": 632857,
       "url": "https://oldschool.runescape.wiki/w/Calculator:Title_generator"
@@ -746,11 +676,6 @@
       "title": "Calculator:Wintertodt Reward Cart",
       "pageid": 266817,
       "url": "https://oldschool.runescape.wiki/w/Calculator:Wintertodt_Reward_Cart"
-    },
-    {
-      "title": "Calculator:Wintertodt supply crate",
-      "pageid": 542369,
-      "url": "https://oldschool.runescape.wiki/w/Calculator:Wintertodt_supply_crate"
     },
     {
       "title": "Calculator:Woodcutting",
@@ -985,6 +910,11 @@
       "reason": "template"
     },
     {
+      "title": "Calculator:Hunter/Rumours/Requirements/Template",
+      "pageid": 682997,
+      "reason": "template"
+    },
+    {
       "title": "Calculator:Hunter/Rumours/Template",
       "pageid": 548699,
       "reason": "template"
@@ -1045,16 +975,6 @@
       "reason": "template"
     },
     {
-      "title": "Calculator:Runecrafting/Abyssal pearls/Template",
-      "pageid": 353273,
-      "reason": "template"
-    },
-    {
-      "title": "Calculator:Sandbox/Slayer block fix",
-      "pageid": 647637,
-      "reason": "sandbox"
-    },
-    {
       "title": "Calculator:Sandbox/User:Dr. C-Dawg/AvgKillCalc",
       "pageid": 592608,
       "reason": "sandbox"
@@ -1100,11 +1020,6 @@
       "reason": "template"
     },
     {
-      "title": "Calculator:Slayer/Imbued heart chance/Template",
-      "pageid": 563085,
-      "reason": "template"
-    },
-    {
       "title": "Calculator:Slayer/Master comparison/Template",
       "pageid": 269420,
       "reason": "template"
@@ -1117,11 +1032,6 @@
     {
       "title": "Calculator:Smithing/Blast Furnace/Gold/Template",
       "pageid": 264870,
-      "reason": "template"
-    },
-    {
-      "title": "Calculator:Swimming/Template",
-      "pageid": 551030,
       "reason": "template"
     },
     {

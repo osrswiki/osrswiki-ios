@@ -574,7 +574,14 @@
         if (window.__osrsForceGadgetCalc) return false;
         var api = window.osrsIndocCalc;
         if (!api) return false;
-        return api.isAllowlisted(osrsIndocReadPageTitle());
+        if (typeof api.isPageEligible === 'function') {
+            return api.isPageEligible(null, osrsIndocReadPageTitle());
+        }
+        if (typeof api.isEligible !== 'function') return false;
+        var nodes = document.querySelectorAll('pre.jcConfig');
+        if (nodes.length !== 1) return false;
+        var definition = api.parse(nodes[0].textContent || nodes[0].innerText || '', osrsIndocReadPageTitle());
+        return api.isEligible(definition);
     }
 
     function osrsIndocMarkPending() {
@@ -899,11 +906,17 @@
         var api = window.osrsIndocCalc;
         if (!api || !osrsIndocShouldTakeover()) return false;
         osrsIndocMarkPending();
-        var pre = document.querySelector('pre.jcConfig');
-        if (!pre) return false;
+        var nodes = document.querySelectorAll('pre.jcConfig');
+        if (nodes.length !== 1) {
+            document.documentElement.classList.remove('osrs-indoc-calc');
+            document.documentElement.classList.remove('osrs-native-calc-slot-active');
+            return false;
+        }
+        var pre = nodes[0];
         var definition = api.parse(pre.textContent || pre.innerText || '', osrsIndocReadPageTitle());
         if (!api.isEligible(definition)) {
             document.documentElement.classList.remove('osrs-indoc-calc');
+            document.documentElement.classList.remove('osrs-native-calc-slot-active');
             return false;
         }
         var values = {};

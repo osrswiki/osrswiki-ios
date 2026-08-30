@@ -70,14 +70,30 @@ struct osrsNativeCalcDefinitionModel: Equatable {
 }
 
 enum osrsNativeCalcDefinition {
-    static let spikeNativeTitles: Set<String> = [
-        "Calculator:Agility",
-        "Calculator:Combat level"
-    ]
     static let kitTypes: Set<osrsNativeCalcParamType> = [
         .string, .int, .number, .select, .buttonSelect, .check,
         .toggleSwitch, .toggleButton, .hs, .rsn, .hidden, .fixed, .semiHidden
     ]
+
+    static func normalizeAutosubmit(_ raw: String?) -> String {
+        let value = (raw ?? "off").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if value.isEmpty || value == "off" || value == "disabled" || value == "false" {
+            return "off"
+        }
+        if value == "enabled" || value == "on" || value == "true" {
+            return "on"
+        }
+        return "on"
+    }
+
+    static func countJcConfigs(in html: String?) -> Int {
+        guard let html, !html.isEmpty else { return 0 }
+        guard let regex = try? NSRegularExpression(pattern: #"(?i)<pre[^>]*class="[^"]*jcConfig[^"]*""#) else {
+            return 0
+        }
+        let range = NSRange(html.startIndex..<html.endIndex, in: html)
+        return regex.numberOfMatches(in: html, options: [], range: range)
+    }
 
     static func parse(_ text: String, title: String? = nil, pageId: Int? = nil, revId: Int? = nil) -> osrsNativeCalcDefinitionModel? {
         guard let config = firstConfig(in: text) else { return nil }
@@ -96,7 +112,7 @@ enum osrsNativeCalcDefinition {
                 case "form": ui.formId = value
                 case "result": ui.resultId = value
                 case "name": if !value.isEmpty { ui.name = value }
-                case "autosubmit": ui.autosubmit = value.isEmpty ? "off" : value
+                case "autosubmit": ui.autosubmit = normalizeAutosubmit(value)
                 case "template":
                     invokeKind = .template
                     template = value
@@ -175,7 +191,6 @@ enum osrsNativeCalcDefinition {
 
     static func isNativeChromeEligible(_ definition: osrsNativeCalcDefinitionModel?) -> Bool {
         guard let definition else { return false }
-        guard spikeNativeTitles.contains(definition.id) else { return false }
         switch definition.invoke.kind {
         case .template:
             if (definition.invoke.template ?? "").isEmpty { return false }
@@ -185,6 +200,11 @@ enum osrsNativeCalcDefinition {
         if !definition.unknownTypes.isEmpty { return false }
         if definition.inputs.isEmpty { return false }
         return definition.inputs.allSatisfy { kitTypes.contains($0.type) }
+    }
+
+    static func isPageNativeChromeEligible(_ html: String?, title: String? = nil) -> Bool {
+        guard let html, countJcConfigs(in: html) == 1 else { return false }
+        return isNativeChromeEligible(parse(html, title: title))
     }
 
     static func invokeWikitext(
@@ -347,7 +367,7 @@ enum osrsNativeCalcDefinition {
         if let html, parseResultIsError(html) {
             return .parseError
         }
-        if let title, !spikeNativeTitles.contains(title) {
+        if let html, countJcConfigs(in: html) > 1 {
             return .unsupportedTitle
         }
         guard let definition else { return .missingConfig }

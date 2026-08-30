@@ -212,7 +212,7 @@ final class osrsCalculatorParityTests: XCTestCase {
         XCTAssertTrue(runtime.contains("setTimeout(patchAjax, 25)"))
         XCTAssertTrue(runtime.contains("__osrsCalculatorSmokeSubmit"))
         XCTAssertTrue(runtime.contains("osrsArmSmokeSubmit"))
-        XCTAssertTrue(runtime.contains("aria-live"))
+        XCTAssertTrue(runtime.contains("aria-hidden"))
         XCTAssertTrue(runtime.contains("MutationObserver"))
         XCTAssertTrue(runtime.contains("[id$=\"Form\"]"))
         XCTAssertTrue(runtime.contains("#bodyContent"))
