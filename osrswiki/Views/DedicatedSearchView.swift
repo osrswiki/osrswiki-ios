@@ -129,6 +129,7 @@ struct DedicatedSearchView: View {
                         viewModel.currentQuery = newValue
                     }
                     .onSubmit {
+                        isSearchFocused = false
                         performSearch()
                     }
                 
@@ -305,6 +306,7 @@ struct DedicatedSearchView: View {
     }
     
     private func performSearch() {
+        isSearchFocused = false
         guard !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         
         // Add to recent searches when user explicitly submits

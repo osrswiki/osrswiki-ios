@@ -154,6 +154,43 @@ final class IOS08SearchHomeDiagnosticsTests: XCTestCase {
         XCTAssertTrue(helper.contains(".opacity(text.isEmpty ? 0 : 1)"))
         XCTAssertTrue(helper.contains(".allowsHitTesting(!text.isEmpty)"))
 
+        let shouldReturn = try extractFunctionBody(named: "textFieldShouldReturn", from: helper)
+        XCTAssertTrue(
+            shouldReturn.contains("onFocusChange(false)"),
+            "Search/Go must clear FocusState before resign so updateUIView cannot restore the keyboard."
+        )
+        XCTAssertTrue(
+            shouldReturn.contains("resignFirstResponder()"),
+            "Search/Go must resign first responder so results can use the full screen."
+        )
+
+        let searchPerform = try extractFunctionBody(
+            named: "performSearch",
+            from: try readSource("platforms/ios/osrswiki/Views/SearchView.swift")
+        )
+        XCTAssertTrue(
+            searchPerform.contains("isSearchFocused = false"),
+            "Canonical Search submit, including recent-row taps, must blur the field."
+        )
+
+        let immediatePerform = try extractFunctionBody(
+            named: "performSearch",
+            from: try readSource("platforms/ios/osrswiki/Views/ImmediateStyledSearchView.swift")
+        )
+        XCTAssertTrue(
+            immediatePerform.contains("isSearchFocused = false"),
+            "Home/history pushed search submit must blur the field."
+        )
+
+        let dedicatedSource = try readSource("platforms/ios/osrswiki/Views/DedicatedSearchView.swift")
+        XCTAssertTrue(dedicatedSource.contains("isSearchFocused = false"))
+        let dedicatedPerform = try extractFunctionBody(named: "performSearch", from: dedicatedSource)
+        XCTAssertTrue(dedicatedPerform.contains("isSearchFocused = false"))
+
+        let instant = try readSource("platforms/ios/osrswiki/Views/Components/InstantFocusTextField.swift")
+        let instantReturn = try extractFunctionBody(named: "textFieldShouldReturn", from: instant)
+        XCTAssertTrue(instantReturn.contains("resignFirstResponder()"))
+
         let searchSource = try readSource("platforms/ios/osrswiki/Views/SearchView.swift")
         XCTAssertEqual(
             searchSource.components(separatedBy: "osrsActiveSearchToolbar(").count - 1,

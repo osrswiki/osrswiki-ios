@@ -169,8 +169,10 @@ class SearchFocusLatencyTest: XCTestCase {
         let firstResult = app.cells.firstMatch
         XCTAssertTrue(firstResult.waitForExistence(timeout: 5), "Search results should appear")
         
-        // Verify keyboard stays visible during search
-        XCTAssertTrue(keyboard.exists, "Keyboard should remain visible during search")
+        XCTAssertTrue(
+            keyboard.waitForNonExistence(timeout: 2),
+            "Keyboard should dismiss on Search so results are full screen"
+        )
     }
     
     // Performance test for repeated focus

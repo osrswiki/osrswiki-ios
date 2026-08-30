@@ -32,6 +32,7 @@ struct ImmediateStyledTextField: UIViewRepresentable {
 
         func textFieldShouldReturn(_ textField: UITextField) -> Bool {
             parent.onSubmit()
+            textField.resignFirstResponder()
             return true
         }
     }
@@ -291,6 +292,7 @@ struct ImmediateStyledSearchView: View {
     }
     
     private func performSearch() {
+        isSearchFocused = false
         guard let viewModel = viewModel,
               !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         
