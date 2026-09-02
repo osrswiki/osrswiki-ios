@@ -73,6 +73,7 @@ struct ArticleView: View {
             managesMainTabBarVisibility: managesMainTabBarVisibility
         )
         .id(articleIdentity)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var articleIdentity: String {
@@ -590,6 +591,7 @@ private struct ArticleViewContent: View {
                 // overlay in CustomMainTabView; do not add one here or the
                 // pocket double-fades.
                 articleCanvas
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .ignoresSafeArea()
                     .osrsPairedEdgeChrome(edge: .top) {
                         articleTopChrome
@@ -599,18 +601,22 @@ private struct ArticleViewContent: View {
                     articleDebugMarker
                     articleTopChrome
                     articleContentCanvas
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .ignoresSafeArea(.keyboard)
     }
 
     private var articleCanvas: some View {
         ZStack(alignment: .top) {
             articleContentCanvas
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .ignoresSafeArea()
             articleDebugMarker
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     @ViewBuilder
@@ -658,6 +664,7 @@ private struct ArticleViewContent: View {
             progressOverlay
             errorOverlay
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     // MARK: - Overlay Management
@@ -1134,8 +1141,10 @@ private struct ArticleViewContent: View {
             }
         )
             .id(viewModel.webViewRenderGeneration)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(Color.clear)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     @ViewBuilder

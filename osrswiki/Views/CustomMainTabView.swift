@@ -225,6 +225,7 @@ struct CustomMainTabView: View {
             nativeTab(MapView().ignoresSafeArea(edges: .bottom), item: .map)
             nativeTab(MoreView(), item: .more)
         }
+        .tabViewStyle(.tabBarOnly)
         .tint(Color(themeManager.currentTheme.primary))
         // Do not use `.toolbarVisibility(.hidden)` for the article overlay.
         // On iOS 26 that leaves the Liquid Glass capsule composited underneath

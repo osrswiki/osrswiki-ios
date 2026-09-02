@@ -1708,6 +1708,17 @@ struct ArticleWebView: UIViewRepresentable {
         return webView
     }
     
+    func sizeThatFits(_ proposal: ProposedViewSize, uiView: WKWebView, context: Context) -> CGSize {
+        let windowSize = uiView.window?.bounds.size
+            ?? uiView.window?.windowScene?.screen.bounds.size
+            ?? UIScreen.main.bounds.size
+        return osrsArticleWebViewLayout.resolvedSize(
+            proposedWidth: proposal.width,
+            proposedHeight: proposal.height,
+            windowSize: windowSize
+        )
+    }
+
     func updateUIView(_ webView: WKWebView, context: Context) {
         context.coordinator.parent = self
         if viewModel.webView !== webView {

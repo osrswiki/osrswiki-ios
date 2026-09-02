@@ -778,6 +778,7 @@ struct PopularPagesCardView: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
                     .buttonStyle(PlainButtonStyle())
+                    .accessibilityIdentifier("home_popular_page")
                     .osrsPrewarmArticleWhenVisible(
                         pageURL: URL(string: page.pageUrl),
                         pageTitle: page.title
@@ -810,6 +811,7 @@ struct OnThisDayEventView: View {
         .foregroundStyle(.osrsOnSurface)
         .lineLimit(1)
         .truncationMode(.tail)
+        .accessibilityIdentifier("home_on_this_day_event")
         .osrsPrewarmArticlesWhenVisible(pageURLs: prewarmArticleURLs)
     }
 
