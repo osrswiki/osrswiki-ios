@@ -925,6 +925,45 @@ class ArticleViewModel: NSObject, ObservableObject {
 
     /// WKWebView can go blank after backgrounding without firing the terminate callback.
     /// Probe the live document on foreground and recover when it is empty.
+    func noteArticleCanvasBecameUsable(webView: WKWebView, sizeChanged: Bool) {
+        guard webView.window != nil else { return }
+        if let theme = pendingArticleLoadTheme {
+            if let html = lastCommittedArticleHTML, html.count > 100 {
+                let generation = currentLoadGeneration
+                let reload = pendingArticleLoadIsReload
+                pendingArticleLoadTheme = nil
+                pendingArticleLoadIsReload = false
+                Task { @MainActor in
+                    await self.loadCustomHtml(
+                        html,
+                        theme: theme,
+                        generation: generation,
+                        forceDocumentReload: reload
+                    )
+                }
+            } else {
+                loadArticle(theme: theme, isReload: pendingArticleLoadIsReload)
+            }
+            return
+        }
+        guard hasCommittedArticleHTML else { return }
+        scheduleCompositorKick(on: webView)
+    }
+
+    func scheduleCompositorKick(on webView: WKWebView) {
+        if shouldSkipDocumentWakeDuringFindOrKeyboard {
+            return
+        }
+        compositorKickGeneration += 1
+        let generation = compositorKickGeneration
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 80_000_000)
+            guard generation == self.compositorKickGeneration else { return }
+            guard let live = self.webView, live === webView else { return }
+            osrsSceneCompositor.kickParkedArticleTiles(live)
+        }
+    }
+
     func wakeRenderedDocumentAfterBackground() {
         if shouldSkipDocumentWakeDuringFindOrKeyboard {
             print("🔁 [RESUME-WAKE] skipped; find or software keyboard is active")
@@ -1152,6 +1191,8 @@ class ArticleViewModel: NSObject, ObservableObject {
     private var firstViewportSettledPosted = false
     private var pendingArticleLoadTheme: (any osrsThemeProtocol)?
     private var pendingArticleLoadIsReload = false
+    private var compositorKickGeneration = 0
+    private var initialPaintRecoveryAttempts = 0
     private var articleRevealedForWarm = false
 
     // TIMING MEASUREMENT: Track progress completion vs page visibility delay
@@ -1690,6 +1731,77 @@ class ArticleViewModel: NSObject, ObservableObject {
         let elapsedMs = Int((CFAbsoluteTimeGetCurrent() - started) * 1000)
         NSLog("osrsFirstViewportSettled elapsedMs=%d", elapsedMs)
         NSLog("LOAD-MINMAX first_viewport_settled elapsedMs=%d", elapsedMs)
+        if let webView {
+            scheduleCompositorKick(on: webView)
+            scheduleInitialPaintSnapshotProbe(on: webView)
+        }
+    }
+
+    /// After the article DOM has settled, empty parchment is a parked GPU
+    /// surface, not a healthy first-paint. Resume probes must not treat
+    /// themed parchment as blank; this initial-open probe may.
+    func scheduleInitialPaintSnapshotProbe(on webView: WKWebView) {
+        if shouldSkipDocumentWakeDuringFindOrKeyboard {
+            return
+        }
+        let generation = currentLoadGeneration
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            guard generation == self.currentLoadGeneration, let live = self.webView else { return }
+            let scroll = live.scrollView
+            let inset = scroll.adjustedContentInset
+            NSLog(
+                "ArticleViewModel: initial paint UIKit frame=%@ offset=%@ size=%@ inset=%.0f,%.0f,%.0f,%.0f window=%@",
+                NSCoder.string(for: live.frame),
+                NSCoder.string(for: scroll.contentOffset),
+                NSCoder.string(for: scroll.contentSize),
+                inset.top, inset.left, inset.bottom, inset.right,
+                live.window != nil ? "yes" : "no"
+            )
+            live.evaluateJavaScript("""
+            (function(){
+              var h1 = document.querySelector('h1.page-header, h1');
+              var r = h1 ? h1.getBoundingClientRect() : null;
+              var cs = getComputedStyle(document.body);
+              return {
+                innerW: window.innerWidth,
+                innerH: window.innerHeight,
+                scrollH: document.documentElement.scrollHeight,
+                textLen: ((document.body && (document.body.innerText || '')) || '').replace(/\\s+/g,'').length,
+                htmlLen: (document.body && document.body.innerHTML || '').length,
+                color: cs.color,
+                bg: cs.backgroundColor,
+                opacity: cs.opacity,
+                vis: cs.visibility,
+                display: cs.display,
+                fontSize: cs.fontSize,
+                padTop: getComputedStyle(document.documentElement).paddingTop,
+                h1: h1 ? (h1.textContent || '').slice(0,80) : null,
+                h1r: r ? {x:r.x,y:r.y,w:r.width,h:r.height} : null,
+                wv: {w: \(Int(live.bounds.width)), h: \(Int(live.bounds.height))}
+              };
+            })()
+            """) { result, error in
+                NSLog("ArticleViewModel: initial paint DOM %@ err=%@", String(describing: result), String(describing: error))
+            }
+            live.takeSnapshot(with: nil) { image, error in
+                Task { @MainActor in
+                    guard generation == self.currentLoadGeneration else { return }
+                    let uniform = error != nil || image == nil || osrsWebViewThemePaint.isUniformFill(image)
+                    guard uniform else {
+                        NSLog("ArticleViewModel: first-viewport snapshot has contrast; GPU tiles attached")
+                        return
+                    }
+                    guard self.initialPaintRecoveryAttempts < 2 else {
+                        NSLog("ArticleViewModel: initial paint still empty parchment after GPU-tile kicks")
+                        return
+                    }
+                    self.initialPaintRecoveryAttempts += 1
+                    NSLog("ArticleViewModel: first-viewport snapshot is empty parchment; kicking GPU tiles (attempt %d)", self.initialPaintRecoveryAttempts)
+                    osrsSceneCompositor.kickParkedArticleTiles(live)
+                }
+            }
+        }
     }
 
     private func notifyAdoptedFirstViewComplete(_ webView: WKWebView) {
@@ -1943,6 +2055,9 @@ class ArticleViewModel: NSObject, ObservableObject {
     func loadArticle(theme: (any osrsThemeProtocol)? = nil, isReload: Bool = false) {
         let theme = theme ?? osrsAppRoot.themeManager.currentTheme
         lastAppliedArticleTheme = theme
+        if !isReload {
+            initialPaintRecoveryAttempts = 0
+        }
         guard webView != nil else {
             pendingArticleLoadTheme = theme
             pendingArticleLoadIsReload = isReload
@@ -2466,9 +2581,18 @@ class ArticleViewModel: NSObject, ObservableObject {
         // Option B: Skip WKUserScript injection - assets loaded via WKURLSchemeHandler
         print("📱 Option B: Skipping WKUserScript injection - using WKURLSchemeHandler for asset loading")
 
+        if webView.window == nil || !osrsArticleWebViewLayout.isUsableArticleFrame(webView.bounds.size) {
+            pendingArticleLoadTheme = theme
+            pendingArticleLoadIsReload = forceDocumentReload
+            print(
+                "⏳ ArticleViewModel: Deferring loadHTMLString until article canvas is usable (bounds=\(webView.bounds.size) window=\(webView.window != nil))"
+            )
+            return
+        }
+
         let navigation = webView.loadHTMLString(htmlWithLoadGeneration(html, generation: generation), baseURL: customBaseURL)
         bindWebKitNavigation(navigation, to: generation)
-        osrsSceneCompositor.wakeLiveArticleWebView(webView)
+        osrsSceneCompositor.kickParkedArticleTiles(webView)
         scheduleReadinessTimeout(for: generation)
         needsContentProcessRecovery = false
         didQueueWebViewRebuildForRecovery = false

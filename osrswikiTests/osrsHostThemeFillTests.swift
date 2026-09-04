@@ -176,6 +176,18 @@ final class osrsHostThemeFillTests: XCTestCase {
             "WK-internal scroll views must stay unpainted (nil); an opaque theme fill covers WebKit's correctly painted page tile"
         )
         XCTAssertFalse(scroller.isOpaque)
+
+        let nestedFill = UIView(frame: CGRect(x: 0, y: 0, width: 820, height: 38352))
+        nestedFill.backgroundColor = themeColor
+        nestedFill.isOpaque = true
+        webView.scrollView.addSubview(nestedFill)
+        defer { nestedFill.removeFromSuperview() }
+        osrsWebViewThemePaint.apply(to: webView, theme: osrsDarkTheme())
+        XCTAssertNil(
+            nestedFill.backgroundColor,
+            "Anonymous WK-internal UIViews must stay unpainted; iPad dumps showed 820x38352 opaque parchment covering GPU tiles"
+        )
+        XCTAssertFalse(nestedFill.isOpaque)
     }
 
     func testApplyLiveThemeOnLoadedArticleKeepsThemeParchment() async throws {

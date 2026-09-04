@@ -24,6 +24,31 @@ final class osrsArticleWebViewLayoutTests: XCTestCase {
         XCTAssertEqual(size, iPadAir)
     }
 
+    func testSubMinimumProposalFallsBackToWindow() {
+        let iPadAir = CGSize(width: 834, height: 1210)
+        let size = osrsArticleWebViewLayout.resolvedSize(
+            proposedWidth: 40,
+            proposedHeight: 40,
+            windowSize: iPadAir
+        )
+        XCTAssertEqual(size, iPadAir)
+        XCTAssertFalse(osrsArticleWebViewLayout.isUsableArticleFrame(CGSize(width: 40, height: 40)))
+        XCTAssertTrue(
+            osrsArticleWebViewLayout.didBecomeUsable(
+                previous: .zero,
+                next: iPadAir
+            )
+        )
+    }
+
+    func testInitialFrameUsesWindowSize() {
+        let iPadAir = CGSize(width: 834, height: 1210)
+        XCTAssertEqual(
+            osrsArticleWebViewLayout.initialFrame(windowSize: iPadAir),
+            CGRect(origin: .zero, size: iPadAir)
+        )
+    }
+
     func testPhoneProposalIsHonored() {
         let size = osrsArticleWebViewLayout.resolvedSize(
             proposedWidth: 390,
@@ -59,6 +84,16 @@ final class osrsArticleWebViewLayoutTests: XCTestCase {
         )
         XCTAssertEqual(padSize, phoneFallback)
         XCTAssertEqual(compactPhone.userInterfaceIdiom, .phone)
+    }
+
+    func testPaintOracleDoesNotTrustAccessibilityLabels() throws {
+        let root = try repositoryRoot()
+        let ui = try source(root, "platforms/ios/osrswikiUITests/osrsIPadEquivalenceUITests.swift")
+        XCTAssertFalse(ui.contains("label CONTAINS[c] %@\", \"Old School\""))
+        XCTAssertFalse(ui.contains("if lastRange > 16"))
+        XCTAssertTrue(ui.contains("Pixel-only"))
+        XCTAssertTrue(ui.contains("lastRange > 24"))
+        XCTAssertTrue(ui.contains("Upper body only"))
     }
 
     func testArticleViewFillsProposedCanvasInsteadOfCollapsingWK() throws {

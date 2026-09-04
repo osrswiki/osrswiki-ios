@@ -15,7 +15,15 @@ final class osrsArticleLoadRegressionContractTests: XCTestCase {
         let articleWebView = try source(root, "platforms/ios/osrswiki/Views/ArticleWebView.swift")
 
         XCTAssertTrue(viewModel.contains("recommitCachedArticleAfterBackground"))
-        XCTAssertTrue(viewModel.contains("wakeLiveArticleWebView"))
+        XCTAssertTrue(viewModel.contains("kickParkedArticleTiles"))
+        XCTAssertTrue(viewModel.contains("noteArticleCanvasBecameUsable"))
+        XCTAssertTrue(viewModel.contains("Deferring loadHTMLString until article canvas is usable"))
+        XCTAssertTrue(viewModel.contains("scheduleInitialPaintSnapshotProbe"))
+        XCTAssertTrue(viewModel.contains("first-viewport snapshot is empty parchment"))
+        XCTAssertTrue(viewModel.contains("kicking GPU tiles"))
+        XCTAssertTrue(compositor.contains("expandVisibilityPropagation"))
+        XCTAssertTrue(themePaint.contains("isInternalWKView"))
+        XCTAssertTrue(themePaint.contains("820x38352 opaque parchment"))
         XCTAssertTrue(viewModel.contains("shouldSkipDocumentWakeDuringFindOrKeyboard"))
         XCTAssertTrue(viewModel.contains("isFindInPageActive"))
         XCTAssertTrue(articleView.contains("shouldSkipDocumentWakeDuringFindOrKeyboard"))
@@ -212,7 +220,25 @@ final class osrsArticleLoadRegressionContractTests: XCTestCase {
         XCTAssertTrue(themePaint.contains("isUnpaintedSystemFill"))
         XCTAssertTrue(themePaint.contains("isUniformFill"))
         XCTAssertTrue(themePaint.contains("meanLuminance >= 220"))
-        XCTAssertTrue(articleWebView.contains("loadPlaceholderIfEmpty"))
+        XCTAssertFalse(
+            articleWebView.contains("loadPlaceholderIfEmpty"),
+            "Live article WK must not commit placeholderHTML; those empty-parchment GPU tiles stick on iPad"
+        )
+        XCTAssertTrue(articleWebView.contains("empty-parchment GPU tiles"))
+        XCTAssertTrue(articleWebView.contains("osrsArticleWebViewLayout.initialFrame"))
+        XCTAssertTrue(articleWebView.contains("noteResolvedCanvas"))
+        XCTAssertTrue(compositor.contains("kickParkedArticleTiles"))
+        let kickBody = compositor
+            .components(separatedBy: "static func kickParkedArticleTiles")
+            .dropFirst()
+            .first?
+            .components(separatedBy: "static func preserveLiveWebViewWithoutReparent")
+            .first ?? ""
+        XCTAssertTrue(kickBody.contains("preserveLiveWebViewWithoutReparent"))
+        XCTAssertFalse(
+            kickBody.contains("wakeLiveArticleWebView"),
+            "Initial-paint kick must not reparent; that parks GPU tiles after a healthy DOM"
+        )
         let warmer = try source(root, "platforms/ios/osrswiki/Services/osrsWebViewProcessWarmer.swift")
         XCTAssertTrue(warmer.contains("func recycleProcessPool()"))
         XCTAssertTrue(warmer.contains("WKWebsiteDataStore.default()"))

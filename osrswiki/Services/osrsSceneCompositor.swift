@@ -114,6 +114,56 @@ enum osrsSceneCompositor {
         }
     }
 
+    /// iPad NavigationStack live-resize parks empty-parchment GPU tiles after the
+    /// article DOM has already settled. Nudge visible-content-rects without
+    /// reparenting; `removeFromSuperview` after a healthy DOM parks tiles again.
+    /// A 0x0 `WKVisibilityPropagationView` makes GPUProcess take a background
+    /// assertion and skip tiles; expand it to the article frame.
+    static func kickParkedArticleTiles(_ webView: WKWebView) {
+        if isPreparedWarmer(webView) {
+            return
+        }
+        preserveLiveWebViewWithoutReparent(webView)
+        expandVisibilityPropagation(in: webView)
+        let frame = webView.frame
+        if frame.width > 2, frame.height > 2 {
+            webView.frame = frame.insetBy(dx: 0, dy: 0.5)
+            webView.layoutIfNeeded()
+            expandVisibilityPropagation(in: webView)
+            webView.frame = frame
+        }
+        let scroll = webView.scrollView
+        let offset = scroll.contentOffset
+        scroll.setContentOffset(CGPoint(x: offset.x, y: offset.y + 1), animated: false)
+        scroll.setContentOffset(offset, animated: false)
+        if let window = webView.window {
+            clearFrozenHostSnapshots(in: window)
+            stripSwitcherSnapshot(from: window)
+        }
+        webView.evaluateJavaScript(
+            "void(document.body && (document.body.style.visibility = 'visible')); window.scrollBy(0,1); window.scrollBy(0,-1);"
+        )
+    }
+
+    /// GPUProcess paints tiles only while visibility-propagation has a non-zero
+    /// rect. iPad dumps showed this view stuck at 0x0 after NavigationStack
+    /// live-resize, matching `GPUProcessProxy is taking a background assertion`.
+    static func expandVisibilityPropagation(in webView: WKWebView) {
+        guard osrsArticleWebViewLayout.isUsableArticleFrame(webView.bounds.size) else { return }
+        func walk(_ view: UIView) {
+            let name = NSStringFromClass(type(of: view))
+            if name.contains("VisibilityPropagation") {
+                if view.bounds.width < 2 || view.bounds.height < 2 {
+                    view.frame = webView.bounds
+                }
+                view.isHidden = false
+                view.alpha = 1
+            }
+            view.subviews.forEach(walk)
+        }
+        walk(webView)
+    }
+
     static func preserveLiveWebViewWithoutReparent(_ webView: WKWebView) {
         webView.isHidden = false
         webView.alpha = 1

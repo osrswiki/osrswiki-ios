@@ -165,12 +165,14 @@ enum osrsWebViewThemePaint {
         // Uncharged-left parchment band (gutter spec Phase 16,
         // gutterDeepestParchment=WKChildScrollView bg=theme parchment). Only
         // the WKWebView's own top-level scrollView keeps the theme underlay;
-        // every other scroll view in the WK subtree stays unpainted (nil, the
-        // WebKit default), and a previously painted one is healed back to nil.
+        // every other view in the WK subtree stays unpainted (nil, the
+        // WebKit default). iPad dumps showed anonymous UIViews at the full
+        // document size (820x38352 opaque parchment) covering GPU tiles.
         let isForeignScroller = view is UIScrollView && view !== root.scrollView
-        if isWebKitSurface || isForeignScroller {
+        let isInternalWKView = view !== root && view !== root.scrollView
+        if isWebKitSurface || isForeignScroller || isInternalWKView {
             view.isOpaque = false
-            view.backgroundColor = isForeignScroller ? nil : .clear
+            view.backgroundColor = (isForeignScroller || isInternalWKView) ? nil : .clear
         } else {
             view.backgroundColor = color
             let transparent = color.cgColor.alpha < 0.05

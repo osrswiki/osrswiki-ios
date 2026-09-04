@@ -221,27 +221,31 @@ final class osrsIPadEquivalenceUITests: XCTestCase {
         let deadline = Date().addingTimeInterval(20)
         var lastRange = 0
         var lastFrame = CGRect.zero
+        var lastSample = CGRect.zero
         while Date() < deadline {
             let webView = app.webViews["article_web_view"]
             if webView.exists {
                 lastFrame = webView.frame
                 if webView.frame.width > 80, webView.frame.height > 80 {
                     let sample = paintSampleRect()
+                    lastSample = sample
                     if sample.width > 40, sample.height > 40 {
-                        lastRange = luminanceRange(croppedImage(app.screenshot().image, to: sample))
-                        if lastRange > 16 {
+                        let cropped = croppedImage(app.screenshot().image, to: sample)
+                        lastRange = luminanceRange(cropped)
+                        // Pixel-only. AX labels from a healthy DOM / map overlay
+                        // previously false-greened empty parchment.
+                        if lastRange > 24 {
                             return
                         }
-                    }
-                    if app.staticTexts["Varrock"].exists
-                        || app.staticTexts.matching(NSPredicate(format: "label CONTAINS[c] %@", "Old School")).firstMatch.exists {
-                        return
                     }
                 }
             }
             RunLoop.current.run(until: Date().addingTimeInterval(0.35))
         }
-        XCTFail("\(moment): article body is empty parchment (range=\(lastRange) frame=\(lastFrame))")
+        attachScreenshot("\(moment)-empty-parchment")
+        XCTFail(
+            "\(moment): article body is empty parchment (range=\(lastRange) frame=\(lastFrame) sample=\(lastSample))"
+        )
     }
 
     private func paintSampleRect() -> CGRect {
@@ -260,14 +264,21 @@ final class osrsIPadEquivalenceUITests: XCTestCase {
         if web.exists, web.frame.width > 40 {
             minY = max(minY, web.frame.minY + 12)
             maxY = min(maxY, web.frame.maxY - 12)
-            return CGRect(
-                x: web.frame.minX + 16,
-                y: minY,
-                width: max(web.frame.width - 32, 1),
-                height: max(maxY - minY, 1)
-            )
         }
-        return CGRect(x: window.minX + 16, y: minY, width: max(window.width - 32, 1), height: max(maxY - minY, 1))
+        // Upper body only: title / infobox / prose. A native map overlay at
+        // the bottom previously let a blank article pass the luminance check.
+        let fullHeight = max(maxY - minY, 1)
+        let sampleHeight = max(min(fullHeight * 0.45, fullHeight), 80)
+        let width: CGFloat
+        let minX: CGFloat
+        if web.exists, web.frame.width > 40 {
+            minX = web.frame.minX + 16
+            width = max(web.frame.width - 32, 1)
+        } else {
+            minX = window.minX + 16
+            width = max(window.width - 32, 1)
+        }
+        return CGRect(x: minX, y: minY, width: width, height: sampleHeight)
     }
 
     private func croppedImage(_ image: UIImage, to rect: CGRect) -> UIImage {

@@ -1616,7 +1616,10 @@ struct ArticleWebView: UIViewRepresentable {
         configuration.mediaTypesRequiringUserActionForPlayback = []
         print("✅ Reusing shared app-assets:// handler for article WebView")
         
-        let webView = WKWebView(frame: .zero, configuration: configuration)
+        let webView = WKWebView(
+            frame: osrsArticleWebViewLayout.initialFrame(),
+            configuration: configuration
+        )
         // Theme-paint before any other WK configuration so the first compositor
         // frame is not system-white or light parchment under a dark article host.
         osrsWebViewThemePaint.apply(to: webView, theme: themeManager.currentTheme)
@@ -1643,11 +1646,10 @@ struct ArticleWebView: UIViewRepresentable {
         // competes with local tables/maps and leaves the system transition outline half-open.
         webView.allowsBackForwardNavigationGestures = false
         osrsArticleRefreshSettlement.configure(webView.scrollView)
-        if viewModel.needsContentProcessRecovery {
-            osrsWebViewThemePaint.apply(to: webView, theme: themeManager.currentTheme)
-        } else {
-            osrsWebViewThemePaint.loadPlaceholderIfEmpty(in: webView, theme: themeManager.currentTheme)
-        }
+        // Do not load placeholderHTML into the live article WKWebView. That
+        // commits empty-parchment GPU tiles; iOS 26 then never replaces them
+        // after loadHTMLString of the real article (iPad NavigationStack live-resize).
+        osrsWebViewThemePaint.apply(to: webView, theme: themeManager.currentTheme)
         webView.accessibilityIdentifier = "article_web_view"
         
         if #available(iOS 16.4, *) {
@@ -1712,11 +1714,13 @@ struct ArticleWebView: UIViewRepresentable {
         let windowSize = uiView.window?.bounds.size
             ?? uiView.window?.windowScene?.screen.bounds.size
             ?? UIScreen.main.bounds.size
-        return osrsArticleWebViewLayout.resolvedSize(
+        let size = osrsArticleWebViewLayout.resolvedSize(
             proposedWidth: proposal.width,
             proposedHeight: proposal.height,
             windowSize: windowSize
         )
+        context.coordinator.noteResolvedCanvas(size, webView: uiView)
+        return size
     }
 
     func updateUIView(_ webView: WKWebView, context: Context) {
@@ -1724,6 +1728,7 @@ struct ArticleWebView: UIViewRepresentable {
         if viewModel.webView !== webView {
             viewModel.setWebView(webView)
         }
+        context.coordinator.noteResolvedCanvas(webView.bounds.size, webView: webView)
         applyDynamicTypeScale(to: webView, coordinator: context.coordinator)
         let isDark = themeManager.currentTheme is osrsDarkTheme
         context.coordinator.interactiveSwipe.chromeColor = UIColor(themeManager.currentTheme.background)
@@ -2107,6 +2112,7 @@ struct ArticleWebView: UIViewRepresentable {
         fileprivate var lastAppliedPageZoom: CGFloat?
         fileprivate var wasArticleRefreshing = false
         fileprivate var lastInjectedThemeIsDark: Bool?
+        private var lastCanvasSize: CGSize = .zero
         private var didRunSyntheticSwipeFPSProbe = false
         private var syntheticSwipeDisplayLink: CADisplayLink?
         private var syntheticSwipeProgress: CGFloat = 0
@@ -2121,6 +2127,22 @@ struct ArticleWebView: UIViewRepresentable {
             mapHandler = osrsNativeMapHandler(webView: webView)
             installCalculatorKeyboardRecovery(on: webView)
             print("✅ iOS ArticleWebView: Map handler initialized")
+        }
+
+        func noteResolvedCanvas(_ size: CGSize, webView: WKWebView) {
+            let previous = lastCanvasSize
+            lastCanvasSize = size
+            if osrsArticleWebViewLayout.isUsableArticleFrame(size),
+               !osrsArticleWebViewLayout.isUsableArticleFrame(webView.bounds.size) {
+                webView.frame = CGRect(origin: webView.frame.origin, size: size)
+            }
+            let becameUsable = osrsArticleWebViewLayout.didBecomeUsable(previous: previous, next: size)
+            let sizeChanged = previous != size && osrsArticleWebViewLayout.isUsableArticleFrame(size)
+            guard becameUsable || sizeChanged else { return }
+            parent.viewModel.noteArticleCanvasBecameUsable(
+                webView: webView,
+                sizeChanged: sizeChanged
+            )
         }
 
         private var keyboardObservers: [NSObjectProtocol] = []
