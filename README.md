@@ -3,7 +3,7 @@
 Unofficial phone reader for [oldschool.runescape.wiki](https://oldschool.runescape.wiki).
 
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/License-GPL--3.0--or--later-blue.svg)](LICENSE)
-[![Platform: iOS](https://img.shields.io/badge/Platform-iOS-000000.svg)](#install)
+[![Platform: iOS](https://img.shields.io/badge/Platform-iOS-000000.svg)](https://apps.apple.com/us/app/osrs-wiki/id6788651409)
 [![GitHub Sponsors](https://img.shields.io/badge/Sponsor-GitHub%20Sponsors-ea4aaa)](https://github.com/sponsors/omiyawaki)
 
 ## Why
@@ -19,7 +19,7 @@ A dedicated phone reader for the OSRS Wiki — polished search, comfortable read
 
 ## Install
 
-- **App Store:** Coming soon
+- **App Store:** [OSRS Wiki on the App Store](https://apps.apple.com/us/app/osrs-wiki/id6788651409)
 
 ## Support
 
