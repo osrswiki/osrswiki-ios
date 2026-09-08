@@ -19,7 +19,7 @@ A dedicated phone reader for the OSRS Wiki — polished search, comfortable read
 
 ## Install
 
-- **App Store:** [OSRS Wiki on the App Store](https://apps.apple.com/us/app/osrs-wiki/id6788651409)
+[![Download on the App Store](assets/download-on-the-app-store-black.svg)](https://apps.apple.com/us/app/osrs-wiki/id6788651409)
 
 ## Support
 
