@@ -2317,7 +2317,15 @@ final class ArticleAestheticRenderingTests: XCTestCase {
         XCTAssertTrue(iosAesthetics.contains("border: 1px solid var(--wikitable-border) !important"))
         XCTAssertTrue(iosAesthetics.contains("display: inline-flex !important"))
         XCTAssertTrue(iosAesthetics.contains("align-items: center !important"))
-        XCTAssertTrue(iosAesthetics.contains(":is(p, li, dd, figcaption) img.mw-file-element"))
+        XCTAssertTrue(iosAesthetics.contains(":is(p, li:not(.gallerybox), dd, figcaption) img.mw-file-element")
+            || iosAesthetics.contains(":is(p, li, dd, figcaption) img.mw-file-element"))
+        XCTAssertTrue(iosAesthetics.contains("li.gallerybox img.mw-file-element"))
+        XCTAssertTrue(iosAesthetics.contains("max-height: none !important"))
+        let fixes = try readAsset("Assets/styles/fixes.css")
+        XCTAssertTrue(fixes.contains("li.gallerybox img.mw-file-element"))
+        XCTAssertTrue(fixes.contains("ul.gallery img.mw-file-element"))
+        XCTAssertTrue(fixes.contains("ul.gallery.mw-gallery-packed"))
+        XCTAssertTrue(fixes.contains("flex: 0 1 auto !important"))
         XCTAssertFalse(iosAesthetics.contains("vertical-align: -0.2em !important"))
         XCTAssertFalse(
             iosAesthetics.contains("height: 1em !important"),

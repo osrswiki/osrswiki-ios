@@ -297,9 +297,7 @@ struct SavedPageRowView: View {
                 // Thumbnail positioned on the right (matching search results layout)
                 if let thumbnailUrl = savedPage.thumbnailUrl, !dynamicTypeSize.isAccessibilitySize {
                     osrsAnimatedThumbnailView(url: thumbnailUrl)
-                    .frame(width: 60, height: 60)  // Match search results size
-                    .background(.clear)  // Transparent background
-                    .cornerRadius(8)
+                        .osrsListThumbnailChrome()
                 }
             }
             .padding(.vertical, 8)

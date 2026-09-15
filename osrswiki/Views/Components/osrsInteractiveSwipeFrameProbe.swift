@@ -72,7 +72,7 @@ enum osrsInteractiveSwipeFrameProbe {
         medianHz: Double,
         displayHz: Int
     ) {
-        let displayHz = max(UIScreen.main.maximumFramesPerSecond, 1)
+        let displayHz = osrsWindowSceneGeometry.maximumFramesPerSecond()
         guard !samples.isEmpty else {
             return (0, 0, 0, 0, displayHz)
         }

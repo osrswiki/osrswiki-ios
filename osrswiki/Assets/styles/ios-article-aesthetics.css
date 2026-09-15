@@ -639,7 +639,7 @@ table.osrs-image-row-table > :is(thead, tbody, tfoot) > tr > :is(th, td) {
 
 :is(p, li, dd, figcaption) img.osrs-inline-icon,
 :is(p, li, dd, figcaption) span.mw-default-size img.mw-file-element,
-:is(p, li, dd, figcaption) img.mw-file-element {
+:is(p, li:not(.gallerybox), dd, figcaption) img.mw-file-element {
     display: inline-block !important;
     height: auto !important;
     max-height: 2em !important;
@@ -651,6 +651,20 @@ table.osrs-image-row-table > :is(thead, tbody, tfoot) > tr > :is(th, td) {
     border: 0 !important;
     vertical-align: middle !important;
     width: auto !important;
+}
+
+/* Packed/traditional gallery photos live in li.gallerybox. They are not
+   inline icons: restore server-defined size. Shared fixes.css also sizes
+   packed galleries to the bitmap so flex-grow cannot manufacture the
+   full-width empty thumb bars seen on iPhone 17 / iOS 27 (HEAD 8b412146). */
+li.gallerybox img.mw-file-element,
+ul.gallery img.mw-file-element {
+    max-height: none !important;
+    max-width: 100% !important;
+    min-height: 0 !important;
+    min-width: 0 !important;
+    width: auto !important;
+    height: auto !important;
 }
 
 td :is(p, li, dd, figcaption) :is(.osrs-inline-icon-wrapper, span.mw-default-size),

@@ -39,25 +39,24 @@ struct HistoryRowView: View {
                     AsyncImage(url: thumbnailUrl) { image in
                         image
                             .resizable()
-                            .aspectRatio(contentMode: .fill)
+                            .aspectRatio(contentMode: .fit)
                             .clipped()
                     } placeholder: {
                         ProgressView()
                             .progressViewStyle(CircularProgressViewStyle())
                             .tint(.osrsPrimaryColor)
-                            .frame(width: 60, height: 60)
+                            .frame(
+                                width: osrsAnimatedThumbnailView.osrsListThumbSize,
+                                height: osrsAnimatedThumbnailView.osrsListThumbSize
+                            )
                     }
-                    .frame(width: 60, height: 60)
-                    .background(.clear)
-                    .cornerRadius(8)
+                    .osrsListThumbnailChrome()
                 } else {
                     // Fallback placeholder when no thumbnail is available
                     Image(systemName: "doc.text")
                         .font(.title2)
                         .foregroundStyle(.osrsSecondaryTextColor)
-                        .frame(width: 60, height: 60)
-                        .background(.clear)
-                        .cornerRadius(8)
+                        .osrsListThumbnailChrome()
                 }
             }
             .padding(.vertical, 8)

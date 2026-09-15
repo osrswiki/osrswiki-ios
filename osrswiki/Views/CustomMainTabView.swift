@@ -203,15 +203,19 @@ struct CustomMainTabView: View {
                 }
             }
 
-            if let articleBottomBar = overlayManager.articleBottomBar {
-                VStack(spacing: 0) {
-                    Spacer()
-                    articleBottomBar
-                        .ignoresSafeArea(.all, edges: .bottom)
+            if overlayManager.articleBottomBar != nil {
+                GeometryReader { geometry in
+                    if let articleBottomBar = overlayManager.articleBottomBar {
+                        VStack(spacing: 0) {
+                            Spacer()
+                            articleBottomBar
+                                .ignoresSafeArea(.all, edges: .bottom)
+                        }
+                        .offset(x: overlayManager.articleBottomBarExitProgress * geometry.size.width)
+                        .opacity(overlayManager.articleBottomBarCovered ? 0 : 1)
+                        .allowsHitTesting(!overlayManager.articleBottomBarCovered)
+                    }
                 }
-                .offset(x: overlayManager.articleBottomBarExitProgress * UIScreen.main.bounds.width)
-                .opacity(overlayManager.articleBottomBarCovered ? 0 : 1)
-                .allowsHitTesting(!overlayManager.articleBottomBarCovered)
             }
         }
     }
@@ -259,17 +263,21 @@ struct CustomMainTabView: View {
             refreshTabBarChrome()
         }
         .overlay {
-            if let articleBottomBar = overlayManager.articleBottomBar {
-                VStack(spacing: 0) {
-                    Spacer(minLength: 0)
-                    articleBottomBar
-                        .padding(.bottom, osrsOverlayChromeMetrics.screenEdgeGap)
+            if overlayManager.articleBottomBar != nil {
+                GeometryReader { geometry in
+                    if let articleBottomBar = overlayManager.articleBottomBar {
+                        VStack(spacing: 0) {
+                            Spacer(minLength: 0)
+                            articleBottomBar
+                                .padding(.bottom, osrsOverlayChromeMetrics.screenEdgeGap)
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                        .ignoresSafeArea(edges: .bottom)
+                        .offset(x: overlayManager.articleBottomBarExitProgress * geometry.size.width)
+                        .opacity(overlayManager.articleBottomBarCovered ? 0 : 1)
+                        .allowsHitTesting(!overlayManager.articleBottomBarCovered)
+                    }
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-                .ignoresSafeArea(edges: .bottom)
-                .offset(x: overlayManager.articleBottomBarExitProgress * UIScreen.main.bounds.width)
-                .opacity(overlayManager.articleBottomBarCovered ? 0 : 1)
-                .allowsHitTesting(!overlayManager.articleBottomBarCovered)
             }
         }
         // Shared status-pocket scrim: every root and pushed Article inherit

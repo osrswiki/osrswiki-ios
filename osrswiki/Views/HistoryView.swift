@@ -222,9 +222,7 @@ struct HistoryEntryRowView: View {
                         url: thumbnailUrl,
                         refreshToken: entry.metadataUpdatedAt.map { String($0.timeIntervalSince1970) }
                     )
-                    .frame(width: 60, height: 60)
-                    .background(.osrsSearchBoxBackgroundColor)
-                    .cornerRadius(8)
+                    .osrsListThumbnailChrome()
                 }
             }
             .padding(.vertical, 8)

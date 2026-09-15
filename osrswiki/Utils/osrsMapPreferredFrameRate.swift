@@ -7,13 +7,25 @@ import UIKit
 /// UIKit, SwiftUI, WKWebView scrolling, and interactive-pop inherit ProMotion from
 /// `CADisableMinimumFrameDurationOnPhone` in Info.plist. This SDK's `UIView` has no
 /// `preferredFrameRateRange` (confirmed against iPhoneSimulator 26.5 / iOS 18.5).
+/// Frame-rate comes from the window scene when one is attached; `UIScreen.main`
+/// remains last-resort only.
 enum osrsMapPreferredFrameRate {
     static var framesPerSecond: MLNMapViewPreferredFramesPerSecond {
-        MLNMapViewPreferredFramesPerSecond(rawValue: UIScreen.main.maximumFramesPerSecond)
+        framesPerSecond(from: nil)
+    }
+
+    static func framesPerSecond(from view: UIView?) -> MLNMapViewPreferredFramesPerSecond {
+        MLNMapViewPreferredFramesPerSecond(
+            rawValue: osrsWindowSceneGeometry.maximumFramesPerSecond(from: view)
+        )
     }
 
     static var viewRange: CAFrameRateRange {
-        let maximum = Float(max(UIScreen.main.maximumFramesPerSecond, 60))
+        viewRange(from: nil)
+    }
+
+    static func viewRange(from view: UIView?) -> CAFrameRateRange {
+        let maximum = Float(max(osrsWindowSceneGeometry.maximumFramesPerSecond(from: view), 60))
         return CAFrameRateRange(
             minimum: min(24, maximum),
             maximum: maximum,
@@ -22,6 +34,6 @@ enum osrsMapPreferredFrameRate {
     }
 
     static func apply(to mapView: MLNMapView) {
-        mapView.preferredFramesPerSecond = framesPerSecond
+        mapView.preferredFramesPerSecond = framesPerSecond(from: mapView)
     }
 }

@@ -28,7 +28,7 @@ enum osrsArticleWebViewLayout {
         size.width > minimumUsableDimension && size.height > minimumUsableDimension
     }
 
-    static func initialFrame(windowSize: CGSize = UIScreen.main.bounds.size) -> CGRect {
+    static func initialFrame(windowSize: CGSize = osrsWindowSceneGeometry.currentSize) -> CGRect {
         CGRect(origin: .zero, size: resolvedSize(
             proposedWidth: nil,
             proposedHeight: nil,

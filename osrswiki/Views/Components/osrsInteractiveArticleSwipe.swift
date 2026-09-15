@@ -214,7 +214,10 @@ final class osrsInteractiveArticleSwipe {
         guard isTracking, let axis else { return }
         switch axis {
         case .back:
-            let width = max(slidingView?.bounds.width ?? UIScreen.main.bounds.width, 1)
+            let width = max(
+                slidingView?.bounds.width ?? osrsWindowSceneGeometry.size(from: slidingView).width,
+                1
+            )
             let x = max(0, translation.x)
             backProgress = min(1, x / width)
             let moving = slidingSnapshot ?? slidingView

@@ -1711,9 +1711,7 @@ struct ArticleWebView: UIViewRepresentable {
     }
     
     func sizeThatFits(_ proposal: ProposedViewSize, uiView: WKWebView, context: Context) -> CGSize {
-        let windowSize = uiView.window?.bounds.size
-            ?? uiView.window?.windowScene?.screen.bounds.size
-            ?? UIScreen.main.bounds.size
+        let windowSize = osrsWindowSceneGeometry.size(from: uiView)
         let size = osrsArticleWebViewLayout.resolvedSize(
             proposedWidth: proposal.width,
             proposedHeight: proposal.height,

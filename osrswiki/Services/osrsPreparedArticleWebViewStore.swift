@@ -320,10 +320,7 @@ final class osrsPreparedArticleWebViewStore: NSObject, WKNavigationDelegate, WKS
     }
 
     private var hostBounds: CGRect {
-        if let scene = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first {
-            return scene.screen.bounds
-        }
-        return CGRect(x: 0, y: 0, width: 390, height: 844)
+        osrsWindowSceneGeometry.currentBounds
     }
 
     private func attachToHost(_ webView: WKWebView) {

@@ -78,7 +78,7 @@ final class NavigationAutomationTests: XCTestCase {
     }
 
     private func visibleButton(identifier: String) -> XCUIElement {
-        let windowFrame = app.windows.firstMatch.exists ? app.windows.firstMatch.frame : UIScreen.main.bounds
+        let windowFrame = app.windows.firstMatch.exists ? app.windows.firstMatch.frame : app.frame
         let candidates = app.buttons
             .matching(NSPredicate(format: "identifier == %@", identifier))
             .allElementsBoundByIndex

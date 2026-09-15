@@ -102,8 +102,10 @@ struct osrsMapLibreView: View {
         .ignoresSafeArea(.keyboard)
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { notification in
             let frame = (notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect) ?? .zero
-            let overlap = max(0, UIScreen.main.bounds.maxY - frame.minY)
-            selectorKeyboardHeight = overlap
+            selectorKeyboardHeight = osrsWindowSceneGeometry.keyboardOverlap(
+                keyboardFrame: frame,
+                containerMaxY: osrsWindowSceneGeometry.currentBounds.maxY
+            )
         }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
             selectorKeyboardHeight = 0
@@ -872,10 +874,16 @@ private struct osrsRealmMapLibreView: UIViewRepresentable {
             envelope: osrsRealmCameraEnvelope
         ) -> Double {
             let baseMinimum = max(0, Double(asset.minZoom) - 2)
-            let viewportWidth = Double(mapView?.bounds.width ?? 0)
-            let viewportHeight = Double(mapView?.bounds.height ?? 0)
-            let resolvedWidth = viewportWidth > 0 ? viewportWidth : Double(UIScreen.main.bounds.width)
-            let resolvedHeight = viewportHeight > 0 ? viewportHeight : Double(UIScreen.main.bounds.height)
+            let fallback = osrsWindowSceneGeometry.size(from: mapView)
+            let resolved = osrsWindowSceneGeometry.fallbackViewport(
+                viewSize: CGSize(
+                    width: mapView?.bounds.width ?? 0,
+                    height: mapView?.bounds.height ?? 0
+                ),
+                fallback: fallback
+            )
+            let resolvedWidth = Double(resolved.width)
+            let resolvedHeight = Double(resolved.height)
             return envelope.finiteRealmMinimumZoom(
                 baseMinimumZoom: baseMinimum,
                 viewportWidth: resolvedWidth,
@@ -1738,7 +1746,7 @@ private struct osrsRealmMapLibreView: UIViewRepresentable {
                     : .nan,
                 cameraEdgeObservedMinimumFPS.isFinite ? cameraEdgeObservedMinimumFPS : .nan,
                 cameraEdgeObservedMaximumFPS,
-                UIScreen.main.maximumFramesPerSecond,
+                osrsWindowSceneGeometry.maximumFramesPerSecond(from: mapView),
                 mapView.preferredFramesPerSecond.rawValue,
                 cameraPinchReleaseVelocityLevelsPerSecond,
                 zoomMomentumPeakContinuation,

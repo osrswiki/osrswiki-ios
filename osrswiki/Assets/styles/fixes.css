@@ -2440,10 +2440,62 @@ li.gallerybox {
     width: auto !important;
 }
 
+/* Photographic galleries are not prose glyphs. MediaWiki packed/traditional
+   galleries put photos in li.gallerybox; iOS aesthetics also caps
+   :is(p, li, …) img.mw-file-element at 2em for true inline icons. Beat that
+   with higher specificity and do not set a min-size (real icons stay tiny).
+   Trust server width/height; max-width:100% only shrinks to the column. */
 li.gallerybox .thumb,
-li.gallerybox img {
+li.gallerybox img,
+li.gallerybox img.mw-file-element,
+ul.gallery img.mw-file-element {
     height: auto !important;
+    max-height: none !important;
     max-width: 100% !important;
+    min-height: 0 !important;
+    min-width: 0 !important;
+    width: auto !important;
+}
+
+/* Packed news-post galleries (Alveus / Update:A Ruff Situation): the generic
+   gallery flex (1 1 12rem) grows each li.gallerybox to the article column.
+   Combined with a block .thumb (wiki-integration thumb-bg) and
+   text-align:center, a 2em-capped photo becomes a tiny chip in a wide empty
+   bar — confirmed on iPhone 17 / iOS 27 at main 8b412146. Size packed boxes
+   to the bitmap; still wrap/shrink to the column. Do not min-size. */
+ul.gallery.mw-gallery-packed,
+ul.gallery.mw-gallery-packed-hover,
+ul.gallery.mw-gallery-packed-overlay {
+    justify-content: center !important;
+}
+
+ul.gallery.mw-gallery-packed > li.gallerybox,
+ul.gallery.mw-gallery-packed-hover > li.gallerybox,
+ul.gallery.mw-gallery-packed-overlay > li.gallerybox {
+    flex: 0 1 auto !important;
+    max-width: 100% !important;
+    width: auto !important;
+}
+
+ul.gallery.mw-gallery-packed li.gallerybox .thumb,
+ul.gallery.mw-gallery-packed-hover li.gallerybox .thumb,
+ul.gallery.mw-gallery-packed-overlay li.gallerybox .thumb {
+    box-sizing: border-box !important;
+    margin-inline: auto !important;
+    max-width: 100% !important;
+    width: fit-content !important;
+}
+
+ul.gallery.mw-gallery-packed li.gallerybox img.mw-file-element,
+ul.gallery.mw-gallery-packed-hover li.gallerybox img.mw-file-element,
+ul.gallery.mw-gallery-packed-overlay li.gallerybox img.mw-file-element {
+    display: block !important;
+    height: auto !important;
+    max-height: none !important;
+    max-width: 100% !important;
+    min-height: 0 !important;
+    min-width: 0 !important;
+    width: auto !important;
 }
 
 .mw-parser-output > figure[typeof^="mw:File"],

@@ -831,22 +831,15 @@ class osrsTablePreviewRenderer: ObservableObject {
     private func getDeviceContentSize() async -> CGSize {
         return await withCheckedContinuation { continuation in
             DispatchQueue.main.async {
-                // Get main screen bounds
-                let screen = UIScreen.main
-                let fullSize = screen.bounds.size
-
-                // Account for safe area (like Android system UI)
                 let window = UIApplication.shared.connectedScenes
                     .compactMap { $0 as? UIWindowScene }
                     .first?.windows.first
-
+                let fullSize = window?.bounds.size ?? osrsWindowSceneGeometry.currentSize
                 let safeAreaInsets = window?.safeAreaInsets ?? UIEdgeInsets.zero
-
-                // Calculate content area (excluding system UI)
-                let contentWidth = fullSize.width
-                let contentHeight = fullSize.height - safeAreaInsets.top - safeAreaInsets.bottom
-
-                let contentSize = CGSize(width: contentWidth, height: contentHeight)
+                let contentSize = osrsWindowSceneGeometry.contentSize(
+                    windowSize: fullSize,
+                    safeAreaInsets: safeAreaInsets
+                )
                 print("📊 Device content size: \(contentSize) (full: \(fullSize), insets: \(safeAreaInsets))")
 
                 continuation.resume(returning: contentSize)

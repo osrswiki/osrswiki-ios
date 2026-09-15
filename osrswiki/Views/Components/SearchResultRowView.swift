@@ -97,9 +97,7 @@ struct SearchResultRowView: View {
                 // Thumbnail positioned on the right (matching Android layout) - only show if URL exists
                 if let thumbnailUrl = result.thumbnailUrl {
                     osrsAnimatedThumbnailView(url: thumbnailUrl)
-                    .frame(width: 60, height: 60)
-                    .background(.osrsSearchBoxBackgroundColor)
-                    .cornerRadius(8)
+                        .osrsListThumbnailChrome()
                 }
             }
             .padding(.vertical, dynamicTypeSize.isAccessibilitySize ? 8 : 4)
@@ -147,12 +145,22 @@ struct osrsAnimatedThumbnailView: UIViewRepresentable {
     func makeCoordinator() -> Coordinator { Coordinator() }
 
     func makeUIView(context: Context) -> UIImageView {
+        Self.makeConfiguredImageView()
+    }
+
+    /// Shared 60pt list thumbs. Aspect-fit matches Android `ImageView.scaleType=fitCenter`
+    /// so item sprites, maps, and portraits stay fully visible instead of center-cropping.
+    static let osrsListContentMode: UIView.ContentMode = .scaleAspectFit
+    /// Android `item_search_result` ImageViews are 60dp with no separate plate or rounded clip.
+    static let osrsListThumbSize: CGFloat = 60
+    static let osrsListThumbCornerRadius: CGFloat = 0
+
+    static func makeConfiguredImageView() -> UIImageView {
         // UIImageView otherwise advertises the downloaded bitmap's pixel size as
         // its intrinsic content size. That allowed a 240x160 Wiki thumbnail to
         // expand a nominally 60x60 SwiftUI list cell.
         let view = osrsThumbnailImageView()
-        view.contentMode = .scaleAspectFill
-        view.clipsToBounds = true
+        applyListThumbCanvas(view)
         view.image = UIImage(systemName: "doc.text.fill")
         view.tintColor = .secondaryLabel
         view.isAccessibilityElement = true
@@ -161,7 +169,47 @@ struct osrsAnimatedThumbnailView: UIViewRepresentable {
         return view
     }
 
+    /// Clear, unrounded canvas so aspect-fit letterboxing is the list-row surface
+    /// color (Android has no thumb plate). SwiftUI UIViewRepresentable can otherwise
+    /// keep an opaque default fill behind the sprite.
+    static func applyListThumbCanvas(_ imageView: UIImageView) {
+        imageView.contentMode = osrsListContentMode
+        imageView.clipsToBounds = true
+        imageView.isOpaque = false
+        imageView.backgroundColor = .clear
+        imageView.layer.cornerRadius = osrsListThumbCornerRadius
+        clearHostingCanvas(startingAt: imageView)
+    }
+
+    /// SwiftUI can wrap UIViewRepresentable in an opaque platform view. Clear a
+    /// couple of generic ancestors so letterboxing is the list-row surface, but
+    /// never wipe UITableView / UICollectionView cells (those carry parchment).
+    static func clearHostingCanvas(startingAt view: UIView) {
+        var node = view.superview
+        var hops = 0
+        while let current = node, hops < 2 {
+            if isListSurface(current) { break }
+            current.isOpaque = false
+            current.backgroundColor = .clear
+            node = current.superview
+            hops += 1
+        }
+    }
+
+    static func isListSurface(_ view: UIView) -> Bool {
+        if view is UITableViewCell
+            || view is UICollectionViewCell
+            || view is UITableView
+            || view is UICollectionView
+            || view is UIScrollView {
+            return true
+        }
+        let name = NSStringFromClass(type(of: view))
+        return name.contains("CellContent")
+    }
+
     func updateUIView(_ imageView: UIImageView, context: Context) {
+        Self.applyListThumbCanvas(imageView)
         let identity = thumbnailIdentity
         guard context.coordinator.loadedIdentity != identity ||
                 context.coordinator.loadedReduceMotion != reduceMotion else { return }
@@ -247,6 +295,29 @@ struct osrsAnimatedThumbnailView: UIViewRepresentable {
 
 private final class osrsThumbnailImageView: UIImageView {
     override var intrinsicContentSize: CGSize { .zero }
+
+    override func didMoveToSuperview() {
+        super.didMoveToSuperview()
+        osrsAnimatedThumbnailView.clearHostingCanvas(startingAt: self)
+    }
+
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        osrsAnimatedThumbnailView.clearHostingCanvas(startingAt: self)
+    }
+}
+
+extension View {
+    /// 60pt list thumbs sit on the row surface. Android `item_search_result`
+    /// ImageViews have no separate plate, fill, or rounded clip — letterboxing
+    /// must remain the same parchment/surface as the search row.
+    func osrsListThumbnailChrome() -> some View {
+        frame(
+            width: osrsAnimatedThumbnailView.osrsListThumbSize,
+            height: osrsAnimatedThumbnailView.osrsListThumbSize
+        )
+        .background(Color.clear)
+    }
 }
 
 // MARK: - ThemedSearchResult Model

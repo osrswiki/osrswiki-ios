@@ -618,7 +618,11 @@ struct UpdateCardView: View {
     }
 
     private var cardWidth: CGFloat {
-        dynamicTypeSize.isAccessibilitySize ? min(UIScreen.main.bounds.width - 32, 398) : osrsRecentUpdateCardMetrics.standardWidth
+        osrsWindowSceneGeometry.accessibilityCardWidth(
+            isAccessibilitySize: dynamicTypeSize.isAccessibilitySize,
+            containerWidth: osrsWindowSceneGeometry.currentSize.width,
+            standardWidth: osrsRecentUpdateCardMetrics.standardWidth
+        )
     }
 
     private var cardHeight: CGFloat? {

@@ -182,13 +182,13 @@ private struct osrsSettingsPreviewTableWebView: UIViewRepresentable {
                 webView.layoutIfNeeded()
 
                 let captureRect = webView.convert(webView.bounds, to: nil)
-                let screenBounds = UIScreen.main.bounds
+                let screenBounds = osrsWindowSceneGeometry.bounds(from: webView)
                 let payload: [String: Any] = [
                     "name": request.name,
                     "renderer": "osrsSettingsPreviewTableExportView.simulator.WKWebView",
                     "theme": request.themeName,
                     "collapsed": request.collapsed,
-                    "screen_scale": UIScreen.main.scale,
+                    "screen_scale": osrsWindowSceneGeometry.scale(from: webView),
                     "screen_points": [
                         "width": screenBounds.width,
                         "height": screenBounds.height

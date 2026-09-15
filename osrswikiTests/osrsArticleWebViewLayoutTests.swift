@@ -104,7 +104,11 @@ final class osrsArticleWebViewLayoutTests: XCTestCase {
 
         XCTAssertTrue(articleView.contains(".frame(maxWidth: .infinity, maxHeight: .infinity)"))
         XCTAssertTrue(articleWebView.contains("osrsArticleWebViewLayout.resolvedSize"))
+        XCTAssertTrue(articleWebView.contains("osrsWindowSceneGeometry.size(from:"))
+        XCTAssertFalse(articleWebView.contains("UIScreen.main.bounds"))
         XCTAssertTrue(articleWebView.contains("func sizeThatFits"))
+        XCTAssertFalse(tabView.contains("UIScreen.main.bounds"))
+        XCTAssertTrue(tabView.contains("geometry.size.width"))
         XCTAssertTrue(tabView.contains(".tabViewStyle(.tabBarOnly)"))
         XCTAssertFalse(
             articleView.contains("liveArticleWebViewPresent: viewModel.webView != nil"),
