@@ -3,6 +3,17 @@
   "asset_set_id": "osrs-surface-maps-949feadd10f7",
   "repository": "osrswiki/osrswiki-tooling",
   "release_tag": "map-assets-v1-949feadd10f7",
+  "bundle": {
+    "name": "map_floors.zip",
+    "sha256": "169281ddcd742402abca56b5535df4310654cc6212cd399bd41e7682dfaab213",
+    "bytes": 45921231,
+    "members": [
+      "map_floor_0.mbtiles",
+      "map_floor_1.mbtiles",
+      "map_floor_2.mbtiles",
+      "map_floor_3.mbtiles"
+    ]
+  },
   "assets": [
     {
       "name": "map_floor_0.mbtiles",
