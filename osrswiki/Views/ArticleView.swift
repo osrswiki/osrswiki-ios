@@ -301,13 +301,14 @@ private struct ArticleViewContent: View {
                     )
                         .environmentObject(themeManager)
                         .toolbar {
-                            ToolbarItem(placement: .navigationBarTrailing) {
+                            osrsHorizontalOnlyToolbarItem(placement: .navigationBarTrailing) {
                                 Button("Done") {
                                     appearancePresentation.dismiss()
                                 }
                             }
                         }
                 }
+                .osrsSystemVerticalBarsDisabled()
             }
             .onChange(of: appearancePresentation.isPresented) { _, presented in
                 overlayManager?.setArticleBottomBarCovered(presented)
@@ -320,13 +321,14 @@ private struct ArticleViewContent: View {
                     FeedbackView()
                         .environmentObject(themeManager)
                         .toolbar {
-                            ToolbarItem(placement: .navigationBarTrailing) {
+                            osrsHorizontalOnlyToolbarItem(placement: .navigationBarTrailing) {
                                 Button("Done") {
                                     isShowingFeedback = false
                                 }
                             }
                         }
                 }
+                .osrsSystemVerticalBarsDisabled()
             }
             .alert("Voice Search Error",
                    isPresented: Binding<Bool>(
@@ -559,28 +561,21 @@ private struct ArticleViewContent: View {
             pageURL: pageUrl,
             fallbackTitle: pageTitle
         )
-        let probeURL = osrsSavedPageRevisionProbe.queryURL(forPageTitle: requestedTitle)
-        do {
-            let (data, _) = try await URLSession.shared.data(from: probeURL)
-            guard let remote = osrsSavedPageRevisionProbe.remoteRevision(
-                in: data,
-                requestedTitle: requestedTitle
-            ) else {
-                return
-            }
-            let localRevision = SavedPagesRepository().getSavedPages().first {
-                $0.offlineCachePageId == savedPageId || $0.url == pageUrl
-            }?.revisionId
-            guard osrsSavedPageRevisionProbe.snapshotNeedsRefresh(
-                localRevisionId: localRevision,
-                remoteRevisionId: remote.revisionId
-            ) else {
-                return
-            }
-            await viewModel.performSaveAction(refreshExistingSnapshot: true)
-        } catch {
+        guard let remote = await osrsSavedPageRevisionProbe.fetchRemoteRevision(
+            forPageTitle: requestedTitle
+        ) else {
             return
         }
+        let localRevision = SavedPagesRepository().getSavedPages().first {
+            $0.offlineCachePageId == savedPageId || $0.url == pageUrl
+        }?.revisionId
+        guard osrsSavedPageRevisionProbe.snapshotNeedsRefresh(
+            localRevisionId: localRevision,
+            remoteRevisionId: remote.revisionId
+        ) else {
+            return
+        }
+        await viewModel.performSaveAction(refreshExistingSnapshot: true)
     }
 
     @ViewBuilder

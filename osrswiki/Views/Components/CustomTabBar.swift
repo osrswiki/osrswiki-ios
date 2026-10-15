@@ -5,6 +5,9 @@
 //  Created to bypass iOS 18 SwiftUI TabView color limitations
 //  Provides complete control over tab bar colors and appearance
 //
+//  Used only on the pre-iOS 26 `legacyTabContent` path. iOS 26+ / Duo uses
+//  system `TabView` in `CustomMainTabView` so vertical side bars can adopt it.
+//
 
 import SwiftUI
 

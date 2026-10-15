@@ -48,27 +48,72 @@ enum osrsWebViewThemePaint {
 
     static func luminanceStats(_ image: UIImage?) -> (min: Int, max: Int, mean: Int)? {
         guard let image else { return nil }
-        let sample = CGSize(width: 16, height: 16)
-        UIGraphicsBeginImageContextWithOptions(sample, true, 1)
-        defer { UIGraphicsEndImageContext() }
-        image.draw(in: CGRect(origin: .zero, size: sample))
-        guard let tiny = UIGraphicsGetImageFromCurrentImageContext()?.cgImage,
-              let data = tiny.dataProvider?.data,
-              let bytes = CFDataGetBytePtr(data) else {
+        let size = image.size
+        guard size.width > 0, size.height > 0, size.width.isFinite, size.height.isFinite else {
             return nil
         }
-        let count = tiny.width * tiny.height
-        guard count > 0 else { return nil }
+        guard let cgImage = image.cgImage else { return nil }
+        return luminanceStats(cgImage)
+    }
+
+    /// Sample CPU-readable 8-bit pixels only. App Store 2.1.0 (67) crashed in
+    /// `vConvert_PermuteChannels_ARGB8888_CV_vec` when `UIImage.draw` converted
+    /// a WKWebView takeSnapshot (CVPixelBuffer / HDR) into a 16×16 RGB context.
+    static func luminanceStats(_ image: CGImage) -> (min: Int, max: Int, mean: Int)? {
+        let width = image.width
+        let height = image.height
+        guard width > 0, height > 0 else { return nil }
+        guard image.bitsPerComponent == 8 else { return nil }
+        let bitsPerPixel = image.bitsPerPixel
+        guard bitsPerPixel == 8 || bitsPerPixel == 24 || bitsPerPixel == 32 else { return nil }
+        let bytesPerPixel = bitsPerPixel / 8
+        let bytesPerRow = image.bytesPerRow
+        guard bytesPerPixel > 0, bytesPerRow >= width * bytesPerPixel else { return nil }
+        guard let data = image.dataProvider?.data else { return nil }
+        let length = CFDataGetLength(data)
+        guard length > 0,
+              let bytes = CFDataGetBytePtr(data),
+              length >= (height - 1) * bytesPerRow + width * bytesPerPixel else {
+            return nil
+        }
+
+        let rgbOffset: Int
+        switch image.alphaInfo {
+        case .premultipliedFirst, .first, .noneSkipFirst:
+            rgbOffset = bitsPerPixel == 32 ? 1 : 0
+        default:
+            rgbOffset = 0
+        }
+        let channelCount = bitsPerPixel == 8 ? 1 : 3
+        guard rgbOffset + channelCount <= bytesPerPixel else { return nil }
+
+        let sampleX = min(16, width)
+        let sampleY = min(16, height)
         var minLuminance = 255
         var maxLuminance = 0
         var total = 0
-        for index in 0..<count {
-            let offset = index * 4
-            let luminance = (Int(bytes[offset]) + Int(bytes[offset + 1]) + Int(bytes[offset + 2])) / 3
-            minLuminance = min(minLuminance, luminance)
-            maxLuminance = max(maxLuminance, luminance)
-            total += luminance
+        var count = 0
+        for sampleRow in 0..<sampleY {
+            let y = sampleRow * height / sampleY
+            for sampleColumn in 0..<sampleX {
+                let x = sampleColumn * width / sampleX
+                let offset = y * bytesPerRow + x * bytesPerPixel + rgbOffset
+                guard offset >= 0, offset + channelCount <= length else { continue }
+                let luminance: Int
+                if channelCount == 1 {
+                    luminance = Int(bytes[offset])
+                } else {
+                    luminance = (
+                        Int(bytes[offset]) + Int(bytes[offset + 1]) + Int(bytes[offset + 2])
+                    ) / 3
+                }
+                minLuminance = min(minLuminance, luminance)
+                maxLuminance = max(maxLuminance, luminance)
+                total += luminance
+                count += 1
+            }
         }
+        guard count > 0 else { return nil }
         return (minLuminance, maxLuminance, total / count)
     }
 

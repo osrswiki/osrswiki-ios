@@ -54,53 +54,170 @@
     return series;
   }
 
-  function withTimeout(promise, ms) {
-    let timer = null;
-    return Promise.race([
-      Promise.resolve(promise),
-      new Promise((_, reject) => {
-        timer = setTimeout(() => reject(new Error('timeout')), ms);
-      })
-    ]).finally(() => {
-      if (timer) clearTimeout(timer);
-    });
-  }
-
-  async function readBridgeText(url) {
+  function readBridgeText(url) {
     const bridge = window.OsrsWikiBridge;
     if (!bridge || typeof bridge.fetchText !== 'function') return '';
     try {
       const raw = bridge.fetchText(url);
-      if (raw && typeof raw.then === 'function') {
-        const text = await withTimeout(raw, 4000);
-        return text ? String(text) : '';
-      }
-      return raw ? String(raw) : '';
+      return raw == null ? '' : raw;
     } catch (e) {
       log('w', 'fetchText failed', e);
       return '';
     }
   }
 
-  async function fetchSeries(itemId) {
-    const url = `https://prices.runescape.wiki/api/v1/osrs/timeseries?timestep=24h&id=${encodeURIComponent(itemId)}`;
-    const bridged = await readBridgeText(url);
-    if (bridged) return seriesFromPayload(JSON.parse(bridged));
+  function retryAfterMsFromResponse(resp) {
+    try {
+      const header = resp && resp.headers && resp.headers.get ? resp.headers.get('Retry-After') : '';
+      if (!header) return null;
+      const seconds = Number(header);
+      if (Number.isFinite(seconds) && seconds >= 0) {
+        return Math.min(Math.round(seconds * 1000), 30000);
+      }
+      const when = Date.parse(header);
+      if (!Number.isNaN(when)) {
+        return Math.min(Math.max(0, when - Date.now()), 30000);
+      }
+    } catch (e) {}
+    return null;
+  }
+
+  function retryDelayMs(err, fallback) {
+    if (err && typeof err.retryAfterMs === 'number') return err.retryAfterMs;
+    return fallback;
+  }
+
+  const CHART_CACHE_TTL_MS = 30 * 60 * 1000;
+  const chartMemoryCache = new Map();
+
+  function chartCacheStorageKey(itemId) {
+    return 'osrs-ge-chart-v2:' + itemId;
+  }
+
+  function readChartMemory(itemId) {
+    const hit = chartMemoryCache.get(itemId);
+    if (!hit || Date.now() >= hit.expires || !hit.series || !hit.series.length) {
+      if (hit) chartMemoryCache.delete(itemId);
+      return null;
+    }
+    return hit.series;
+  }
+
+  function writeChartMemory(itemId, series) {
+    chartMemoryCache.set(itemId, { expires: Date.now() + CHART_CACHE_TTL_MS, series: series });
+  }
+
+  function readChartDisk(itemId) {
+    try {
+      if (!window.localStorage) return null;
+      const raw = window.localStorage.getItem(chartCacheStorageKey(itemId));
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (!parsed || Date.now() >= parsed.expires || !Array.isArray(parsed.series) || !parsed.series.length) {
+        window.localStorage.removeItem(chartCacheStorageKey(itemId));
+        return null;
+      }
+      writeChartMemory(itemId, parsed.series);
+      return parsed.series;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function writeChartDisk(itemId, series) {
+    try {
+      if (!window.localStorage) return;
+      window.localStorage.setItem(chartCacheStorageKey(itemId), JSON.stringify({
+        expires: Date.now() + CHART_CACHE_TTL_MS,
+        series: series
+      }));
+    } catch (e) {}
+  }
+
+  function rememberSeries(itemId, series) {
+    if (!series || !series.length) return;
+    writeChartMemory(itemId, series);
+    // localStorage on a warm wiki origin is expensive; do not block render.
+    setTimeout(() => writeChartDisk(itemId, series), 0);
+  }
+
+  function readPrefetchedSeries(itemId) {
+    try {
+      const bag = window.__osrsGeChartPrefetch;
+      if (!bag || !Object.prototype.hasOwnProperty.call(bag, itemId)) return null;
+      const raw = bag[itemId];
+      let series = null;
+      if (Array.isArray(raw)) series = raw;
+      else if (typeof raw === 'string') series = seriesFromPayload(JSON.parse(raw));
+      else if (raw && typeof raw === 'object') series = seriesFromPayload(raw);
+      if (series && series.length) {
+        writeChartMemory(itemId, series);
+        return series;
+      }
+    } catch (e) {}
+    return null;
+  }
+
+  async function fetchPricesApi(url) {
     const controller = typeof AbortController === 'function' ? new AbortController() : null;
     const timer = controller ? setTimeout(() => controller.abort(), 4000) : null;
     try {
       const resp = await fetch(url, {
         credentials: 'omit',
         mode: 'cors',
-        cache: 'no-cache',
+        cache: 'default',
         signal: controller ? controller.signal : undefined,
-        headers: { 'Accept': 'application/json' }
+        headers: {
+          'Accept': 'application/json'
+        }
       });
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-      return seriesFromPayload(await resp.json());
+      if (!resp.ok) {
+        const err = new Error(`HTTP ${resp.status}`);
+        err.retryAfterMs = retryAfterMsFromResponse(resp);
+        throw err;
+      }
+      const series = seriesFromPayload(await resp.json());
+      return series;
     } finally {
       if (timer) clearTimeout(timer);
     }
+  }
+
+  async function fetchSeries(itemId, allowNetwork) {
+    const memory = readChartMemory(itemId) || readPrefetchedSeries(itemId);
+    if (memory && memory.length) return memory;
+    if (allowNetwork === false) {
+      return readChartDisk(itemId) || [];
+    }
+    // Official v2 equivalent of v1 timestep=24h: lookback=1y is the daily
+    // series (~365 points, same payload fields for Chart.js). A finer
+    // lookback would be a different chart, not a faster one.
+    const url = `https://prices.runescape.wiki/api/v2/osrs/timeseries?lookback=1y&id=${encodeURIComponent(itemId)}`;
+    const remember = (series) => {
+      rememberSeries(itemId, series);
+      return series;
+    };
+    // Exactly one network request: finish the native/XHR path first.
+    // Never start a browser fetch() in parallel — that was a duplicate
+    // prices.wiki GET, and a custom agent header on that fetch 403'd CORS.
+    const bridged = readBridgeText(url);
+    let text = '';
+    if (bridged && typeof bridged.then === 'function') {
+      try {
+        text = String((await bridged) || '');
+      } catch (e) {
+        text = '';
+      }
+    } else if (bridged) {
+      text = String(bridged);
+    }
+    if (text) {
+      try {
+        const series = seriesFromPayload(JSON.parse(text));
+        if (series.length) return remember(series);
+      } catch (e) {}
+    }
+    return remember(await fetchPricesApi(url));
   }
 
   function ensureStylesInjected() {
@@ -258,7 +375,7 @@
     }
   }
 
-  function initOne(box) {
+  function initOne(box, allowNetwork) {
     try {
       const dataEl = box.querySelector('.GEdataprices');
       const chartEl = box.querySelector('.GEdatachart');
@@ -298,7 +415,7 @@
       }
 
       const attempt = (remaining) => {
-        fetchSeries(itemId)
+        fetchSeries(itemId, allowNetwork !== false)
           .then(series => {
             if (series.length) {
               if (renderChart(chartEl, series)) {
@@ -323,7 +440,7 @@
           .catch(err => {
             log('e', `fetchSeries failed for ${itemId}`, err);
             if (remaining > 0) {
-              setTimeout(() => attempt(remaining - 1), 400);
+              setTimeout(() => attempt(remaining - 1), retryDelayMs(err, 400));
             } else {
               markUnavailable();
             }
@@ -349,7 +466,7 @@
   let chartjsWaitQueued = false;
   let initStartedAt = 0;
 
-  function initAll() {
+  function initAll(allowNetwork) {
     if (!document || !document.body) return;
     const boxes = document.querySelectorAll('.GEChartBox');
     if (!boxes || boxes.length === 0) return;
@@ -372,12 +489,12 @@
         log('w', 'Chart.js not yet loaded; delaying init');
         setTimeout(() => {
           chartjsWaitQueued = false;
-          initAll();
+          initAll(allowNetwork);
         }, 100);
       }
       return;
     }
-    boxes.forEach(initOne);
+    boxes.forEach((box) => initOne(box, allowNetwork));
   }
 
   function ready(fn) {
@@ -388,23 +505,23 @@
     }
   }
 
-  function kick(resetBudget) {
+  function kick(resetBudget, allowNetwork) {
     if (resetBudget) {
       initStartedAt = 0;
       chartjsDeadline = 0;
     }
-    initAll();
+    initAll(allowNetwork);
   }
 
-  // Kickoff. First-open of an adopted/pre-rendered WKWebView can miss
-  // DOMContentLoaded and leave fetch pending; pageshow/visibility retry.
-  ready(initAll);
-  window.addEventListener('pageshow', () => kick(true));
+  // Kickoff. pageshow/visibility must never auto-refresh from the network;
+  // they may only paint an already-cached series.
+  ready(() => initAll(true));
+  window.addEventListener('pageshow', () => kick(false, false));
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') kick(true);
+    if (document.visibilityState === 'visible') kick(false, false);
   });
   // Also observe late-added content
-  const mo = new MutationObserver(() => initAll());
+  const mo = new MutationObserver(() => initAll(true));
   ready(() => {
     if (document.body) mo.observe(document.body, { childList: true, subtree: true });
   });

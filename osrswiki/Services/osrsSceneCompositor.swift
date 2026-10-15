@@ -782,39 +782,17 @@ enum osrsSceneCompositor {
 
     private static func layerContentsLookUniform(_ layer: CALayer) -> Bool {
         guard let image = cgImage(from: layer) else { return false }
-        let width = min(24, image.width)
-        let height = min(24, image.height)
-        guard width > 0, height > 0 else { return false }
-        let sample = CGSize(width: width, height: height)
-        let renderer = UIGraphicsImageRenderer(size: sample)
-        let tiny = renderer.image { _ in
-            UIImage(cgImage: image).draw(in: CGRect(origin: .zero, size: sample))
-        }
-        guard let cgImage = tiny.cgImage,
-              let data = cgImage.dataProvider?.data,
-              let bytes = CFDataGetBytePtr(data) else {
-            return false
-        }
-        let count = cgImage.width * cgImage.height
-        guard count > 0 else { return false }
-        var minLuminance = 255
-        var maxLuminance = 0
-        var total = 0
-        for index in 0..<count {
-            let offset = index * 4
-            let luminance = (Int(bytes[offset]) + Int(bytes[offset + 1]) + Int(bytes[offset + 2])) / 3
-            minLuminance = min(minLuminance, luminance)
-            maxLuminance = max(maxLuminance, luminance)
-            total += luminance
-        }
-        let range = maxLuminance - minLuminance
-        if range < 16 {
+        guard let stats = osrsWebViewThemePaint.luminanceStats(image) else { return false }
+        if osrsWebViewThemePaint.isUniformFill(
+            minLuminance: stats.min,
+            maxLuminance: stats.max
+        ) {
             return true
         }
         return osrsWebViewThemePaint.isUnpaintedSystemFill(
-            minLuminance: minLuminance,
-            maxLuminance: maxLuminance,
-            meanLuminance: total / count
+            minLuminance: stats.min,
+            maxLuminance: stats.max,
+            meanLuminance: stats.mean
         )
     }
 

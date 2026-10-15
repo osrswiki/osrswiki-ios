@@ -18,10 +18,51 @@ extension NetworkManager: osrsSearchDataClient {
     }
 }
 
+final class osrsRecentSearchQueryCache<Value> {
+    private let maxEntries: Int
+    private var keys: [String] = []
+    private var values: [String: Value] = [:]
+    private let lock = NSLock()
+
+    init(maxEntries: Int = osrsWikiApiStewardship.searchQueryCacheSize) {
+        self.maxEntries = maxEntries
+    }
+
+    func get(_ key: String) -> Value? {
+        lock.lock()
+        defer { lock.unlock() }
+        guard let value = values[key] else { return nil }
+        keys.removeAll { $0 == key }
+        keys.append(key)
+        return value
+    }
+
+    func put(_ key: String, _ value: Value) {
+        lock.lock()
+        defer { lock.unlock() }
+        if keys.contains(key) {
+            keys.removeAll { $0 == key }
+        }
+        keys.append(key)
+        values[key] = value
+        while keys.count > maxEntries {
+            let evicted = keys.removeFirst()
+            values.removeValue(forKey: evicted)
+        }
+    }
+
+    var count: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return values.count
+    }
+}
+
 @MainActor
 class SearchRepository {
     private let baseURL = "https://oldschool.runescape.wiki/api.php"
     private let dataClient: osrsSearchDataClient
+    private let queryResultCache = osrsRecentSearchQueryCache<SearchResponse>()
 
     init(dataClient: osrsSearchDataClient? = nil) {
         self.dataClient = dataClient ?? NetworkManager.shared
@@ -48,6 +89,12 @@ class SearchRepository {
             return SearchResponse(results: [], hasMore: false, totalCount: 0)
         }
 
+        let cacheKey = "\(scope)-\(trimmed.lowercased())-\(offset)"
+        if offset == 0, let cached = queryResultCache.get(cacheKey) {
+            onPartialResults?(cached)
+            return cached
+        }
+
         if let namespace = scope.namespace {
             do {
                 let fetch = try await fetchGeneratedPages(
@@ -66,13 +113,17 @@ class SearchRepository {
                     includeExtracts: true,
                     followRedirects: false
                 )
-                return makeSearchResponse(
-                    pages: fetch.pages
-                        .filter { $0.ns == namespace }
-                        .map { $0.withPreviewFallback() },
-                    offset: offset,
-                    hasMore: fetch.hasMore,
-                    continueToken: fetch.continueToken
+                return cacheFirstPage(
+                    makeSearchResponse(
+                        pages: fetch.pages
+                            .filter { $0.ns == namespace }
+                            .map { $0.withPreviewFallback() },
+                        offset: offset,
+                        hasMore: fetch.hasMore,
+                        continueToken: fetch.continueToken
+                    ),
+                    key: cacheKey,
+                    offset: offset
                 )
             } catch let error as SearchError {
                 throw error
@@ -144,12 +195,16 @@ class SearchRepository {
                 fulltext: fulltextFetch.pages,
                 for: query
             ).filter { osrsWikiWebViewUrl.isIncludedInDefaultSearch($0.title) }
-            return makeSearchResponse(
-                pages: fillOpenSearchPreviews(pages: rankedPages, openSearchPages: openSearchPages)
-                    .map { $0.withPreviewFallback() },
-                offset: offset,
-                hasMore: fulltextFetch.hasMore,
-                continueToken: fulltextFetch.continueToken
+            return cacheFirstPage(
+                makeSearchResponse(
+                    pages: fillOpenSearchPreviews(pages: rankedPages, openSearchPages: openSearchPages)
+                        .map { $0.withPreviewFallback() },
+                    offset: offset,
+                    hasMore: fulltextFetch.hasMore,
+                    continueToken: fulltextFetch.continueToken
+                ),
+                key: cacheKey,
+                offset: offset
             )
             
         } catch let error as SearchError {
@@ -182,6 +237,17 @@ class SearchRepository {
             self.hasMore = hasMore
             self.continueToken = continueToken
         }
+    }
+
+    private func cacheFirstPage(
+        _ response: SearchResponse,
+        key: String,
+        offset: Int
+    ) -> SearchResponse {
+        if offset == 0 {
+            queryResultCache.put(key, response)
+        }
+        return response
     }
 
     private func makeSearchResponse(

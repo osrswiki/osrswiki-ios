@@ -352,9 +352,8 @@
     }
 
     function initialize() {
-        // Calculator forms are owned by ext.gadget.calc-core. Replacing them here
-        // broke every non-combat calculator. Layout wrapping lives in
-        // osrs_calculator_runtime.js.
+        // Native calculators live in osrs_calculator_runtime.js. Do not rebuild
+        // wiki gadget forms here. Layout wrapping lives in that runtime.
         document.querySelectorAll('table.mmg-table.mmg-isperkill').forEach(setupMoneyMakingControl);
     }
 

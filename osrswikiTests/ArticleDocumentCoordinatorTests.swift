@@ -1603,7 +1603,7 @@ final class ArticleDocumentCoordinatorTests: XCTestCase {
         XCTAssertFalse(articleViewModel.contains("Task.detached(priority: .utility) { [weak self, tempPageId"))
         XCTAssertTrue(articleViewModel.contains("downloadBoundedOfflineResources"))
         XCTAssertTrue(articleViewModel.contains("persistExplicitSaveResponse"))
-        XCTAssertTrue(articleViewModel.contains("maximumConcurrency: 6"))
+        XCTAssertTrue(articleViewModel.contains("maximumConcurrency: 2"))
         XCTAssertFalse(articleViewModel.contains("prefix(maximumOfflineImages)"))
 
         let proxy = try String(

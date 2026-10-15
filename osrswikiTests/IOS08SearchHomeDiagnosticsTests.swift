@@ -164,6 +164,32 @@ final class IOS08SearchHomeDiagnosticsTests: XCTestCase {
             "Search/Go must resign first responder so results can use the full screen."
         )
 
+        let dismantle = try extractFunctionBody(named: "dismantleUIView", from: helper)
+        XCTAssertFalse(
+            dismantle.contains("deliverTextImmediately"),
+            "dismantleUIView runs during a SwiftUI graph update; writing the text Binding there crashes GraphHost.IsUpdating."
+        )
+        XCTAssertFalse(
+            dismantle.contains("parent.text"),
+            "dismantleUIView must not write the text Binding."
+        )
+        XCTAssertFalse(
+            dismantle.contains("onFocusChange"),
+            "dismantleUIView must not write the focus Binding; resign without a delegate callback."
+        )
+        XCTAssertTrue(
+            dismantle.contains("isDismantled = true"),
+            "Late UIKit text/focus callbacks after dismantle must be ignored."
+        )
+        XCTAssertTrue(
+            dismantle.contains("delegate = nil"),
+            "Nil the UITextField delegate before resign so didEndEditing cannot write Bindings."
+        )
+        XCTAssertTrue(
+            dismantle.contains("resignFirstResponder()"),
+            "The field must still resign so the keyboard does not leak across search teardown."
+        )
+
         let searchPerform = try extractFunctionBody(
             named: "performSearch",
             from: try readSource("platforms/ios/osrswiki/Views/SearchView.swift")

@@ -15,7 +15,7 @@
     var KIT = {
         string: true, int: true, number: true, select: true, buttonselect: true,
         check: true, toggleswitch: true, togglebutton: true, togglebuttongroup: true,
-        combobox: true, group: true, hs: true, rsn: true,
+        combobox: true, group: true, hs: true, rsn: true, article: true,
         hidden: true, fixed: true, semihidden: true
     };
     var JC_CONFIG_SELECTOR = 'pre.jcConfig, div.jcConfig';
@@ -405,7 +405,7 @@
     }
 
     function shouldAutosubmitOnEdit(type) {
-        return type !== 'hs' && type !== 'rsn' && type !== 'string' && type !== 'group';
+        return type !== 'hs' && type !== 'rsn' && type !== 'string' && type !== 'article' && type !== 'group';
     }
 
     function shouldAutosubmit(definition, fieldType) {
@@ -465,7 +465,7 @@
             '<label class="osrs-indoc-calc-label" for="' + fieldDomId(name, instanceIndex) + '">' + label + '</label>' +
             help;
         var control = '';
-        if (input.type === 'hs' || input.type === 'rsn' || input.type === 'string') {
+        if (input.type === 'hs' || input.type === 'rsn' || input.type === 'string' || input.type === 'article') {
             var lookup = input.type === 'hs'
                 ? '<button type="button" class="osrs-indoc-calc-btn" data-osrs-indoc-lookup="1" aria-label="Lookup">Lookup</button>'
                 : '';

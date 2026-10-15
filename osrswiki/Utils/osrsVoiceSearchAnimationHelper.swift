@@ -206,6 +206,13 @@ extension View {
 
 /// Search launcher plus one trailing glass control. The control sits in the leftover
 /// space between the field and the trailing screen edge rather than hugging that edge.
+///
+/// Search and Random stay in this horizontal accessory on purpose. They are not
+/// system `ToolbarItem`s. iOS 27.1 `axisBehavior(.horizontalOnly)` only exists
+/// on `ToolbarContent`, so it cannot mark this accessory; keeping Search/Random
+/// out of the system bar is what keeps them on the horizontal axis. See
+/// `osrsDuoSystemBars.searchRandomStayHorizontalReason`. Do not move them into
+/// a system vertical bar.
 struct osrsTabSearchWithTrailingControl<Trailing: View>: View {
     let search: osrsSearchLauncher
     @ViewBuilder let trailing: () -> Trailing
@@ -357,6 +364,8 @@ enum osrsOverlayChromeMetrics {
     private static let cacheLock = NSLock()
     private static var cachedTopInset: CGFloat = 59
     private static var cachedBottomInset: CGFloat = 34
+    private static var cachedLeftInset: CGFloat = 0
+    private static var cachedRightInset: CGFloat = 0
 
     private static func liveWindowSafeArea() -> UIEdgeInsets? {
         guard Thread.isMainThread else { return nil }
@@ -365,31 +374,55 @@ enum osrsOverlayChromeMetrics {
         return window?.safeAreaInsets
     }
 
-    static var topInset: CGFloat {
+    private static func cachedInsetsAfterReadingLive() -> UIEdgeInsets {
         if let insets = liveWindowSafeArea() {
             cacheLock.lock()
             cachedTopInset = insets.top
+            cachedBottomInset = insets.bottom
+            cachedLeftInset = max(0, insets.left)
+            cachedRightInset = max(0, insets.right)
             cacheLock.unlock()
-            return insets.top
+            return insets
         }
         cacheLock.lock()
         defer { cacheLock.unlock() }
-        return cachedTopInset
+        return UIEdgeInsets(
+            top: cachedTopInset,
+            left: cachedLeftInset,
+            bottom: cachedBottomInset,
+            right: cachedRightInset
+        )
+    }
+
+    static var topInset: CGFloat {
+        cachedInsetsAfterReadingLive().top
+    }
+
+    static var leftInset: CGFloat {
+        max(0, cachedInsetsAfterReadingLive().left)
+    }
+
+    static var rightInset: CGFloat {
+        max(0, cachedInsetsAfterReadingLive().right)
+    }
+
+    static func overlayHorizontalPadding(base: CGFloat) -> UIEdgeInsets {
+        osrsWindowSceneGeometry.overlayChromeHorizontalInsets(
+            base: base,
+            safeAreaInsets: UIEdgeInsets(
+                top: 0,
+                left: leftInset,
+                bottom: 0,
+                right: rightInset
+            )
+        )
     }
 
     /// Paired gap: Dynamic Island → search bar, and search bar → first content.
     static let pairedEdgeGap: CGFloat = 8
 
     static var bottomInset: CGFloat {
-        if let insets = liveWindowSafeArea() {
-            cacheLock.lock()
-            cachedBottomInset = insets.bottom
-            cacheLock.unlock()
-            return insets.bottom
-        }
-        cacheLock.lock()
-        defer { cacheLock.unlock() }
-        return cachedBottomInset
+        cachedInsetsAfterReadingLive().bottom
     }
 
     static func tabContentClearance(for dynamicTypeSize: DynamicTypeSize) -> CGFloat {
@@ -437,6 +470,7 @@ extension View {
                     .bottom,
                     edge == .bottom ? osrsOverlayChromeMetrics.screenEdgeGap : 0
                 )
+                .osrsIgnoredSafeAreaSideChromePadding()
         }
         .ignoresSafeArea(edges: edge == .top ? .top : .bottom)
     }
@@ -463,6 +497,28 @@ private struct osrsTabGlassAccessoryBarModifier<Accessory: View>: ViewModifier {
 }
 
 extension View {
+    /// Horizontal `ScrollView` ignores the scroll-axis safe area. Re-apply it
+    /// as content inset so a vertical side rail does not cover cards or chips.
+    /// No-op when horizontal insets are zero (typical iPhone portrait / iPad).
+    func osrsHorizontalSideChromeInset() -> some View {
+        safeAreaPadding(.horizontal)
+    }
+
+    /// Custom chrome on a view that already called `ignoresSafeArea()`.
+    /// SwiftUI `safeAreaPadding` is zero there, so read window insets instead.
+    /// Portrait phone/iPad add 0.
+    func osrsIgnoredSafeAreaSideChromePadding() -> some View {
+        padding(.leading, osrsOverlayChromeMetrics.leftInset)
+            .padding(.trailing, osrsOverlayChromeMetrics.rightInset)
+    }
+
+    /// Base overlay padding plus independent horizontal safe-area insets.
+    func osrsOverlayChromeHorizontalPadding(base: CGFloat) -> some View {
+        let insets = osrsOverlayChromeMetrics.overlayHorizontalPadding(base: base)
+        return padding(.leading, insets.left)
+            .padding(.trailing, insets.right)
+    }
+
     func osrsTabGlassAccessoryBar<Accessory: View>(
         @ViewBuilder accessory: @escaping () -> Accessory
     ) -> some View {
@@ -718,9 +774,10 @@ struct osrsUIKitSearchTextField: UIViewRepresentable {
 
     final class Coordinator: NSObject, UITextFieldDelegate {
         var parent: osrsUIKitSearchTextField
-        private var pendingTextUpdate: DispatchWorkItem?
+        var pendingTextUpdate: DispatchWorkItem?
         private(set) var lastDeliveredText: String
         private var focusSynchronizationGeneration = 0
+        var isDismantled = false
 
         init(parent: osrsUIKitSearchTextField) {
             self.parent = parent
@@ -728,20 +785,24 @@ struct osrsUIKitSearchTextField: UIViewRepresentable {
         }
 
         @objc func textChanged(_ textField: UITextField) {
+            guard !isDismantled else { return }
             scheduleTextDelivery(textField.text ?? "")
         }
 
         func textFieldDidBeginEditing(_ textField: UITextField) {
+            guard !isDismantled else { return }
             parent.onFocusChange(true)
             osrsBlankViewFirstResponderDump.capture(reason: "search-field")
         }
 
         func textFieldDidEndEditing(_ textField: UITextField) {
+            guard !isDismantled else { return }
             deliverTextImmediately(textField.text ?? "")
             parent.onFocusChange(false)
         }
 
         func textFieldShouldReturn(_ textField: UITextField) -> Bool {
+            guard !isDismantled else { return false }
             deliverTextImmediately(textField.text ?? "")
             // Unfocus before resign so updateUIView cannot re-apply shouldFocus.
             parent.onFocusChange(false)
@@ -751,21 +812,27 @@ struct osrsUIKitSearchTextField: UIViewRepresentable {
         }
 
         func scheduleTextDelivery(_ value: String) {
+            guard !isDismantled else { return }
             pendingTextUpdate?.cancel()
             let workItem = DispatchWorkItem { [weak self] in
-                guard let self else { return }
+                guard let self, !self.isDismantled else { return }
                 self.lastDeliveredText = value
-                self.parent.text = value
+                if self.parent.text != value {
+                    self.parent.text = value
+                }
             }
             pendingTextUpdate = workItem
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.04, execute: workItem)
         }
 
         func deliverTextImmediately(_ value: String) {
+            guard !isDismantled else { return }
             pendingTextUpdate?.cancel()
             pendingTextUpdate = nil
             lastDeliveredText = value
-            parent.text = value
+            if parent.text != value {
+                parent.text = value
+            }
         }
 
         func synchronizeExternalText(_ value: String, in textField: UITextField) {
@@ -783,6 +850,7 @@ struct osrsUIKitSearchTextField: UIViewRepresentable {
         /// fresh generation when attachment actually happens. This remains bounded and makes a
         /// stale focus request unable to override a newer dismiss/back transition.
         func requestFocusSynchronization(in textField: UITextField) {
+            guard !isDismantled else { return }
             focusSynchronizationGeneration &+= 1
             let requestedGeneration = focusSynchronizationGeneration
             synchronizeFocus(
@@ -806,6 +874,7 @@ struct osrsUIKitSearchTextField: UIViewRepresentable {
             DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self, weak textField] in
                 guard let self,
                       let textField,
+                      !self.isDismantled,
                       generation == self.focusSynchronizationGeneration else { return }
 
                 guard textField.window != nil else {
@@ -818,7 +887,7 @@ struct osrsUIKitSearchTextField: UIViewRepresentable {
                     ?? viewController.navigationController?.transitionCoordinator,
                    transition.isAnimated {
                     transition.animate(alongsideTransition: nil) { [weak self, weak textField] _ in
-                        guard let self, let textField else { return }
+                        guard let self, let textField, !self.isDismantled else { return }
                         self.synchronizeFocus(
                             in: textField,
                             generation: generation,
@@ -830,6 +899,7 @@ struct osrsUIKitSearchTextField: UIViewRepresentable {
                 }
 
                 if self.parent.shouldFocus {
+                    guard !self.isDismantled else { return }
                     if !textField.isFirstResponder {
                         textField.becomeFirstResponder()
                     }
@@ -891,10 +961,22 @@ struct osrsUIKitSearchTextField: UIViewRepresentable {
         context.coordinator.requestFocusSynchronization(in: textField)
     }
 
+    /// SwiftUI calls this during a graph update. Writing the text/focus Bindings
+    /// here hits GraphHost.IsUpdating exclusive access (App Store 2.1.0 / 67).
     static func dismantleUIView(_ textField: UITextField, coordinator: Coordinator) {
+        coordinator.isDismantled = true
         coordinator.cancelFocusSynchronization()
-        coordinator.deliverTextImmediately(textField.text ?? "")
-        textField.resignFirstResponder()
+        coordinator.pendingTextUpdate?.cancel()
+        coordinator.pendingTextUpdate = nil
+        textField.removeTarget(
+            coordinator,
+            action: #selector(Coordinator.textChanged),
+            for: .editingChanged
+        )
+        textField.delegate = nil
+        if textField.isFirstResponder {
+            textField.resignFirstResponder()
+        }
     }
 
     func sizeThatFits(

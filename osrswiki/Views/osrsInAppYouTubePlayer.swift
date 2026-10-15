@@ -79,10 +79,11 @@ struct osrsYouTubePlayerPage: View {
         .navigationTitle("Video")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
+            osrsHorizontalOnlyToolbarItem(placement: .navigationBarTrailing) {
                 Button("Done", action: onDone)
             }
         }
+        .osrsSystemVerticalBarsDisabled()
     }
 }
 
@@ -97,6 +98,7 @@ struct osrsYouTubePlayerSheetModifier: ViewModifier {
                 }
             }
             .osrsYouTubePlayerChrome()
+            .osrsSystemVerticalBarsDisabled()
         }
     }
 

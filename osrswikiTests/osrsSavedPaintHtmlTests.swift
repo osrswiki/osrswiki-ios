@@ -51,6 +51,43 @@ final class osrsSavedPaintHtmlTests: XCTestCase {
         XCTAssertTrue(live.contains("--osrs-article-user-text-scale: 1.150"))
         XCTAssertTrue(live.contains("osrs-article-live-chrome"))
         XCTAssertTrue(live.contains("--osrs-article-chrome-clearance: 12px"))
+        XCTAssertTrue(live.contains("--osrs-article-safe-area-left: 0px"))
+        XCTAssertTrue(live.contains("--osrs-article-safe-area-right: 0px"))
+    }
+
+    func testLiveChromeBakesIndependentHorizontalSafeAreasWithoutFoldDisplacement() {
+        let html = """
+        <html><head></head><body>hello</body></html>
+        """
+        let phone = osrsSavedPaintHtml.withLiveChrome(
+            html,
+            chromeClearancePx: 56,
+            bottomChromePx: 96,
+            safeAreaTopPx: 59,
+            safeAreaBottomPx: 34
+        )
+        XCTAssertTrue(phone.contains("--osrs-article-safe-area-left: 0px"))
+        XCTAssertTrue(phone.contains("--osrs-article-safe-area-right: 0px"))
+        XCTAssertTrue(phone.contains("padding-left: var(--osrs-article-safe-area-left)"))
+        XCTAssertTrue(phone.contains("padding-right: var(--osrs-article-safe-area-right)"))
+        XCTAssertFalse(phone.contains("reservedRegion"))
+        XCTAssertFalse(phone.contains("env(safe-area-inset-left"))
+
+        let duo = osrsSavedPaintHtml.withLiveChrome(
+            html,
+            chromeClearancePx: 56,
+            bottomChromePx: 96,
+            safeAreaTopPx: 8,
+            safeAreaBottomPx: 34,
+            safeAreaLeftPx: 62,
+            safeAreaRightPx: 8
+        )
+        XCTAssertTrue(duo.contains("--osrs-article-safe-area-left: 62px"))
+        XCTAssertTrue(duo.contains("--osrs-article-safe-area-right: 8px"))
+        XCTAssertNotEqual(
+            duo.components(separatedBy: "--osrs-article-safe-area-left: 62px").count,
+            duo.components(separatedBy: "--osrs-article-safe-area-right: 62px").count
+        )
     }
 
     func testInlinesDeferredStylesheetLinksAndIgnoresStylePreloads() {
@@ -94,7 +131,7 @@ final class osrsSavedPaintHtmlTests: XCTestCase {
         assertCriticalStylesheet(html, asset: "web/switch_infobox_styles.css")
         assertDeferredStylesheet(html, asset: "styles/wiki-integration.css")
         assertCriticalStylesheet(html, asset: "styles/fixes.css")
-        assertCriticalStylesheet(html, asset: "styles/gadget_calc.css")
+        assertCriticalStylesheet(html, asset: "styles/osrs_calculator.css")
         assertDeferredStylesheet(html, asset: "styles/ios-article-aesthetics.css")
         XCTAssertTrue(html.contains("id=\"osrs-article-first-paint\""))
         XCTAssertTrue(html.contains("background-color: #e2dbc8"))

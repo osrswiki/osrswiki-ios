@@ -53,10 +53,6 @@ class osrsWikiModuleRegistry {
         // Categories
         ("class=\"catlinks", ["mediawiki.action.view.categoryPage.styles"]),
         
-        // Tabs and switching interfaces
-        ("data-switch-infobox", ["ext.gadget.switch-infobox"]),
-        ("switch-info", ["ext.gadget.switch-infobox"]),
-        
         // OSRS-specific: Grand Exchange charts
         ("GEChartBox", ["ext.osrs.ge-charts"]),
         ("GEdatachart", ["ext.osrs.ge-charts"]),
@@ -73,8 +69,8 @@ class osrsWikiModuleRegistry {
         // Experience tables and wiki calculators
         ("exptable", ["ext.osrs.exp-calculator"]),
         ("calc-table", ["ext.osrs.exp-calculator"]),
-        ("jcConfig", ["oojs-ui-core", "oojs-ui-widgets", "mediawiki.widgets", "ext.gadget.rsw-util"]),
-        ("class=\"jcConfig", ["oojs-ui-core", "oojs-ui-widgets", "mediawiki.widgets", "ext.gadget.rsw-util"])
+        ("jcConfig", ["oojs-ui-core", "oojs-ui-widgets", "mediawiki.widgets"]),
+        ("class=\"jcConfig", ["oojs-ui-core", "oojs-ui-widgets", "mediawiki.widgets"])
     ]
     
     // Page-specific modules for certain article types
@@ -101,7 +97,7 @@ class osrsWikiModuleRegistry {
         "update": ["ext.osrs.update-diff"],
         
         // Calculator pages
-        "calculator": ["oojs-ui-core", "oojs-ui-widgets", "mediawiki.widgets", "ext.gadget.rsw-util"]
+        "calculator": ["oojs-ui-core", "oojs-ui-widgets", "mediawiki.widgets"]
     ]
     
     static func generateRLPAGEMODULES(bodyContent: String, title: String) -> [String] {
@@ -133,19 +129,14 @@ class osrsWikiModuleRegistry {
             detectedModules.insert("jquery.tablesorter.advanced")
         }
         
-        // If we detect infoboxes, likely need infobox enhancements
-        if bodyContent.contains("infobox") {
-            detectedModules.insert("ext.gadget.infobox-styles")
-        }
-        
         // If we detect many images, preload image handling
         let imageCount = bodyContent.components(separatedBy: "<img").count - 1
         if imageCount > 5 {
             detectedModules.insert("mediawiki.page.gallery")
         }
         
-        // Convert to sorted array for consistent output
-        return Array(detectedModules).sorted()
+        // Convert to sorted array for consistent output. Wiki gadgets are never loaded.
+        return osrsWikiWebViewUrl.withoutMediaWikiGadgets(Array(detectedModules)).sorted()
     }
     
     // Helper method for debugging module detection

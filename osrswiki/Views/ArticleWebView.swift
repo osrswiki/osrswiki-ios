@@ -122,8 +122,6 @@ class IOSAssetHandler: NSObject, WKURLSchemeHandler {
             return "web/collapsible_tables.css"
         case "styles/infobox_switcher.css":
             return "web/switch_infobox_styles.css"
-        case "gadget_calc_core.js":
-            return "js/mediawiki/gadget_calc_core.js"
         case "osrs_calculator_runtime.js":
             return "web/osrs_calculator_runtime.js"
         case "osrs_native_calc_indoc.js":
@@ -202,7 +200,17 @@ class IOSAssetHandler: NSObject, WKURLSchemeHandler {
             }
 
             if osrsWikiWebViewUrl.shouldProxy(url) {
-                let wikiURL = osrsWikiWebViewUrl.rewriteToWiki(url)
+                if osrsWikiWebViewUrl.isRejectedMediaWikiGadgetLoad(url) {
+                    print("🚫 IOSAssetHandler: Rejected MediaWiki gadget load: \(url.absoluteString)")
+                    self.completeGadgetRejection(urlSchemeTask, requestURL: url)
+                    return
+                }
+                let rewritten = osrsWikiWebViewUrl.rewriteToWiki(url)
+                guard let wikiURL = osrsWikiWebViewUrl.withoutMediaWikiGadgetLoadModules(rewritten) else {
+                    print("🚫 IOSAssetHandler: Rejected MediaWiki gadget load: \(url.absoluteString)")
+                    self.completeGadgetRejection(urlSchemeTask, requestURL: url)
+                    return
+                }
                 print("🌐 IOSAssetHandler: Proxying wiki calculator/API request: \(wikiURL.absoluteString)")
                 if url.path.contains("/images/") {
                     NSLog(
@@ -565,6 +573,28 @@ class IOSAssetHandler: NSObject, WKURLSchemeHandler {
                 print("❌ IOSAssetHandler: Task generation \(taskInfo.generation) failed successfully")
             }
         }
+    }
+
+    private func completeGadgetRejection(_ urlSchemeTask: WKURLSchemeTask, requestURL: URL) {
+        let body = Data(osrsWikiWebViewUrl.rejectedGadgetLoadJS.utf8)
+        let headers = [
+            "Content-Type": "text/javascript; charset=utf-8",
+            "Content-Length": "\(body.count)"
+        ]
+        guard let response = HTTPURLResponse(
+            url: requestURL,
+            statusCode: 200,
+            httpVersion: "HTTP/1.1",
+            headerFields: headers
+        ) else {
+            completeTask(urlSchemeTask, withError: NSError(
+                domain: "IOSAssetHandler",
+                code: 404,
+                userInfo: [NSLocalizedDescriptionKey: "Rejected MediaWiki gadget load"]
+            ))
+            return
+        }
+        completeTask(urlSchemeTask, withResponse: response, data: body)
     }
     
     /// CRITICAL: Atomic task completion that prevents WebKit NSException crashes
@@ -1054,14 +1084,41 @@ class IOSAssetHandler: NSObject, WKURLSchemeHandler {
         url: URL,
         originalURL: String
     ) async throws -> (data: Data, response: URLResponse) {
+        if osrsWikiWebViewUrl.isRejectedMediaWikiGadgetLoad(url) ||
+            osrsWikiWebViewUrl.isRejectedMediaWikiGadgetLoad(originalURL) {
+            let body = Data(osrsWikiWebViewUrl.rejectedGadgetLoadJS.utf8)
+            let response = HTTPURLResponse(
+                url: url,
+                statusCode: 200,
+                httpVersion: "HTTP/1.1",
+                headerFields: ["Content-Type": "text/javascript; charset=utf-8"]
+            )!
+            return (body, response)
+        }
+        var fetchURL = url
+        if originalURL.contains("/load.php") || url.path.hasSuffix("/load.php") {
+            guard let stripped = osrsWikiWebViewUrl.withoutMediaWikiGadgetLoadModules(url) else {
+                let body = Data(osrsWikiWebViewUrl.rejectedGadgetLoadJS.utf8)
+                let response = HTTPURLResponse(
+                    url: url,
+                    statusCode: 200,
+                    httpVersion: "HTTP/1.1",
+                    headerFields: ["Content-Type": "text/javascript; charset=utf-8"]
+                )!
+                return (body, response)
+            }
+            fetchURL = stripped
+        }
         let method = (urlSchemeTask.request.httpMethod ?? "GET").uppercased()
         let requestBody = urlSchemeTask.request.httpBody
         let cacheBody = String(data: requestBody ?? Data(), encoding: .utf8) ?? ""
         let isCacheableCalculatorTraffic = originalURL.contains("/api.php")
             || originalURL.contains("/load.php")
         let isCalculatorTraffic = isCacheableCalculatorTraffic || originalURL.contains("/cors/")
+        let cacheURL = originalURL.contains("/load.php") ? fetchURL.absoluteString : originalURL
         if isCacheableCalculatorTraffic,
-           let cached = osrsCalculatorParseCache.read(method: method, url: originalURL, body: cacheBody),
+           !osrsWikiWebViewUrl.loadPhpModuleNames(cacheURL).contains(where: osrsWikiWebViewUrl.isMediaWikiGadgetModule),
+           let cached = osrsCalculatorParseCache.read(method: method, url: cacheURL, body: cacheBody),
            !cached.isEmpty,
            let cachedResponse = HTTPURLResponse(
             url: url,
@@ -1079,9 +1136,9 @@ class IOSAssetHandler: NSObject, WKURLSchemeHandler {
             throw Self.forcedOfflineError(for: originalURL)
         }
 
-        var request = URLRequest(url: url)
+        var request = URLRequest(url: fetchURL)
         request.httpMethod = method
-        request.setValue("OSRSWiki-iOS-Calculator", forHTTPHeaderField: "User-Agent")
+        request.setValue(osrsWikiApiStewardship.appUserAgent("calculator"), forHTTPHeaderField: "User-Agent")
         request.setValue("*/*", forHTTPHeaderField: "Accept")
         if method == "POST" {
             request.httpBody = requestBody
@@ -1101,7 +1158,7 @@ class IOSAssetHandler: NSObject, WKURLSchemeHandler {
         }
         if isCacheableCalculatorTraffic, !data.isEmpty {
             let stored = originalURL.contains("/load.php") ? osrsResourceLoaderScript.sanitize(data) : data
-            osrsCalculatorParseCache.write(method: method, url: originalURL, body: cacheBody, data: stored)
+            osrsCalculatorParseCache.write(method: method, url: cacheURL, body: cacheBody, data: stored)
             return (stored, response)
         }
         if originalURL.contains("/load.php") {

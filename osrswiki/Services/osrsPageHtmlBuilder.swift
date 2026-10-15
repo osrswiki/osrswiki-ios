@@ -22,7 +22,7 @@ class osrsPageHtmlBuilder {
         "web/collapsible_tables.css",
         "web/collapsible_sections.css",
         "web/switch_infobox_styles.css",
-        "styles/gadget_calc.css",
+        "styles/osrs_calculator.css",
         "styles/fixes.css"
     ]
 
@@ -51,8 +51,7 @@ class osrsPageHtmlBuilder {
     // MediaWiki ResourceLoader artifacts
     private let mediawikiArtifacts = [
         "startup.js",
-        "web/osrs_native_calc_indoc.js",
-        "js/mediawiki/gadget_calc_core.js"
+        "web/osrs_native_calc_indoc.js"
     ]
 
     private let articleTransformJsAssetPaths = [
@@ -64,7 +63,8 @@ class osrsPageHtmlBuilder {
         "web/live_article_asset_warm.js",
         "web/mobile_article_polish.js",
         "web/horizontal_scroll_interceptor.js",
-        "web/image_area_cap.js"
+        "web/image_area_cap.js",
+        "web/osrs_article_tooltips.js"
     ]
 
     // Base JavaScript assets
@@ -267,6 +267,7 @@ class osrsPageHtmlBuilder {
             var RLCONF = {"wgBreakFrames": false, "wgSeparatorTransformTable": ["", ""], "wgDigitTransformTable": ["", ""], "wgDefaultDateFormat": "dmy", "wgMonthNames": ["", "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"], "wgRequestId": "smart-module-loader", "wgCanonicalNamespace": "\(canonicalNamespace)", "wgCanonicalSpecialPageName": false, "wgNamespaceNumber": \(namespaceNumber), "wgPageName": "\(safePageName)", "wgTitle": "\(safeTitle)", "wgCurRevisionId": 0, "wgRevisionId": 0, "wgArticleId": 1, "wgIsArticle": true, "wgIsRedirect": false, "wgAction": "view", "wgUserName": null, "wgUserGroups": ["*"], "wgPageViewLanguage": "en-gb", "wgPageContentLanguage": "en-gb", "wgPageContentModel": "wikitext", "wgRelevantPageName": "\(safePageName)", "wgRelevantArticleId": 1, "wgIsProbablyEditable": true, "wgRelevantPageIsProbablyEditable": true, "wgRestrictionEdit": [], "wgRestrictionMove": [], "wgServer": "https://oldschool.runescape.wiki", "wgServerName": "oldschool.runescape.wiki", "wgScriptPath": "", "wgScript": "/index.php", "wgLoadScript": "/load.php"};
             var RLSTATE = {"ext.gadget.switch-infobox-styles": "ready", "ext.gadget.articlefeedback-styles": "ready", "ext.gadget.falseSubpage": "ready", "ext.gadget.headerTargetHighlight": "ready", "site.styles": "ready", "user.styles": "ready", "user": "ready", "user.options": "loading", "ext.cite.styles": "ready", "ext.kartographer.style": "ready", "skins.minerva.base.styles": "ready", "skins.minerva.content.styles.images": "ready", "mediawiki.hlist": "ready", "skins.minerva.codex.styles": "ready", "skins.minerva.icons.wikimedia": "ready", "skins.minerva.mainMenu.icons": "ready", "skins.minerva.mainMenu.styles": "ready", "jquery.tablesorter.styles": "ready", "ext.embedVideo.styles": "ready", "mobile.init.styles": "ready"};
             var RLPAGEMODULES = [\(modulesList)];
+            window.osrsApiUserAgent = "\(osrsWikiApiStewardship.appUserAgent("webview"))";
 
             // Log detected modules for debugging
             console.log('osrsWikiModuleRegistry detected modules for "\(safeTitle)":', RLPAGEMODULES);
@@ -291,7 +292,17 @@ class osrsPageHtmlBuilder {
                         xhr.open('GET', url, false);
                         xhr.setRequestHeader('Accept', 'application/json');
                         xhr.send(null);
-                        return (xhr.status >= 200 && xhr.status < 300) ? (xhr.responseText || '') : '';
+                        var text = (xhr.status >= 200 && xhr.status < 300) ? (xhr.responseText || '') : '';
+                        if (text) {
+                            try {
+                                window.webkit.messageHandlers.OsrsWikiBridge.postMessage({
+                                    method: 'rememberGeChart',
+                                    url: String(url || ''),
+                                    text: text
+                                });
+                            } catch (ignored) {}
+                        }
+                        return text;
                     } catch (e) {
                         return '';
                     }
@@ -440,6 +451,8 @@ class osrsPageHtmlBuilder {
         ) : 0
         let safeAreaTop = bakeChromeInsets ? Int(osrsOverlayChromeMetrics.topInset.rounded()) : 0
         let safeAreaBottom = bakeChromeInsets ? Int(osrsOverlayChromeMetrics.bottomInset.rounded()) : 0
+        let safeAreaLeft = bakeChromeInsets ? Int(osrsOverlayChromeMetrics.leftInset.rounded()) : 0
+        let safeAreaRight = bakeChromeInsets ? Int(osrsOverlayChromeMetrics.rightInset.rounded()) : 0
         let readerPreferenceStyle = """
         <style id="osrs-article-reader-preferences">
             html:root {
@@ -448,6 +461,8 @@ class osrsPageHtmlBuilder {
                 --osrs-article-bottom-chrome: \(bottomChrome)px;
                 --osrs-article-safe-area-top: \(safeAreaTop)px;
                 --osrs-article-safe-area-bottom: \(safeAreaBottom)px;
+                --osrs-article-safe-area-left: \(safeAreaLeft)px;
+                --osrs-article-safe-area-right: \(safeAreaRight)px;
             }
         </style>
         """
@@ -457,8 +472,10 @@ class osrsPageHtmlBuilder {
                            cleanedBodyContent.contains("GEdatachart") ||
                            cleanedBodyContent.contains("GEdataprices")
 
+        let geChartItemIDs = needsGECharts ? osrsGeChartPriceCache.itemIDs(in: cleanedBodyContent) : []
         if needsGECharts {
             print("\(logTag): Detected GE chart markers in content; will include Chart.js widget script.")
+            osrsGeChartPriceCache.prefetchDiskAsync(itemIDs: geChartItemIDs)
         }
 
         // Generate CSS links only if requested (disabled for WKUserScript injection)
@@ -483,16 +500,19 @@ class osrsPageHtmlBuilder {
         // Keep Chart.js + ge_charts_init off the MediaWiki startup.js tail.
         // startup.js is large and blocking; first-open can leave the wiki
         // "Loading..." placeholder forever if those scripts never run.
+        let geChartPrefetch = needsGECharts
+            ? "<script>\(osrsGeChartPriceCache.memoryPrefetchScript(itemIDs: geChartItemIDs))</script>\n"
+            : ""
         let geChartScripts: String
         if needsGECharts && includeAssetLinks {
             geChartScripts = """
-            <script>window.__osrsAmdDefine=window.define;try{window.define=undefined;}catch(e){}</script>
+            \(geChartPrefetch)<script>window.__osrsAmdDefine=window.define;try{window.define=undefined;}catch(e){}</script>
             <script src="\(customScheme)://localhost/web/chart.umd.min.js"></script>
             <script>if(typeof window.__osrsAmdDefine!=='undefined'){window.define=window.__osrsAmdDefine;}</script>
             <script src="\(customScheme)://localhost/web/ge_charts_init.js"></script>
             """
         } else if needsGECharts {
-            geChartScripts = "<!-- GE chart scripts injected via WKUserScript -->"
+            geChartScripts = "\(geChartPrefetch)<!-- GE chart scripts injected via WKUserScript -->"
         } else {
             geChartScripts = ""
         }
@@ -540,6 +560,8 @@ class osrsPageHtmlBuilder {
             chromeClearancePx: chromeClearance,
             safeAreaTopPx: safeAreaTop,
             safeAreaBottomPx: safeAreaBottom,
+            safeAreaLeftPx: safeAreaLeft,
+            safeAreaRightPx: safeAreaRight,
             bottomChromePx: bottomChrome,
             usesDarkTheme: theme is osrsDarkTheme
         )
@@ -732,22 +754,33 @@ class osrsPageHtmlBuilder {
         chromeClearancePx: Int,
         safeAreaTopPx: Int = 0,
         safeAreaBottomPx: Int = 0,
+        safeAreaLeftPx: Int = 0,
+        safeAreaRightPx: Int = 0,
         bottomChromePx: Int? = nil,
         usesDarkTheme: Bool = false
     ) -> String {
         let resolvedBottomChrome = bottomChromePx ?? chromeClearancePx
         let chromePadding: String
-        if chromeClearancePx > 0 || safeAreaTopPx > 0 || safeAreaBottomPx > 0 || resolvedBottomChrome > 0 {
+        if chromeClearancePx > 0
+            || safeAreaTopPx > 0
+            || safeAreaBottomPx > 0
+            || safeAreaLeftPx > 0
+            || safeAreaRightPx > 0
+            || resolvedBottomChrome > 0 {
             chromePadding = """
                     html:root {
                         --osrs-article-safe-area-top: \(safeAreaTopPx)px;
                         --osrs-article-safe-area-bottom: \(safeAreaBottomPx)px;
+                        --osrs-article-safe-area-left: \(safeAreaLeftPx)px;
+                        --osrs-article-safe-area-right: \(safeAreaRightPx)px;
                         --osrs-article-chrome-clearance: \(chromeClearancePx)px;
                         --osrs-article-bottom-chrome: \(resolvedBottomChrome)px;
                     }
                     html {
                         padding-top: calc(var(--osrs-article-safe-area-top) + var(--osrs-article-chrome-clearance)) !important;
                         padding-bottom: calc(var(--osrs-article-safe-area-bottom) + var(--osrs-article-bottom-chrome)) !important;
+                        padding-left: var(--osrs-article-safe-area-left) !important;
+                        padding-right: var(--osrs-article-safe-area-right) !important;
                     }
             """
         } else {

@@ -220,6 +220,34 @@ final class osrsArticleLoadRegressionContractTests: XCTestCase {
         XCTAssertTrue(themePaint.contains("isUnpaintedSystemFill"))
         XCTAssertTrue(themePaint.contains("isUniformFill"))
         XCTAssertTrue(themePaint.contains("meanLuminance >= 220"))
+        let luminanceBody = themePaint
+            .components(separatedBy: "static func luminanceStats(_ image: UIImage?)")
+            .dropFirst()
+            .first?
+            .components(separatedBy: "@MainActor")
+            .first ?? ""
+        XCTAssertFalse(
+            luminanceBody.contains("UIGraphicsBeginImageContext"),
+            "luminanceStats must not redraw snapshots; UIImage.draw hit vImage permute on iOS 26 WK snapshots"
+        )
+        XCTAssertFalse(
+            luminanceBody.contains("image.draw(in:"),
+            "luminanceStats must read CPU-readable 8-bit pixels instead of UIImage.draw"
+        )
+        XCTAssertTrue(luminanceBody.contains("dataProvider"))
+        XCTAssertTrue(luminanceBody.contains("bytesPerRow"))
+        XCTAssertTrue(luminanceBody.contains("bitsPerComponent == 8"))
+        let lookUniform = compositor
+            .components(separatedBy: "private static func layerContentsLookUniform(_ layer: CALayer)")
+            .dropFirst()
+            .first?
+            .components(separatedBy: "private static func cgImage(from layer: CALayer)")
+            .first ?? ""
+        XCTAssertFalse(
+            lookUniform.contains("UIImage(cgImage:"),
+            "Layer-content sampling must not UIImage.draw IOSurface-backed tiles"
+        )
+        XCTAssertTrue(lookUniform.contains("luminanceStats"))
         XCTAssertFalse(
             articleWebView.contains("loadPlaceholderIfEmpty"),
             "Live article WK must not commit placeholderHTML; those empty-parchment GPU tiles stick on iPad"
@@ -502,7 +530,7 @@ final class osrsArticleLoadRegressionContractTests: XCTestCase {
         XCTAssertTrue(viewModel.contains("articleRevealedForWarm"))
         let prepared = try source(root, "platforms/ios/osrswiki/Services/osrsPreparedArticleWebViewStore.swift")
         XCTAssertTrue(prepared.contains("private let maxEntries = 2"))
-        XCTAssertTrue(htmlBuilder.contains("fixes.css") || htmlBuilder.contains("gadget_calc.css"))
+        XCTAssertTrue(htmlBuilder.contains("fixes.css") || htmlBuilder.contains("osrs_calculator.css"))
         let articleWebView = try source(root, "platforms/ios/osrswiki/Views/ArticleWebView.swift")
         XCTAssertNil(
             articleWebView.range(
@@ -565,6 +593,21 @@ final class osrsArticleLoadRegressionContractTests: XCTestCase {
         XCTAssertEqual(themes, try source(root, "platforms/ios/osrswiki/Assets/styles/themes.css"))
         XCTAssertTrue(themes.contains("--osrs-article-audio-height: 32px"))
         XCTAssertTrue(themes.contains("--osrs-article-audio-fill: var(--body-main)"))
+    }
+
+    func testArticleTooltipsAreOriginalAndWiredIntoHtmlBuilder() throws {
+        let root = try repositoryRoot()
+        let htmlBuilder = try source(root, "platforms/ios/osrswiki/Services/osrsPageHtmlBuilder.swift")
+        let viewModel = try source(root, "platforms/ios/osrswiki/ViewModels/ArticleViewModel.swift")
+        let tooltips = try source(root, "platforms/ios/osrswiki/Assets/web/osrs_article_tooltips.js")
+        let shared = try source(root, "shared/js/osrs_article_tooltips.js")
+        XCTAssertEqual(shared, tooltips)
+        XCTAssertTrue(htmlBuilder.contains("web/osrs_article_tooltips.js"))
+        XCTAssertTrue(viewModel.contains("osrs_article_tooltips.js"))
+        XCTAssertTrue(tooltips.contains("js-tooltip-click"))
+        XCTAssertTrue(tooltips.contains("data-tooltip-for"))
+        XCTAssertFalse(tooltips.contains("ext.gadget."))
+        XCTAssertFalse(tooltips.contains("MediaWiki:Gadget"))
     }
 
     func testCriticalArticleBundleFlagDefaultsOnAndWired() throws {

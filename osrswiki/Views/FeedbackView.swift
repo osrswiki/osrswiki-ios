@@ -200,13 +200,14 @@ struct osrsFeedbackFormView: View {
             .navigationBarTitleDisplayMode(.inline)
             .navigationBarBackButtonHidden(true)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
+                osrsHorizontalOnlyToolbarItem(placement: .navigationBarLeading) {
                     Button("Cancel") {
                         isPresented = false
                     }
                     .foregroundStyle(.osrsPrimary)
                 }
             }
+            .osrsSystemVerticalBarsDisabled()
             .background(.osrsBackground)
             .modifier(osrsLegacyFeedbackNavigationSurface())
             .toolbarColorScheme(themeManager.currentColorScheme, for: .navigationBar)

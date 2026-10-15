@@ -216,6 +216,9 @@ final class LocalHTTPServer: @unchecked Sendable {
             configuration.timeoutIntervalForRequest = 15
             configuration.timeoutIntervalForResource = 30
             configuration.waitsForConnectivity = false
+            configuration.httpAdditionalHeaders = [
+                "User-Agent": osrsWikiApiStewardship.appUserAgent("local-http")
+            ]
             self.durableRefreshSession = URLSession(configuration: configuration)
         }
         
@@ -1515,7 +1518,7 @@ final class LocalHTTPServer: @unchecked Sendable {
         request.httpMethod = method
         
         // Add common headers for MediaWiki API compatibility
-        request.setValue("osrswiki-ios/1.0", forHTTPHeaderField: "User-Agent")
+        request.setValue(osrsWikiApiStewardship.appUserAgent("local-http"), forHTTPHeaderField: "User-Agent")
         request.setValue("application/json, text/html", forHTTPHeaderField: "Accept")
         if requiresDurableCommit {
             request.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
@@ -1650,7 +1653,7 @@ final class LocalHTTPServer: @unchecked Sendable {
         
         var request = URLRequest(url: url)
         request.httpMethod = method
-        request.setValue("osrswiki-ios/1.0", forHTTPHeaderField: "User-Agent")
+        request.setValue(osrsWikiApiStewardship.appUserAgent("local-http"), forHTTPHeaderField: "User-Agent")
         
         let task = originSession.dataTask(with: request) { [weak self] data, response, error in
             guard let self else { return }

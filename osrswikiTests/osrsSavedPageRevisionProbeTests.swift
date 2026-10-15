@@ -14,6 +14,7 @@ final class osrsSavedPageRevisionProbeTests: XCTestCase {
         XCTAssertEqual(items["prop"], "revisions")
         XCTAssertEqual(items["rvprop"], "ids")
         XCTAssertEqual(items["titles"], "Abyssal whip")
+        XCTAssertEqual(items["maxlag"], "5")
         XCTAssertNil(items["text"])
     }
 

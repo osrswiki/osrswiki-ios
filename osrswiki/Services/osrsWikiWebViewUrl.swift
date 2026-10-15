@@ -32,6 +32,66 @@ enum osrsWikiWebViewUrl {
         return rewriteToWiki(url).absoluteString
     }
 
+    static let rejectedGadgetLoadJS = "/* osrs: MediaWiki gadgets are not loaded */\n"
+
+    static func isMediaWikiGadgetModule(_ name: String) -> Bool {
+        name.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("ext.gadget.")
+    }
+
+    static func withoutMediaWikiGadgets(_ modules: [String]) -> [String] {
+        modules.filter { !isMediaWikiGadgetModule($0) }
+    }
+
+    static func loadPhpModuleNames(_ url: URL) -> [String] {
+        guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+              let modules = components.queryItems?.first(where: { $0.name == "modules" })?.value else {
+            return []
+        }
+        return modules
+            .split { $0 == "|" || $0 == "," }
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+    }
+
+    static func loadPhpModuleNames(_ urlString: String) -> [String] {
+        guard let url = URL(string: urlString) else { return [] }
+        return loadPhpModuleNames(url)
+    }
+
+    static func isRejectedMediaWikiGadgetLoad(_ url: URL) -> Bool {
+        guard url.path == "/load.php" || url.path.hasSuffix("/load.php") else { return false }
+        let modules = loadPhpModuleNames(url)
+        return !modules.isEmpty && modules.allSatisfy { isMediaWikiGadgetModule($0) }
+    }
+
+    static func isRejectedMediaWikiGadgetLoad(_ urlString: String) -> Bool {
+        guard let url = URL(string: urlString) else { return false }
+        return isRejectedMediaWikiGadgetLoad(url)
+    }
+
+    /// Drop `ext.gadget.*` from a load.php URL. Returns nil when nothing FLOSS remains.
+    static func withoutMediaWikiGadgetLoadModules(_ url: URL) -> URL? {
+        guard url.path == "/load.php" || url.path.hasSuffix("/load.php") else { return url }
+        let modules = loadPhpModuleNames(url)
+        guard !modules.isEmpty else { return url }
+        let kept = withoutMediaWikiGadgets(modules)
+        if kept.count == modules.count { return url }
+        if kept.isEmpty { return nil }
+        guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return url }
+        components.queryItems = (components.queryItems ?? []).map { item in
+            if item.name == "modules" {
+                return URLQueryItem(name: "modules", value: kept.joined(separator: "|"))
+            }
+            return item
+        }
+        return components.url
+    }
+
+    static func withoutMediaWikiGadgetLoadModules(_ urlString: String) -> String? {
+        guard let url = URL(string: urlString) else { return urlString }
+        return withoutMediaWikiGadgetLoadModules(url)?.absoluteString
+    }
+
     static func isCalculatorNamespaceTitle(_ title: String) -> Bool {
         title.hasPrefix("Calculator:")
     }

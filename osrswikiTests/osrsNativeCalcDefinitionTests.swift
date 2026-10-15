@@ -313,6 +313,7 @@ final class osrsNativeCalcDefinitionTests: XCTestCase {
         XCTAssertFalse(osrsNativeCalcDefinition.shouldAutosubmitOnEdit(.hs))
         XCTAssertFalse(osrsNativeCalcDefinition.shouldAutosubmitOnEdit(.rsn))
         XCTAssertFalse(osrsNativeCalcDefinition.shouldAutosubmitOnEdit(.string))
+        XCTAssertFalse(osrsNativeCalcDefinition.shouldAutosubmitOnEdit(.article))
         XCTAssertTrue(osrsNativeCalcDefinition.shouldAutosubmitOnEdit(.select))
         XCTAssertTrue(osrsNativeCalcDefinition.shouldAutosubmitOnEdit(.int))
         XCTAssertTrue(osrsNativeCalcDefinition.shouldAutosubmitOnEdit(.toggleSwitch))

@@ -72,7 +72,10 @@ struct osrsMapLibreView: View {
                     }
                 }
             }
-            .padding(.horizontal, 16)
+            .osrsOverlayChromeHorizontalPadding(base: 16)
+            .osrsReservedRegionOverlayPadding(
+                alreadyAccounted: osrsOverlayChromeMetrics.overlayHorizontalPadding(base: 16)
+            )
             .padding(.top, 4)
             .padding(.bottom, osrsOverlayChromeMetrics.mapFloatingControlBottomInset)
 
@@ -88,7 +91,10 @@ struct osrsMapLibreView: View {
                             selectorPresented = false
                         }
                         .frame(height: min(440, geometry.size.height * 0.52))
-                        .padding(.horizontal, 16)
+                        .osrsOverlayChromeHorizontalPadding(base: 16)
+                        .osrsReservedRegionOverlayPadding(
+                            alreadyAccounted: osrsOverlayChromeMetrics.overlayHorizontalPadding(base: 16)
+                        )
                         .padding(.top, 4)
                         .padding(.bottom, max(selectorKeyboardHeight, 0))
                     }

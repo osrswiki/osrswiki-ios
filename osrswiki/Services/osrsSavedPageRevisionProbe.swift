@@ -17,9 +17,41 @@ struct osrsSavedPageRevisionProbe: Sendable {
             URLQueryItem(name: "prop", value: "revisions"),
             URLQueryItem(name: "rvprop", value: "ids"),
             URLQueryItem(name: "rvlimit", value: "1"),
-            URLQueryItem(name: "titles", value: title)
+            URLQueryItem(name: "titles", value: title),
+            URLQueryItem(name: "maxlag", value: String(osrsWikiApiStewardship.backgroundMaxLagSeconds))
         ]
         return components.url ?? wikiQueryURL
+    }
+
+    static func fetchRemoteRevision(forPageTitle title: String) async -> RemoteRevision? {
+        var request = URLRequest(url: queryURL(forPageTitle: title))
+        request.setValue(
+            osrsWikiApiStewardship.appUserAgent("revision-probe"),
+            forHTTPHeaderField: "User-Agent"
+        )
+        var attempt = 0
+        while attempt <= 2 {
+            do {
+                let (data, response) = try await URLSession.shared.data(for: request)
+                let http = response as? HTTPURLResponse
+                let retryable = osrsWikiApiStewardship.shouldRetry(
+                    statusCode: http?.statusCode ?? 0,
+                    body: data
+                )
+                if retryable && attempt < 2 {
+                    let delay = (http.flatMap { osrsWikiApiStewardship.retryAfterInterval(from: $0) }) ?? 1
+                    try await Task.sleep(
+                        nanoseconds: UInt64(min(delay, osrsWikiApiStewardship.maxRetryAfter) * 1_000_000_000)
+                    )
+                    attempt += 1
+                    continue
+                }
+                return remoteRevision(in: data, requestedTitle: title)
+            } catch {
+                return nil
+            }
+        }
+        return nil
     }
 
     static func remoteRevision(

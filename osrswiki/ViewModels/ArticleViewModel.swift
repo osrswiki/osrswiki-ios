@@ -565,7 +565,7 @@ enum osrsOfflineArticleResourceSettlement {
     @discardableResult
     static func settle(
         html: String,
-        maximumConcurrency: Int = 6,
+        maximumConcurrency: Int = 2,
         maximumRecursiveStylesheetResources: Int = 4_096,
         downloader: @escaping Downloader
     ) async throws -> [URL] {
@@ -1261,7 +1261,9 @@ class ArticleViewModel: NSObject, ObservableObject {
             chromeClearancePx: chromeClearance,
             bottomChromePx: bottomChrome,
             safeAreaTopPx: Int(osrsOverlayChromeMetrics.topInset.rounded()),
-            safeAreaBottomPx: Int(osrsOverlayChromeMetrics.bottomInset.rounded())
+            safeAreaBottomPx: Int(osrsOverlayChromeMetrics.bottomInset.rounded()),
+            safeAreaLeftPx: Int(osrsOverlayChromeMetrics.leftInset.rounded()),
+            safeAreaRightPx: Int(osrsOverlayChromeMetrics.rightInset.rounded())
         )
     }
 
@@ -3404,7 +3406,6 @@ class ArticleViewModel: NSObject, ObservableObject {
             "tablesort.min.js",
             "tablesort_init.js",
             "osrs_native_calc_indoc.js",
-            "gadget_calc_core.js",
             "osrs_calculator_runtime.js",
             "article_tools.js",
             "collapsible_content.js",
@@ -3415,6 +3416,7 @@ class ArticleViewModel: NSObject, ObservableObject {
             "map_bridge.js",
             "horizontal_scroll_interceptor.js",
             "image_area_cap.js",
+            "osrs_article_tooltips.js",
             "responsive_videos.js",
             "article_audio_player.js",
             "mobile_article_polish.js",
@@ -3748,7 +3750,6 @@ class ArticleViewModel: NSObject, ObservableObject {
             "js/tablesort.min.js",
             "js/tablesort_init.js",
             "web/osrs_native_calc_indoc.js",
-            "js/mediawiki/gadget_calc_core.js",
             "web/osrs_calculator_runtime.js",
             "web/article_tools.js",
             "web/collapsible_content.js",
@@ -3759,6 +3760,7 @@ class ArticleViewModel: NSObject, ObservableObject {
             "web/map_bridge.js",
             "web/horizontal_scroll_interceptor.js",
             "web/image_area_cap.js",
+            "web/osrs_article_tooltips.js",
             "web/responsive_videos.js",
             "web/article_audio_player.js",
             "web/mobile_article_polish.js",
@@ -4578,8 +4580,7 @@ extension ArticleViewModel: WKNavigationDelegate {
                     jquery: mw.loader.getState('jquery'),
                     oojs: mw.loader.getState('oojs'),
                     ooui: mw.loader.getState('oojs-ui-core'),
-                    widgets: mw.loader.getState('mediawiki.widgets'),
-                    calc: mw.loader.getState('ext.gadget.calc-core')
+                    widgets: mw.loader.getState('mediawiki.widgets')
                 } : null,
                 errors: window.__osrsCalcErrors || []
             });
@@ -5276,7 +5277,7 @@ extension ArticleViewModel: WKNavigationDelegate {
                                 parseData = try JSONEncoder().encode(response)
                             } else {
                                 let fetched = try await NetworkManager.shared.performExplicitOfflineDataRequest(
-                                    url: apiURL,
+                                    url: osrsWikiApiStewardship.withBackgroundMaxLag(apiURL),
                                     retryCount: 1
                                 )
                                 parseData = fetched.0
@@ -5514,7 +5515,7 @@ extension ArticleViewModel: WKNavigationDelegate {
         let reuseCounts = osrsReuseCounts()
         let settledURLs = try await osrsOfflineArticleResourceSettlement.settle(
             html: htmlContent,
-            maximumConcurrency: 6
+            maximumConcurrency: 2
         ) { url in
             if await ProxyInterceptorService.shared.hasPersistedResponseAsync(
                 pageId: pageId,

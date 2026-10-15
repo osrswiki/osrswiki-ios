@@ -51,7 +51,7 @@ class NewsRepository: ObservableObject {
         
         // Use NetworkManager for resilient network handling
         do {
-            let (data, _) = try await networkManager.performDataRequest(url: url, retryCount: 2, bypassCache: true)
+            let (data, _) = try await networkManager.performDataRequest(url: url, retryCount: 2, bypassCache: false)
             guard let html = String(data: data, encoding: .utf8) else {
                 throw NetworkError.invalidData
             }

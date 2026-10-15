@@ -31,7 +31,9 @@ struct osrsSavedPaintHtml {
         chromeClearancePx: Int,
         bottomChromePx: Int,
         safeAreaTopPx: Int,
-        safeAreaBottomPx: Int
+        safeAreaBottomPx: Int,
+        safeAreaLeftPx: Int = 0,
+        safeAreaRightPx: Int = 0
     ) -> String {
         var next = applyingNamedClass(html, tag: "html", className: "theme-osrs-dark", enabled: isDark)
         next = applyingNamedClass(next, tag: "body", className: "theme-osrs-dark", enabled: isDark)
@@ -47,7 +49,9 @@ struct osrsSavedPaintHtml {
             chromeClearancePx: chromeClearancePx,
             bottomChromePx: bottomChromePx,
             safeAreaTopPx: safeAreaTopPx,
-            safeAreaBottomPx: safeAreaBottomPx
+            safeAreaBottomPx: safeAreaBottomPx,
+            safeAreaLeftPx: safeAreaLeftPx,
+            safeAreaRightPx: safeAreaRightPx
         )
     }
 
@@ -81,19 +85,25 @@ struct osrsSavedPaintHtml {
         chromeClearancePx: Int,
         bottomChromePx: Int,
         safeAreaTopPx: Int,
-        safeAreaBottomPx: Int
+        safeAreaBottomPx: Int,
+        safeAreaLeftPx: Int = 0,
+        safeAreaRightPx: Int = 0
     ) -> String {
         let style = """
         <style id="osrs-article-live-chrome">
         html:root {
             --osrs-article-safe-area-top: \(safeAreaTopPx)px;
             --osrs-article-safe-area-bottom: \(safeAreaBottomPx)px;
+            --osrs-article-safe-area-left: \(safeAreaLeftPx)px;
+            --osrs-article-safe-area-right: \(safeAreaRightPx)px;
             --osrs-article-chrome-clearance: \(chromeClearancePx)px;
             --osrs-article-bottom-chrome: \(bottomChromePx)px;
         }
         html {
             padding-top: calc(var(--osrs-article-safe-area-top) + var(--osrs-article-chrome-clearance)) !important;
             padding-bottom: calc(var(--osrs-article-safe-area-bottom) + var(--osrs-article-bottom-chrome)) !important;
+            padding-left: var(--osrs-article-safe-area-left) !important;
+            padding-right: var(--osrs-article-safe-area-right) !important;
         }
         </style>
         """

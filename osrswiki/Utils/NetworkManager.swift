@@ -96,10 +96,14 @@ class NetworkManager: ObservableObject {
     
     private init() {
         // Configure default URLSession with reasonable timeouts
+        let identifiedHeaders = [
+            "User-Agent": osrsWikiApiStewardship.appUserAgent("url-session")
+        ]
         let defaultConfig = URLSessionConfiguration.default
         defaultConfig.timeoutIntervalForRequest = 15.0
         defaultConfig.timeoutIntervalForResource = 30.0
         defaultConfig.waitsForConnectivity = false // Don't wait indefinitely
+        defaultConfig.httpAdditionalHeaders = identifiedHeaders
         self.defaultSession = URLSession(configuration: defaultConfig)
         self.session = defaultSession // Start with default session
 
@@ -109,6 +113,7 @@ class NetworkManager: ObservableObject {
         directConfig.waitsForConnectivity = false
         directConfig.urlCache = nil
         directConfig.requestCachePolicy = .reloadIgnoringLocalAndRemoteCacheData
+        directConfig.httpAdditionalHeaders = identifiedHeaders
         self.directNoStoreSession = URLSession(configuration: directConfig)
 
 #if DEBUG
@@ -303,7 +308,11 @@ class NetworkManager: ObservableObject {
         routingPolicy: osrsNetworkRoutingPolicy
     ) -> URLRequest {
         var request = URLRequest(url: url)
-        if bypassCache || routingPolicy == .configuredNoStore {
+        request.setValue(
+            osrsWikiApiStewardship.appUserAgent("url-session"),
+            forHTTPHeaderField: "User-Agent"
+        )
+        if bypassCache {
             request.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
             request.setValue("no-store, no-cache", forHTTPHeaderField: "Cache-Control")
             request.setValue("no-cache", forHTTPHeaderField: "Pragma")
@@ -318,6 +327,10 @@ class NetworkManager: ObservableObject {
 #if DEBUG
     nonisolated static func explicitOfflineRequestForTesting(url: URL) -> URLRequest {
         transportRequest(for: url, bypassCache: true, routingPolicy: .configured)
+    }
+
+    nonisolated static func ordinaryRequestForTesting(url: URL) -> URLRequest {
+        transportRequest(for: url, bypassCache: false, routingPolicy: .configured)
     }
 #endif
 
@@ -353,22 +366,31 @@ class NetworkManager: ObservableObject {
                         data = simulatedResponse.data
                         response = simulatedResponse.response
                     } else {
-                        if bypassCache || routingPolicy == .configuredNoStore {
-                            let request = Self.transportRequest(
-                                for: requestURL,
-                                bypassCache: bypassCache,
-                                routingPolicy: routingPolicy
-                            )
-                            let requestSession = routingPolicy == .configuredNoStore ? directNoStoreSession : session
-                            (data, response) = try await requestSession.data(for: request)
-                        } else {
-                            (data, response) = try await session.data(from: requestURL)
-                        }
+                        let request = Self.transportRequest(
+                            for: requestURL,
+                            bypassCache: bypassCache,
+                            routingPolicy: routingPolicy
+                        )
+                        let requestSession = routingPolicy == .configuredNoStore ? directNoStoreSession : session
+                        (data, response) = try await requestSession.data(for: request)
                     }
 
-                    if let httpResponse = response as? HTTPURLResponse,
-                       !(200...299).contains(httpResponse.statusCode) {
-                        throw NetworkError.from(httpStatusCode: httpResponse.statusCode)
+                    if let httpResponse = response as? HTTPURLResponse {
+                        let retryable = osrsWikiApiStewardship.shouldRetry(
+                            statusCode: httpResponse.statusCode,
+                            body: data
+                        )
+                        if retryable && attempt < retryCount {
+                            let delay = osrsWikiApiStewardship.retryAfterInterval(from: httpResponse)
+                                ?? TimeInterval(pow(2.0, Double(attempt)))
+                            try await Task.sleep(
+                                nanoseconds: UInt64(min(delay, osrsWikiApiStewardship.maxRetryAfter) * 1_000_000_000)
+                            )
+                            continue
+                        }
+                        if !(200...299).contains(httpResponse.statusCode) {
+                            throw NetworkError.from(httpStatusCode: httpResponse.statusCode)
+                        }
                     }
 
                     return (data, response)

@@ -16,6 +16,28 @@ final class osrsCalculatorParityTests: XCTestCase {
         XCTAssertTrue(osrsWikiWebViewUrl.shouldProxy(nestedLoad))
     }
 
+    func testLoadPhpStripsOrRejectsMediaWikiGadgets() throws {
+        let gadgetOnly = try XCTUnwrap(
+            URL(string: "https://oldschool.runescape.wiki/load.php?modules=ext.gadget.rsw-util&only=scripts")
+        )
+        let mixed = try XCTUnwrap(
+            URL(string: "https://oldschool.runescape.wiki/load.php?modules=jquery|ext.gadget.calc-core|oojs&only=scripts")
+        )
+        let floss = try XCTUnwrap(
+            URL(string: "https://oldschool.runescape.wiki/load.php?modules=oojs-ui-core&only=scripts")
+        )
+        XCTAssertTrue(osrsWikiWebViewUrl.isMediaWikiGadgetModule("ext.gadget.calc-core"))
+        XCTAssertFalse(osrsWikiWebViewUrl.isMediaWikiGadgetModule("oojs-ui-core"))
+        XCTAssertTrue(osrsWikiWebViewUrl.isRejectedMediaWikiGadgetLoad(gadgetOnly))
+        XCTAssertFalse(osrsWikiWebViewUrl.isRejectedMediaWikiGadgetLoad(floss))
+        XCTAssertNil(osrsWikiWebViewUrl.withoutMediaWikiGadgetLoadModules(gadgetOnly))
+        let stripped = try XCTUnwrap(osrsWikiWebViewUrl.withoutMediaWikiGadgetLoadModules(mixed))
+        XCTAssertTrue(stripped.absoluteString.contains("modules=jquery"))
+        XCTAssertTrue(stripped.absoluteString.contains("oojs"))
+        XCTAssertFalse(stripped.absoluteString.contains("ext.gadget."))
+        XCTAssertEqual(osrsWikiWebViewUrl.withoutMediaWikiGadgetLoadModules(floss), floss)
+    }
+
     func testResourceLoaderOojsTrailerDoesNotAssignModuleExportsWhenModuleMissing() {
         let payload = """
         (function(global){var OO={initClass:function(){}};global.OO=OO;}(this));
@@ -100,8 +122,9 @@ final class osrsCalculatorParityTests: XCTestCase {
                 includeAssetLinks: true,
                 canonicalTitle: entry.title
             )
-            XCTAssertTrue(html.contains("js/mediawiki/gadget_calc_core.js"), entry.title)
+            XCTAssertFalse(html.contains("js/mediawiki/gadget_calc_core.js"), entry.title)
             XCTAssertFalse(html.contains("src=\"app-assets://localhost/gadget_calc_core.js\""), entry.title)
+            XCTAssertTrue(html.contains("web/osrs_calculator_runtime.js"), entry.title)
             XCTAssertTrue(html.contains("\"oojs-ui-core\""), entry.title)
             XCTAssertTrue(html.contains("\"oojs-ui-widgets\""), entry.title)
             XCTAssertTrue(html.contains("\"mediawiki.widgets\""), entry.title)
@@ -175,12 +198,13 @@ final class osrsCalculatorParityTests: XCTestCase {
             encoding: .utf8
         )
         XCTAssertFalse(tools.contains("document.querySelectorAll('pre.jcConfig').forEach(setupCalculator)"))
-        XCTAssertTrue(tools.contains("Calculator forms are owned by ext.gadget.calc-core"))
+        XCTAssertFalse(tools.contains("ext.gadget.calc-core"))
         let runtime = try String(
             contentsOf: iosRoot.appendingPathComponent("osrswiki/Assets/web/osrs_calculator_runtime.js"),
             encoding: .utf8
         )
-        XCTAssertTrue(runtime.contains("mw.loader.load('ext.gadget.calc-core')"))
+        XCTAssertFalse(runtime.contains("ext.gadget."))
+        XCTAssertFalse(runtime.contains("mw.loader.load('ext.gadget.calc-core')"))
         XCTAssertTrue(runtime.contains("osrsCalculatorApi"))
         XCTAssertTrue(runtime.contains("webkit.messageHandlers.osrsCalculatorApi"))
         XCTAssertTrue(runtime.contains("oojs-ui-widgets"))
@@ -207,12 +231,12 @@ final class osrsCalculatorParityTests: XCTestCase {
         XCTAssertTrue(runtime.contains("mousedown"))
         XCTAssertTrue(runtime.contains("__osrsOpenCalcDropdown"))
         XCTAssertTrue(runtime.contains(".osrs-article-scroll-region, .osrs-local-scroll-surface"))
-        if let gadgetRange = runtime.range(of: "'gadget_calc.css'"),
+        if let calcRange = runtime.range(of: "'osrs_calculator.css'"),
            let fixesRange = runtime.range(of: "'fixes.css'") {
             XCTAssertLessThan(
-                gadgetRange.lowerBound,
+                calcRange.lowerBound,
                 fixesRange.lowerBound,
-                "Theme fixes must re-append after gadget_calc so Wikipedia #fff dump cannot win"
+                "Theme fixes must re-append after osrs_calculator so Wikipedia #fff dump cannot win"
             )
         } else {
             XCTFail("Calculator theme sheet order markers missing")
@@ -228,27 +252,11 @@ final class osrsCalculatorParityTests: XCTestCase {
         XCTAssertTrue(runtime.contains("#bodyContent"))
         XCTAssertTrue(runtime.contains("scrollIntoView"))
         XCTAssertTrue(runtime.contains("poll(attempt"))
-        let calcCore = try String(
-            contentsOf: iosRoot.appendingPathComponent("osrswiki/Assets/js/mediawiki/gadget_calc_core.js"),
-            encoding: .utf8
+        XCTAssertFalse(
+            FileManager.default.fileExists(
+                atPath: iosRoot.appendingPathComponent("osrswiki/Assets/js/mediawiki/gadget_calc_core.js").path
+            )
         )
-        XCTAssertTrue(calcCore.contains("document.getElementById('bodyContent') || document.body"))
-        XCTAssertTrue(calcCore.contains("document.getElementById(self.form)"))
-        XCTAssertTrue(calcCore.contains("window.__osrsKickCalcCore"))
-        XCTAssertTrue(calcCore.contains("osrsCalcCoreDepsReady"))
-        XCTAssertTrue(calcCore.contains("OO.ui.ButtonOptionWidget"))
-        XCTAssertTrue(calcCore.contains("osrsRunModuleScript"))
-        XCTAssertTrue(calcCore.contains("osrsMakeModuleRequire"))
-        XCTAssertTrue(calcCore.contains("osrsInstallImplementedScript"))
-        XCTAssertTrue(calcCore.contains("osrsEnsureMwHelpers"))
-        XCTAssertTrue(calcCore.contains("mw.html.escape"))
-        XCTAssertTrue(runtime.contains("osrsEnsureJQueryAlias"))
-        XCTAssertTrue(calcCore.contains("setupCalc:"))
-        XCTAssertTrue(calcCore.contains("data-osrs-calc-built"))
-        XCTAssertTrue(calcCore.contains("ToggleSwitchWidget"))
-        XCTAssertTrue(calcCore.contains("__osrsRebuildCalcs"))
-        XCTAssertTrue(calcCore.contains("__osrsCalculatorPatched"))
-        XCTAssertFalse(calcCore.contains("$('#bodyContent')"))
         let startup = try String(
             contentsOf: iosRoot.appendingPathComponent("osrswiki/Assets/startup.js"),
             encoding: .utf8
@@ -266,14 +274,18 @@ final class osrsCalculatorParityTests: XCTestCase {
         XCTAssertTrue(leftovers.contains(where: { $0.localizedCaseInsensitiveContains("Please wait for the form") }))
     }
 
-    func testAssetHandlerAliasesBareCalcCoreFilename() {
+    func testAssetHandlerDoesNotAliasRemovedGadgetCalcCore() {
         XCTAssertEqual(
             IOSAssetHandler.canonicalAssetPath("gadget_calc_core.js"),
-            "js/mediawiki/gadget_calc_core.js"
+            "gadget_calc_core.js"
         )
         XCTAssertEqual(
             IOSAssetHandler.canonicalAssetPath("js/mediawiki/gadget_calc_core.js"),
             "js/mediawiki/gadget_calc_core.js"
+        )
+        XCTAssertEqual(
+            IOSAssetHandler.canonicalAssetPath("osrs_calculator_runtime.js"),
+            "web/osrs_calculator_runtime.js"
         )
     }
 

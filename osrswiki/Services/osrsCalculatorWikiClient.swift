@@ -10,6 +10,14 @@ enum osrsCalculatorWikiClient {
             requestURL = appendQuery(rewritten, encoded.params)
             cacheBody = ""
         }
+        if requestURL.contains("/load.php") {
+            if osrsWikiWebViewUrl.isRejectedMediaWikiGadgetLoad(requestURL) {
+                return ["ok": true, "body": osrsWikiWebViewUrl.rejectedGadgetLoadJS, "cached": true]
+            }
+            if let stripped = osrsWikiWebViewUrl.withoutMediaWikiGadgetLoadModules(requestURL) {
+                requestURL = stripped
+            }
+        }
         let cacheable = requestURL.contains("/api.php") || requestURL.contains("/load.php")
         if cacheable,
            let cached = osrsCalculatorParseCache.read(method: method, url: requestURL, body: cacheBody),
@@ -23,7 +31,7 @@ enum osrsCalculatorWikiClient {
         do {
             var request = URLRequest(url: URL(string: requestURL) ?? URL(string: osrsWikiWebViewUrl.wikiOrigin)!)
             request.httpMethod = method.uppercased()
-            request.setValue("OSRSWiki-iOS-Calculator", forHTTPHeaderField: "User-Agent")
+            request.setValue(osrsWikiApiStewardship.appUserAgent("calculator"), forHTTPHeaderField: "User-Agent")
             request.setValue("*/*", forHTTPHeaderField: "Accept")
             if method.uppercased() == "POST" {
                 request.httpBody = encoded.bodyData

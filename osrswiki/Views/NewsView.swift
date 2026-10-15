@@ -362,6 +362,15 @@ struct EmptyStateView: View {
 
 // MARK: - Content Section Views
 
+private extension View {
+    /// Horizontal `ScrollView` ignores the scroll-axis safe area. Re-apply it
+    /// as content inset so Duo's vertical side rail does not cover cards.
+    /// No-op when horizontal insets are zero (typical iPhone/iPad).
+    func osrsHomeUpdatesCarouselSideChromeInset() -> some View {
+        osrsHorizontalSideChromeInset()
+    }
+}
+
 struct WikiFeedContentView: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let wikiFeed: WikiFeed
@@ -418,8 +427,12 @@ struct WikiFeedContentView: View {
                                 appState.navigateToScopedSearch(.updates)
                             }
                         }
-                        .padding(.horizontal, 16)
+                        .padding(
+                            .horizontal,
+                            osrsWindowSceneGeometry.homeUpdatesCarouselBaseHorizontalPadding
+                        )
                     }
+                    .osrsHomeUpdatesCarouselSideChromeInset()
                     .accessibilityIdentifier("home_updates_carousel")
                 }
                 .padding(.vertical, 8)
@@ -1101,6 +1114,7 @@ struct StaticNewsView: View {
                                     .padding(.horizontal, 16)
                                     .padding(.vertical, 16)
                                 }
+                                .osrsHorizontalSideChromeInset()
                             }
                             .padding(.vertical, 8)
                         }
@@ -1210,6 +1224,7 @@ struct NewsViewWithPreloadedData: View {
                                         .padding(.horizontal, 16)
                                         .padding(.vertical, 16)
                                     }
+                                    .osrsHorizontalSideChromeInset()
                                 }
                                 .padding(.vertical, 8)
                             }
@@ -1304,6 +1319,7 @@ struct CachedContentView: View {
                         }
                         .padding(.horizontal, 16)
                     }
+                    .osrsHorizontalSideChromeInset()
                 }
                 .padding(.vertical, 8)
             }

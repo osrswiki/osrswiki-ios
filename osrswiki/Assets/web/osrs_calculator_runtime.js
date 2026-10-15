@@ -1,10 +1,9 @@
 /*
  * Wiki calculator runtime for app WebViews.
  *
- * The wiki gadget builds OOUI forms from pre.jcConfig and parses results via
- * /api.php. App articles load from a local asset origin, so this file:
- *   - leaves the wiki gadget in charge of controls unless native calc slot-replaces the form
- *   - wraps the template box + form for mobile layout
+ * Native in-document calculators own the form. Wiki gadget scripts are not
+ * bundled or loaded. This file:
+ *   - wraps the native calculator slot for mobile layout
  *   - routes /api.php and /cors/ through the native calculator bridge
  */
 (function() {
@@ -1888,7 +1887,7 @@ function parseCalculatorConfig(pre) {
         var head = document.head || document.documentElement;
         var names = [
             'wiki-integration.css',
-            'gadget_calc.css',
+            'osrs_calculator.css',
             'fixes.css',
             'ios-article-aesthetics.css',
             'android-article-aesthetics.css'
@@ -2138,7 +2137,7 @@ function parseCalculatorConfig(pre) {
             if (typeof window.__osrsKickCalcCore === 'function') {
                 window.__osrsKickCalcCore();
             }
-            mw.loader.load('ext.gadget.calc-core');
+            mw.loader.load('mediawiki.widgets');
             if (typeof window.__osrsRebuildCalcs === 'function' &&
                 !document.querySelector('.jcTable .jsCalc-field, .oo-ui-fieldsetLayout .oo-ui-widget')) {
                 try { window.__osrsRebuildCalcs(); } catch (ignore) {}
@@ -2241,10 +2240,6 @@ function parseCalculatorConfig(pre) {
                 {
                     src: '/load.php?modules=mediawiki.widgets',
                     skip: function() { return !!(window.mw && mw.widgets); }
-                },
-                {
-                    src: '/load.php?modules=ext.gadget.rsw-util&only=scripts',
-                    skip: function() { return !!(window.rs && typeof rs.hasLocalStorage === 'function'); }
                 }
             ];
             if (index >= steps.length) {
@@ -2277,7 +2272,7 @@ function parseCalculatorConfig(pre) {
         }
         if (typeof mw.loader.using === 'function') {
             mw.loader.using(
-                ['ext.gadget.rsw-util', 'oojs-ui-core', 'oojs-ui-widgets', 'mediawiki.widgets'],
+                ['oojs-ui-core', 'oojs-ui-widgets', 'mediawiki.widgets'],
                 function() { injectOOUIThenStart(0); }
             );
             setTimeout(function() {

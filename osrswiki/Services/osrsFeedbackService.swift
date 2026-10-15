@@ -120,7 +120,7 @@ class osrsFeedbackService {
             var request = URLRequest(url: feedbackWorkerURL)
             request.httpMethod = "POST"
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            request.setValue("OSRSWikiApp-iOS/\(getAppVersion())", forHTTPHeaderField: "User-Agent")
+            request.setValue(osrsWikiApiStewardship.appUserAgent("feedback"), forHTTPHeaderField: "User-Agent")
             request.httpBody = jsonData
             
             print("osrsFeedbackService: Submitting feedback via feedback Worker for iOS")

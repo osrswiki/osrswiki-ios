@@ -230,7 +230,11 @@ struct osrsAnimatedThumbnailView: UIViewRepresentable {
         let cachePolicy: URLRequest.CachePolicy = refreshToken == nil
             ? .returnCacheDataElseLoad
             : .reloadRevalidatingCacheData
-        let request = URLRequest(url: url, cachePolicy: cachePolicy, timeoutInterval: 20)
+        var request = URLRequest(url: url, cachePolicy: cachePolicy, timeoutInterval: 20)
+        request.setValue(
+            osrsWikiApiStewardship.appUserAgent("search-thumb"),
+            forHTTPHeaderField: "User-Agent"
+        )
         context.coordinator.task = URLSession.shared.dataTask(with: request) { data, _, _ in
             guard let data, let image = Self.decodeImage(data: data) else { return }
             Self.cache.setObject(image, forKey: cacheKey)

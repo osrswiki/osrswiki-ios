@@ -31,7 +31,7 @@ struct DedicatedSearchView: View {
         .background(.osrsBackground)
         .tint(Color(osrsTheme.primary))
         .toolbar {
-            ToolbarItem(placement: .navigationBarLeading) {
+            osrsHorizontalOnlyToolbarItem(placement: .navigationBarLeading) {
                 Button("Back") {
                     appState.navigateBack()
                 }
@@ -232,6 +232,7 @@ struct DedicatedSearchView: View {
                 }
                 .padding(.horizontal)
             }
+            .osrsHorizontalSideChromeInset()
         }
     }
     

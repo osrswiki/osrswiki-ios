@@ -160,6 +160,32 @@ final class osrsInteractiveArticleSwipeTests: XCTestCase {
             osrsInteractiveArticleSwipe.contentsParkedOffset(panelWidth: 280),
             280 + osrsInteractiveArticleSwipe.contentsDrawerTrailingInset
         )
+        XCTAssertEqual(
+            osrsInteractiveArticleSwipe.contentsDrawerTrailingPadding(
+                safeAreaInsets: UIEdgeInsets(top: 59, left: 0, bottom: 34, right: 0)
+            ),
+            osrsInteractiveArticleSwipe.contentsDrawerTrailingInset
+        )
+        XCTAssertEqual(
+            osrsInteractiveArticleSwipe.contentsDrawerTrailingPadding(
+                safeAreaInsets: UIEdgeInsets(top: 8, left: 62, bottom: 34, right: 8)
+            ),
+            osrsInteractiveArticleSwipe.contentsDrawerTrailingInset + 8
+        )
+        XCTAssertEqual(
+            osrsInteractiveArticleSwipe.contentsDrawerTrailingPadding(
+                safeAreaInsets: UIEdgeInsets(top: 8, left: 8, bottom: 34, right: 62),
+                layoutDirection: .leftToRight
+            ),
+            osrsInteractiveArticleSwipe.contentsDrawerTrailingInset + 62
+        )
+        XCTAssertEqual(
+            osrsInteractiveArticleSwipe.contentsDrawerTrailingPadding(
+                safeAreaInsets: UIEdgeInsets(top: 8, left: 62, bottom: 34, right: 8),
+                layoutDirection: .rightToLeft
+            ),
+            osrsInteractiveArticleSwipe.contentsDrawerTrailingInset + 62
+        )
     }
 
     func testClosedContentsLeftSwipeStillOpens() {

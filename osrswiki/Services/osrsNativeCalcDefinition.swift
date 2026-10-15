@@ -14,6 +14,7 @@ enum osrsNativeCalcParamType: String, Equatable {
     case group
     case hs
     case rsn
+    case article
     case hidden
     case fixed
     case semiHidden = "semihidden"
@@ -77,7 +78,7 @@ enum osrsNativeCalcDefinition {
     static let kitTypes: Set<osrsNativeCalcParamType> = [
         .string, .int, .number, .select, .buttonSelect, .check,
         .toggleSwitch, .toggleButton, .toggleButtonGroup, .combobox, .group,
-        .hs, .rsn, .hidden, .fixed, .semiHidden
+        .hs, .rsn, .article, .hidden, .fixed, .semiHidden
     ]
 
     static func normalizeAutosubmit(_ raw: String?) -> String {
@@ -296,7 +297,7 @@ enum osrsNativeCalcDefinition {
 
     static func shouldAutosubmitOnEdit(_ type: osrsNativeCalcParamType) -> Bool {
         switch type {
-        case .hs, .rsn, .string, .group:
+        case .hs, .rsn, .string, .article, .group:
             return false
         default:
             return true

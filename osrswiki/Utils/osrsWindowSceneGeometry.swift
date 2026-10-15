@@ -5,8 +5,8 @@ import UIKit
 /// `UIScreen.main` is ambiguous on a two-display device and is the layout
 /// footgun Apple flags for iPhone Duo / resizable iPhone. Prefer the attached
 /// window, then `UIWindowScene.coordinateSpace.bounds`, then a documented
-/// last-resort fallback. This helper compiles on the current SDK (iOS 18.5 /
-/// Xcode 16.4 project; Mac builds today use Xcode 26.x).
+/// last-resort fallback. The Xcode project links the iOS 27.1 SDK
+/// (`SDKROOT = iphoneos27.1`); `IPHONEOS_DEPLOYMENT_TARGET` stays 18.5.
 enum osrsWindowSceneGeometry {
     /// Hosted unit tests and pre-scene launch only. Not a layout source of truth.
     static let fallbackPhonePortrait = CGSize(width: 390, height: 844)
@@ -94,6 +94,126 @@ enum osrsWindowSceneGeometry {
         let bounds = window.map(\.bounds) ?? currentBounds
         let insets = window?.safeAreaInsets ?? .zero
         return contentSize(windowSize: bounds.size, safeAreaInsets: insets)
+    }
+
+    /// Today's Updates carousel leading/trailing padding when there is no
+    /// horizontal side chrome (typical iPhone portrait and iPad).
+    static let homeUpdatesCarouselBaseHorizontalPadding: CGFloat = 16
+
+    /// Extra leading/trailing padding from the system horizontal safe area.
+    /// Zero on typical iPhone portrait and iPad (`left == right == 0`).
+    /// Left and right stay independent: never `left * 2`.
+    static func extraHorizontalSafeAreaInsets(
+        _ safeAreaInsets: UIEdgeInsets
+    ) -> UIEdgeInsets {
+        UIEdgeInsets(
+            top: 0,
+            left: max(0, safeAreaInsets.left),
+            bottom: 0,
+            right: max(0, safeAreaInsets.right)
+        )
+    }
+
+    /// Base overlay padding plus independent horizontal safe-area insets.
+    /// Use for custom chrome that is not inside a system bar.
+    static func overlayChromeHorizontalInsets(
+        base: CGFloat,
+        safeAreaInsets: UIEdgeInsets
+    ) -> UIEdgeInsets {
+        let extra = extraHorizontalSafeAreaInsets(safeAreaInsets)
+        return UIEdgeInsets(
+            top: 0,
+            left: base + extra.left,
+            bottom: 0,
+            right: base + extra.right
+        )
+    }
+
+    /// Combined content insets for the Home Updates horizontal carousel.
+    ///
+    /// Horizontal `ScrollView` ignores the scroll-axis safe area, so Duo's
+    /// vertical side rail otherwise covers the first and last cards. This
+    /// adds independent `safeAreaInsets.left` / `.right` on top of
+    /// `homeUpdatesCarouselBaseHorizontalPadding`.
+    ///
+    /// When those insets are zero, the result is 16pt on both sides and
+    /// non-Duo phone/iPad layout is unchanged. Do not assume left == right.
+    static func homeUpdatesCarouselContentInsets(
+        safeAreaInsets: UIEdgeInsets
+    ) -> UIEdgeInsets {
+        overlayChromeHorizontalInsets(
+            base: homeUpdatesCarouselBaseHorizontalPadding,
+            safeAreaInsets: safeAreaInsets
+        )
+    }
+
+    /// Snapshot of an iOS 27.1 `ReservedRegion` that unit tests can construct
+    /// without the 27.1 SwiftUI types. `frame` is the reserved rect in the
+    /// container; `margins` is extra clearance around that rect.
+    struct osrsReservedRegionSnapshot: Equatable {
+        var frame: CGRect
+        var margins: UIEdgeInsets
+        var isActive: Bool
+
+        var paddedFrame: CGRect {
+            CGRect(
+                x: frame.minX - margins.left,
+                y: frame.minY - margins.top,
+                width: max(0, frame.width + margins.left + margins.right),
+                height: max(0, frame.height + margins.top + margins.bottom)
+            )
+        }
+    }
+
+    /// Extra overlay padding so custom chrome clears edge-hugging reserved
+    /// regions (active camera occlusions). Interior divisions — the fold when
+    /// the device is partially open — do **not** displace the overlay as a
+    /// whole. Same rule as article scroll: do not reflow solely for the fold.
+    ///
+    /// Leading/trailing rails are already handled by window `safeAreaInsets`
+    /// (`overlayChromeHorizontalInsets`). Pass those as `alreadyAccounted` so
+    /// a vertical-bar occlusion does not double-inset.
+    ///
+    /// Empty / inactive / zero-size regions yield `.zero` — typical iPhone
+    /// portrait and iPad stay unchanged.
+    static func overlayEdgeInsetsAvoidingReservedRegions(
+        containerSize: CGSize,
+        regions: [osrsReservedRegionSnapshot],
+        alreadyAccounted: UIEdgeInsets = .zero,
+        edgeBand: CGFloat = 80
+    ) -> UIEdgeInsets {
+        guard containerSize.width > 1, containerSize.height > 1 else { return .zero }
+        var raw = UIEdgeInsets.zero
+        for region in regions where region.isActive {
+            let padded = region.paddedFrame
+            guard padded.width > 0, padded.height > 0 else { continue }
+
+            let hugsLeading = padded.minX <= edgeBand
+            let hugsTrailing = padded.maxX >= containerSize.width - edgeBand
+            let hugsTop = padded.minY <= edgeBand
+            let hugsBottom = padded.maxY >= containerSize.height - edgeBand
+
+            // Full-span bands (center fold, full-width hinge) hug both opposite
+            // edges. Skip those so continuous canvases are not split.
+            if hugsLeading && !hugsTrailing {
+                raw.left = max(raw.left, max(0, padded.maxX))
+            }
+            if hugsTrailing && !hugsLeading {
+                raw.right = max(raw.right, max(0, containerSize.width - padded.minX))
+            }
+            if hugsTop && !hugsBottom {
+                raw.top = max(raw.top, max(0, padded.maxY))
+            }
+            if hugsBottom && !hugsTop {
+                raw.bottom = max(raw.bottom, max(0, containerSize.height - padded.minY))
+            }
+        }
+        return UIEdgeInsets(
+            top: max(0, raw.top - alreadyAccounted.top),
+            left: max(0, raw.left - alreadyAccounted.left),
+            bottom: max(0, raw.bottom - alreadyAccounted.bottom),
+            right: max(0, raw.right - alreadyAccounted.right)
+        )
     }
 
     static func accessibilityCardWidth(

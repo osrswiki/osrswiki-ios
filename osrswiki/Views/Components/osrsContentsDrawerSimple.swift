@@ -19,7 +19,6 @@ struct osrsContentsDrawerSimple: View {
     let onSectionSelected: (String) -> Void
 
     private let drawerWidth: CGFloat = osrsInteractiveArticleSwipe.contentsDrawerWidth
-    private let drawerTrailingInset: CGFloat = osrsInteractiveArticleSwipe.contentsDrawerTrailingInset
     @State private var isDismissTracking = false
     @State private var suppressSectionSelection = false
     @State private var settleGeneration = 0
@@ -48,7 +47,17 @@ struct osrsContentsDrawerSimple: View {
                 panel
                     .frame(width: resolvedPanelWidth)
                     .frame(maxHeight: panelMaxHeight(in: geometry.size))
-                    .padding(.trailing, drawerTrailingInset)
+                    .padding(
+                        .trailing,
+                        osrsInteractiveArticleSwipe.contentsDrawerTrailingPadding(
+                            safeAreaInsets: UIEdgeInsets(
+                                top: 0,
+                                left: osrsOverlayChromeMetrics.leftInset,
+                                bottom: 0,
+                                right: osrsOverlayChromeMetrics.rightInset
+                            )
+                        )
+                    )
                     .padding(.top, topClearance)
                     .padding(.bottom, bottomClearance)
                     .offset(x: (1 - revealProgress) * osrsInteractiveArticleSwipe.contentsParkedOffset(panelWidth: resolvedPanelWidth))

@@ -230,6 +230,7 @@ struct CustomMainTabView: View {
             nativeTab(MoreView(), item: .more)
         }
         .tabViewStyle(.tabBarOnly)
+        .osrsSystemVerticalBarsEnabled()
         .tint(Color(themeManager.currentTheme.primary))
         // Do not use `.toolbarVisibility(.hidden)` for the article overlay.
         // On iOS 26 that leaves the Liquid Glass capsule composited underneath

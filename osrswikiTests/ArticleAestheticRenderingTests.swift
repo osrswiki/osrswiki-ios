@@ -339,7 +339,7 @@ final class ArticleAestheticRenderingTests: XCTestCase {
 
     func testCalculatorOOUIChromeUsesArticleParchmentTokensAgainstLateWikiStyles() async throws {
         let themesCss = try readAsset("Assets/styles/themes.css")
-        let gadgetCss = try readAsset("Assets/styles/gadget_calc.css")
+        let calcCss = try readAsset("Assets/styles/osrs_calculator.css")
         let fixesCss = try readAsset("Assets/styles/fixes.css")
         let hotSwap = try String(
             contentsOf: iosRoot.appendingPathComponent("osrswikiUITests/AppearanceThemeHotSwapUITests.swift"),
@@ -428,7 +428,7 @@ final class ArticleAestheticRenderingTests: XCTestCase {
             display: table-cell;
             height: 100%;
         }
-        \(gadgetCss)
+        \(calcCss)
         \(fixesCss)
         </style>
         </head>
@@ -2387,11 +2387,17 @@ final class ArticleAestheticRenderingTests: XCTestCase {
         XCTAssertFalse(htmlBuilder.contains("min-width: min(18.75rem, 100%)"))
         XCTAssertTrue(htmlBuilder.contains("alegreya_bold.ttf"))
         XCTAssertTrue(htmlBuilder.contains("--osrs-article-safe-area-top"))
+        XCTAssertTrue(htmlBuilder.contains("--osrs-article-safe-area-left"))
+        XCTAssertTrue(htmlBuilder.contains("--osrs-article-safe-area-right"))
         XCTAssertTrue(htmlBuilder.contains("padding-top: calc(var(--osrs-article-safe-area-top) + var(--osrs-article-chrome-clearance))"))
+        XCTAssertTrue(htmlBuilder.contains("padding-left: var(--osrs-article-safe-area-left)"))
         XCTAssertFalse(htmlBuilder.contains("env(safe-area-inset-top"))
+        XCTAssertFalse(htmlBuilder.contains("env(safe-area-inset-left"))
         let iosAesthetics = try readAsset("Assets/styles/ios-article-aesthetics.css")
         XCTAssertTrue(iosAesthetics.contains("var(--osrs-article-safe-area-top, 0px)"))
+        XCTAssertTrue(iosAesthetics.contains("var(--osrs-article-safe-area-left, 0px)"))
         XCTAssertFalse(iosAesthetics.contains("env(safe-area-inset-top"))
+        XCTAssertFalse(iosAesthetics.contains("env(safe-area-inset-left"))
     }
 
     func testGEChartScriptsLoadBeforeMediaWikiStartup() throws {

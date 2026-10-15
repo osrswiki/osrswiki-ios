@@ -41,6 +41,7 @@ enum osrsWebViewProcessWarmer {
         configuration.processPool = osrsArticleWebKitRuntime.processPool
         configuration.websiteDataStore = .default()
         configuration.allowsInlineMediaPlayback = true
+        configuration.applicationNameForUserAgent = osrsWikiApiStewardship.appUserAgent("webview")
         let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 1, height: 1), configuration: configuration)
         webView.isOpaque = false
         webView.loadHTMLString(

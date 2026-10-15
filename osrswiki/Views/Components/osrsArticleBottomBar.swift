@@ -73,7 +73,7 @@ struct osrsArticleBottomBar: View {
             in: Capsule(),
             fallback: Color(osrsTheme.surface)
         )
-        .padding(.horizontal, 16)
+        .osrsOverlayChromeHorizontalPadding(base: 16)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("article_bottom_bar")
     }

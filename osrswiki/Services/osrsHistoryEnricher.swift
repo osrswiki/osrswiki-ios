@@ -51,6 +51,9 @@ final class osrsHistoryEnricher: @unchecked Sendable {
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 10.0
         config.timeoutIntervalForResource = 20.0
+        config.httpAdditionalHeaders = [
+            "User-Agent": osrsWikiApiStewardship.appUserAgent("history")
+        ]
         self.session = URLSession(configuration: config)
     }
     

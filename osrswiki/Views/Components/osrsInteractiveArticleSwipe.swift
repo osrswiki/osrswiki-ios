@@ -36,6 +36,19 @@ final class osrsInteractiveArticleSwipe {
     static func contentsParkedOffset(panelWidth: CGFloat) -> CGFloat {
         panelWidth + contentsDrawerTrailingInset + contentsDrawerParkBleed
     }
+
+    /// Visible trailing gap for the contents panel. Adds the independent
+    /// trailing safe-area inset so a vertical side rail does not cover it.
+    /// Phone portrait / iPad (`right == 0` in LTR) stay at 12pt.
+    static func contentsDrawerTrailingPadding(
+        safeAreaInsets: UIEdgeInsets,
+        layoutDirection: UIUserInterfaceLayoutDirection = .leftToRight
+    ) -> CGFloat {
+        let trailing = layoutDirection == .rightToLeft
+            ? max(0, safeAreaInsets.left)
+            : max(0, safeAreaInsets.right)
+        return contentsDrawerTrailingInset + trailing
+    }
     static let lockDistance: CGFloat = 12
     static let horizontalDominance: CGFloat = 1.75
     static let commitProgress: CGFloat = 0.35

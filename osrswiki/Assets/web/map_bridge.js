@@ -93,7 +93,17 @@
                 xhr.open('GET', url, false);
                 xhr.setRequestHeader('Accept', 'application/json');
                 xhr.send(null);
-                return (xhr.status >= 200 && xhr.status < 300) ? (xhr.responseText || '') : '';
+                var text = (xhr.status >= 200 && xhr.status < 300) ? (xhr.responseText || '') : '';
+                if (text) {
+                    try {
+                        window.webkit.messageHandlers.OsrsWikiBridge.postMessage({
+                            method: 'rememberGeChart',
+                            url: String(url || ''),
+                            text: text
+                        });
+                    } catch (ignored) {}
+                }
+                return text;
             } catch (e) {
                 return '';
             }

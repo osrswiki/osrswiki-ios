@@ -245,6 +245,7 @@ final class osrsPreparedArticleWebViewStore: NSObject, WKNavigationDelegate, WKS
         configuration.websiteDataStore = .default()
         configuration.allowsInlineMediaPlayback = true
         configuration.mediaTypesRequiringUserActionForPlayback = []
+        configuration.applicationNameForUserAgent = osrsWikiApiStewardship.appUserAgent("webview")
         let customScheme = "app-assets"
         configuration.setURLSchemeHandler(
             IOSAssetHandler(sourceArticleURL: sourceArticleURL),
