@@ -21,6 +21,17 @@ enum osrsSceneCompositor {
     private static var lastCssCaptionLines: [String] = []
     private static var dumpCssGeneration: UInt64 = 0
     private static var lastDumpPrefix: String = ""
+    /// Opt-in scene census. Off by default so Debug resume is not blocked by
+    /// layer dumps. Enable with `-osrsSceneDump`, `-osrsPeriodicSceneDump`,
+    /// or this flag in tests. `dumpWindow` itself is compiled out of Release.
+    static var dumpWindowEnabled = false
+#if DEBUG
+    private static var dumpWindowOptInFromLaunchArguments: Bool {
+        let args = ProcessInfo.processInfo.arguments
+        return args.contains("-osrsSceneDump")
+            || args.contains("-osrsPeriodicSceneDump")
+    }
+#endif
 
     static func shouldRestoreResumeCover(didLeaveToBackground: Bool) -> Bool {
         didLeaveToBackground
@@ -28,6 +39,20 @@ enum osrsSceneCompositor {
 
     static func noteDidEnterBackground() {
         pendingBackgroundRestore = true
+        osrsResumeFrameOverlay.beginResumeCoverGeneration()
+    }
+
+    /// Arm cover reveal from this resume's activation, not from install.
+    /// Polls and the 1 s force-remove are measured from here.
+    static func noteDidBecomeActive() {
+        osrsResumeFrameOverlay.noteSceneBecameActive()
+    }
+
+    /// Test hook: drop compositor resume-cover state so unit tests do not leak
+    /// a generation, cover window, or last-good bitmap across cases.
+    static func resetResumeCoverStateForTesting() {
+        pendingBackgroundRestore = false
+        osrsResumeFrameOverlay.resetForTesting()
     }
 
     static func restoreResumedScenes() {
@@ -466,9 +491,7 @@ enum osrsSceneCompositor {
     static func restore(_ window: UIWindow) {
         if osrsResumeFrameOverlay.hasAdoptedLiveRoot {
             osrsResumeFrameOverlay.makeOverlayKeyIfInstalled()
-            if let overlay = osrsResumeFrameOverlay.adoptedPrimaryWindow {
-                dumpWindow(overlay)
-            }
+            osrsResumeFrameOverlay.revealWhenLiveWebViewPaintsAfterActivation()
             return
         }
         window.isHidden = false
@@ -494,12 +517,14 @@ enum osrsSceneCompositor {
             clearFrozenHostSnapshots(in: root.view)
             nudgeLayer(root.view)
         }
+        // Theme paint, scene lifecycle, article recommit, and compositor
+        // restore/nudge all call restore() during one resume. Install is
+        // idempotent per resume generation so the cover is stamped once.
         osrsResumeFrameOverlay.installOnWindowLayer(window)
         if let scene = window.windowScene {
             osrsResumeFrameOverlay.installPassthroughResumePixels(on: scene)
         }
         osrsResumeFrameOverlay.scheduleRevealWhenLiveWebViewPaints()
-        dumpWindow(window)
         // osrsSceneCompositorLooksBlank must not be posted from restore():
         // that rebuilt the article WKWebView during the compositor race and
         // left a themed blank with no chrome.
@@ -859,6 +884,8 @@ enum osrsSceneCompositor {
         reason: String = "dump",
         includeLayerCensus: Bool = true
     ) {
+#if DEBUG
+        guard dumpWindowEnabled || dumpWindowOptInFromLaunchArguments else { return }
         var lines: [String] = []
         let keyWindow = allSceneWindows().first(where: \.isKeyWindow)
         let keyClass = keyWindow.map { NSStringFromClass(type(of: $0)) } ?? "nil"
@@ -958,6 +985,11 @@ enum osrsSceneCompositor {
             appendRemoteTileCensus(for: window, into: &census)
             publish(censusLines: census)
         }
+#else
+        _ = window
+        _ = reason
+        _ = includeLayerCensus
+#endif
     }
 
     private static func writeSceneDump(_ text: String) {
@@ -1881,6 +1913,18 @@ final class osrsResumeCoverWindow: UIWindow {
     }
 }
 
+/// CADisplayLink target for one vsync after resume activation. The overlay
+/// enum cannot be a display-link target.
+private final class osrsResumeCoverActivationProbe: NSObject {
+    static let shared = osrsResumeCoverActivationProbe()
+
+    @objc func tick(_ link: CADisplayLink) {
+        Task { @MainActor in
+            osrsResumeFrameOverlay.handlePostActivationDisplayTick()
+        }
+    }
+}
+
 @MainActor
 enum osrsResumeFrameOverlay {
     private static var lastGoodFrame: UIImage?
@@ -1888,9 +1932,100 @@ enum osrsResumeFrameOverlay {
     private static var overlayWindow: osrsResumeCoverWindow?
     private static var coveredWindow: UIWindow?
     private static var previousBackgroundColor: UIColor?
+    /// Incremented on a true application background. Install is a no-op while
+    /// `installedCoverGeneration` already matches, so theme paint, lifecycle
+    /// restore, article recommit, and compositor nudge share one stamp.
+    private static var resumeCoverGeneration: UInt64 = 0
+    private static var installedCoverGeneration: UInt64?
+    private static var resumeCoverArmed = false
+    /// True only while the live root-VC move is in-flight. Reveal must not
+    /// take the cover down until the next turn after that commit, or the
+    /// swap can flash black. This is not a session-lifetime gate.
+    private static var resumeCoverAdoptPending = false
+    /// This resume's scene/app has become active. Install during the system
+    /// animation must not reveal: a WK still showing its pre-background
+    /// layer counts as painted and would drop the cover ~100 ms early.
+    private static var resumeCoverSceneBecameActive = false
+    /// At least one display frame has presented after this resume's
+    /// activation, so the live WK snapshot is not the pre-background layer.
+    private static var resumeCoverPostActivationFrameSeen = false
+    private static var postActivationDisplayLink: CADisplayLink?
+    /// First successful cover install this process. Later warm resumes skip,
+    /// matching #58 after adopt. Cleared only by `resetForTesting()`.
+    private static var didInstallCoverThisSession = false
+    private(set) static var coverInstallCountForCurrentResume = 0
+    private static var coverSafetyTimeoutToken: UInt64 = 0
+    private static var revealPollToken: UInt64 = 0
+    private static let coverSafetyTimeoutNs: UInt64 = 1_000_000_000
 
     static var hasCapturedFrame: Bool { lastGoodFrame != nil }
     static var paintedArticleImage: UIImage? { lastGoodFrame }
+
+    /// Scene and application `didEnterBackground` both call this. Arm once
+    /// until this generation installs, then a later background starts a new
+    /// generation so the next resume can stamp last-good again.
+    static func beginResumeCoverGeneration() {
+        if resumeCoverArmed, installedCoverGeneration != resumeCoverGeneration {
+            return
+        }
+        resumeCoverGeneration &+= 1
+        resumeCoverArmed = true
+        coverInstallCountForCurrentResume = 0
+        resumeCoverSceneBecameActive = false
+        resumeCoverPostActivationFrameSeen = false
+        coverSafetyTimeoutToken &+= 1
+        revealPollToken &+= 1
+        stopPostActivationFrameWatcher()
+    }
+
+    static func resetForTesting() {
+        coverSafetyTimeoutToken &+= 1
+        revealPollToken &+= 1
+        resumeCoverAdoptPending = false
+        resumeCoverSceneBecameActive = false
+        resumeCoverPostActivationFrameSeen = false
+        stopPostActivationFrameWatcher()
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        overlayWindow?.layer.contents = nil
+        coveredWindow?.layer.contents = nil
+        if let overlay = overlayWindow {
+            stripPassthrough(from: overlay)
+        }
+        if let covered = coveredWindow {
+            stripPassthrough(from: covered)
+        }
+        CATransaction.commit()
+        if let overlay = overlayWindow,
+           let root = overlay.rootViewController as? osrsAppSceneViewController {
+            overlay.rootViewController = nil
+            let original = coveredWindow
+                ?? UIApplication.shared.connectedScenes
+                    .compactMap { $0 as? UIWindowScene }
+                    .flatMap(\.windows)
+                    .first { $0 !== overlay && osrsSceneCompositor.isAppContentWindow($0) }
+            if let original {
+                original.rootViewController = root
+                original.isHidden = false
+                original.isUserInteractionEnabled = true
+                original.makeKeyAndVisible()
+            }
+        }
+        overlayWindow?.isHidden = true
+        overlayWindow?.layer.contents = nil
+        overlayWindow?.osrsHitTarget = nil
+        overlayWindow?.windowScene = nil
+        overlayWindow = nil
+        coveredWindow = nil
+        previousBackgroundColor = nil
+        lastGoodFrame = nil
+        lastGoodRange = 0
+        resumeCoverGeneration = 0
+        installedCoverGeneration = nil
+        resumeCoverArmed = false
+        didInstallCoverThisSession = false
+        coverInstallCountForCurrentResume = 0
+    }
 
     static func rememberPaintedArticle(_ image: UIImage) {
         consider(image)
@@ -1971,7 +2106,9 @@ enum osrsResumeFrameOverlay {
     }
 
     static func adoptLiveRootIfNeeded() {
-        guard let overlay = overlayWindow, overlay.isHidden == false else { return }
+        guard let overlay = overlayWindow, overlay.isHidden == false else {
+            return
+        }
         if overlay.rootViewController is osrsAppSceneViewController {
             overlay.osrsHitTarget = nil
             overlay.isUserInteractionEnabled = true
@@ -1984,35 +2121,26 @@ enum osrsResumeFrameOverlay {
         }
         overlay.osrsHitTarget = nil
         overlay.isUserInteractionEnabled = true
-        let lastGoodImage = overlay.rootViewController?.view.subviews
-            .compactMap { $0 as? UIImageView }
-            .first { $0.accessibilityIdentifier == "osrs_resume_passthrough_frame" }?
-            .image ?? lastGoodFrame
+        let lastGoodImage = firstPassthroughImageView(in: overlay)?.image ?? lastGoodFrame
+        // Keep last-good fully opaque on the overlay *window* (not the dummy
+        // host VC) for the whole root move, in one transaction, so no black
+        // or partial frame can commit. Replacing rootViewController used to
+        // destroy the cover image mid-swap.
+        // Do not wait on a CATransaction completion callback: a disableActions
+        // commit often never invokes it, which left the cover up for the
+        // whole session.
+        resumeCoverAdoptPending = true
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        if let image = lastGoodImage {
+            pinOpaqueCoverOnTop(of: overlay, image: image)
+        }
         live.rootViewController = nil
         overlay.rootViewController = root
         if let bounds = overlay.windowScene?.coordinateSpace.bounds {
             overlay.frame = bounds
         }
         root.view.frame = overlay.bounds
-        if let image = lastGoodImage {
-            let imageView = root.view.subviews
-                .compactMap { $0 as? UIImageView }
-                .first { $0.accessibilityIdentifier == "osrs_resume_passthrough_frame" }
-                ?? UIImageView()
-            imageView.image = image
-            imageView.frame = overlay.bounds
-            imageView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-            imageView.contentMode = .scaleToFill
-            imageView.isUserInteractionEnabled = false
-            imageView.accessibilityIdentifier = "osrs_resume_passthrough_frame"
-            if imageView.superview !== root.view {
-                root.view.insertSubview(imageView, at: 0)
-            } else {
-                root.view.sendSubviewToBack(imageView)
-            }
-        }
-        root.view.setNeedsLayout()
-        root.view.layoutIfNeeded()
         overlay.makeKeyAndVisible()
         // The parked original window is now empty. Leaving it visible under
         // a .statusBar overlay lets bottom-chrome hits miss the live tree.
@@ -2023,13 +2151,19 @@ enum osrsResumeFrameOverlay {
             to: overlay,
             themeBackground: UIColor(osrsAppRoot.themeManager.currentTheme.background)
         )
-        osrsSceneCompositor.dumpWindow(overlay)
+        if let image = lastGoodImage {
+            pinOpaqueCoverOnTop(of: overlay, image: image)
+        }
+        CATransaction.commit()
+        CATransaction.flush()
         NSLog("osrsResumeFrameOverlay adopted live root")
-        scheduleRevealWhenLiveWebViewPaints()
+        allowCoverRevealAfterNextTurn()
     }
 
     static func installOnWindowLayer(_ window: UIWindow) {
-        if hasAdoptedLiveRoot { return }
+        if hasAdoptedLiveRoot || didInstallCoverThisSession { return }
+        guard resumeCoverArmed else { return }
+        if installedCoverGeneration == resumeCoverGeneration { return }
         guard let image = lastGoodFrame, let cgImage = image.cgImage else { return }
         CATransaction.begin()
         CATransaction.setDisableActions(true)
@@ -2039,14 +2173,43 @@ enum osrsResumeFrameOverlay {
         window.layer.shouldRasterize = false
         CATransaction.commit()
         coveredWindow = window
+        didInstallCoverThisSession = true
         if let scene = window.windowScene {
             installPassthroughResumePixels(on: scene)
         }
+        installedCoverGeneration = resumeCoverGeneration
+        coverInstallCountForCurrentResume += 1
+        scheduleCoverSafetyTimeout()
         NSLog(
             "osrsResumeFrameOverlay installed %dx%d on window layer passthrough will follow",
             Int(image.size.width * image.scale),
             Int(image.size.height * image.scale)
         )
+    }
+
+    /// Last-good as a window subview in front of the live tree, plus a layer
+    /// stamp. Hits pass through (`isUserInteractionEnabled = false`).
+    private static func pinOpaqueCoverOnTop(of window: UIWindow, image: UIImage) {
+        if let cgImage = image.cgImage {
+            window.layer.contents = cgImage
+            window.layer.contentsScale = image.scale
+            window.layer.contentsGravity = .resize
+            window.layer.shouldRasterize = false
+        }
+        let imageView = window.subviews
+            .compactMap { $0 as? UIImageView }
+            .first { $0.accessibilityIdentifier == "osrs_resume_passthrough_frame" }
+            ?? UIImageView()
+        imageView.image = image
+        imageView.frame = window.bounds
+        imageView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        imageView.contentMode = .scaleToFill
+        imageView.isUserInteractionEnabled = false
+        imageView.accessibilityIdentifier = "osrs_resume_passthrough_frame"
+        if imageView.superview !== window {
+            window.addSubview(imageView)
+        }
+        window.bringSubviewToFront(imageView)
     }
 
     /// Magenta-in-window proved Safari resume does not composite the live
@@ -2061,6 +2224,12 @@ enum osrsResumeFrameOverlay {
             overlayWindow?.makeKey()
             return
         }
+        if installedCoverGeneration == resumeCoverGeneration {
+            overlayWindow?.windowScene = windowScene
+            overlayWindow?.makeKey()
+            return
+        }
+        guard resumeCoverArmed else { return }
         guard let image = lastGoodFrame else { return }
         let overlay = overlayWindow ?? osrsResumeCoverWindow(windowScene: windowScene)
         overlay.windowScene = windowScene
@@ -2069,10 +2238,11 @@ enum osrsResumeFrameOverlay {
         overlay.isUserInteractionEnabled = true
         overlay.backgroundColor = .clear
         overlay.isHidden = false
-        overlay.osrsHitTarget = UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .flatMap(\.windows)
-            .first { $0 !== overlay && osrsSceneCompositor.isAppContentWindow($0) }
+        overlay.osrsHitTarget = coveredWindow
+            ?? UIApplication.shared.connectedScenes
+                .compactMap { $0 as? UIWindowScene }
+                .flatMap(\.windows)
+                .first { $0 !== overlay && osrsSceneCompositor.isAppContentWindow($0) }
         let host = overlay.rootViewController ?? UIViewController()
         if !(host is osrsAppSceneViewController) {
             host.view.isUserInteractionEnabled = false
@@ -2101,9 +2271,7 @@ enum osrsResumeFrameOverlay {
             overlay.isKeyWindow ? 1 : 0,
             overlay.osrsHitTarget == nil ? 0 : 1
         )
-        DispatchQueue.main.async {
-            adoptLiveRootIfNeeded()
-        }
+        adoptLiveRootIfNeeded()
     }
 
     static func blitPassthroughResumePixels(from window: UIWindow) {
@@ -2140,18 +2308,92 @@ enum osrsResumeFrameOverlay {
     /// Keep last-good only while live WK is not compositing after background.
     /// Once tiles paint, the passthrough UIImageView and window.layer stamp
     /// must come down. Do not drop the cover at didEnterBackground.
+    /// Tests call this after install; automatic resume must use
+    /// `revealWhenLiveWebViewPaintsAfterActivation` so a pre-background
+    /// WK layer cannot take the cover down during the system animation.
     static func revealWhenLiveWebViewPaints() {
+        guard !resumeCoverAdoptPending else { return }
         guard lastGoodIsCoveringLiveArticle else { return }
         guard liveArticleIsPainting() else { return }
         removeLastGoodCover()
     }
 
+    /// Automatic reveal: scene is active and a display frame has presented
+    /// after that activation. Install/adopt must not call the ungated reveal.
+    static func revealWhenLiveWebViewPaintsAfterActivation() {
+        guard resumeCoverSceneBecameActive else { return }
+        guard resumeCoverPostActivationFrameSeen else { return }
+        revealWhenLiveWebViewPaints()
+    }
+
+    static func noteSceneBecameActive() {
+        resumeCoverSceneBecameActive = true
+        startPostActivationFrameWatcher()
+        scheduleRevealWhenLiveWebViewPaints()
+        scheduleCoverSafetyTimeout()
+    }
+
     static func scheduleRevealWhenLiveWebViewPaints() {
-        for delayNs in [0, 80_000_000, 250_000_000, 500_000_000] as [UInt64] {
+        guard resumeCoverSceneBecameActive else { return }
+        revealPollToken &+= 1
+        let token = revealPollToken
+        for delayNs in [16_000_000, 80_000_000, 250_000_000, 500_000_000] as [UInt64] {
             DispatchQueue.main.asyncAfter(deadline: .now() + .nanoseconds(Int(delayNs))) {
-                revealWhenLiveWebViewPaints()
+                guard revealPollToken == token else { return }
+                revealWhenLiveWebViewPaintsAfterActivation()
             }
         }
+    }
+
+    /// Next turn after the root-VC swap so that move can present under the
+    /// opaque cover. Do not wait for a CATransaction completion callback: it
+    /// never fired with `setDisableActions`, which left the cover up all session.
+    /// Do not reveal here: that raced the system animation. Activation polls
+    /// take the cover down once a post-activation frame has painted.
+    private static func allowCoverRevealAfterNextTurn() {
+        DispatchQueue.main.async {
+            resumeCoverAdoptPending = false
+            revealWhenLiveWebViewPaintsAfterActivation()
+        }
+    }
+
+    /// Cover must not outlive ~1 s after active.
+    private static func scheduleCoverSafetyTimeout() {
+        guard resumeCoverSceneBecameActive else { return }
+        coverSafetyTimeoutToken &+= 1
+        let token = coverSafetyTimeoutToken
+        let generation = resumeCoverGeneration
+        DispatchQueue.main.asyncAfter(deadline: .now() + .nanoseconds(Int(coverSafetyTimeoutNs))) {
+            guard coverSafetyTimeoutToken == token else { return }
+            guard resumeCoverGeneration == generation else { return }
+            guard lastGoodIsCoveringLiveArticle else { return }
+            resumeCoverAdoptPending = false
+            NSLog("osrsResumeFrameOverlay last-good safety timeout")
+            removeLastGoodCover()
+        }
+    }
+
+    private static func startPostActivationFrameWatcher() {
+        guard resumeCoverSceneBecameActive else { return }
+        guard !resumeCoverPostActivationFrameSeen else { return }
+        guard postActivationDisplayLink == nil else { return }
+        let link = CADisplayLink(
+            target: osrsResumeCoverActivationProbe.shared,
+            selector: #selector(osrsResumeCoverActivationProbe.tick(_:))
+        )
+        link.add(to: .main, forMode: .common)
+        postActivationDisplayLink = link
+    }
+
+    private static func stopPostActivationFrameWatcher() {
+        postActivationDisplayLink?.invalidate()
+        postActivationDisplayLink = nil
+    }
+
+    fileprivate static func handlePostActivationDisplayTick() {
+        stopPostActivationFrameWatcher()
+        resumeCoverPostActivationFrameSeen = true
+        revealWhenLiveWebViewPaintsAfterActivation()
     }
 
     static var lastGoodIsCoveringLiveArticle: Bool {
@@ -2237,6 +2479,9 @@ enum osrsResumeFrameOverlay {
     }
 
     private static func removeLastGoodCover() {
+        stopPostActivationFrameWatcher()
+        revealPollToken &+= 1
+        coverSafetyTimeoutToken &+= 1
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         overlayWindow?.layer.contents = nil

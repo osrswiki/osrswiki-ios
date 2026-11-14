@@ -1167,14 +1167,19 @@ html body .osrs-calculator-panel .oo-ui-horizontalLayout.jsCalc-group {
     max-width: 100% !important;
     min-width: 0 !important;
 }
+.osrs-article-scroll-region > table.infobox-bonuses,
+.osrs-article-scroll-region > .osrs-disclosure-body > table.infobox-bonuses,
 .osrs-local-scroll-surface > table.infobox-bonuses,
 .osrs-local-scroll-surface > .osrs-disclosure-body > table.infobox-bonuses,
 .collapsible-content.osrs-local-scroll-surface > table.infobox-bonuses,
 .collapsible-content.osrs-local-scroll-surface > .osrs-disclosure-body > table.infobox-bonuses {
     max-width: 100% !important;
     min-width: var(--osrs-bonuses-min-inline-size) !important;
+    float: none !important;
 }
 
+.osrs-article-scroll-region > table.infobox-bonuses,
+.osrs-article-scroll-region > .osrs-disclosure-body > table.infobox-bonuses,
 .osrs-local-scroll-surface > table.infobox-bonuses,
 .osrs-local-scroll-surface > .osrs-disclosure-body > table.infobox-bonuses,
 .collapsible-content.osrs-local-scroll-surface > table.infobox-bonuses,
@@ -1183,6 +1188,7 @@ html body .osrs-calculator-panel .oo-ui-horizontalLayout.jsCalc-group {
     width: max-content !important;
     max-width: 100% !important;
     min-width: var(--osrs-bonuses-min-inline-size) !important;
+    float: none !important;
 }
 
 /* An obsolete outer owner can remain as harmless structure around a disclosure, but never as

@@ -7,9 +7,16 @@ import XCTest
 final class osrsHostThemeFillTests: XCTestCase {
     private var hostWindow: UIWindow?
 
+    override func setUp() {
+        super.setUp()
+        osrsSceneCompositor.resetResumeCoverStateForTesting()
+    }
+
     override func tearDown() {
+        osrsSceneCompositor.dumpWindowEnabled = false
         hostWindow?.isHidden = true
         hostWindow = nil
+        osrsSceneCompositor.resetResumeCoverStateForTesting()
         super.tearDown()
     }
 
@@ -537,6 +544,10 @@ final class osrsHostThemeFillTests: XCTestCase {
         )
 
         osrsResumeFrameOverlay.revealWhenLiveWebViewPaints()
+        if osrsResumeFrameOverlay.lastGoodIsCoveringLiveArticle {
+            try await Task.sleep(nanoseconds: 50_000_000)
+            osrsResumeFrameOverlay.revealWhenLiveWebViewPaints()
+        }
         XCTAssertTrue(
             osrsResumeFrameOverlay.liveArticleIsPainting(),
             "Hosted loaded article must count as painting so last-good can come down range=\(osrsWebViewThemePaint.luminanceRange(snapshot(live)))"
@@ -565,6 +576,8 @@ final class osrsHostThemeFillTests: XCTestCase {
         try await loadArticleHTML(in: webView)
         live.makeKeyAndVisible()
 
+        osrsSceneCompositor.dumpWindowEnabled = true
+        defer { osrsSceneCompositor.dumpWindowEnabled = false }
         osrsSceneCompositor.dumpWindow(live)
 
         let dumpURL = try XCTUnwrap(
@@ -626,6 +639,8 @@ final class osrsHostThemeFillTests: XCTestCase {
             osrsSceneCompositor.endLiveOverlaySession()
         }
 
+        osrsSceneCompositor.dumpWindowEnabled = true
+        defer { osrsSceneCompositor.dumpWindowEnabled = false }
         osrsSceneCompositor.beginLiveOverlaySession()
         defer {
             osrsSceneCompositor.endLiveOverlaySession()
@@ -682,6 +697,8 @@ final class osrsHostThemeFillTests: XCTestCase {
             in: webView
         )
         live.makeKeyAndVisible()
+        osrsSceneCompositor.dumpWindowEnabled = true
+        defer { osrsSceneCompositor.dumpWindowEnabled = false }
         osrsSceneCompositor.dumpWindow(live)
         let dumpURL = try XCTUnwrap(
             FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
@@ -803,7 +820,8 @@ final class osrsHostThemeFillTests: XCTestCase {
         XCTAssertTrue(compositor.contains("installPassthroughResumePixels"))
         XCTAssertTrue(compositor.contains("class osrsResumeCoverWindow"))
         XCTAssertTrue(compositor.contains("adoptLiveRootIfNeeded"))
-        XCTAssertTrue(compositor.contains("insertSubview(imageView, at: 0)"))
+        XCTAssertTrue(compositor.contains("pinOpaqueCoverOnTop(of: overlay, image:"))
+        XCTAssertTrue(compositor.contains("window.bringSubviewToFront(imageView)"))
         XCTAssertFalse(compositor.contains("shouldPreserveLiveHierarchy() && !osrsHostThemeFill"))
 
         XCTAssertTrue(tabView.contains("osrsHostThemeFill.shouldPaintOpaqueFill"))
@@ -883,6 +901,8 @@ final class osrsHostThemeFillTests: XCTestCase {
         XCTAssertTrue(compositor.contains("shouldRestoreResumeCover(didLeaveToBackground:"))
         XCTAssertTrue(compositor.contains("revealWhenLiveWebViewPaints"))
         XCTAssertTrue(compositor.contains("removeLastGoodCover"))
+        XCTAssertTrue(compositor.contains("resumeCoverAdoptPending"))
+        XCTAssertTrue(compositor.contains("coverSafetyTimeoutNs"))
         XCTAssertFalse(compositor.contains("passthrough retained"))
         let became = sceneDelegate
             .components(separatedBy: "func handleBecameActive")
@@ -902,7 +922,16 @@ final class osrsHostThemeFillTests: XCTestCase {
         )
         XCTAssertTrue(
             compositor.contains("dumpCssV=js-first-v3"),
-            "dumpWindow must stamp a version so a stale Release binary cannot fake the live DOM census"
+            "dumpWindow must stamp a version so a stale Debug dump cannot fake the live DOM census"
+        )
+        XCTAssertTrue(
+            compositor.contains("dumpWindowEnabled"),
+            "dumpWindow must stay behind an explicit Debug opt-in, off by default"
+        )
+        XCTAssertTrue(
+            compositor.contains("compiled out of Release")
+                || compositor.contains("Compiled out of Release"),
+            "dumpWindow must not run in Release"
         )
         XCTAssertTrue(
             compositor.contains("appendTileOwnerCensus"),

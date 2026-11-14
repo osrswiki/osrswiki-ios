@@ -102,6 +102,7 @@ final class osrsSceneDelegate: UIResponder, UIWindowSceneDelegate {
     }
 
     private func handleBecameActive(_ scene: UIScene, reason: String) {
+        osrsSceneCompositor.noteDidBecomeActive()
         osrsAppRoot.themeManager.applyPersistedThemeToWindows()
         osrsAppRoot.applyGlobalTheming()
         guard let windowScene = scene as? UIWindowScene else { return }
@@ -285,7 +286,7 @@ final class osrsSceneDelegate: UIResponder, UIWindowSceneDelegate {
     private func nudgeCompositor(on windowScene: UIWindowScene) {
         if osrsResumeFrameOverlay.hasAdoptedLiveRoot {
             osrsResumeFrameOverlay.makeOverlayKeyIfInstalled()
-            osrsResumeFrameOverlay.revealWhenLiveWebViewPaints()
+            osrsResumeFrameOverlay.revealWhenLiveWebViewPaintsAfterActivation()
             return
         }
         guard let window, window.windowScene === windowScene else { return }

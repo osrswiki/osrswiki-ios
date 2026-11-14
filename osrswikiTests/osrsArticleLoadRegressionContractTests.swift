@@ -232,11 +232,14 @@ final class osrsArticleLoadRegressionContractTests: XCTestCase {
         )
         XCTAssertFalse(
             luminanceBody.contains("image.draw(in:"),
-            "luminanceStats must read CPU-readable 8-bit pixels instead of UIImage.draw"
+            "luminanceStats must read CPU-readable pixels instead of UIImage.draw"
         )
+        XCTAssertFalse(luminanceBody.contains("vImage"))
         XCTAssertTrue(luminanceBody.contains("dataProvider"))
         XCTAssertTrue(luminanceBody.contains("bytesPerRow"))
         XCTAssertTrue(luminanceBody.contains("bitsPerComponent == 8"))
+        XCTAssertTrue(luminanceBody.contains("bitsPerComponent == 16"))
+        XCTAssertTrue(luminanceBody.contains("floatComponents"))
         let lookUniform = compositor
             .components(separatedBy: "private static func layerContentsLookUniform(_ layer: CALayer)")
             .dropFirst()
@@ -313,6 +316,8 @@ final class osrsArticleLoadRegressionContractTests: XCTestCase {
         XCTAssertTrue(compositor.contains("revealWhenLiveWebViewPaints"))
         XCTAssertTrue(compositor.contains("static func discard()"))
         XCTAssertTrue(compositor.contains("installOnWindowLayer"))
+        XCTAssertTrue(compositor.contains("beginResumeCoverGeneration()"))
+        XCTAssertTrue(compositor.contains("installedCoverGeneration == resumeCoverGeneration"))
         XCTAssertTrue(compositor.contains("hasCapturedFrame"))
         XCTAssertTrue(compositor.contains("Keep last-good only while live WK is not compositing"))
         XCTAssertFalse(
@@ -335,6 +340,20 @@ final class osrsArticleLoadRegressionContractTests: XCTestCase {
         XCTAssertTrue(restoreBody.contains("installOnWindowLayer"))
         XCTAssertTrue(restoreBody.contains("installPassthroughResumePixels"))
         XCTAssertTrue(restoreBody.contains("scheduleRevealWhenLiveWebViewPaints"))
+        XCTAssertFalse(
+            restoreBody.contains("dumpWindow("),
+            "Resume restore must not run dumpWindow; it blocked the main thread ~1.4 s"
+        )
+        let adoptedRestore = restoreBody
+            .components(separatedBy: "if osrsResumeFrameOverlay.hasAdoptedLiveRoot")
+            .dropFirst()
+            .first?
+            .components(separatedBy: "window.isHidden = false")
+            .first ?? ""
+        XCTAssertFalse(
+            adoptedRestore.contains("installOnWindowLayer"),
+            "After the live root is adopted, later resumes must not restamp the cover"
+        )
         XCTAssertTrue(compositor.contains("isUserInteractionEnabled = false"))
         XCTAssertTrue(compositor.contains("osrs_resume_passthrough_frame"))
         XCTAssertTrue(compositor.contains("blitPassthroughResumePixels"))

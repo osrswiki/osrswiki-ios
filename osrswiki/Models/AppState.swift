@@ -84,6 +84,7 @@ class AppState: ObservableObject {
     func noteApplicationDidBecomeActive() {
         guard applicationWasBackgrounded else { return }
         applicationWasBackgrounded = false
+        osrsSceneCompositor.noteDidBecomeActive()
         osrsSceneCompositor.restoreResumedScenes()
     }
 

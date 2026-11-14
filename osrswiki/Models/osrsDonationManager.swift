@@ -93,10 +93,18 @@ final class DonationManager: ObservableObject {
             products = Self.prefetchedProducts
             donationState = .idle
             let result = await paymentGateway.loadDonationProducts()
-            if case .loaded(let loaded) = result {
+            switch result {
+            case .failed:
+                // Transient refresh failure: keep the already-cached products.
+                return
+            case .loaded(let loaded):
                 products = loaded
                 Self.prefetchedProducts = loaded
+            case .unavailable:
+                products = []
+                Self.prefetchedProducts = []
             }
+            donationState = osrsDonationStateReducer.reduceProductLoad(result)
             return
         }
 
@@ -117,6 +125,14 @@ final class DonationManager: ObservableObject {
         }
         donationState = osrsDonationStateReducer.reduceProductLoad(result)
     }
+
+#if DEBUG
+    static func resetPrefetchCacheForTesting() {
+        prefetchTask?.cancel()
+        prefetchTask = nil
+        prefetchedProducts = []
+    }
+#endif
 
     func processDonation(amount: DonationAmount, completion: @escaping (Bool) -> Void) {
         guard let productId = amount.productId else {

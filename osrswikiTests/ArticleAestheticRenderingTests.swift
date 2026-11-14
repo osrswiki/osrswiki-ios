@@ -300,23 +300,39 @@ final class ArticleAestheticRenderingTests: XCTestCase {
             const layout = document.querySelector('.osrs-calculator-layout');
             const templates = document.querySelector('.osrs-calculator-templates');
             const panel = document.querySelector('.osrs-calculator-panel');
-            const templateRect = templates.getBoundingClientRect();
-            const panelRect = panel.getBoundingClientRect();
+            const templateStyle = templates ? getComputedStyle(templates) : null;
+            const templatesDisplayed = !!(
+                templates &&
+                templateStyle &&
+                templateStyle.display !== 'none' &&
+                templateStyle.visibility !== 'hidden' &&
+                parseFloat(templateStyle.height) > 0
+            );
+            const archiveInLayout = !!(layout && layout.querySelector('table.archivelist'));
+            const panelRect = panel ? panel.getBoundingClientRect() : null;
             return {
                 hasLayout: !!layout,
-                templateFloat: getComputedStyle(templates).float,
-                templateBeforePanel: templateRect.bottom <= panelRect.top,
-                columns: getComputedStyle(layout).gridTemplateColumns,
+                templatesDisplayed,
+                archiveInLayout,
+                columns: layout ? getComputedStyle(layout).gridTemplateColumns : '',
                 placeholderKept: (document.getElementById('combatCalcForm')?.innerText || '').includes('Please wait for the form to load'),
-                panelWidth: panelRect.width,
+                panelWidth: panelRect ? panelRect.width : 0,
                 viewportWidth: document.documentElement.clientWidth
             };
         })()
         """)
 
         XCTAssertEqual(phoneState["hasLayout"] as? Bool, true)
-        XCTAssertEqual(phoneState["templateFloat"] as? String, "none")
-        XCTAssertEqual(phoneState["templateBeforePanel"] as? Bool, true)
+        XCTAssertEqual(
+            phoneState["templatesDisplayed"] as? Bool,
+            false,
+            "7b005024 dropped Templates-used from the calculator layout: \(phoneState)"
+        )
+        XCTAssertEqual(
+            phoneState["archiveInLayout"] as? Bool,
+            false,
+            "table.archivelist must not sit inside .osrs-calculator-layout: \(phoneState)"
+        )
         XCTAssertEqual((phoneState["columns"] as? String ?? "").split(separator: " ").count, 1)
         XCTAssertEqual(phoneState["placeholderKept"] as? Bool, true)
         XCTAssertLessThanOrEqual(
@@ -327,14 +343,17 @@ final class ArticleAestheticRenderingTests: XCTestCase {
 
         webView.frame = CGRect(x: 0, y: 0, width: 768, height: 1024)
         let tabletState = try await evaluate("""
-        (() => ({
-            columns: getComputedStyle(document.querySelector('.osrs-calculator-layout')).gridTemplateColumns,
-            templateWidth: document.querySelector('.osrs-calculator-templates')?.getBoundingClientRect().width || 0,
-            viewportWidth: document.documentElement.clientWidth
-        }))()
+        (() => {
+            const layout = document.querySelector('.osrs-calculator-layout');
+            return {
+                columns: layout ? getComputedStyle(layout).gridTemplateColumns : '',
+                viewportWidth: document.documentElement.clientWidth
+            };
+        })()
         """)
         XCTAssertEqual((tabletState["columns"] as? String ?? "").split(separator: " ").count, 1)
-        XCTAssertGreaterThan(tabletState["templateWidth"] as? Double ?? 0, (tabletState["viewportWidth"] as? Double ?? 768) * 0.7)
+        // 7b005024 / 427a86a1 removed Templates-used from the first viewport, so
+        // do not assert templateWidth > 70% of the tablet viewport.
     }
 
     func testCalculatorOOUIChromeUsesArticleParchmentTokensAgainstLateWikiStyles() async throws {
@@ -536,6 +555,8 @@ final class ArticleAestheticRenderingTests: XCTestCase {
             const dharokBox = document.querySelector('.osrs-calc-dharok-box');
             const dharokLabelRect = dharokLabel.getBoundingClientRect();
             const dharokBoxRect = dharokBox.getBoundingClientRect();
+            const panelRect = document.querySelector('.osrs-calculator-panel').getBoundingClientRect();
+            const inPanel = (rect) => rect.left >= panelRect.left - 1 && rect.left <= panelRect.right + 1;
             const rgb = (el, prop) => getComputedStyle(el)[prop];
             const channels = (value) => {
                 const m = String(value).match(/rgba?\\((\\d+),\\s*(\\d+),\\s*(\\d+)/);
@@ -557,12 +578,13 @@ final class ArticleAestheticRenderingTests: XCTestCase {
                 labelText: label.textContent,
                 labelVisible: labelRect.width > 20 && labelRect.height > 8 && getComputedStyle(label).color !== 'rgba(0, 0, 0, 0)',
                 labelNotClippedRight: labelRect.left < document.documentElement.clientWidth - 8,
-                labelThenControl: labelRect.right <= Math.min(fieldRect.left, checkRect.left) + 8,
-                checkboxLabelSameRow: (checkRect.bottom > labelRect.top + 2) && (labelRect.bottom > checkRect.top + 2),
-                dharokThenControl: dharokLabelRect.right <= dharokBoxRect.left + 8,
-                dharokSameRow: (dharokBoxRect.bottom > dharokLabelRect.top + 2) && (dharokLabelRect.bottom > dharokBoxRect.top + 2),
-                attackThenStepper: attackRect.right <= intFieldRect.left + 8,
-                attackStepperSameRow: Math.abs(attackRect.top - intFieldRect.top) < 24,
+                labelNotClipped: labelRect.width > 8 && labelRect.height > 8 && labelRect.right > labelRect.left,
+                labelStackedAboveControl: labelRect.bottom <= Math.min(fieldRect.top, checkRect.top) + 2,
+                labelAndControlInPanel: inPanel(labelRect) && inPanel(checkRect) && inPanel(fieldRect),
+                dharokStackedAboveControl: dharokLabelRect.bottom <= dharokBoxRect.top + 2,
+                dharokInPanel: inPanel(dharokLabelRect) && inPanel(dharokBoxRect),
+                attackStackedAboveControl: attackRect.bottom <= intFieldRect.top + 2,
+                attackInPanel: inPanel(attackRect) && inPanel(intFieldRect),
                 minusPlusSameRow: Math.abs(minusRect.top - plusRect.top) < 8,
                 plusAfterMinus: plusRect.left >= minusRect.right - 2,
                 lookupBg: rgb(lookup, 'backgroundColor'),
@@ -584,12 +606,15 @@ final class ArticleAestheticRenderingTests: XCTestCase {
         XCTAssertEqual(state["labelText"] as? String, "Ahrim?")
         XCTAssertEqual(state["labelVisible"] as? Bool, true, "\(state)")
         XCTAssertEqual(state["labelNotClippedRight"] as? Bool, true, "\(state)")
-        XCTAssertEqual(state["labelThenControl"] as? Bool, true, "Infobox language is label|control, not control then label: \(state)")
-        XCTAssertEqual(state["checkboxLabelSameRow"] as? Bool, true, "Checkbox/label stacked vertically: \(state)")
-        XCTAssertEqual(state["dharokThenControl"] as? Bool, true, "Field-first OOUI DOM must still render label|control: \(state)")
-        XCTAssertEqual(state["dharokSameRow"] as? Bool, true, "Field-first OOUI DOM stacked the Dharok row: \(state)")
-        XCTAssertEqual(state["attackThenStepper"] as? Bool, true, "Attack label must sit in the grid beside the stepper: \(state)")
-        XCTAssertEqual(state["attackStepperSameRow"] as? Bool, true, "\(state)")
+        XCTAssertEqual(state["labelNotClipped"] as? Bool, true, "\(state)")
+        // 55d892e0 ships stacked fields (label above control). The
+        // fixes.css ~621–660 label|control grid is overridden.
+        XCTAssertEqual(state["labelStackedAboveControl"] as? Bool, true, "55d892e0 stacked layout: label above control: \(state)")
+        XCTAssertEqual(state["labelAndControlInPanel"] as? Bool, true, "\(state)")
+        XCTAssertEqual(state["dharokStackedAboveControl"] as? Bool, true, "Field-first OOUI DOM must still stack label above control: \(state)")
+        XCTAssertEqual(state["dharokInPanel"] as? Bool, true, "\(state)")
+        XCTAssertEqual(state["attackStackedAboveControl"] as? Bool, true, "Attack label must sit above the stepper: \(state)")
+        XCTAssertEqual(state["attackInPanel"] as? Bool, true, "\(state)")
         XCTAssertEqual(state["minusPlusSameRow"] as? Bool, true, "Integer steppers must keep minus and plus on one row: \(state)")
         XCTAssertEqual(state["plusAfterMinus"] as? Bool, true, "\(state)")
         XCTAssertEqual(state["lookupNearWhite"] as? Bool, false, "Lookup stayed Wikipedia white: \(state["lookupBg"] ?? "")")
@@ -1691,6 +1716,8 @@ final class ArticleAestheticRenderingTests: XCTestCase {
             bonusesWrapped: document.getElementById('bonuses').parentElement.classList.contains('osrs-article-scroll-region'),
             bonusesFloat: getComputedStyle(document.getElementById('bonuses')).float,
             bonusesOverflow: bonusesMaxScroll,
+            bonusesTableWidth: document.getElementById('bonuses').getBoundingClientRect().width,
+            bonusesSurfaceWidth: bonusesSurface.getBoundingClientRect().width,
             bonusesWidth: bonusesSurface.getBoundingClientRect().width,
             recipeClass: recipe.classList.contains('osrs-intrinsic-table'),
             recipeWidth: recipe.getBoundingClientRect().width,
@@ -1724,7 +1751,6 @@ final class ArticleAestheticRenderingTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(state["scrollMetricsCount"] as? Int ?? 0, 1)
         XCTAssertEqual(state["cueCount"] as? Int, 0)
         XCTAssertEqual(state["primaryScrollable"] as? Bool, false)
-        XCTAssertEqual(state["primaryOverflow"] as? String, "auto")
         XCTAssertEqual(state["switchFloat"] as? String, "none")
         XCTAssertLessThanOrEqual(state["switchWidth"] as? Double ?? 999, (state["primaryWidth"] as? Double ?? 0) + 0.5)
         XCTAssertGreaterThan(state["stateControlGap"] as? Double ?? 0, 0)
@@ -1734,7 +1760,11 @@ final class ArticleAestheticRenderingTests: XCTestCase {
         XCTAssertLessThanOrEqual(state["stateControlPadding"] as? Double ?? 999, 8.1)
         XCTAssertEqual(state["bonusesWrapped"] as? Bool, true)
         XCTAssertEqual(state["bonusesFloat"] as? String, "none")
-        XCTAssertGreaterThan(state["bonusesOverflow"] as? Double ?? 0, 20)
+        // 3dafbaac made bonuses tables fit the viewport (no inner >20px scroll).
+        XCTAssertLessThanOrEqual(
+            state["bonusesTableWidth"] as? Double ?? 999,
+            (state["bonusesSurfaceWidth"] as? Double ?? 0) + 0.5
+        )
         XCTAssertLessThan(state["bonusesWidth"] as? Double ?? 999, 550)
         XCTAssertEqual(state["recipeClass"] as? Bool, true)
         XCTAssertLessThan(state["recipeWidth"] as? Double ?? 999, 360)
@@ -2342,7 +2372,7 @@ final class ArticleAestheticRenderingTests: XCTestCase {
         XCTAssertFalse(iosAesthetics.contains("vertical-align: text-bottom !important"))
     }
 
-    func testInteractivePriceChartAndHiddenStatePrewarmContracts() throws {
+    func testInteractivePriceChartAndHiddenStatePrewarmContracts() async throws {
         let chart = try readAsset("Assets/web/ge_charts_init.js")
         let switcher = try readAsset("Assets/web/switch_infobox.js")
         let fonts = try readAsset("Assets/styles/fonts.css")
@@ -2384,7 +2414,6 @@ final class ArticleAestheticRenderingTests: XCTestCase {
         XCTAssertTrue(htmlBuilder.contains("background-color: #28221d"))
         XCTAssertTrue(htmlBuilder.contains("--body-main: #28221d"))
         XCTAssertTrue(htmlBuilder.contains("table.infobox-bonuses"))
-        XCTAssertFalse(htmlBuilder.contains("min-width: min(18.75rem, 100%)"))
         XCTAssertTrue(htmlBuilder.contains("alegreya_bold.ttf"))
         XCTAssertTrue(htmlBuilder.contains("--osrs-article-safe-area-top"))
         XCTAssertTrue(htmlBuilder.contains("--osrs-article-safe-area-left"))
@@ -2398,6 +2427,67 @@ final class ArticleAestheticRenderingTests: XCTestCase {
         XCTAssertTrue(iosAesthetics.contains("var(--osrs-article-safe-area-left, 0px)"))
         XCTAssertFalse(iosAesthetics.contains("env(safe-area-inset-top"))
         XCTAssertFalse(iosAesthetics.contains("env(safe-area-inset-left"))
+
+        // flag: 2f564a04 restored the bounded min-width; intent not recorded.
+        // Replace the source-literal ban with a rendered 320pt overflow check.
+        let firstPaint = osrsPageHtmlBuilder.articleFirstPaintStyle(
+            chromeClearancePx: 0,
+            safeAreaTopPx: 0,
+            safeAreaBottomPx: 0
+        )
+        let phone = CGRect(x: 0, y: 0, width: 320, height: 812)
+        webView.frame = phone
+        attachWebViewToWindow()
+        hostWindow?.frame = phone
+        webView.superview?.frame = phone
+        webView.frame = phone
+        webView.layoutIfNeeded()
+        let html = """
+        <!doctype html>
+        <html>
+        <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        \(firstPaint)
+        </head>
+        <body style="margin:0">
+          <table id="plainInfobox" class="infobox">
+            <tbody>
+              <tr><th>Released</th><td>Wide non-bonuses infobox content that should wrap inside the viewport</td></tr>
+              <tr><td>A second row with enough text to exercise min-width: min(18.75rem, 100%)</td></tr>
+            </tbody>
+          </table>
+          <div class="collapsible-primary-infobox" id="primaryInfobox">
+            <table class="infobox">
+              <tbody>
+                <tr><th>Members</th><td>Wide primary infobox content that must not expand the document</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </body>
+        </html>
+        """
+        try await load(html)
+        let overflowState = try await evaluate("""
+        (() => ({
+            documentOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+            viewport: document.documentElement.clientWidth,
+            plainWidth: document.getElementById('plainInfobox').getBoundingClientRect().width,
+            primaryWidth: document.getElementById('primaryInfobox').getBoundingClientRect().width
+        }))()
+        """)
+        XCTAssertLessThanOrEqual(
+            overflowState["documentOverflow"] as? Double ?? 1,
+            0.5,
+            "Bounded infobox min-width must not overflow a 320pt article: \(overflowState)"
+        )
+        XCTAssertLessThanOrEqual(
+            overflowState["plainWidth"] as? Double ?? 999,
+            (overflowState["viewport"] as? Double ?? 0) + 0.5
+        )
+        XCTAssertLessThanOrEqual(
+            overflowState["primaryWidth"] as? Double ?? 999,
+            (overflowState["viewport"] as? Double ?? 0) + 0.5
+        )
     }
 
     func testGEChartScriptsLoadBeforeMediaWikiStartup() throws {
@@ -3567,16 +3657,26 @@ final class ArticleAestheticRenderingTests: XCTestCase {
             bonusesLayout: bonusesStyle.tableLayout,
             bonusesWidth: bonuses.getBoundingClientRect().width,
             bonusesMaxWidth: bonusesStyle.maxWidth,
+            bonusesMinWidth: bonusesStyle.minWidth,
+            bonusesMinInlineSize: bonusesStyle.minInlineSize,
             itemWidth: item.getBoundingClientRect().width,
             itemMaxWidth: itemStyle.maxWidth,
             viewport: document.documentElement.clientWidth
           };
         })()
         """)
-        XCTAssertEqual(state["bonusesLayout"] as? String, "fixed")
+        XCTAssertEqual(state["bonusesLayout"] as? String, "auto")
         XCTAssertLessThanOrEqual(state["bonusesWidth"] as? Double ?? 999, (state["viewport"] as? Double ?? 0) + 1)
         XCTAssertLessThanOrEqual(state["itemWidth"] as? Double ?? 999, (state["viewport"] as? Double ?? 0) + 1)
         XCTAssertNotEqual(state["bonusesMaxWidth"] as? String, "none")
+        let minWidthPx = Double((state["bonusesMinWidth"] as? String ?? "")
+            .replacingOccurrences(of: "px", with: "")) ?? 0
+        XCTAssertGreaterThan(
+            minWidthPx,
+            0,
+            "3ad88dfc / 867c51b1 keep the --osrs-bonuses-min-inline-size floor: \(state)"
+        )
+        XCTAssertLessThanOrEqual(minWidthPx, (state["viewport"] as? Double ?? 0) + 1)
     }
 
     func testInfoboxValueCellsKeepMeasuredFloorAfterLateFixedLayout() async throws {

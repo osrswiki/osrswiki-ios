@@ -56,19 +56,33 @@ enum osrsWebViewThemePaint {
         return luminanceStats(cgImage)
     }
 
-    /// Sample CPU-readable 8-bit pixels only. App Store 2.1.0 (67) crashed in
+    /// Sample CPU-readable pixels only. App Store 2.1.0 (67) crashed in
     /// `vConvert_PermuteChannels_ARGB8888_CV_vec` when `UIImage.draw` converted
     /// a WKWebView takeSnapshot (CVPixelBuffer / HDR) into a 16×16 RGB context.
+    /// Default UIGraphicsImageRenderer output on P3 is 16-bit half-float
+    /// (bitmapInfo 0x1101, kCGColorSpaceExtendedSRGB); 8-bit-only sampling made
+    /// every compositor snapshot look like a uniform fill.
     static func luminanceStats(_ image: CGImage) -> (min: Int, max: Int, mean: Int)? {
         let width = image.width
         let height = image.height
         guard width > 0, height > 0 else { return nil }
-        guard image.bitsPerComponent == 8 else { return nil }
+
+        let bitsPerComponent = image.bitsPerComponent
+        guard bitsPerComponent == 8 || bitsPerComponent == 16 || bitsPerComponent == 32 else {
+            return nil
+        }
         let bitsPerPixel = image.bitsPerPixel
-        guard bitsPerPixel == 8 || bitsPerPixel == 24 || bitsPerPixel == 32 else { return nil }
+        guard bitsPerPixel > 0, bitsPerPixel % 8 == 0 else { return nil }
+        let bytesPerComponent = bitsPerComponent / 8
         let bytesPerPixel = bitsPerPixel / 8
+        guard bytesPerComponent > 0, bytesPerPixel > 0, bytesPerPixel % bytesPerComponent == 0 else {
+            return nil
+        }
+        let channelCount = bytesPerPixel / bytesPerComponent
+        guard channelCount == 1 || channelCount == 3 || channelCount == 4 else { return nil }
+
         let bytesPerRow = image.bytesPerRow
-        guard bytesPerPixel > 0, bytesPerRow >= width * bytesPerPixel else { return nil }
+        guard bytesPerRow >= width * bytesPerPixel else { return nil }
         guard let data = image.dataProvider?.data else { return nil }
         let length = CFDataGetLength(data)
         guard length > 0,
@@ -77,44 +91,217 @@ enum osrsWebViewThemePaint {
             return nil
         }
 
-        let rgbOffset: Int
-        switch image.alphaInfo {
-        case .premultipliedFirst, .first, .noneSkipFirst:
-            rgbOffset = bitsPerPixel == 32 ? 1 : 0
-        default:
-            rgbOffset = 0
+        let bitmapInfo = image.bitmapInfo
+        let isFloat = bitmapInfo.contains(.floatComponents)
+        let byteOrder = bitmapInfo.intersection(.byteOrderMask)
+        let littleEndian = osrsComponentBytesAreLittleEndian(
+            byteOrder: byteOrder,
+            isFloat: isFloat
+        )
+        guard let channels = osrsColorChannelIndices(
+            channelCount: channelCount,
+            alphaInfo: image.alphaInfo,
+            byteOrder: byteOrder,
+            bitsPerComponent: bitsPerComponent
+        ) else {
+            return nil
         }
-        let channelCount = bitsPerPixel == 8 ? 1 : 3
-        guard rgbOffset + channelCount <= bytesPerPixel else { return nil }
+        let lastChannel = max(channels.r, channels.g, channels.b)
+        guard lastChannel < channelCount else { return nil }
 
-        let sampleX = min(16, width)
-        let sampleY = min(16, height)
+        let gridX = min(16, width)
+        let gridY = min(16, height)
         var minLuminance = 255
         var maxLuminance = 0
         var total = 0
         var count = 0
-        for sampleRow in 0..<sampleY {
-            let y = sampleRow * height / sampleY
-            for sampleColumn in 0..<sampleX {
-                let x = sampleColumn * width / sampleX
-                let offset = y * bytesPerRow + x * bytesPerPixel + rgbOffset
-                guard offset >= 0, offset + channelCount <= length else { continue }
-                let luminance: Int
-                if channelCount == 1 {
-                    luminance = Int(bytes[offset])
-                } else {
-                    luminance = (
-                        Int(bytes[offset]) + Int(bytes[offset + 1]) + Int(bytes[offset + 2])
-                    ) / 3
+        for cellRow in 0..<gridY {
+            let y0 = cellRow * height / gridY
+            let y1 = (cellRow + 1) * height / gridY
+            let cellHeight = max(1, y1 - y0)
+            let stepY = max(1, cellHeight / 8)
+            for cellColumn in 0..<gridX {
+                let x0 = cellColumn * width / gridX
+                let x1 = (cellColumn + 1) * width / gridX
+                let cellWidth = max(1, x1 - x0)
+                let stepX = max(1, cellWidth / 8)
+                var cellTotal = 0
+                var cellCount = 0
+                var y = y0
+                while y < y1 {
+                    var x = x0
+                    while x < x1 {
+                        let pixelOffset = y * bytesPerRow + x * bytesPerPixel
+                        if let luminance = osrsLuminanceByte(
+                            bytes: bytes,
+                            length: length,
+                            pixelOffset: pixelOffset,
+                            bytesPerComponent: bytesPerComponent,
+                            channels: channels,
+                            bitsPerComponent: bitsPerComponent,
+                            isFloat: isFloat,
+                            littleEndian: littleEndian
+                        ) {
+                            cellTotal += luminance
+                            cellCount += 1
+                        }
+                        x += stepX
+                    }
+                    y += stepY
                 }
-                minLuminance = min(minLuminance, luminance)
-                maxLuminance = max(maxLuminance, luminance)
-                total += luminance
+                guard cellCount > 0 else { continue }
+                let cellMean = cellTotal / cellCount
+                minLuminance = min(minLuminance, cellMean)
+                maxLuminance = max(maxLuminance, cellMean)
+                total += cellMean
                 count += 1
             }
         }
         guard count > 0 else { return nil }
         return (minLuminance, maxLuminance, total / count)
+    }
+
+    private static func osrsComponentBytesAreLittleEndian(
+        byteOrder: CGBitmapInfo,
+        isFloat: Bool
+    ) -> Bool {
+        if byteOrder == .byteOrder16Little || byteOrder == .byteOrder32Little {
+            return true
+        }
+        if byteOrder == .byteOrder16Big || byteOrder == .byteOrder32Big {
+            return false
+        }
+        // Default integer CG bitmaps are historically big-endian; float
+        // snapshots on iOS (half-float P3 renderer) are host/little-endian.
+        return isFloat
+    }
+
+    /// Component indices of R, G, B in memory. premulFirst + byteOrder32Little
+    /// is BGRA, not ARGB.
+    private static func osrsColorChannelIndices(
+        channelCount: Int,
+        alphaInfo: CGImageAlphaInfo,
+        byteOrder: CGBitmapInfo,
+        bitsPerComponent: Int
+    ) -> (r: Int, g: Int, b: Int)? {
+        if channelCount == 1 {
+            return (0, 0, 0)
+        }
+        if channelCount == 3 {
+            return (0, 1, 2)
+        }
+        guard channelCount == 4 else { return nil }
+
+        let alphaFirst: Bool
+        switch alphaInfo {
+        case .premultipliedFirst, .first, .noneSkipFirst:
+            alphaFirst = true
+        default:
+            alphaFirst = false
+        }
+
+        let swap32Little = bitsPerComponent == 8 && byteOrder == .byteOrder32Little
+        if swap32Little {
+            // Conceptual ARGB stored as a little-endian 32-bit word is BGRA.
+            // Conceptual RGBA stored that way is ABGR.
+            return alphaFirst ? (2, 1, 0) : (3, 2, 1)
+        }
+        return alphaFirst ? (1, 2, 3) : (0, 1, 2)
+    }
+
+    private static func osrsLuminanceByte(
+        bytes: UnsafePointer<UInt8>,
+        length: Int,
+        pixelOffset: Int,
+        bytesPerComponent: Int,
+        channels: (r: Int, g: Int, b: Int),
+        bitsPerComponent: Int,
+        isFloat: Bool,
+        littleEndian: Bool
+    ) -> Int? {
+        let lastOffset = pixelOffset + max(channels.r, channels.g, channels.b) * bytesPerComponent
+        guard pixelOffset >= 0, lastOffset + bytesPerComponent <= length else {
+            return nil
+        }
+        func sample(_ componentIndex: Int) -> Int? {
+            osrsNormalizedChannelByte(
+                bytes: bytes,
+                offset: pixelOffset + componentIndex * bytesPerComponent,
+                bitsPerComponent: bitsPerComponent,
+                isFloat: isFloat,
+                littleEndian: littleEndian
+            )
+        }
+        if channels.r == channels.g && channels.g == channels.b {
+            return sample(channels.r)
+        }
+        guard let red = sample(channels.r),
+              let green = sample(channels.g),
+              let blue = sample(channels.b) else {
+            return nil
+        }
+        return (red + green + blue) / 3
+    }
+
+    private static func osrsNormalizedChannelByte(
+        bytes: UnsafePointer<UInt8>,
+        offset: Int,
+        bitsPerComponent: Int,
+        isFloat: Bool,
+        littleEndian: Bool
+    ) -> Int? {
+        if isFloat {
+            let value: Float
+            if bitsPerComponent == 16 {
+                let bits = osrsReadUInt16(bytes, offset: offset, littleEndian: littleEndian)
+                value = Float(Float16(bitPattern: bits))
+            } else if bitsPerComponent == 32 {
+                let bits = osrsReadUInt32(bytes, offset: offset, littleEndian: littleEndian)
+                value = Float(bitPattern: bits)
+            } else {
+                return nil
+            }
+            let clamped = value.isFinite ? min(max(value, 0), 1) : 0
+            return Int(clamped * 255.0)
+        }
+        if bitsPerComponent == 8 {
+            return Int(bytes[offset])
+        }
+        if bitsPerComponent == 16 {
+            let raw = Float(osrsReadUInt16(bytes, offset: offset, littleEndian: littleEndian)) / 65535.0
+            return Int(min(max(raw, 0), 1) * 255.0)
+        }
+        if bitsPerComponent == 32 {
+            let raw = Float(osrsReadUInt32(bytes, offset: offset, littleEndian: littleEndian))
+                / Float(UInt32.max)
+            return Int(min(max(raw, 0), 1) * 255.0)
+        }
+        return nil
+    }
+
+    private static func osrsReadUInt16(
+        _ bytes: UnsafePointer<UInt8>,
+        offset: Int,
+        littleEndian: Bool
+    ) -> UInt16 {
+        let b0 = UInt16(bytes[offset])
+        let b1 = UInt16(bytes[offset + 1])
+        return littleEndian ? b0 | (b1 << 8) : (b0 << 8) | b1
+    }
+
+    private static func osrsReadUInt32(
+        _ bytes: UnsafePointer<UInt8>,
+        offset: Int,
+        littleEndian: Bool
+    ) -> UInt32 {
+        let b0 = UInt32(bytes[offset])
+        let b1 = UInt32(bytes[offset + 1])
+        let b2 = UInt32(bytes[offset + 2])
+        let b3 = UInt32(bytes[offset + 3])
+        if littleEndian {
+            return b0 | (b1 << 8) | (b2 << 16) | (b3 << 24)
+        }
+        return (b0 << 24) | (b1 << 16) | (b2 << 8) | b3
     }
 
     @MainActor

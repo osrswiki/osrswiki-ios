@@ -1,8 +1,8 @@
 import UIKit
 
 /// Same-second dump for Find / article-search / Name. Logging only. Do not
-/// change compositor, WK, or layer.contents. Ships in Release so TF-class
-/// overlays rewrite `osrs-scene-dump.txt` after overlay depth already ≥1.
+/// change compositor, WK, or layer.contents. `dumpWindow` is Debug-only and
+/// off unless `-osrsSceneDump` / `-osrsPeriodicSceneDump` (or a test) opts in.
 @MainActor
 enum osrsBlankViewFirstResponderDump {
     private static var lastReason: String = ""

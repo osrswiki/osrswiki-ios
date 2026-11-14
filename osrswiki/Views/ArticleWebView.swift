@@ -150,32 +150,30 @@ class IOSAssetHandler: NSObject, WKURLSchemeHandler {
     private let completionSemaphore = DispatchSemaphore(value: 1)
     
     func webView(_ webView: WKWebView, start urlSchemeTask: WKURLSchemeTask) {
+        // Register the task synchronously, on the thread WebKit calls us on (main), so
+        // a webView(_:stop:) delivered before the queued work runs always finds it.
+        // (Registering inside taskQueue.async let stop() see "never started", after which
+        // the queued work re-registered a dead task and WebKit raised "This task has
+        // already been stopped" -- the 2.1.2 (70) production crash.)
+        guard let urlString = urlSchemeTask.request.url?.absoluteString, !urlString.isEmpty else {
+            print("❌ IOSAssetHandler: EDGE CASE PREVENTED: Empty or nil URL in request")
+            return
+        }
+        let taskId = ObjectIdentifier(urlSchemeTask)
+        tasksLock.lock()
+        // DEFENSIVE: Check if task was already added (shouldn't happen but prevent duplicates)
+        if activeTasks.keys.contains(taskId) {
+            tasksLock.unlock()
+            print("⚠️ IOSAssetHandler: EDGE CASE PREVENTED: Task already exists in active set")
+            return
+        }
+        globalGeneration += 1
+        let taskInfo = TaskInfo(id: taskId, generation: globalGeneration, startTime: Date())
+        activeTasks[taskId] = taskInfo
+        let currentGeneration = taskInfo.generation
+        tasksLock.unlock()
+
         taskQueue.async {
-            // DEFENSIVE: Verify task is not nil and URL scheme handler is still active
-            guard let urlString = urlSchemeTask.request.url?.absoluteString, !urlString.isEmpty else {
-                print("❌ IOSAssetHandler: EDGE CASE PREVENTED: Empty or nil URL in request")
-                return
-            }
-            
-            // Add task to active set with generation tracking
-            let taskId = ObjectIdentifier(urlSchemeTask)
-            self.tasksLock.lock()
-            
-            // DEFENSIVE: Check if task was already added (shouldn't happen but prevent duplicates)
-            if self.activeTasks.keys.contains(taskId) {
-                self.tasksLock.unlock()
-                print("⚠️ IOSAssetHandler: EDGE CASE PREVENTED: Task already exists in active set")
-                return
-            }
-            
-            // Create task info with unique generation counter
-            self.globalGeneration += 1
-            let taskInfo = TaskInfo(id: taskId, generation: self.globalGeneration, startTime: Date())
-            self.activeTasks[taskId] = taskInfo
-            
-            let currentGeneration = taskInfo.generation
-            self.tasksLock.unlock()
-            
             print("🆔 IOSAssetHandler: Task started with generation \(currentGeneration)")
             
             print("🚨 IOSAssetHandler: CALLED! URL: \(urlSchemeTask.request.url?.absoluteString ?? "nil")")
@@ -525,9 +523,10 @@ class IOSAssetHandler: NSObject, WKURLSchemeHandler {
         // CRITICAL: Use synchronous execution to prevent race conditions
         let taskId = ObjectIdentifier(urlSchemeTask)
         
-        // Acquire completion semaphore to prevent concurrent WebKit calls
-        completionSemaphore.wait()
-        
+        // Non-blocking: never wait on completionSemaphore here. stop() runs on the main
+        // thread, and WebKit's WKURLSchemeTask methods need the main thread, so waiting
+        // here deadlocked against a background completion. Completions now run on main,
+        // so they are serialized with stop() without a semaphore.
         tasksLock.lock()
         let transportHandle = transportHandles.removeValue(forKey: taskId)
         if let taskInfo = activeTasks[taskId] {
@@ -540,13 +539,13 @@ class IOSAssetHandler: NSObject, WKURLSchemeHandler {
             print("⚠️ IOSAssetHandler: Task was already removed or never started")
         }
         
-        completionSemaphore.signal()
         transportHandle?.cancel()
     }
     
     
     private func completeTask(_ urlSchemeTask: WKURLSchemeTask, withResponse response: HTTPURLResponse, data: Data) {
-        taskQueue.async {
+        // All WKURLSchemeTask calls happen on the main thread (same thread as stop()).
+        DispatchQueue.main.async {
             self.performAtomicTaskCompletion(urlSchemeTask) { taskInfo in
                 // This closure runs ONLY if the task is verified as still active
                 print("✅ IOSAssetHandler: Completing task generation \(taskInfo.generation)")
@@ -562,7 +561,8 @@ class IOSAssetHandler: NSObject, WKURLSchemeHandler {
     }
     
     private func completeTask(_ urlSchemeTask: WKURLSchemeTask, withError error: Error) {
-        taskQueue.async {
+        // All WKURLSchemeTask calls happen on the main thread (same thread as stop()).
+        DispatchQueue.main.async {
             self.performAtomicTaskCompletion(urlSchemeTask) { taskInfo in
                 // This closure runs ONLY if the task is verified as still active
                 print("❌ IOSAssetHandler: Failing task generation \(taskInfo.generation) with error: \(error.localizedDescription)")
@@ -600,17 +600,15 @@ class IOSAssetHandler: NSObject, WKURLSchemeHandler {
     /// CRITICAL: Atomic task completion that prevents WebKit NSException crashes
     /// This method ensures WebKit methods are never called on stopped tasks
     private func performAtomicTaskCompletion(_ urlSchemeTask: WKURLSchemeTask, completion: (TaskInfo) -> Void) {
+        // Runs on the main thread, serialized with webView(_:stop:), so a task that is
+        // still in activeTasks here cannot be stopped before the WebKit calls below.
+        dispatchPrecondition(condition: .onQueue(.main))
         let taskId = ObjectIdentifier(urlSchemeTask)
         
-        // STEP 1: Acquire semaphore to prevent concurrent stop() calls
-        completionSemaphore.wait()
-        
-        // STEP 2: Check if task is still active under lock
+        // Check if task is still active under lock; stopped or unknown tasks are ignored.
         tasksLock.lock()
         guard let taskInfo = activeTasks[taskId] else {
-            // Task was stopped - release lock and semaphore, abort safely
             tasksLock.unlock()
-            completionSemaphore.signal()
             print("⚠️ IOSAssetHandler: RACE PREVENTED: Task generation unknown was already stopped")
             return
         }
@@ -623,9 +621,6 @@ class IOSAssetHandler: NSObject, WKURLSchemeHandler {
         
         // STEP 4: Execute WebKit methods (guaranteed safe - task cannot be stopped now)
         completion(capturedTaskInfo)
-        
-        // STEP 5: Release semaphore to allow other operations
-        completionSemaphore.signal()
     }
     
     // MARK: - WebView Cleanup Methods (Fix for task lifecycle crashes)
