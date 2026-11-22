@@ -1,45 +1,54 @@
 {
-  "schema_version": 1,
-  "asset_set_id": "osrs-surface-maps-949feadd10f7",
-  "repository": "osrswiki/osrswiki-tooling",
-  "release_tag": "map-assets-v1-949feadd10f7",
+  "asset_set_id": "osrs-surface-maps-bf360315c53a",
+  "assets": [
+    {
+      "bytes": 47013888,
+      "name": "map_floor_0.mbtiles",
+      "payload_sha256": "082ce4a2e4b394c07fee939527a19538c483f432327b10b8dea7cd8fc4c2fd26",
+      "sha256": "2a39689d18eca2d3f175d873253f1e18b4f7ac633b399e92d1f6ab49fefae96c"
+    },
+    {
+      "bytes": 4452352,
+      "name": "map_floor_1.mbtiles",
+      "payload_sha256": "9475f12be624874b27df663c3ed2d0bbc936e40e1e57c9b8c4758fe219a1ee9e",
+      "sha256": "eba9141fb7e9fcba51759a760bf278582342fb3ffeaab9147b8fe02d1ecba2c9"
+    },
+    {
+      "bytes": 2527232,
+      "name": "map_floor_2.mbtiles",
+      "payload_sha256": "d47b9285e71a4aac44c87ff6642fe0d7246a230320d90404c114d906cbcb4735",
+      "sha256": "eff0bef780d36769ef75bf0b6e4ee8fe0cede2bbb97635325b35b9038a125f25"
+    },
+    {
+      "bytes": 1216512,
+      "name": "map_floor_3.mbtiles",
+      "payload_sha256": "e9a336ff517b31aada15ea4024ece8daa619a7234e550c7810006a9dc2f6d514",
+      "sha256": "974d9038305db286d37f5ef6276215a9b74ada381fb52aac4a7f4cf7270fee49"
+    }
+  ],
   "bundle": {
-    "name": "map_floors.zip",
-    "sha256": "169281ddcd742402abca56b5535df4310654cc6212cd399bd41e7682dfaab213",
-    "bytes": 45921231,
+    "bytes": 48904003,
     "members": [
       "map_floor_0.mbtiles",
       "map_floor_1.mbtiles",
       "map_floor_2.mbtiles",
       "map_floor_3.mbtiles"
-    ]
+    ],
+    "name": "map_floors.zip",
+    "sha256": "bf7c5524cbd59e275790867c2c44c80ebec5f2db14b6d5815ceb254ec976a4d1"
   },
-  "assets": [
-    {
-      "name": "map_floor_0.mbtiles",
-      "sha256": "8abc2cbe5c25cbdb70ac00d763d6560b7544a1befa7546d7cc67205273e22cea",
-      "bytes": 44019712
-    },
-    {
-      "name": "map_floor_1.mbtiles",
-      "sha256": "130a98d27f069d76c2b902968c7c62892ca9046d5172103506d0487984b45e07",
-      "bytes": 4255744
-    },
-    {
-      "name": "map_floor_2.mbtiles",
-      "sha256": "43f1fbf54377d39c5523884fc8d406adbec48178c46bede05000388116e7e36b",
-      "bytes": 2453504
-    },
-    {
-      "name": "map_floor_3.mbtiles",
-      "sha256": "208fd6907e9746ec849cc7f51ae09bb9cf037b3b4eca044b825d19af676a8b05",
-      "bytes": 1122304
-    }
-  ],
   "provenance": {
-    "source_authority": "https://github.com/omiyawaki/osrswiki-fleet.git#main",
-    "generator": "tools/map/map-asset-generator.py",
     "artifact_class": "immutable-reproducible-release",
-    "generated_intermediates": "host-local-only"
-  }
+    "generated_intermediates": "host-local-only",
+    "generator": "scripts/shared/map-auto-update.sh",
+    "openrs2_cache_build": 242,
+    "openrs2_cache_id": 2772,
+    "openrs2_cache_scope": "runescape",
+    "openrs2_cache_timestamp": "2026-11-18T14:45:05.401534Z",
+    "openrs2_xtea_cache_id": 2499,
+    "source_authority": "https://github.com/omiyawaki/osrswiki-fleet.git#main"
+  },
+  "release_tag": "map-assets-v1-bf360315c53a",
+  "repository": "osrswiki/osrswiki-tooling",
+  "schema_version": 1
 }
